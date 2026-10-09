@@ -206,11 +206,13 @@ public class MLFeatureEnabledSetting {
     }
 
     /**
-     * Whether the agentic search template CRUD APIs are enabled. Disabled by default pending security review.
+     * Whether the agentic search template APIs and the template-fill tool are enabled. Disabled by default
+     * pending security review, and always disabled with multi-tenancy, since templates are not yet
+     * tenant-scoped.
      * @return whether the agentic search template APIs are enabled.
      */
     public boolean isAgenticSearchTemplateEnabled() {
-        return isAgenticSearchTemplateEnabled;
+        return isAgenticSearchTemplateEnabled && !isMultiTenancyEnabled;
     }
 
     /**

@@ -120,6 +120,27 @@ public class SearchTemplateFillToolValidatorTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void fallbackEnabled_mustBeABooleanInConfig() {
+        Map<String, String> config = validConfig();
+        config.put("fallback_enabled", "false");
+        SearchTemplateFillToolValidator.validate(List.of(fillTool(validParams(), config)), featureSetting);
+
+        config.put("fallback_enabled", "no");
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> SearchTemplateFillToolValidator.validate(List.of(fillTool(validParams(), config)), featureSetting)
+        );
+
+        Map<String, String> params = validParams();
+        params.put("fallback_enabled", "true");
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> SearchTemplateFillToolValidator.validate(List.of(fillTool(params, validConfig())), featureSetting)
+        );
+        assertTrue(e.getMessage().contains("config"));
+    }
+
+    @Test
     public void configValues_countAsEffectiveSettings() {
         Map<String, String> params = new HashMap<>();
         Map<String, String> config = validConfig();

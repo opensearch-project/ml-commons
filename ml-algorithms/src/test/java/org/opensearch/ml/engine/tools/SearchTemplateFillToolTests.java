@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,6 +33,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
 import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplateResolver;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -97,6 +100,10 @@ public class SearchTemplateFillToolTests {
     }
 
     private SearchTemplateFillTool tool(String... templateIds) {
+        return tool(fallbackTool, templateIds);
+    }
+
+    private SearchTemplateFillTool tool(QueryPlanningTool fallback, String... templateIds) {
         return new SearchTemplateFillTool(
             client,
             resolver,
@@ -104,8 +111,14 @@ public class SearchTemplateFillToolTests {
             "model-1",
             new BedrockConverseFunctionCalling(),
             List.of(templateIds),
-            fallbackTool
+            fallback
         );
+    }
+
+    private Exception runFailing(SearchTemplateFillTool tool, Map<String, String> params) {
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        tool.run(params, ActionListener.wrap(r -> { throw new AssertionError("expected failure, got " + r); }, failure::set));
+        return failure.get();
     }
 
     /** Make the model answer with a Bedrock tool call to {@code toolName} carrying {@code input}. */
@@ -233,13 +246,15 @@ public class SearchTemplateFillToolTests {
     }
 
     @Test
-    public void lookupFailure_fallsBack() {
+    public void lookupFailure_surfacesWithoutFallback() {
+        RuntimeException boom = new RuntimeException("boom");
         doAnswer(invocation -> {
             ActionListener<Map<String, AgenticSearchTemplate>> listener = invocation.getArgument(2);
-            listener.onFailure(new RuntimeException("boom"));
+            listener.onFailure(boom);
             return null;
         }).when(resolver).getTemplates(any(), any(), any());
-        assertEquals(FALLBACK, run(tool("product_search"), question()));
+        assertEquals(boom, runFailing(tool("product_search"), question()));
+        verify(fallbackTool, never()).run(any(), any());
     }
 
     @Test
@@ -304,13 +319,55 @@ public class SearchTemplateFillToolTests {
     }
 
     @Test
-    public void predictFailure_fallsBack() {
+    public void predictFailure_surfacesWithoutFallback() {
+        // A throttled or unauthorized model call would fail the same way through the fallback.
+        OpenSearchStatusException throttled = new OpenSearchStatusException("throttled", RestStatus.TOO_MANY_REQUESTS);
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
-            listener.onFailure(new RuntimeException("connector down"));
+            listener.onFailure(throttled);
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
-        assertEquals(FALLBACK, run(tool("product_search"), question()));
+        assertEquals(throttled, runFailing(tool("product_search"), question()));
+        verify(fallbackTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void fallbackDisabled_declineFails() {
+        modelFills("FillTemplate", Map.of("cannot_express", true));
+        Exception e = runFailing(tool((QueryPlanningTool) null, "product_search"), question());
+        assertTrue(e instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) e).status());
+        assertTrue(e.getMessage().contains("fallback is disabled"));
+    }
+
+    @Test
+    public void fallbackDisabled_noUsableTemplateFails() {
+        registered.clear();
+        assertTrue(runFailing(tool((QueryPlanningTool) null, "product_search"), question()) instanceof OpenSearchStatusException);
+        verify(client, never()).execute(any(), any(), any());
+    }
+
+    @Test
+    public void streamFlag_isDroppedFromFillAndFallback() {
+        modelFills("FillTemplate", Map.of("cannot_express", true));
+        Map<String, String> params = question();
+        params.put("stream", "true");
+        assertEquals(FALLBACK, run(tool("product_search"), params));
+        assertFalse(predictParameters().containsKey("stream"));
+        ArgumentCaptor<Map<String, String>> fallbackParams = ArgumentCaptor.forClass(Map.class);
+        verify(fallbackTool).run(fallbackParams.capture(), any());
+        assertFalse(fallbackParams.getValue().containsKey("stream"));
+        assertEquals("true", params.get("stream"));
+    }
+
+    @Test
+    public void fallback_pointsPromptAtUserPrompt() {
+        modelFills("FillTemplate", Map.of("cannot_express", true));
+        run(tool("product_search"), question());
+        ArgumentCaptor<Map<String, String>> fallbackParams = ArgumentCaptor.forClass(Map.class);
+        verify(fallbackTool).run(fallbackParams.capture(), any());
+        assertEquals("${parameters.user_prompt}", fallbackParams.getValue().get("prompt"));
+        assertEquals("5 cheapest shoes", fallbackParams.getValue().get("question"));
     }
 
     @Test
@@ -436,6 +493,8 @@ public class SearchTemplateFillToolTests {
         assertEquals("model-1", created.getModelId());
         assertEquals(List.of("product_search"), created.getTemplateIds());
         assertEquals(QueryPlanningTool.LLM_GENERATED_TYPE_FIELD, created.getFallbackTool().getGenerationType());
+        params.put("fallback_enabled", "false");
+        assertNull(SearchTemplateFillTool.Factory.getInstance().create(params).getFallbackTool());
         assertThrows(IllegalArgumentException.class, () -> SearchTemplateFillTool.Factory.getInstance().create(new HashMap<>()));
     }
 }

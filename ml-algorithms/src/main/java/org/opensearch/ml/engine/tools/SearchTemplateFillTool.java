@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.MAX_CAN
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.NONE_CHOICE;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -70,9 +71,15 @@ import lombok.extern.log4j.Log4j2;
  * body. With several candidate templates, one forced call picks a template and fills it. The model may
  * decline through a {@code cannot_express} flag when no template fits the question.
  *
- * <p>A decline, or any failure along the way, falls back to a {@link QueryPlanningTool} built from the
- * same parameters, which writes the query directly. Experimental: gated behind
- * {@code plugins.ml_commons.agentic_search_template_enabled}.
+ * <p>When the model cannot produce a usable fill (it declines, skips the tool, fills invalid values, or the
+ * render is not a query) or no template is usable for the index, the tool falls back to a
+ * {@link QueryPlanningTool} built from the same parameters, which writes the query directly. Failures of the
+ * template lookup or the model call itself (throttling, permissions, an unreachable connector) are returned
+ * to the caller instead, since retrying them through the fallback would hit the same model again. Setting
+ * {@code fallback_enabled} to {@code false} in the tool's {@code config} turns the fallback off, so a search
+ * the templates cannot express fails rather than running free-form DSL. Experimental: gated behind
+ * {@code plugins.ml_commons.agentic_search_template_enabled}, and unavailable with multi-tenancy since
+ * templates are not yet tenant-scoped.
  *
  * <p>Configuration: {@code model_id} and {@code _llm_interface} (one that supports forced tool calls) in the
  * tool's parameters, and {@code template_ids} in the tool's {@code config}, which execution parameters
@@ -86,11 +93,13 @@ public class SearchTemplateFillTool implements WithModelTool {
     public static final String TYPE = "SearchTemplateFillTool";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String TEMPLATE_IDS_FIELD = "template_ids";
+    public static final String FALLBACK_ENABLED_FIELD = "fallback_enabled";
 
     static final String SYSTEM_PROMPT_FIELD = "system_prompt";
     static final String USER_PROMPT_FIELD = "user_prompt";
     static final String PROMPT_FIELD = "prompt";
     static final String TOOL_CONFIGS_FIELD = "tool_configs";
+    static final String STREAM_FIELD = "stream";
     static final String WHOLE_RESPONSE_FILTER = "$";
     static final String NO_PROCESSORS = "[]";
 
@@ -118,6 +127,7 @@ public class SearchTemplateFillTool implements WithModelTool {
     private final FunctionCalling functionCalling;
     @Getter
     private final List<String> templateIds;
+    /** Null when the fallback is disabled. */
     @Getter
     private final QueryPlanningTool fallbackTool;
 
@@ -199,7 +209,9 @@ public class SearchTemplateFillTool implements WithModelTool {
 
                     @Override
                     public void onFailure(Exception e) {
-                        if (e instanceof CannotExpressException) {
+                        if (e instanceof ModelCallException) {
+                            listener.onFailure((Exception) e.getCause());
+                        } else if (e instanceof CannotExpressException) {
                             fallback(originalParameters, listener, e.getMessage(), null);
                         } else {
                             fallback(originalParameters, listener, "template fill failed", e);
@@ -210,7 +222,7 @@ public class SearchTemplateFillTool implements WithModelTool {
 
             @Override
             public void onFailure(Exception e) {
-                fallback(originalParameters, listener, "template lookup failed", e);
+                listener.onFailure(e);
             }
         });
     }
@@ -300,7 +312,7 @@ public class SearchTemplateFillTool implements WithModelTool {
 
             @Override
             public void onFailure(Exception e) {
-                listener.onFailure(e);
+                listener.onFailure(new ModelCallException(e));
             }
         });
     }
@@ -309,7 +321,8 @@ public class SearchTemplateFillTool implements WithModelTool {
      * The fill call's parameters: the caller's parameters (so connector-level settings still apply), with
      * the fill prompts and the forced tool config. Output filtering is overridden with a whole-response
      * filter and an empty processor chain, since a filter meant for the direct-DSL fallback, whether set on
-     * the tool or on the connector, would strip the tool call from the response.
+     * the tool or on the connector, would strip the tool call from the response. A streaming agent's
+     * {@code stream} flag is dropped, since this internal call has no channel to stream to.
      */
     @VisibleForTesting
     static Map<String, String> buildModelParameters(
@@ -319,6 +332,7 @@ public class SearchTemplateFillTool implements WithModelTool {
         String toolConfigs
     ) {
         Map<String, String> modelParameters = new HashMap<>(parameters);
+        modelParameters.remove(STREAM_FIELD);
         // Request parameters take precedence over the connector's, so these also replace connector-level filters.
         modelParameters.put(RESPONSE_FILTER_FIELD, WHOLE_RESPONSE_FILTER);
         modelParameters.put(OUTPUT_PROCESSORS, NO_PROCESSORS);
@@ -330,7 +344,7 @@ public class SearchTemplateFillTool implements WithModelTool {
         String noEscape = modelParameters.get(NO_ESCAPE_PARAMS);
         if (noEscape == null || noEscape.isBlank()) {
             modelParameters.put(NO_ESCAPE_PARAMS, TOOL_CONFIGS_FIELD);
-        } else if (!List.of(noEscape.split(",")).stream().map(String::trim).toList().contains(TOOL_CONFIGS_FIELD)) {
+        } else if (!Arrays.stream(noEscape.split(",")).map(String::trim).toList().contains(TOOL_CONFIGS_FIELD)) {
             modelParameters.put(NO_ESCAPE_PARAMS, noEscape + "," + TOOL_CONFIGS_FIELD);
         }
         return modelParameters;
@@ -403,12 +417,36 @@ public class SearchTemplateFillTool implements WithModelTool {
     }
 
     private <T> void fallback(Map<String, String> originalParameters, ActionListener<T> listener, String reason, Exception cause) {
+        if (fallbackTool == null) {
+            listener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Search template fill did not produce a query (" + reason + ") and the fallback is disabled",
+                        RestStatus.BAD_REQUEST,
+                        cause
+                    )
+                );
+            return;
+        }
         if (cause == null) {
             log.info("Search template fill declined ({}); writing the query directly", reason);
         } else {
             log.warn("Search template fill failed ({}); writing the query directly", reason, cause);
         }
-        fallbackTool.run(originalParameters, listener);
+        fallbackTool.run(fallbackParameters(originalParameters), listener);
+    }
+
+    /**
+     * The fallback's parameters: the caller's, without a streaming agent's {@code stream} flag, and with
+     * {@code prompt} pointing at the {@code user_prompt} that {@link QueryPlanningTool} sets, so connectors
+     * that name the user turn {@code prompt} also work for the fallback.
+     */
+    @VisibleForTesting
+    static Map<String, String> fallbackParameters(Map<String, String> originalParameters) {
+        Map<String, String> parameters = new HashMap<>(originalParameters);
+        parameters.remove(STREAM_FIELD);
+        parameters.put(PROMPT_FIELD, "${parameters." + USER_PROMPT_FIELD + "}");
+        return parameters;
     }
 
     @Override
@@ -434,6 +472,13 @@ public class SearchTemplateFillTool implements WithModelTool {
     static final class CannotExpressException extends RuntimeException {
         CannotExpressException(String message) {
             super(message);
+        }
+    }
+
+    /** The fill's model call itself failed. Returned to the caller rather than retried through the fallback. */
+    static final class ModelCallException extends RuntimeException {
+        ModelCallException(Exception cause) {
+            super(cause);
         }
     }
 
@@ -472,7 +517,10 @@ public class SearchTemplateFillTool implements WithModelTool {
             List<String> templateIds = parseTemplateIds(params.get(TEMPLATE_IDS_FIELD));
 
             // The fallback writes the query directly with the same model and parameters.
-            QueryPlanningTool fallbackTool = QueryPlanningTool.Factory.getInstance().create(new HashMap<>(params));
+            String fallbackEnabled = stringParam(params, FALLBACK_ENABLED_FIELD);
+            QueryPlanningTool fallbackTool = fallbackEnabled == null || Boolean.parseBoolean(fallbackEnabled)
+                ? QueryPlanningTool.Factory.getInstance().create(new HashMap<>(params))
+                : null;
             return new SearchTemplateFillTool(
                 client,
                 resolver,

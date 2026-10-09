@@ -56,6 +56,21 @@ public final class SearchTemplateFillToolValidator {
                 );
             }
             SearchTemplateFillTool.Factory.parseTemplateIds(config.get(SearchTemplateFillTool.TEMPLATE_IDS_FIELD));
+            // Likewise for the fallback switch, so an execute request cannot turn a disabled fallback back on.
+            if (parameters.containsKey(SearchTemplateFillTool.FALLBACK_ENABLED_FIELD)) {
+                throw new IllegalArgumentException(
+                    SearchTemplateFillTool.TYPE
+                        + " requires "
+                        + SearchTemplateFillTool.FALLBACK_ENABLED_FIELD
+                        + " in the tool's config, not its parameters, so that an execute request cannot override it"
+                );
+            }
+            String fallbackEnabled = config.get(SearchTemplateFillTool.FALLBACK_ENABLED_FIELD);
+            if (fallbackEnabled != null && !"true".equalsIgnoreCase(fallbackEnabled) && !"false".equalsIgnoreCase(fallbackEnabled)) {
+                throw new IllegalArgumentException(
+                    SearchTemplateFillTool.TYPE + " " + SearchTemplateFillTool.FALLBACK_ENABLED_FIELD + " must be true or false"
+                );
+            }
 
             // At run time config values take precedence over parameters, so validate the effective values.
             Map<String, String> effective = new HashMap<>(parameters);

@@ -9,7 +9,9 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -655,8 +657,12 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         try {
             IndexNameExpressionResolver resolver = new IndexNameExpressionResolver(client.threadPool().getThreadContext());
             ClusterState state = clusterService.state();
-            Set<String> searched = Set.of(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), indexName));
-            Set<String> bound = Set.of(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), binding));
+            Set<String> searched = new HashSet<>(
+                Arrays.asList(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), indexName))
+            );
+            Set<String> bound = new HashSet<>(
+                Arrays.asList(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), binding))
+            );
             return !searched.isEmpty() && bound.containsAll(searched);
         } catch (Exception e) {
             log.debug("Could not resolve index {} against binding {}: {}", indexName, binding, e.getMessage());
@@ -736,6 +742,10 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                                 .xContent()
                                 .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, rendered)
                         ) {
+                            // map() reads a scalar or empty input as an empty map, so require an object first.
+                            if (parser.nextToken() != XContentParser.Token.START_OBJECT) {
+                                throw new IllegalArgumentException("the render is not a JSON object");
+                            }
                             parser.map();
                             if (parser.nextToken() != null) {
                                 throw new IllegalArgumentException("unexpected content after the query object");
