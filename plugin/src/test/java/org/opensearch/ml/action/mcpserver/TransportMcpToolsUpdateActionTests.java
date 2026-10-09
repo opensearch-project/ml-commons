@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -40,6 +41,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLIndex;
@@ -188,9 +190,12 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, listener);
 
-        ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals("Failed to update tools as none of them is found in index", captor.getValue().getMessage());
+        Exception exception = captor.getValue();
+        assertEquals("Failed to update tools as none of them is found in index", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
     }
 
     @Test
@@ -216,9 +221,12 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, listener);
 
-        ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals("Failed to find one or more requested tools in system index", captor.getValue().getMessage());
+        Exception exception = captor.getValue();
+        assertEquals("Failed to find one or more requested tools in system index", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
     }
 
     @Test

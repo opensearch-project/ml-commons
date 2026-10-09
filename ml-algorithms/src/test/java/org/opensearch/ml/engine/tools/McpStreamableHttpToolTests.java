@@ -11,6 +11,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
@@ -21,6 +22,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
@@ -88,12 +90,22 @@ public class McpStreamableHttpToolTests {
     }
 
     @Test
-    public void testRunMissingInputParam() {
-        // No "input" key in parameters should be caught
-        tool.run(Collections.emptyMap(), listener);
+    public void testRunNoArguments() {
+        McpSchema.CallToolResult result = new McpSchema.CallToolResult(List.of(new McpSchema.TextContent("{}")), false, null, Map.of());
+        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(result);
 
-        verify(listener).onFailure(any(Exception.class));
-        verify(listener, never()).onResponse(any());
+        tool.run(Collections.emptyMap(), listener);
+        tool.run(Map.of("input", ""), listener);
+        tool.run(Map.of("input", "   "), listener);
+        tool.run(Map.of("input", "{}"), listener);
+
+        ArgumentCaptor<McpSchema.CallToolRequest> requestCaptor = ArgumentCaptor.forClass(McpSchema.CallToolRequest.class);
+        verify(mcpSyncClient, times(4)).callTool(requestCaptor.capture());
+        for (McpSchema.CallToolRequest request : requestCaptor.getAllValues()) {
+            assertTrue(request.arguments().isEmpty());
+        }
+        verify(listener, times(4)).onResponse("[{\"text\":\"{}\"}]");
+        verify(listener, never()).onFailure(any());
     }
 
     @Test

@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
@@ -37,6 +38,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -135,12 +137,24 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     // If any to update tool not found, return error.
                     if (!updateToolSet.isEmpty()) {
                         log.warn("Failed to find tools: {} in system index", updateToolSet);
-                        restoreListener.onFailure(new OpenSearchException("Failed to find one or more requested tools in system index"));
+                        restoreListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Failed to find one or more requested tools in system index",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
                     } else {
                         updateMcpTools(updateNodesRequest, searchedMcpToolWrappers, restoreListener);
                     }
                 } else {
-                    restoreListener.onFailure(new OpenSearchException("Failed to update tools as none of them is found in index"));
+                    restoreListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to update tools as none of them is found in index",
+                                RestStatus.BAD_REQUEST
+                            )
+                        );
                 }
             }, e -> {
                 log.error("Failed to search mcp tools index", e);

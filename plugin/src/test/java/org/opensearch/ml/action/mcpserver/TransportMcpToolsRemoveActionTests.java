@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +25,7 @@ import java.util.Set;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -36,6 +38,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
@@ -220,7 +223,11 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Unable to remove tools as no tool in the request found in system index", argumentCaptor.getValue().getMessage());
+        Exception exception = argumentCaptor.getValue();
+        assertEquals("Unable to remove tools as no tool in the request found in system index", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
+        verify(client, never()).bulk(any(), isA(ActionListener.class));
     }
 
     public void test_doExecute_partialToolsNotExists() {
@@ -236,10 +243,11 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Unable to remove tools as these tools: [SearchIndexTool] are not found in system index",
-            argumentCaptor.getValue().getMessage()
-        );
+        Exception exception = argumentCaptor.getValue();
+        assertEquals("Unable to remove tools as these tools: [SearchIndexTool] are not found in system index", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
+        verify(client, never()).bulk(any(), isA(ActionListener.class));
     }
 
     public void test_doExecute_bulkIndexAllFailed() {
