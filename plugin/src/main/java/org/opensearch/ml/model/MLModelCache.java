@@ -55,6 +55,9 @@ public class MLModelCache {
     private Boolean deployToAllNodes;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Instant lastAccessTime;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isAutoDeploying;
+    // Identity of the deploy attempt that created this entry. Failure cleanup removes the entry only when it still
+    // belongs to the failing attempt, so a late failure cannot evict a deployment another attempt created.
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Object deployOwner;
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
