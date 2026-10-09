@@ -5,18 +5,28 @@
 
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.ActionType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
@@ -25,6 +35,8 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 /**
@@ -606,6 +618,122 @@ public class SummarizationManagerTest {
 
         // Interactions unchanged because client call fails, but model ID resolution worked
         Assert.assertEquals(20, context.getToolInteractions().size());
+    }
+
+    @Test
+    public void testExecuteSummarizationPropagatesTenantId() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "test-model");
+        manager.initialize(config);
+
+        // Set up client mock to capture the prediction request
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.generic()).thenReturn(executorService);
+
+        // Make the executor run the submitted task immediately so client.execute() is called
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
+
+        // Set up tenant_id in context parameters
+        String expectedTenantId = "test-tenant-123";
+        Map<String, String> params = new HashMap<>();
+        params.put(TENANT_ID_FIELD, expectedTenantId);
+        params.put("_llm_model_id", "test-model");
+
+        context = ContextManagerContext.builder().toolInteractions(new ArrayList<>()).parameters(params).build();
+
+        // Add enough interactions to trigger summarization
+        addToolInteractionsToContext(20);
+
+        manager.execute(context);
+
+        // Capture the request passed to client.execute()
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client).execute(any(ActionType.class), requestCaptor.capture(), any(ActionListener.class));
+
+        MLPredictionTaskRequest capturedRequest = requestCaptor.getValue();
+        Assert.assertEquals(expectedTenantId, capturedRequest.getTenantId());
+    }
+
+    @Test
+    public void testExecuteSummarizationPropagatesNullTenantIdWhenAbsent() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "test-model");
+        manager.initialize(config);
+
+        // Set up client mock
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.generic()).thenReturn(executorService);
+
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
+
+        // No tenant_id in context parameters
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_model_id", "test-model");
+        context = ContextManagerContext.builder().toolInteractions(new ArrayList<>()).parameters(params).build();
+
+        addToolInteractionsToContext(20);
+
+        manager.execute(context);
+
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client).execute(any(ActionType.class), requestCaptor.capture(), any(ActionListener.class));
+
+        MLPredictionTaskRequest capturedRequest = requestCaptor.getValue();
+        Assert.assertNull(capturedRequest.getTenantId());
+    }
+
+    @Test
+    public void testExecuteStructuredSummarizationPropagatesTenantId() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "test-model");
+        manager.initialize(config);
+
+        // Set up client mock
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.generic()).thenReturn(executorService);
+
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
+
+        // Set up tenant_id in context parameters
+        String expectedTenantId = "structured-tenant-456";
+        Map<String, String> params = new HashMap<>();
+        params.put(TENANT_ID_FIELD, expectedTenantId);
+        params.put("_llm_model_id", "test-model");
+
+        List<Message> messages = createStructuredMessages(20);
+        context = ContextManagerContext
+            .builder()
+            .toolInteractions(new ArrayList<>())
+            .parameters(params)
+            .structuredChatHistory(messages)
+            .build();
+
+        manager.execute(context);
+
+        // Capture the request passed to client.execute()
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client).execute(any(ActionType.class), requestCaptor.capture(), any(ActionListener.class));
+
+        MLPredictionTaskRequest capturedRequest = requestCaptor.getValue();
+        Assert.assertEquals(expectedTenantId, capturedRequest.getTenantId());
     }
 
     /**
