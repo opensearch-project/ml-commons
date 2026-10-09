@@ -186,6 +186,11 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                             mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
                                         );
                                 }
+                                // Checked last: the validations above name a specific reason, so they get first
+                                // refusal. This one covers the general case - a protocol whose connector class
+                                // rejects the document the update would leave behind.
+                                ConnectorProtocolValidator
+                                    .validateProtocolRequirementsAfterUpdate(connector, mlUpdateConnectorAction.getUpdateContent());
                             } catch (Exception e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);

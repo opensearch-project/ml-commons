@@ -36,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
@@ -210,6 +211,25 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .credential(credential)
             .build();
         when(request.getMlCreateConnectorInput()).thenReturn(input);
+    }
+
+    /**
+     * Create already refuses this, because Connector.createConnector resolves the concrete class from the
+     * protocol and an AwsConnector cannot be built without a signing credential. Pinned because the update
+     * paths lean on the same invariant - a stored connector always parses as its own protocol's class - so if
+     * create ever stopped enforcing it, corrupt documents would be back in the index by another route.
+     */
+    public void test_execute_rejectsProtocolWhoseRequiredFieldsAreMissing() {
+        input.setProtocol(ConnectorProtocols.AWS_SIGV4);
+        input.setCredential(Map.of("api_key", "mockKey"));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertEquals("Missing credential", captor.getValue().getMessage());
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
     }
 
     /** Create has no stored connector, so asking for mutual TLS is always newly relying on it. */

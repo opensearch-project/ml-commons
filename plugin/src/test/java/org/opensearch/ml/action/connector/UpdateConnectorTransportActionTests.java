@@ -52,10 +52,12 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -630,11 +632,78 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
     }
 
+    /**
+     * The switch also has to carry the credential google_cloud requires: the stored connector holds an http
+     * connector's api_key, which a GoogleCloudConnector rejects, so a bare protocol swap is refused for a
+     * separate reason than the flag.
+     */
     @Test
     public void testUpdateConnectorAllowsSwitchToEnabledProtocol() {
         when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
         when(updateRequest.getUpdateContent())
-            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.GOOGLE_CLOUD).build());
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                    .credential(Map.of(GoogleCloudConnector.PRIVATE_KEY_FIELD, "key", GoogleCloudConnector.CLIENT_EMAIL_FIELD, "a@b.c"))
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        stubSearchReturnsNoModels();
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    /**
+     * A protocol selects the class the stored document is parsed back into. Relabelling an http connector as
+     * aws_sigv4 leaves a document an AwsConnector rejects, so the connector could be read back neither by get
+     * nor by a later update - it was accepted with 200 and then unusable.
+     */
+    @Test
+    public void testUpdateConnectorRejectsRelabellingOntoIncompatibleProtocol() {
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).protocol(ConnectorProtocols.AWS_SIGV4).build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+        assertTrue(captor.getValue().getMessage().contains(ConnectorProtocols.AWS_SIGV4));
+        assertTrue(captor.getValue().getMessage().contains("Missing credential"));
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    /** The same switch is fine once the request also carries the fields aws_sigv4 needs. */
+    @Test
+    public void testUpdateConnectorAllowsProtocolChangeThatSuppliesTheRequiredFields() {
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.AWS_SIGV4)
+                    .credential(
+                        Map
+                            .of(
+                                AbstractConnector.ACCESS_KEY_FIELD,
+                                "access",
+                                AbstractConnector.SECRET_KEY_FIELD,
+                                "secret",
+                                HttpConnector.REGION_FIELD,
+                                "us-east-1",
+                                HttpConnector.SERVICE_NAME_FIELD,
+                                "bedrock"
+                            )
+                    )
+                    .build()
+            );
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
