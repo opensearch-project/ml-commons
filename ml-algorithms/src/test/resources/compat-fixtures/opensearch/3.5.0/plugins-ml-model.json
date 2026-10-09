@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "nyZYEKEBjAN6Nq94FXDA",
+    "_source": {
+      "algorithm": "REMOTE",
+      "connector_id": "mCZYEKEBjAN6Nq94E3B_",
+      "created_time": 1791275570489,
+      "description": "fixture",
+      "is_hidden": false,
+      "last_updated_time": 1791275570489,
+      "model_config": {
+        "additional_config": {
+          "space_type": "l2"
+        },
+        "embedding_dimension": 1024,
+        "framework_type": "SENTENCE_TRANSFORMERS",
+        "model_type": "text_embedding"
+      },
+      "model_group_id": "myZYEKEBjAN6Nq94FHBe",
+      "model_state": "REGISTERED",
+      "model_version": "1",
+      "name": "compat-titan-embed"
+    }
+  },
+  {
+    "_id": "oiZYEKEBjAN6Nq94FnB2",
+    "_source": {
+      "algorithm": "REMOTE",
+      "connector_id": "mSZYEKEBjAN6Nq94E3Ct",
+      "created_time": 1791275570805,
+      "description": "fixture",
+      "is_hidden": false,
+      "last_updated_time": 1791275570805,
+      "model_group_id": "oCZYEKEBjAN6Nq94FnAn",
+      "model_state": "REGISTERED",
+      "model_version": "1",
+      "name": "compat-openai-chat"
+    }
+  }
+]
