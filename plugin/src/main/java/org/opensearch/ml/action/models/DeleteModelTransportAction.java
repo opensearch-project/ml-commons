@@ -212,8 +212,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     }
                                 } else {
                                     modelAccessControlHelper
-                                        .validateModelGroupAccess(
+                                        .validateModelAccess(
                                             user,
+                                            modelId,
                                             mlModel.getModelGroupId(),
                                             MLModelDeleteAction.NAME,
                                             client,

@@ -188,10 +188,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
         when(clusterService.getSettings()).thenReturn(settings);
@@ -418,10 +418,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
@@ -499,10 +499,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
