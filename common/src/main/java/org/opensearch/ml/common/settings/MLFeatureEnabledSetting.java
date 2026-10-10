@@ -35,6 +35,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VER
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -50,7 +51,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
-    private volatile List<String> trustedConnectorEndpointsRegex;
+    // Updated in place so the list handed to deployed remote models picks up setting changes.
+    private final CopyOnWriteArrayList<String> trustedConnectorEndpointsRegex = new CopyOnWriteArrayList<>();
 
     private volatile Boolean isControllerEnabled;
     private volatile Boolean isBatchIngestionEnabled;
@@ -99,7 +101,7 @@ public class MLFeatureEnabledSetting {
         isAgenticSearchTemplateEnabled = ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
-        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        trustedConnectorEndpointsRegex.addAll(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings));
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
@@ -137,9 +139,11 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled = it);
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> {
+            // Add before removing so concurrent readers never see an empty list mid-update.
+            trustedConnectorEndpointsRegex.addAllAbsent(it);
+            trustedConnectorEndpointsRegex.retainAll(it);
+        });
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
         clusterService
             .getClusterSettings()
@@ -225,9 +229,11 @@ public class MLFeatureEnabledSetting {
         return isConnectorPrivateIpEnabled;
     }
 
+    /**
+     * Returns a read-only live view of the trusted connector endpoints regex, reflecting later setting updates.
+     */
     public List<String> getTrustedConnectorEndpointsRegex() {
-        List<String> current = trustedConnectorEndpointsRegex;
-        return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
+        return Collections.unmodifiableList(trustedConnectorEndpointsRegex);
     }
 
     /**
