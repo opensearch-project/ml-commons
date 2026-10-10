@@ -197,7 +197,7 @@ Replace `<MODEL_ID>` with your deployed model ID.
 ```
 
 ## References
-- [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/docs/source/examples/semantic_highlighting/README.md)
+- [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/tree/main/docs/source/examples/semantic_highlighting)
 - [Using OpenSearch Semantic Highlighting Guide](https://docs.opensearch.org/latest/tutorials/vector-search/semantic-highlighting-tutorial/)
-- [OpenSearch ML Commons Documentation](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/)
+- [OpenSearch ML Commons Documentation](https://docs.opensearch.org/latest/ml-commons-plugin/remote-models/index/)
 - [SageMaker Endpoints Documentation](https://docs.aws.amazon.com/sagemaker/latest/dg/deploy-model.html)
