@@ -20,6 +20,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -167,6 +168,61 @@ public class MLMcpToolsUpdateNodesRequestTest {
         assertEquals("Stock data tool", parsed.getMcpTools().get(0).getDescription());
         assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getMcpTools().get(0).getParameters());
         assertTrue(parsed.getMcpTools().get(0).getAttributes().containsKey("input_schema"));
+    }
+
+    @Test
+    public void testParse_NullNameField_ThenFail() throws Exception {
+        String jsonStr = "{\"tools\":[{\"type\":\"stock_tool\",\"name\":null,\"description\":\"Stock data tool\"}]}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLMcpToolsUpdateNodesRequest.parse(parser, new String[] { "nodeId" })
+        );
+        assertEquals(McpToolUpdateInput.NAME_NOT_SHOWN_EXCEPTION_MESSAGE, exception.getMessage());
+    }
+
+    @Test
+    public void testParse_NullDescriptionField_ParsesToNullDescription() throws Exception {
+        String jsonStr = "{\"tools\":[{\"type\":\"stock_tool\",\"name\":\"stock_tool\",\"description\":null}]}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
+
+        MLMcpToolsUpdateNodesRequest parsed = MLMcpToolsUpdateNodesRequest.parse(parser, new String[] { "nodeId" });
+        assertEquals("stock_tool", parsed.getMcpTools().get(0).getName());
+        assertNull(parsed.getMcpTools().get(0).getDescription());
+    }
+
+    @Test
+    public void testParse_ParametersIsArray_ThenFail() throws Exception {
+        String jsonStr = "{\"tools\":[{\"name\":\"stock_tool\",\"parameters\":[\"a\",\"b\"]}]}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
+
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> MLMcpToolsUpdateNodesRequest.parse(parser, new String[] { "nodeId" })
+        );
+        assertTrue(exception.getMessage().contains("expecting token of type [FIELD_NAME]"));
     }
 
     @Test

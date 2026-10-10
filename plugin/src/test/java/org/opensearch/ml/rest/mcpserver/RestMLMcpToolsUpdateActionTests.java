@@ -25,6 +25,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -132,6 +133,48 @@ public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
             """;
         BytesReference bytesReference = BytesReference
             .fromByteBuffer(ByteBuffer.wrap(emptyToolListRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_prepareRequest_nullToolName() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("name field required");
+        String nullToolNameRequest = """
+            {
+                "tools": [
+                    {
+                        "name": null
+                    }
+                ]
+            }
+            """;
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(nullToolNameRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_prepareRequest_blankToolName() throws IOException {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("tool name can not be null or blank");
+        String blankToolNameRequest = """
+            {
+                "tools": [
+                    {
+                        "name": "   "
+                    }
+                ]
+            }
+            """;
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(blankToolNameRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();

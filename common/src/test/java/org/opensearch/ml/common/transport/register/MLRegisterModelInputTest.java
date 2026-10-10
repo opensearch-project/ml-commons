@@ -813,6 +813,38 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
+    public void parse_WithNullModelId() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"model_id\":null}";
+        testParseFromJsonString(true, json, parsedInput -> { assertNull(parsedInput.getModelId()); });
+    }
+
+    @Test
+    public void parse_WithModelNameAndVersion_WithNullModelId() throws Exception {
+        String json = "{\"model_format\":\"ONNX\",\"function_name\":\"TEXT_EMBEDDING\",\"model_id\":null}";
+        testParseFromJsonString("modelName", "version", true, json, parsedInput -> { assertNull(parsedInput.getModelId()); });
+    }
+
+    @Test
+    public void parse_WithNullDescriptionAndModelGroupId() throws Exception {
+        String json = "{\"name\":\"modelName\",\"version\":\"version\",\"model_format\":\"ONNX\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"description\":null,\"model_group_id\":null}";
+        testParseFromJsonString(true, json, parsedInput -> {
+            assertNull(parsedInput.getDescription());
+            assertNull(parsedInput.getModelGroupId());
+        });
+    }
+
+    @Test
+    public void parse_WithModelNameAndVersion_WithNullDescriptionAndModelGroupId() throws Exception {
+        String json = "{\"model_format\":\"ONNX\",\"function_name\":\"TEXT_EMBEDDING\",\"description\":null,\"model_group_id\":null}";
+        testParseFromJsonString("modelName", "version", true, json, parsedInput -> {
+            assertNull(parsedInput.getDescription());
+            assertNull(parsedInput.getModelGroupId());
+        });
+    }
+
+    @Test
     public void writeTo_ReadFrom_WithCustomModelId() throws IOException {
         MLRegisterModelInput inputWithModelId = input.toBuilder().modelId("text_embedding_v1").build();
         BytesStreamOutput output = new BytesStreamOutput();
