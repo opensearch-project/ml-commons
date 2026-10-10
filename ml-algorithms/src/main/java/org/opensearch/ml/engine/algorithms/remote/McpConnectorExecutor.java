@@ -23,14 +23,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import javax.net.ssl.SSLContext;
+
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLSslContextFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -72,6 +76,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     private Client client;
 
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
+
     public McpConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (McpConnector) connector;
@@ -83,6 +89,10 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             ? connector.getParameters().get(SSE_ENDPOINT_FIELD)
             : MCP_DEFAULT_SSE_ENDPOINT;
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
+
+        SSLContext sslContext = MLSslContextFactory
+            .create(super.getConnectorClientConfig(), connector.getDecryptedCredential(), certificateProcessor);
+
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
@@ -101,8 +111,12 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 .builder(mcpServerUrl)
                 .jsonMapper(JSON_MAPPER)
                 .sseEndpoint(sseEndpoint)
+                // On the transport builder: build() overwrites connectTimeout set on the client builder.
+                .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
-                    clientBuilder.connectTimeout(connectionTimeout);
+                    if (sslContext != null) {
+                        clientBuilder.sslContext(sslContext);
+                    }
                 })
                 .customizeRequest(headerConfig)
                 .build();

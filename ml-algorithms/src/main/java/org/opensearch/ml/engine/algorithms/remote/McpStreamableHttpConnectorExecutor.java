@@ -25,14 +25,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import javax.net.ssl.SSLContext;
+
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLSslContextFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -74,6 +78,8 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
     @Setter
     private Client client;
 
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
+
     public McpStreamableHttpConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (McpStreamableHttpConnector) connector;
@@ -86,6 +92,10 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
             .map(params -> params.get(ENDPOINT_FIELD))
             .orElse(MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT);
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
+
+        SSLContext sslContext = MLSslContextFactory
+            .create(super.getConnectorClientConfig(), connector.getDecryptedCredential(), certificateProcessor);
+
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
@@ -104,9 +114,13 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 .builder(mcpServerUrl)
                 .jsonMapper(JSON_MAPPER)
                 .endpoint(endpoint)
+                // On the transport builder: build() overwrites connectTimeout set on the client builder.
+                .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
-                    clientBuilder.connectTimeout(connectionTimeout);
                     clientBuilder.followRedirects(HttpClient.Redirect.NORMAL);
+                    if (sslContext != null) {
+                        clientBuilder.sslContext(sslContext);
+                    }
                 })
                 .customizeRequest(headerConfig)
                 .build();

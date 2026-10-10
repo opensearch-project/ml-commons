@@ -35,8 +35,13 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.CertificateProcessor;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -66,6 +71,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
+    private static final CertificateProcessor CERTIFICATE_PROCESSOR = new CertificateProcessor();
     final Client client;
     final SdkClient sdkClient;
 
@@ -170,12 +176,19 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
                                         mlFeatureEnabledSetting
                                     );
-                                // Skipped for an MCP connector: it carries no actions, so reading them below
-                                // throws and would escape as a 500. Nothing is lost by skipping - an MCP protocol
-                                // can never apply mutual TLS, which the supported check above already owns, so an
-                                // action URL's scheme says nothing here. The protocol-crossing check above means
-                                // the stored protocol settles this for the updated connector as well.
-                                if (!ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                // An MCP connector carries no actions - reading them throws and would escape as a
+                                // 500 - so its endpoint scheme is checked on the top-level url instead. The
+                                // protocol-crossing check above means the stored protocol settles which applies.
+                                if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    ConnectorProtocolValidator
+                                        .validateMcpMutualTlsSchemeAfterUpdate(
+                                            connector.getProtocol(),
+                                            mcpUrl(connector),
+                                            connector.getConnectorClientConfig(),
+                                            mlUpdateConnectorAction.getUpdateContent().getUrl(),
+                                            mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                        );
+                                } else {
                                     ConnectorProtocolValidator
                                         .validateMutualTlsSchemeAfterUpdate(
                                             connector.getActions(),
@@ -216,6 +229,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                     AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
                                 }
                             }
+                            // Before encrypt(): reject an invalid mutual TLS configuration up front rather
+                            // than on every request the updated connector serves.
+                            validateMutualTlsConfig(connector, updateContent);
+
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                                 connector.setLastUpdateTime(Instant.now());
@@ -254,6 +271,42 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         } catch (Exception e) {
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
+        }
+    }
+
+    /** The server url of an MCP connector; the two MCP classes share no type that declares it. */
+    private static String mcpUrl(Connector connector) {
+        if (connector instanceof McpConnector) {
+            return ((McpConnector) connector).getUrl();
+        }
+        if (connector instanceof McpStreamableHttpConnector) {
+            return ((McpStreamableHttpConnector) connector).getUrl();
+        }
+        return null;
+    }
+
+    /**
+     * Rejects an invalid mutual TLS configuration. MLValidationException carries no REST status, so
+     * it surfaces as 500; translating it keeps a malformed request a 400, consistent with the other
+     * validation in this action.
+     *
+     * <p>The connector being updated arrives with its credentials stripped by
+     * {@code ConnectorAccessControlHelper#getConnector}, so certificate presence can only be judged
+     * when this update supplies credentials of its own. Otherwise the certificates may well be
+     * stored and simply invisible here, and only the credential-independent settings are checked -
+     * validating presence unconditionally would reject every update to a working mutual TLS
+     * connector.
+     */
+    private static void validateMutualTlsConfig(Connector connector, MLCreateConnectorInput updateContent) {
+        try {
+            Map<String, String> credential = updateContent.getCredential();
+            if (credential != null && !credential.isEmpty()) {
+                CERTIFICATE_PROCESSOR.validateCertificateConfig(connector.getConnectorClientConfig(), credential);
+            } else {
+                CERTIFICATE_PROCESSOR.validateMutualTlsSettings(connector.getConnectorClientConfig());
+            }
+        } catch (MLValidationException e) {
+            throw new IllegalArgumentException(e.getMessage(), e);
         }
     }
 
