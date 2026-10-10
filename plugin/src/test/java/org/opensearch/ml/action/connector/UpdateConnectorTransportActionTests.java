@@ -637,6 +637,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     /** When the update does supply credentials, their completeness can and should be judged. */
     @Test
     public void testUpdate_withIncompleteCredentials_isRejected() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
         stubStoredConnector(null, null);
         when(updateRequest.getUpdateContent())
             .thenReturn(
@@ -888,7 +889,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     /**
-     * mutual_tls_enabled is accepted on every protocol but only honoured by the non-streaming http executor.
+     * mutual_tls_enabled is accepted on every protocol but only honoured by the non-streaming http executor
+     * and the MCP executors.
      * Accepting it elsewhere reports a transport protection back to the operator that is never applied, so the
      * request has to fail instead.
      */
@@ -990,14 +992,6 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-    }
-
-    private void stubUpdateSucceeds() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
     }
 
 }

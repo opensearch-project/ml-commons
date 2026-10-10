@@ -119,6 +119,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     mlCreateConnectorInput.getParameters(),
                     mlCreateConnectorInput.getConnectorClientConfig()
                 );
+            ConnectorProtocolValidator
+                .validateMcpMutualTlsScheme(
+                    mlCreateConnectorInput.getProtocol(),
+                    mlCreateConnectorInput.getUrl(),
+                    mlCreateConnectorInput.getConnectorClientConfig()
+                );
         } catch (Exception e) {
             listener.onFailure(e);
             return;

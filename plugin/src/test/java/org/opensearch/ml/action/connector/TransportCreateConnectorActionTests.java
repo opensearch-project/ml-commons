@@ -232,7 +232,11 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
         input.setAddAllBackendRoles(null);
         input.setBackendRoles(null);
-        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build());
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -695,6 +699,60 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
     }
 
+    private static MLCreateConnectorInput mcpMutualTlsInput(String protocol, String url) {
+        return MLCreateConnectorInput
+            .builder()
+            .name("mcp_mtls")
+            .version("1")
+            .protocol(protocol)
+            .url(url)
+            .credential(Map.of("client_cert_pem", "cert", "client_key_pem", "key"))
+            .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build())
+            .build();
+    }
+
+    /**
+     * The whole create path, not only the validator: an MCP connector requesting mutual TLS must be accepted,
+     * since its executor applies the client certificate. Guards against a protocol check rejecting it up front.
+     */
+    public void test_execute_mcpConnectorWithMutualTls_isCreated() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        for (String protocol : new String[] { ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP }) {
+            ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+            action.doExecute(task, new MLCreateConnectorRequest(mcpMutualTlsInput(protocol, "https://api.openai.com/mcp")), listener);
+
+            verify(listener, never()).onFailure(any());
+            verify(listener).onResponse(any(MLCreateConnectorResponse.class));
+        }
+    }
+
+    /** Over http:// no TLS handshake happens, so the client certificate would never be presented. */
+    public void test_execute_mcpConnectorWithMutualTlsOnCleartextUrl_isRejected() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+
+        action.doExecute(task, new MLCreateConnectorRequest(mcpMutualTlsInput(ConnectorProtocols.MCP_SSE, "http://api.openai.com/mcp")), actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage(), captor.getValue().getMessage().contains("cleartext endpoint"));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
     public void test_vertexai_connector_creation_fail_when_disabled() {
         // Vertex AI connector is opt-in; flag defaults to false, so creation must be rejected.
         when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
@@ -1036,6 +1094,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void test_execute_mutualTls_missingCertificates_failsAtCreateTime() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
         input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
 
@@ -1050,6 +1109,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void test_execute_mutualTls_withSkipSslVerification_failsAtCreateTime() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
         Map<String, String> mtlsCredential = new HashMap<>();
         mtlsCredential.put("client_cert_pem", "cert");
@@ -1074,6 +1134,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void test_execute_mutualTls_validConfig_passesValidation() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
         Map<String, String> mtlsCredential = new HashMap<>();
         mtlsCredential.put("client_cert_pem", "cert");

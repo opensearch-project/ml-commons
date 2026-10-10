@@ -39,6 +39,8 @@ import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -174,12 +176,19 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig(),
                                         mlFeatureEnabledSetting
                                     );
-                                // Skipped for an MCP connector: it carries no actions, so reading them below
-                                // throws and would escape as a 500. Nothing is lost by skipping - an MCP protocol
-                                // can never apply mutual TLS, which the supported check above already owns, so an
-                                // action URL's scheme says nothing here. The protocol-crossing check above means
-                                // the stored protocol settles this for the updated connector as well.
-                                if (!ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                // An MCP connector carries no actions - reading them throws and would escape as a
+                                // 500 - so its endpoint scheme is checked on the top-level url instead. The
+                                // protocol-crossing check above means the stored protocol settles which applies.
+                                if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    ConnectorProtocolValidator
+                                        .validateMcpMutualTlsSchemeAfterUpdate(
+                                            connector.getProtocol(),
+                                            mcpUrl(connector),
+                                            connector.getConnectorClientConfig(),
+                                            mlUpdateConnectorAction.getUpdateContent().getUrl(),
+                                            mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
+                                        );
+                                } else {
                                     ConnectorProtocolValidator
                                         .validateMutualTlsSchemeAfterUpdate(
                                             connector.getActions(),
@@ -263,6 +272,17 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
         }
+    }
+
+    /** The server url of an MCP connector; the two MCP classes share no type that declares it. */
+    private static String mcpUrl(Connector connector) {
+        if (connector instanceof McpConnector) {
+            return ((McpConnector) connector).getUrl();
+        }
+        if (connector instanceof McpStreamableHttpConnector) {
+            return ((McpStreamableHttpConnector) connector).getUrl();
+        }
+        return null;
     }
 
     /**

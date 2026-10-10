@@ -169,12 +169,14 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
         ConnectorProtocolValidator.validateMutualTlsSupported(ConnectorProtocols.HTTP, mtls(true));
     }
 
+    /** The MCP executors install the client certificate through MLSslContextFactory, so mTLS must be accepted. */
+    public void testMutualTls_allowedOnMcpProtocols() {
+        ConnectorProtocolValidator.validateMutualTlsSupported(ConnectorProtocols.MCP_SSE, mtls(true));
+        ConnectorProtocolValidator.validateMutualTlsSupported(ConnectorProtocols.MCP_STREAMABLE_HTTP, mtls(true));
+    }
+
     public void testMutualTls_rejectedOnProtocolsThatNeverApplyIt() {
-        for (String protocol : new String[] {
-            ConnectorProtocols.AWS_SIGV4,
-            ConnectorProtocols.GOOGLE_CLOUD,
-            ConnectorProtocols.MCP_SSE,
-            ConnectorProtocols.MCP_STREAMABLE_HTTP }) {
+        for (String protocol : new String[] { ConnectorProtocols.AWS_SIGV4, ConnectorProtocols.GOOGLE_CLOUD }) {
             IllegalArgumentException e = expectThrows(
                 IllegalArgumentException.class,
                 () -> ConnectorProtocolValidator.validateMutualTlsSupported(protocol, mtls(true))
@@ -389,5 +391,59 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
 
     public void testMutualTlsSchemeAfterUpdate_noChangeIsAllowed() {
         ConnectorProtocolValidator.validateMutualTlsSchemeAfterUpdate(actions("https://host/predict"), null, mtls(true), null, null, null);
+    }
+
+    // ---- validateMcpMutualTlsScheme ----------------------------------------
+
+    public void testMcpMutualTlsScheme_allowedOnHttps() {
+        for (String protocol : new String[] { ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP }) {
+            ConnectorProtocolValidator.validateMcpMutualTlsScheme(protocol, "https://mcp.example.com", mtls(true));
+        }
+    }
+
+    /** An MCP connector keeps its endpoint in url, which the action-based check never inspects. */
+    public void testMcpMutualTlsScheme_rejectedOnCleartextUrl() {
+        for (String protocol : new String[] { ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP }) {
+            IllegalArgumentException e = expectThrows(
+                IllegalArgumentException.class,
+                () -> ConnectorProtocolValidator.validateMcpMutualTlsScheme(protocol, "  HTTP://mcp.example.com", mtls(true))
+            );
+            assertTrue(e.getMessage().contains("HTTP://mcp.example.com"));
+            assertTrue(e.getMessage().contains(ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD));
+        }
+    }
+
+    public void testMcpMutualTlsScheme_nullDisabledAndNonMcpInputsAreIgnored() {
+        ConnectorProtocolValidator.validateMcpMutualTlsScheme(ConnectorProtocols.MCP_SSE, null, mtls(true));
+        ConnectorProtocolValidator.validateMcpMutualTlsScheme(ConnectorProtocols.MCP_SSE, "http://mcp", null);
+        ConnectorProtocolValidator.validateMcpMutualTlsScheme(ConnectorProtocols.MCP_SSE, "http://mcp", mtls(false));
+        // A non-MCP connector's endpoint lives in its actions, owned by validateMutualTlsScheme.
+        ConnectorProtocolValidator.validateMcpMutualTlsScheme(ConnectorProtocols.HTTP, "http://mcp", mtls(true));
+    }
+
+    public void testMcpMutualTlsSchemeAfterUpdate_rejectsNewlyIntroducedCleartextUrl() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMcpMutualTlsSchemeAfterUpdate(ConnectorProtocols.MCP_SSE, "https://mcp", mtls(true), "http://mcp", null)
+        );
+    }
+
+    public void testMcpMutualTlsSchemeAfterUpdate_rejectsTurningMutualTlsOnOverStoredCleartextUrl() {
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMcpMutualTlsSchemeAfterUpdate(ConnectorProtocols.MCP_SSE, "http://mcp", mtls(false), null, mtls(true))
+        );
+    }
+
+    public void testMcpMutualTlsSchemeAfterUpdate_allowsEditOfPreExistingCleartextCombination() {
+        ConnectorProtocolValidator
+            .validateMcpMutualTlsSchemeAfterUpdate(ConnectorProtocols.MCP_SSE, "http://mcp", mtls(true), null, mtls(true));
+    }
+
+    public void testMcpMutualTlsSchemeAfterUpdate_allowsSwitchToHttps() {
+        ConnectorProtocolValidator
+            .validateMcpMutualTlsSchemeAfterUpdate(ConnectorProtocols.MCP_SSE, "http://mcp", mtls(true), "https://mcp", null);
     }
 }
