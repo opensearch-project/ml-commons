@@ -204,13 +204,24 @@ public final class TemplateStructureAnalyzer {
 
         if (located.asKey) {
             // The param supplies a field name (e.g. the sort key), not a value.
-            String role = keys.contains("sort") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
-            return new Facts(role, List.of(), null);
+            return new Facts(sortOrSelector(keys), List.of(), null);
+        }
+
+        // A key literally named "field" always holds a field name in the DSL (terms agg,
+        // collapse, exists, rank_feature), never a value, so it must not fall through to the
+        // <clause>.<field> value rules below (e.g. aggs.<name>.terms.field is not a terms filter).
+        if (n >= 1 && "field".equals(keys.get(n - 1))) {
+            return new Facts(sortOrSelector(keys), List.of(), null);
         }
 
         String last = n >= 1 ? keys.get(n - 1) : null;
         String prev = n >= 2 ? keys.get(n - 2) : null;
         String prev2 = n >= 3 ? keys.get(n - 3) : null;
+
+        // A bare sort key given as a value: "sort":"{{x}}" or "sort":["{{x}}"].
+        if ("sort".equals(last)) {
+            return new Facts(ROLE_SORT_FIELD, List.of(), null);
+        }
 
         // Top-level paging controls.
         if (n == 1) {
@@ -479,6 +490,11 @@ public final class TemplateStructureAnalyzer {
     }
 
     // ---- internals ---------------------------------------------------------
+
+    /** A geo-distance sort takes a geo_point, which is never in the sortable set. */
+    private static String sortOrSelector(List<String> keys) {
+        return keys.contains("sort") && !keys.contains("_geo_distance") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
+    }
 
     private static boolean isRangeBound(String key) {
         return "gte".equals(key) || "gt".equals(key) || "lte".equals(key) || "lt".equals(key);
