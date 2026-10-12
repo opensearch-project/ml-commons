@@ -345,7 +345,7 @@ public class AgenticSearchTemplateService {
         reconcileMappingEnum(spec, facts.role, sortable);
 
         // A closed-vocabulary slot becomes an enum: only for a string param with no enum yet,
-        // so a field-name enum from deriveSchema is left as is.
+        // so a field-name enum that survived reconcileMappingEnum is left as is.
         List<String> vocab = TemplateStructureAnalyzer.vocabEnum(facts);
         if (vocab != null && MustacheTemplateAnalyzer.TYPE_STRING.equals(type) && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY)) {
             spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(vocab));
@@ -396,7 +396,7 @@ public class AgenticSearchTemplateService {
 
     /** Heuristic: a param that selects a field (named "field", "sort_by", or ending in _field). */
     private static boolean targetsAField(String name) {
-        String n = name.toLowerCase(java.util.Locale.ROOT);
+        String n = name.toLowerCase(Locale.ROOT);
         return n.equals("field") || n.equals("sort_by") || n.endsWith("_field");
     }
 
@@ -556,6 +556,7 @@ public class AgenticSearchTemplateService {
             "half_float",
             "scaled_float",
             "unsigned_long",
+            "token_count",
             "date",
             "date_nanos",
             "boolean",
