@@ -103,6 +103,14 @@ public class GoogleCredentialProvider {
             return credentials.getAccessToken().getTokenValue();
         } catch (IOException e) {
             throw new MLException("Failed to obtain Google OAuth2 access token: " + e.getMessage(), e);
+        } catch (NoClassDefFoundError | ExceptionInInitializerError e) {
+            // The refresh path initializes google-http-client's OpenCensus instrumentation, which needs
+            // io.grpc.Context. That class comes from the transport-grpc module, declared optional in
+            // plugin/build.gradle. Modules are mandatory in every supported OpenSearch distribution, so
+            // this can only fire on an image with modules/ stripped. Catching an Error is deliberate:
+            // it is the one chokepoint for token minting, and the raw failure surfaces as an opencensus
+            // stack trace naming neither google_cloud nor the missing module.
+            throw new MLException("google_cloud token minting requires the transport-grpc module, which is unavailable: " + e, e);
         }
     }
 }
