@@ -117,10 +117,12 @@ public class AgenticSearchTemplateFieldNamesTests {
             "f",
             map("type", "ip"),
             "g",
-            map("type", "integer")
+            map("type", "integer"),
+            "h",
+            map("type", "token_count", "analyzer", "standard")
         );
 
-        assertEquals(Set.of("a", "b", "c", "d", "e", "f", "g"), sortable(props));
+        assertEquals(Set.of("a", "b", "c", "d", "e", "f", "g", "h"), sortable(props));
     }
 
     @Test
@@ -443,6 +445,35 @@ public class AgenticSearchTemplateFieldNamesTests {
 
         assertEquals(List.of("location", "price"), collect(props));
         assertEquals(Set.of("price"), sortable(props));
+    }
+
+    @Test
+    public void enrichment_geoDistanceSortKeyKeepsFullEnum() {
+        // The only value that works here is the geo_point, so the sortable subset must not replace the list.
+        Map<String, Object> props = map(
+            "brand",
+            map("type", "keyword"),
+            "price",
+            map("type", "double"),
+            "location",
+            map("type", "geo_point")
+        );
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":[{\"_geo_distance\":{\"{{geo_field}}\":\"{{origin}}\"}}]}";
+        Map<String, Object> schema = deriveAndEnrich(
+            body,
+            collect(props),
+            sortable(props),
+            rp -> map(
+                "query",
+                map("match_all", map()),
+                "sort",
+                List.of(map("_geo_distance", map((String) rp.get("geo_field"), rp.get("origin"))))
+            )
+        );
+
+        assertEquals(List.of("brand", "price", "location"), enumOf(schema, "geo_field"));
+        assertEquals("mapping", specOf(schema, "geo_field").get("source"));
+        assertFalse(specOf(schema, "origin").containsKey("enum"));
     }
 
     // ---- the issue's repro, end to end -------------------------------------

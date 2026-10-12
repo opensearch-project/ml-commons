@@ -329,6 +329,17 @@ public class TemplateStructureAnalyzerTests {
     }
 
     @Test
+    public void classify_geoDistanceSortKeyIsFieldSelector() {
+        // The key names a geo_point, which no sortable set contains, so it must not be a sort_field.
+        checkSingle(
+            "string",
+            mk -> map("sort", list(map("_geo_distance", map(mk, "40.7,-74.0", "order", "asc")))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            "Field name to target."
+        );
+    }
+
+    @Test
     public void classify_termsAggFieldIsFieldSelector() {
         // A literal "field" key holds a field name, so a terms agg is not read as a terms filter.
         checkSingle(
