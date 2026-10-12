@@ -133,4 +133,21 @@ public class MustacheTemplateAnalyzerTests {
         // lex_fields is a triple-stache -> array.
         assertEquals("array", spec(schema, "lex_fields").get("type"));
     }
+
+    @Test
+    public void derive_invertedOnlyBoolean_describedAsOmittingItsClause() {
+        // true REMOVES a {{^x}}-only clause, so it must not get the generic "enable" wording.
+        Map<String, Object> schema = MustacheTemplateAnalyzer
+            .derive(
+                "{ \"query\": { \"match_all\": {} }{{^skip_explain}}, \"explain\": true{{/skip_explain}}"
+                    + "{{#with_version}}, \"version\": true{{/with_version}}"
+                    + "{{#both}}, \"a\": 1{{/both}}{{^both}}, \"a\": 2{{/both}} }"
+            );
+
+        assertEquals("boolean", spec(schema, "skip_explain").get("type"));
+        assertEquals("Set to true to omit the optional skip_explain clause.", spec(schema, "skip_explain").get("description"));
+        // A {{#x}} guard, alone or alongside {{^x}}, keeps the empty description for enrichment.
+        assertEquals("", spec(schema, "with_version").get("description"));
+        assertEquals("", spec(schema, "both").get("description"));
+    }
 }

@@ -266,8 +266,9 @@ public class AgenticSearchTemplateService {
                 return null;
             }
             // Render with optionals omitted so an optional param's slot shows the body's own
-            // default; read that value at the param's (stable) path below.
-            Map<String, Object> defaults = renderToMap(body, sampleParams(schema, true));
+            // default; read that value at the param's (aligned) path below. Required params
+            // render as markers so a default that is another param's value is recognizable.
+            Map<String, Object> defaults = renderToMap(body, TemplateStructureAnalyzer.defaultsRenderParams(schema, markers));
             applyStructuralEnrichment(schema, markers, rendered, defaults);
             // Derive a one-line template-level description (capabilities grouped by clause)
             // for multi-template selection. Null when no role is recovered.
@@ -290,6 +291,9 @@ public class AgenticSearchTemplateService {
         Map<String, Object> defaults
     ) {
         Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
+        // A slot whose default is another param's value renders that param's marker; it has no
+        // literal default, so blank it before any default is read.
+        defaults = TemplateStructureAnalyzer.withoutMarkers(defaults, markers);
         for (Map.Entry<String, Object> entry : schema.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
                 continue;
@@ -341,8 +345,8 @@ public class AgenticSearchTemplateService {
             return;
         }
         Object defaultValue = null;
-        if (Boolean.FALSE.equals(spec.get(MustacheTemplateAnalyzer.REQUIRED_KEY)) && located.isStablePath() && defaults != null) {
-            defaultValue = TemplateStructureAnalyzer.valueAt(defaults, located.path);
+        if (Boolean.FALSE.equals(spec.get(MustacheTemplateAnalyzer.REQUIRED_KEY)) && defaults != null) {
+            defaultValue = TemplateStructureAnalyzer.alignedValueAt(rendered, defaults, located.path);
         }
         String description = TemplateStructureAnalyzer.describe(facts, defaultValue);
         if (description != null) {
