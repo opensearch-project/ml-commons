@@ -455,6 +455,48 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
+    public void getModelCachePath_keepsRelativeRepositoryNameInsideCache() {
+        String modelName = "huggingface/sentence-transformers/all-MiniLM-L6-v2";
+        Path actualPath = mlEngine.getModelCachePath("cachedModel", modelName, "1.0.0");
+
+        assertTrue(actualPath.startsWith(mlEngine.getModelCacheRootPath()));
+        assertEquals("all-MiniLM-L6-v2", actualPath.getFileName().toString());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void getModelCachePath_rejectsAbsoluteModelName() {
+        mlEngine.getModelCachePath("cachedModel", "/tmp/outside-cache", "1.0.0");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void getModelCachePath_rejectsAbsoluteVersion() {
+        mlEngine.getModelCachePath("cachedModel", "myModel", "/tmp/outside-cache");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void getModelCachePath_rejectsDotDotEscape() {
+        mlEngine.getModelCachePath("cachedModel", "foo/../../../../../../outside-cache", "1.0.0");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void getRegisterModelPath_rejectsAbsoluteModelName() {
+        mlEngine.getRegisterModelPath("cachedModel", "/tmp/outside-cache", "1.0.0");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void getDeployModelZipPath_rejectsAbsoluteModelName() {
+        mlEngine.getDeployModelZipPath("cachedModel", "/tmp/outside-cache");
+    }
+
+    @Test
+    public void getDeployModelZipPath_keepsRelativeNameUnderDeployRoot() {
+        String zipPath = mlEngine.getDeployModelZipPath("cachedModel", "huggingface/sentence-transformers/all-MiniLM-L6-v2");
+
+        assertTrue(Path.of(zipPath).startsWith(mlEngine.getDeployModelRootPath()));
+        assertTrue(zipPath.endsWith(".zip"));
+    }
+
+    @Test
     public void testMLEngineInitialization() {
         Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
         mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
