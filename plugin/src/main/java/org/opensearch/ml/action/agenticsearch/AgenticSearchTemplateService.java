@@ -758,8 +758,11 @@ public class AgenticSearchTemplateService {
         // Lenient name collection: a body derive() rejects (e.g. list iteration) is exactly
         // the one a caller must supply a schema for, so that schema must still pass here.
         Set<String> bodyParams = MustacheTemplateAnalyzer.paramNames(body);
+        // A schema saved from 3.9.0 may name a built-in section ({{#url}}) that release derived
+        // as a boolean param; keep accepting it so such a schema still registers.
+        Set<String> builtins = MustacheTemplateAnalyzer.builtinSectionNames(body);
         for (String name : paramSchema.keySet()) {
-            if (!bodyParams.contains(name)) {
+            if (!bodyParams.contains(name) && !builtins.contains(name)) {
                 throw new IllegalArgumentException(
                     "param '"
                         + name

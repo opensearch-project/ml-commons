@@ -116,6 +116,8 @@ public class MustacheTemplateAnalyzer {
         final Map<String, ParamFacts> facts = new LinkedHashMap<>();
         // Params only reachable through a toJson/join built-in: named, but not typeable.
         final Set<String> functionParams = new LinkedHashSet<>();
+        // Built-in section names as written ({{#url}}, {{#toJson}}, ...); not params.
+        final Set<String> builtinSections = new LinkedHashSet<>();
         // Constructs that make a derived schema wrong; derive() rejects on any of them.
         final List<String> issues = new ArrayList<>();
     }
@@ -149,6 +151,17 @@ public class MustacheTemplateAnalyzer {
         Set<String> names = new LinkedHashSet<>(scan.facts.keySet());
         names.addAll(scan.functionParams);
         return Collections.unmodifiableSet(names);
+    }
+
+    /**
+     * The built-in section names the body uses, exactly as written. Up to 3.9.0 the analyzer
+     * derived these as boolean params, so a schema saved from that release may still name
+     * them; the engine never reads a value under such a name, so accepting one is harmless.
+     *
+     * @throws IllegalArgumentException if the body is empty or has an unbalanced section.
+     */
+    public static Set<String> builtinSectionNames(String body) {
+        return Collections.unmodifiableSet(scan(body).builtinSections);
     }
 
     private static Scan scan(String body) {
@@ -227,7 +240,9 @@ public class MustacheTemplateAnalyzer {
                     boolean inverted = sigil == '^';
                     boolean function = !inverted && isBuiltinFunction(name);
                     openSections.push(new OpenSection(name, inverted, function, afterTag));
-                    if (!function) {
+                    if (function) {
+                        scan.builtinSections.add(name);
+                    } else {
                         scan.facts.computeIfAbsent(name, k -> new ParamFacts()).usedAsSection = true;
                     }
                     break;
@@ -295,10 +310,10 @@ public class MustacheTemplateAnalyzer {
         if (".".equals(name)) {
             // The implicit iterator: inside {{#xs}}, xs is a list the body iterates, so it
             // must be filled with a real list (a boolean guard would render one bogus item).
-            // A built-in such as {{#url}} is not the list, so skip it; at root or directly in
-            // an inverted section there is no list to attribute it to.
-            OpenSection section = innermostParamSection(openSections);
-            if (section != null && !section.inverted) {
+            // Neither a built-in such as {{#url}} nor an inverted section pushes a new context,
+            // so {{.}} still names the nearest enclosing {{#x}}; at root there is no list.
+            OpenSection section = innermostLoopSection(openSections);
+            if (section != null) {
                 scan.facts.computeIfAbsent(section.name, k -> new ParamFacts()).iteratedWithDot = true;
             }
             return;
@@ -322,6 +337,16 @@ public class MustacheTemplateAnalyzer {
     private static OpenSection innermostParamSection(Deque<OpenSection> openSections) {
         for (OpenSection section : openSections) { // ArrayDeque iterates from the top of the stack
             if (!section.function) {
+                return section;
+            }
+        }
+        return null;
+    }
+
+    /** The innermost open {{#x}} param section, skipping built-ins and inverted sections. */
+    private static OpenSection innermostLoopSection(Deque<OpenSection> openSections) {
+        for (OpenSection section : openSections) {
+            if (!section.function && !section.inverted) {
                 return section;
             }
         }
