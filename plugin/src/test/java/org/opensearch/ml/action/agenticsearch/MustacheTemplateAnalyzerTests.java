@@ -222,6 +222,24 @@ public class MustacheTemplateAnalyzerTests {
     }
 
     @Test
+    public void derive_implicitIteratorInInvertedSectionInsideLoop_attributesToLoop() {
+        // An inverted section pushes no context, so {{.}} is still the xs element.
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"a\":[{{#xs}}{{^flag}}\"{{.}}\",{{/flag}}{{/xs}}\"z\"]}");
+        assertEquals("list", spec(schema, "xs").get("type"));
+        assertEquals(Boolean.FALSE, spec(schema, "xs").get("required"));
+        assertEquals("boolean", spec(schema, "flag").get("type"));
+    }
+
+    @Test
+    public void builtinSectionNames_returnsNamesAsWritten() {
+        assertEquals(
+            Set.of("url", "TOJSON"),
+            MustacheTemplateAnalyzer.builtinSectionNames("{\"q\":\"{{#url}}{{t}}{{/url}}\",\"b\":{{#TOJSON}}xs{{/TOJSON}}}")
+        );
+        assertEquals(Set.of(), MustacheTemplateAnalyzer.builtinSectionNames("{\"q\":\"{{q}}\"}"));
+    }
+
+    @Test
     public void derive_toJsonSection_throws_paramNamesReturnsInnerName() {
         String body = "{\"query\":{\"terms\":{\"brand\":{{#toJson}}brands{{/toJson}}}}}";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MustacheTemplateAnalyzer.derive(body));

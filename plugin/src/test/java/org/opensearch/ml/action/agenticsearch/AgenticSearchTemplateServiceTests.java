@@ -521,7 +521,26 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
         service.rejectUnknownParams(ImmutableMap.of("brands", ImmutableMap.of("type", "array")), body);
         assertThrows(
             IllegalArgumentException.class,
-            () -> service.rejectUnknownParams(ImmutableMap.of("toJson", ImmutableMap.of("type", "boolean")), body)
+            () -> service.rejectUnknownParams(ImmutableMap.of("colors", ImmutableMap.of("type", "array")), body)
+        );
+    }
+
+    @Test
+    public void rejectUnknownParams_acceptsBuiltinSectionNameFromA39Schema() {
+        // 3.9.0 derived {{#url}}/{{#toJson}} as a boolean param of that name, so a schema saved
+        // from that release still names it and must keep registering.
+        String urlBody = "{\"query\":{\"match\":{\"title\":\"{{#url}}{{term}}{{/url}}\"}}}";
+        service
+            .rejectUnknownParams(
+                ImmutableMap.of("url", ImmutableMap.of("type", "boolean"), "term", ImmutableMap.of("type", "string")),
+                urlBody
+            );
+        String toJsonBody = "{\"query\":{\"terms\":{\"brand\":{{#toJson}}brands{{/toJson}}}}}";
+        service.rejectUnknownParams(ImmutableMap.of("toJson", ImmutableMap.of("type", "boolean")), toJsonBody);
+        // Only the name as written in the body is accepted, not every built-in.
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.rejectUnknownParams(ImmutableMap.of("join", ImmutableMap.of("type", "boolean")), urlBody)
         );
     }
 
