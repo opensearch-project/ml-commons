@@ -79,29 +79,34 @@ public class RestMLConnectorReferenceGuardIT extends MLCommonsRestTestCase {
     }
 
     private String connectorBody(String connectorId) {
-        return String.format(Locale.ROOT, """
-            {
-              "connector_id": "%s",
-              "name": "reference guard connector",
-              "description": "connector used to verify the model reference guard",
-              "version": 1,
-              "protocol": "http",
-              "parameters": {
-                "endpoint": "api.openai.com",
-                "model": "gpt-3.5-turbo-instruct"
-              },
-              "credential": {
-                "openAI_key": "placeholder-not-used-by-this-test"
-              },
-              "actions": [
-                {
-                  "action_type": "predict",
-                  "method": "POST",
-                  "url": "https://${parameters.endpoint}/v1/completions",
-                  "request_body": "{ \\"model\\": \\"${parameters.model}\\", \\"prompt\\": \\"${parameters.prompt}\\" }"
-                }
-              ]
-            }
-            """, connectorId);
+        return String
+            .format(
+                Locale.ROOT,
+                """
+                    {
+                      "connector_id": "%s",
+                      "name": "reference guard connector",
+                      "description": "connector used to verify the model reference guard",
+                      "version": 1,
+                      "protocol": "http",
+                      "parameters": {
+                        "endpoint": "api.openai.com",
+                        "model": "gpt-4o-mini"
+                      },
+                      "credential": {
+                        "openAI_key": "placeholder-not-used-by-this-test"
+                      },
+                      "actions": [
+                        {
+                          "action_type": "predict",
+                          "method": "POST",
+                          "url": "https://${parameters.endpoint}/v1/chat/completions",
+                          "request_body": "{ \\"model\\": \\"${parameters.model}\\", \\"messages\\": [{\\"role\\": \\"user\\", \\"content\\": \\"${parameters.prompt}\\"}] }"
+                        }
+                      ]
+                    }
+                    """,
+                connectorId
+            );
     }
 }
