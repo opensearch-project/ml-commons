@@ -95,6 +95,8 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
         SSLContext sslContext = MLSslContextFactory
             .create(super.getConnectorClientConfig(), connector.getDecryptedCredential(), certificateProcessor);
+        boolean mutualTls = super.getConnectorClientConfig() != null
+            && Boolean.TRUE.equals(super.getConnectorClientConfig().getMutualTlsEnabled());
 
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
@@ -117,7 +119,9 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 // On the transport builder: build() overwrites connectTimeout set on the client builder.
                 .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
-                    clientBuilder.followRedirects(HttpClient.Redirect.NORMAL);
+                    // A followed redirect reuses this SSLContext, so with mutual TLS another host could be handed the
+                    // client certificate.
+                    clientBuilder.followRedirects(mutualTls ? HttpClient.Redirect.NEVER : HttpClient.Redirect.NORMAL);
                     if (sslContext != null) {
                         clientBuilder.sslContext(sslContext);
                     }

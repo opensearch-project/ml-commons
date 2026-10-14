@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.CommonValue.SSE_ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
+import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -92,6 +93,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
         SSLContext sslContext = MLSslContextFactory
             .create(super.getConnectorClientConfig(), connector.getDecryptedCredential(), certificateProcessor);
+        boolean mutualTls = super.getConnectorClientConfig() != null
+            && Boolean.TRUE.equals(super.getConnectorClientConfig().getMutualTlsEnabled());
 
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
@@ -114,6 +117,11 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 // On the transport builder: build() overwrites connectTimeout set on the client builder.
                 .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
+                    // A followed redirect reuses this SSLContext, so with mutual TLS another host could be handed the
+                    // client certificate. Set explicitly rather than relying on the client's default.
+                    if (mutualTls) {
+                        clientBuilder.followRedirects(HttpClient.Redirect.NEVER);
+                    }
                     if (sslContext != null) {
                         clientBuilder.sslContext(sslContext);
                     }

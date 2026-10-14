@@ -27,8 +27,8 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * Builds the {@link SSLContext} used by the MCP connector transports, which reach remote services
- * through the JDK's {@code java.net.http.HttpClient}. {@link MLHttpClientFactory} takes
+ * Builds the {@link SSLContext} for connectors that reach remote services through the JDK's
+ * {@code java.net.http.HttpClient}. {@link MLHttpClientFactory} takes
  * {@code KeyManager[]}/{@code TrustManager[]} directly through the AWS SDK's provider hooks; the JDK
  * client only accepts an assembled {@code SSLContext}.
  */

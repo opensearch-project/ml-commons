@@ -658,6 +658,29 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         assertTrue(failure.getMessage(), failure.getMessage().contains("client_key_pem"));
     }
 
+    /** A connector without mutual TLS has no stored certificates, so turning it on must supply them. */
+    @Test
+    public void testUpdate_enablingMutualTlsWithoutCredentials_isRejected() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        stubStoredConnector(null, null);
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build())
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue(failure.getMessage(), failure.getMessage().contains("in the same update"));
+    }
+
     private void stubStoredConnector(ConnectorClientConfig clientConfig, Map<String, String> credential) {
         // Without this the mock denies access and doExecute never reaches the mutual TLS validation.
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
