@@ -117,7 +117,9 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 // On the transport builder: build() overwrites connectTimeout set on the client builder.
                 .connectTimeout(connectionTimeout)
                 .customizeClient(clientBuilder -> {
-                    clientBuilder.followRedirects(HttpClient.Redirect.NORMAL);
+                    // A followed redirect reuses this SSLContext, so with mutual TLS another host could be handed the
+                    // client certificate.
+                    clientBuilder.followRedirects(sslContext != null ? HttpClient.Redirect.NEVER : HttpClient.Redirect.NORMAL);
                     if (sslContext != null) {
                         clientBuilder.sslContext(sslContext);
                     }

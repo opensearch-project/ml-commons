@@ -38,6 +38,7 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
@@ -205,6 +206,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 return;
                             }
 
+                            boolean storedMutualTls = connector.getConnectorClientConfig() != null
+                                && Boolean.TRUE.equals(connector.getConnectorClientConfig().getMutualTlsEnabled());
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
@@ -231,7 +234,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             }
                             // Before encrypt(): reject an invalid mutual TLS configuration up front rather
                             // than on every request the updated connector serves.
-                            validateMutualTlsConfig(connector, updateContent);
+                            validateMutualTlsConfig(connector, updateContent, storedMutualTls);
 
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
@@ -295,13 +298,19 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
      * when this update supplies credentials of its own. Otherwise the certificates may well be
      * stored and simply invisible here, and only the credential-independent settings are checked -
      * validating presence unconditionally would reject every update to a working mutual TLS
-     * connector.
+     * connector. A connector that did not have mutual TLS before has no stored certificates to rely
+     * on, so turning it on requires the certificates in the same update.
      */
-    private static void validateMutualTlsConfig(Connector connector, MLCreateConnectorInput updateContent) {
+    private static void validateMutualTlsConfig(Connector connector, MLCreateConnectorInput updateContent, boolean storedMutualTls) {
         try {
             Map<String, String> credential = updateContent.getCredential();
+            ConnectorClientConfig config = connector.getConnectorClientConfig();
             if (credential != null && !credential.isEmpty()) {
-                CERTIFICATE_PROCESSOR.validateCertificateConfig(connector.getConnectorClientConfig(), credential);
+                CERTIFICATE_PROCESSOR.validateCertificateConfig(config, credential);
+            } else if (!storedMutualTls && config != null && Boolean.TRUE.equals(config.getMutualTlsEnabled())) {
+                throw new IllegalArgumentException(
+                    "Enabling mutual_tls_enabled requires the client certificate credentials in the same update"
+                );
             } else {
                 CERTIFICATE_PROCESSOR.validateMutualTlsSettings(connector.getConnectorClientConfig());
             }
