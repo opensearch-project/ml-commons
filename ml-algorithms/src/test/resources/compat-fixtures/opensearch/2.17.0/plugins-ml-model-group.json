@@ -1,0 +1,24 @@
+[
+  {
+    "_id": "3spWEKEBA3WI_k51THhg",
+    "_source": {
+      "access": "public",
+      "created_time": 1791275453425,
+      "description": "fixture",
+      "last_updated_time": 1791275453719,
+      "latest_version": 1,
+      "name": "compat-titan-embed"
+    }
+  },
+  {
+    "_id": "4cpWEKEBA3WI_k51TngK",
+    "_source": {
+      "access": "public",
+      "created_time": 1791275453962,
+      "description": "fixture",
+      "last_updated_time": 1791275454001,
+      "latest_version": 1,
+      "name": "compat-openai-chat"
+    }
+  }
+]
