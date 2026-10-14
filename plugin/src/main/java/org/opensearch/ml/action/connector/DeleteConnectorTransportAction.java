@@ -90,6 +90,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                 connectorId,
                 tenantId,
                 mlFeatureEnabledSetting,
+                MLConnectorDeleteAction.NAME,
                 ActionListener
                     .wrap(
                         isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, actionListener),

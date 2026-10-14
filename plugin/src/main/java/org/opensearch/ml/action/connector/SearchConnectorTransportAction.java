@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -19,12 +22,17 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -107,20 +115,33 @@ public class SearchConnectorTransportAction extends HandledTransportAction<MLSea
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
+            // When connectors are protected in their own right, search has to admit exactly what a per-connector
+            // permission check would admit: the connectors whose own sharing record grants the caller. Without this the
+            // point check denies an unshared connector while search still returns it.
+            //
+            // This deliberately does not lean on the security plugin's DLS filter. That filter only engages for a search
+            // the security plugin sees as an internal request, and this search does not reach it that way - the same was
+            // verified end to end for model search. Filtering here keeps it fail-closed regardless.
+            if (shouldUseResourceAuthz(ML_CONNECTOR_RESOURCE_TYPE) && user != null) {
+                var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                resourceSharingClient.getAccessibleResourceIds(ML_CONNECTOR_RESOURCE_TYPE, ActionListener.wrap(accessibleIds -> {
+                    SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
+                    gated.query(restrictToAccessible(gated.query(), accessibleIds));
+                    request.source(gated);
+                    runSearch(request, tenantId, doubleWrappedListener);
+                }, e -> {
+                    log.error("Failed to resolve accessible ml-connector ids", e);
+                    wrappedListener.onFailure(e);
+                }));
+                return;
+            }
+
             if (!connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
             }
 
-            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                .builder()
-                .indices(request.indices())
-                .searchSourceBuilder(request.source())
-                .tenantId(tenantId)
-                .build();
-            sdkClient
-                .searchDataObjectAsync(searchDataObjectRequest)
-                .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
+            runSearch(request, tenantId, doubleWrappedListener);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
@@ -146,6 +167,35 @@ public class SearchConnectorTransportAction extends HandledTransportAction<MLSea
             listener.onResponse(emptySearchResponse);
         } else {
             listener.onFailure(e);
+        }
+    }
+
+    private void runSearch(SearchRequest request, String tenantId, ActionListener<SearchResponse> listener) {
+        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            .builder()
+            .indices(request.indices())
+            .searchSourceBuilder(request.source())
+            .tenantId(tenantId)
+            .build();
+        sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+    }
+
+    /**
+     * Narrows a search to the connectors the caller may reach. An empty set denies everything rather than matching
+     * everything, so a caller with no accessible connector sees none instead of all of them.
+     */
+    static QueryBuilder restrictToAccessible(QueryBuilder existing, @Nullable Collection<String> accessibleConnectorIds) {
+        final QueryBuilder gate = (accessibleConnectorIds == null || accessibleConnectorIds.isEmpty())
+            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery())
+            : QueryBuilders.idsQuery().addIds(accessibleConnectorIds.toArray(new String[0]));
+
+        if (existing == null) {
+            return gate;
+        } else if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(gate);
+            return existing;
+        } else {
+            return QueryBuilders.boolQuery().must(existing).filter(gate);
         }
     }
 }

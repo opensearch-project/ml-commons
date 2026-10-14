@@ -122,10 +122,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -235,10 +235,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
 
     public void test_UserHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), any());
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = forClass(Exception.class);
@@ -322,10 +322,10 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), any());
 
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = forClass(Exception.class);

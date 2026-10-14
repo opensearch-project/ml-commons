@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_RESOURCE_TYPE;
 import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
@@ -17,6 +19,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.DocRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -28,7 +31,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class MLUpdateConnectorRequest extends ActionRequest {
+public class MLUpdateConnectorRequest extends ActionRequest implements DocRequest {
     String connectorId;
     MLCreateConnectorInput updateContent;
 
@@ -94,5 +97,20 @@ public class MLUpdateConnectorRequest extends ActionRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLUpdateConnectorRequest", e);
         }
+    }
+
+    @Override
+    public String type() {
+        return ML_CONNECTOR_RESOURCE_TYPE;
+    }
+
+    @Override
+    public String index() {
+        return ML_CONNECTOR_INDEX;
+    }
+
+    @Override
+    public String id() {
+        return connectorId;
     }
 }

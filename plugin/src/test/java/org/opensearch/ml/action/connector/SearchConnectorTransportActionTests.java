@@ -12,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -31,6 +33,11 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.IdsQueryBuilder;
+import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -204,4 +211,42 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
+    public void test_restrictToAccessible_noAccessibleIds_deniesEverything() {
+        // An empty set must deny rather than match everything, so a caller with no accessible connector sees none
+        QueryBuilder gated = SearchConnectorTransportAction.restrictToAccessible(null, List.of());
+
+        assertTrue(gated instanceof BoolQueryBuilder);
+        BoolQueryBuilder bool = (BoolQueryBuilder) gated;
+        assertEquals(1, bool.mustNot().size());
+        assertTrue(bool.mustNot().get(0) instanceof MatchAllQueryBuilder);
+    }
+
+    public void test_restrictToAccessible_accessibleIds_gatesOnThoseIds() {
+        QueryBuilder gated = SearchConnectorTransportAction.restrictToAccessible(null, List.of("c1", "c2"));
+
+        assertTrue(gated instanceof IdsQueryBuilder);
+        assertEquals(Set.of("c1", "c2"), ((IdsQueryBuilder) gated).ids());
+    }
+
+    public void test_restrictToAccessible_existingQueryIsKeptAndFiltered() {
+        QueryBuilder existing = QueryBuilders.termQuery("name", "my-connector");
+
+        QueryBuilder gated = SearchConnectorTransportAction.restrictToAccessible(existing, List.of("c1"));
+
+        assertTrue(gated instanceof BoolQueryBuilder);
+        BoolQueryBuilder bool = (BoolQueryBuilder) gated;
+        assertEquals(List.of(existing), bool.must());
+        assertEquals(1, bool.filter().size());
+        assertTrue(bool.filter().get(0) instanceof IdsQueryBuilder);
+    }
+
+    public void test_restrictToAccessible_existingBoolQueryIsFilteredInPlace() {
+        BoolQueryBuilder existing = QueryBuilders.boolQuery().must(QueryBuilders.matchAllQuery());
+
+        QueryBuilder gated = SearchConnectorTransportAction.restrictToAccessible(existing, List.of("c1"));
+
+        assertSame(existing, gated);
+        assertEquals(1, existing.filter().size());
+        assertTrue(existing.filter().get(0) instanceof IdsQueryBuilder);
+    }
 }

@@ -97,61 +97,76 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
             String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
-                if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-                    // An MCP connector defines no actions, so the executor selected for its protocol cannot build a
-                    // payload for one - the accessors are unimplemented and escape as a 500. MCP connectors are
-                    // reached through the agent and MCP tool APIs, not through connector execute.
-                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
-                        log.error("Rejected execute on MCP connector {}", connectorId);
-                        actionListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "Cannot execute an MCP connector: protocol ["
-                                        + connector.getProtocol()
-                                        + "] defines no executable action.",
-                                    RestStatus.BAD_REQUEST
-                                )
-                            );
-                        return;
-                    }
-                    // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-                    ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
-                        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
-                            .initInstance(connector.getProtocol(), connector, Connector.class);
-                        connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-                        connectorExecutor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
-                        connectorExecutor.setScriptService(scriptService);
-                        connectorExecutor.setClusterService(clusterService);
-                        connectorExecutor.setClient(client);
-                        connectorExecutor.setXContentRegistry(xContentRegistry);
-                        connectorExecutor
-                            .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
-                                connectorExecutor.close();
-                                connector.removeCredential();
-                                actionListener.onResponse(taskResponse);
-                            }, e -> {
-                                connectorExecutor.close();
-                                connector.removeCredential();
-                                actionListener.onFailure(e);
-                            }));
-                    }, e -> {
-                        log.error("Failed to decrypt credentials in connector", e);
-                        connector.removeCredential();
-                        actionListener.onFailure(e);
-                    });
-                    connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
-                } else {
-                    // Without this the listener is never completed on denial, so the request hangs until the client
-                    // gives up instead of reporting that access was refused.
-                    log.error("You don't have permission to execute this connector, connector id: {}", connectorId);
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "You don't have permission to execute this connector, connector id: " + connectorId,
-                                RestStatus.FORBIDDEN
-                            )
-                        );
-                }
+                // The check is asynchronous, so the execution path below runs from its listener rather than from an if
+                connectorAccessControlHelper
+                    .validateConnectorAccess(
+                        client,
+                        connectorId,
+                        connector,
+                        MLExecuteConnectorAction.NAME,
+                        ActionListener.wrap(hasPermission -> {
+                            if (Boolean.TRUE.equals(hasPermission)) {
+                                // An MCP connector defines no actions, so the executor selected for its protocol cannot build a
+                                // payload for one - the accessors are unimplemented and escape as a 500. MCP connectors are
+                                // reached through the agent and MCP tool APIs, not through connector execute.
+                                if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                    log.error("Rejected execute on MCP connector {}", connectorId);
+                                    actionListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Cannot execute an MCP connector: protocol ["
+                                                    + connector.getProtocol()
+                                                    + "] defines no executable action.",
+                                                RestStatus.BAD_REQUEST
+                                            )
+                                        );
+                                    return;
+                                }
+                                // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
+                                ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+                                    RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                                        .initInstance(connector.getProtocol(), connector, Connector.class);
+                                    connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+                                    connectorExecutor
+                                        .setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+                                    connectorExecutor.setScriptService(scriptService);
+                                    connectorExecutor.setClusterService(clusterService);
+                                    connectorExecutor.setClient(client);
+                                    connectorExecutor.setXContentRegistry(xContentRegistry);
+                                    connectorExecutor
+                                        .executeAction(
+                                            finalConnectorAction,
+                                            executeConnectorRequest.getMlInput(),
+                                            ActionListener.wrap(taskResponse -> {
+                                                connectorExecutor.close();
+                                                connector.removeCredential();
+                                                actionListener.onResponse(taskResponse);
+                                            }, e -> {
+                                                connectorExecutor.close();
+                                                connector.removeCredential();
+                                                actionListener.onFailure(e);
+                                            })
+                                        );
+                                }, e -> {
+                                    log.error("Failed to decrypt credentials in connector", e);
+                                    connector.removeCredential();
+                                    actionListener.onFailure(e);
+                                });
+                                connector.decrypt(finalConnectorAction, encryptor::decrypt, null, decryptSuccessfulListener);
+                            } else {
+                                // Without this the listener is never completed on denial, so the request hangs until
+                                // the client gives up instead of reporting that access was refused.
+                                log.error("You don't have permission to execute this connector, connector id: {}", connectorId);
+                                actionListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "You don't have permission to execute this connector, connector id: " + connectorId,
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
+                        }, actionListener::onFailure)
+                    );
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);
                 actionListener.onFailure(e);

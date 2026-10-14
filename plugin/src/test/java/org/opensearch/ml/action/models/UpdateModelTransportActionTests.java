@@ -369,10 +369,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -659,10 +659,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -867,13 +867,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(5);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener
                 .onFailure(
                     new RuntimeException("Any other connector access control Exception occurred. Please check log for more details.")
                 );
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_EXTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

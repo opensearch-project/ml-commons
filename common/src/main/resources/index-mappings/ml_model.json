@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 14
+    "schema_version": 15
   },
   "properties": {
     "algorithm": {
@@ -67,6 +67,12 @@
       "type": "keyword"
     },
     "provisioned_by": {
+      "type": "keyword"
+    },
+    "resource_type": {
+      "type": "keyword"
+    },
+    "all_shared_principals": {
       "type": "keyword"
     },
     "model_config": {

@@ -250,6 +250,15 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    /**
+     * Backend-role and access-mode based control over model groups. Superseded by the security plugin's resource
+     * sharing and access control, which authorizes each model by the access level it is shared at. It is neither
+     * deprecated nor scheduled for removal: existing models cannot be migrated to per-model sharing until the security
+     * plugin's migrate endpoint can inherit a parent's owner and recipients and restrict a migration to part of an
+     * index, and on a cluster that does not run resource sharing this remains the only access control over models.
+     * Removal is tracked in ml-commons issue 5107, gated on a migration path that has shipped in 3.x. See
+     * docs/model_access_control.md.
+     */
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "model_access_control_enabled",
@@ -258,6 +267,14 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /**
+     * Backend-role and access-mode based control over connectors. Superseded by the security plugin's resource sharing
+     * and access control, which authorizes each connector by the access level it is shared at. It is neither deprecated
+     * nor scheduled for removal, for the same reasons as
+     * {@link #ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED}: connectors that exist already cannot be migrated to per-resource
+     * sharing until the security plugin's migrate endpoint can attribute a document that carries no owner, and on a
+     * cluster that does not run resource sharing this is the only access control over connectors.
+     */
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector_access_control_enabled",

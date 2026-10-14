@@ -104,8 +104,9 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             user,
+                            modelId,
                             mlModel.getModelGroupId(),
                             MLUpdateControllerAction.NAME,
                             client,

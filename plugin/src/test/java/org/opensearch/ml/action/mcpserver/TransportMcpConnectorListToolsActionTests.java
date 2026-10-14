@@ -117,12 +117,12 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
         when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            ActionListener<Boolean> accessListener = invocation.getArgument(5);
+            ActionListener<Boolean> accessListener = invocation.getArgument(6);
             accessListener.onResponse(true);
             return null;
         })
             .when(connectorAccessControlHelper)
-            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any());
+            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any(), any());
         transportAction = new TestableTransportMcpConnectorListToolsAction(
             transportService,
             actionFilters,
@@ -251,12 +251,12 @@ public class TransportMcpConnectorListToolsActionTests extends OpenSearchTestCas
     public void testDoExecute_ConnectorAccessDenied_Forbidden() {
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            ActionListener<Boolean> accessListener = invocation.getArgument(5);
+            ActionListener<Boolean> accessListener = invocation.getArgument(6);
             accessListener.onResponse(false);
             return null;
         })
             .when(connectorAccessControlHelper)
-            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any());
+            .validateConnectorAccess(eq(sdkClient), eq(client), any(), any(), eq(mlFeatureEnabledSetting), any(), any());
 
         transportAction.setToolSpecsToReturn(List.of(MLToolSpec.builder().type("test_tool").name("TestTool").description("Desc").build()));
 
