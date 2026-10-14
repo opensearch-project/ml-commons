@@ -77,7 +77,9 @@ import com.google.gson.reflect.TypeToken;
  * </ul>
  *
  * <p>A failure fails the build unless it is listed in {@code known-failures.txt} next to the fixture sets. A listed
- * failure that no longer happens also fails the build, so the list stays accurate once a fix lands.
+ * failure that no longer happens also fails the build, so the list stays accurate once a fix lands. A distribution
+ * that replays another fixture directory with deliberately different behaviour can keep its own list next to its code
+ * by overriding {@link #knownFailuresResource()}.
  *
  * <p>Distributions that change connector behaviour (extra protocols, credential sources, endpoint allow-lists)
  * override {@link #environment()}. Calls whose signatures differ between release lines (credential decryption, model
@@ -105,6 +107,14 @@ public abstract class StoredDocumentCompatibilityTestCase {
     /** Classpath directory holding the fixture sets, e.g. {@code /compat-fixtures/opensearch}. */
     protected abstract String fixturesResource();
 
+    /**
+     * Classpath file listing the expected failures for this test, by default {@code known-failures.txt} in
+     * {@link #fixturesResource()}. A missing file means no failures are expected.
+     */
+    protected String knownFailuresResource() {
+        return fixturesResource() + "/known-failures.txt";
+    }
+
     /** Distribution-specific stubs and settings. Plain OpenSearch by default. */
     protected CompatEnvironment environment() {
         return new CompatEnvironment() {
@@ -114,7 +124,7 @@ public abstract class StoredDocumentCompatibilityTestCase {
     @Test
     public void storedDocumentsAreReadableByCurrentCode() throws Exception {
         Path fixturesDir = fixturesDir();
-        knownFailures = readKnownFailures(fixturesDir.resolve("known-failures.txt"));
+        knownFailures = readKnownFailures(knownFailuresResource());
         List<Path> sets = fixtureSets(fixturesDir);
         assertTrue("no fixture sets under " + fixturesDir, sets.size() > 0);
         Map<String, String> actual = new TreeMap<>();
@@ -573,12 +583,13 @@ public abstract class StoredDocumentCompatibilityTestCase {
         }
     }
 
-    private static Map<String, String> readKnownFailures(Path file) throws IOException {
+    private Map<String, String> readKnownFailures(String resource) throws IOException, URISyntaxException {
         Map<String, String> known = new LinkedHashMap<>();
-        if (!Files.exists(file)) {
+        URL url = getClass().getResource(resource);
+        if (url == null) {
             return known;
         }
-        for (String line : Files.readAllLines(file)) {
+        for (String line : Files.readAllLines(Path.of(url.toURI()))) {
             if (line.isBlank() || line.startsWith("#")) {
                 continue;
             }
