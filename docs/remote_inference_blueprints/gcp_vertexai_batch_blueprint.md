@@ -13,7 +13,7 @@ Only the `batch_predict` action is declared. ml-commons derives the status and c
 it, so `batch_predict_status` and `cancel_batch_predict` are not declared separately (see step 2).
 
 Batch input and output are configured in the request body via GCS or BigQuery locations. See
-the [batch inference from Cloud Storage docs](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/batch-prediction-from-cloud-storage).
+the [batch inference from Cloud Storage docs](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/batch-inference/new-job-from-cloud-storage).
 Google has since renamed Vertex AI to Gemini Enterprise Agent Platform; the API host, the
 `batchPredictionJobs` resource and the request shape are unchanged.
 
