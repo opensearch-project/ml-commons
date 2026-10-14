@@ -304,6 +304,48 @@ public class MLCommonsSettingsTests {
         assertEquals(validRegex, result);
     }
 
+    /**
+     * Vertex AI publishes both a regional host ({@code us-central1-aiplatform.googleapis.com}) and a global
+     * one ({@code aiplatform.googleapis.com}). The regional form joins the region with a hyphen rather than a
+     * dot, so a dot-separated subdomain pattern does not cover it.
+     */
+    private static boolean matchesAnyDefaultTrustedEndpoint(String url) {
+        return MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getDefault(null).stream().anyMatch(url::matches);
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsAllowRegionalVertexAi() {
+        assertTrue(
+            matchesAnyDefaultTrustedEndpoint(
+                "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1"
+                    + "/publishers/google/models/gemini-2.0-flash:generateContent"
+            )
+        );
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsAllowGlobalVertexAi() {
+        assertTrue(
+            matchesAnyDefaultTrustedEndpoint(
+                "https://aiplatform.googleapis.com/v1/projects/my-project/locations/global"
+                    + "/publishers/google/models/gemini-2.0-flash:generateContent"
+            )
+        );
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsRejectVertexAiHostSuffixSpoofing() {
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://us-central1-aiplatform.googleapis.com.evil.example/v1/predict"));
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsRejectMalformedVertexAiRegionPrefix() {
+        // A DNS label cannot start with a hyphen, so the region prefix must not either. These cannot
+        // resolve, but the allowlist should describe only hostnames that are actually well formed.
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://--aiplatform.googleapis.com/v1/predict"));
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://-us-aiplatform.googleapis.com/v1/predict"));
+    }
+
     @Test
     public void testDynamicBatchingMemoryFractionAcceptsMaximum() {
         double value = MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
