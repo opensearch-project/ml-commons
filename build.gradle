@@ -100,6 +100,11 @@ subprojects {
         resolutionStrategy.force "io.netty:netty-resolver:${versions.netty}"
         resolutionStrategy.force "io.netty:netty-transport:${versions.netty}"
         resolutionStrategy.force "io.netty:netty-transport-native-unix-common:${versions.netty}"
+
+        // remote-metadata-sdk 2.19 pulls vulnerable httpclient5/httpcore5; force the fixed versions in every module
+        resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5:5.4.3"
+        resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5-h2:5.4.3"
+        resolutionStrategy.force "org.apache.httpcomponents.client5:httpclient5:5.6.4"
     }
 }
 
