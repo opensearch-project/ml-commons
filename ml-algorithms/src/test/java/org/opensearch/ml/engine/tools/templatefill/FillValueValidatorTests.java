@@ -10,6 +10,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchemaTests.spec;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -119,6 +121,24 @@ public class FillValueValidatorTests {
         Map<String, Object> small = new LinkedHashMap<>();
         small.put("size", spec("integer", true, "", List.of(5L, 10L)));
         assertEquals(5L, FillValueValidator.validate(small, filled("size", 5.0)).get("size"));
+    }
+
+    @Test
+    public void bigIntegers_keepExactPrecision() {
+        // The largest unsigned_long, beyond both a long and a double's exact range.
+        BigInteger max = new BigInteger("18446744073709551615");
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("id", spec("integer", true, "", List.of(max, BigInteger.ONE)));
+        assertEquals(max, FillValueValidator.validate(schema, filled("id", max)).get("id"));
+        assertEquals(max, FillValueValidator.validate(schema, filled("id", "18446744073709551615")).get("id"));
+
+        Map<String, Object> open = new LinkedHashMap<>();
+        open.put("id", spec("integer", true, "", null));
+        assertEquals(max, FillValueValidator.validate(open, filled("id", max)).get("id"));
+        assertEquals(max, FillValueValidator.validate(open, filled("id", "18446744073709551615")).get("id"));
+        assertEquals(max, FillValueValidator.validate(open, filled("id", new BigDecimal("18446744073709551615.0"))).get("id"));
+        // A BigInteger within a long's range narrows to a Long.
+        assertEquals(7L, FillValueValidator.validate(open, filled("id", BigInteger.valueOf(7))).get("id"));
     }
 
     @Test
