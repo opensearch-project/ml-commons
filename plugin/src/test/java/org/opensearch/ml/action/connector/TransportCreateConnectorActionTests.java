@@ -787,6 +787,60 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         assertEquals(CONNECTOR_ID, captor.getValue().getConnectorId());
     }
 
+    public void test_vertexai_connector_creation_rejects_versionless_batch_predict_url() {
+        // The batch_predict version check runs on the create request path (validateConnectorURL), not in the
+        // connector constructor, so this proves create still rejects the URL before anything is indexed.
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/projects/p/locations/l/batchPredictionJobs")
+                    .build()
+            );
+        // api.openai.com is in this test's trusted list, so only the version check can reject the URL.
+        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com", "auth_mode", "adc");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters)
+            .actions(actions)
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assertTrue(argCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment, got: "
+                + "https://api.openai.com/projects/p/locations/l/batchPredictionJobs",
+            argCaptor.getValue().getMessage()
+        );
+        verify(mlIndicesHandler, never()).initMLConnectorIndex(any());
+    }
+
     public void test_connector_creation_success_rekognition() {
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
             transportService,
