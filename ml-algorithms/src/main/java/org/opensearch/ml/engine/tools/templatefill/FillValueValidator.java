@@ -41,6 +41,8 @@ public final class FillValueValidator {
 
     // Largest magnitude a double represents every integer up to exactly.
     private static final double MAX_EXACT_INTEGER = 9_007_199_254_740_992d;
+    // Integral digits kept exactly for a decimal value; covers unsigned_long, and bounds the BigInteger built.
+    private static final int MAX_EXACT_INTEGER_DIGITS = 20;
 
     private FillValueValidator() {}
 
@@ -136,7 +138,7 @@ public final class FillValueValidator {
 
     private static Object integer(String name, Object value) {
         Object number = number(name, value);
-        if (!(number instanceof Long)) {
+        if (!(number instanceof Long || number instanceof BigInteger)) {
             throw new IllegalArgumentException("param '" + name + "' expects an integer, got '" + value + "'");
         }
         return number;
@@ -149,7 +151,7 @@ public final class FillValueValidator {
         }
         if (value instanceof String) {
             try {
-                return normalizeNumber(Double.parseDouble(((String) value).trim()));
+                return normalizeNumber(new BigDecimal(((String) value).trim()));
             } catch (NumberFormatException e) {
                 // fall through
             }
@@ -229,15 +231,30 @@ public final class FillValueValidator {
         throw new IllegalArgumentException("param '" + name + "' expects a string, got '" + value + "'");
     }
 
-    /** An integral value becomes a Long; anything else a Double. */
+    /** An integral value becomes a Long, or a BigInteger beyond a long's range; anything else a Double. */
     static Number normalizeNumber(Number value) {
         if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte) {
             return value.longValue();
+        }
+        if (value instanceof BigInteger) {
+            return narrow((BigInteger) value);
+        }
+        if (value instanceof BigDecimal) {
+            BigDecimal decimal = (BigDecimal) value;
+            boolean integral = decimal.signum() == 0 || decimal.stripTrailingZeros().scale() <= 0;
+            if (integral && decimal.precision() - decimal.scale() <= MAX_EXACT_INTEGER_DIGITS) {
+                return narrow(decimal.toBigIntegerExact());
+            }
+            return decimal.doubleValue();
         }
         double d = value.doubleValue();
         if (!Double.isInfinite(d) && !Double.isNaN(d) && d == Math.rint(d) && Math.abs(d) <= MAX_EXACT_INTEGER) {
             return (long) d;
         }
         return d;
+    }
+
+    private static Number narrow(BigInteger value) {
+        return value.bitLength() < Long.SIZE ? (Number) value.longValue() : value;
     }
 }

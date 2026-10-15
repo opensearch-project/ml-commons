@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchemaTests.productSchema;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchemaTests.spec;
 
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -389,6 +390,18 @@ public class SearchTemplateFillToolTests {
         assertThrows(IllegalStateException.class, () -> tool("product_search").run(question(), throwing));
         assertEquals(1, calls.get());
         verify(fallbackTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void bigIntegerEnum_rendersExactValue() {
+        BigInteger max = new BigInteger("18446744073709551615");
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("id", spec("integer", true, "", List.of(max, BigInteger.ONE)));
+        registered.put("by_id", template("by_id", "products", schema));
+        modelFills("FillTemplate", Map.of("id", max));
+
+        assertEquals(RENDERED, run(tool("by_id"), question()));
+        assertEquals(Map.of("id", max), renderedParams.get());
     }
 
     @Test
