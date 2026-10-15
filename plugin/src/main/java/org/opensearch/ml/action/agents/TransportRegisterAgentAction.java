@@ -29,6 +29,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
+import org.opensearch.ml.action.agenticsearch.SearchTemplateFillToolValidator;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
@@ -185,6 +186,13 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+            return;
+        }
+
+        try {
+            SearchTemplateFillToolValidator.validate(agent.getTools(), mlFeatureEnabledSetting);
+        } catch (Exception e) {
+            listener.onFailure(e);
             return;
         }
 

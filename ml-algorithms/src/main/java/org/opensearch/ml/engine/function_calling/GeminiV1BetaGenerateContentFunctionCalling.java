@@ -27,6 +27,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -214,5 +215,74 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Override
+    public boolean supportsForcedToolCall() {
+        return true;
+    }
+
+    @Override
+    public String forcedToolConfigs(String toolName, String toolDescription, Map<String, Object> inputSchema) {
+        Map<String, Object> declaration = new LinkedHashMap<>();
+        declaration.put("name", toolName);
+        declaration.put("description", toolDescription);
+        declaration.put("parameters", geminiSchema(inputSchema));
+        Map<String, Object> callingConfig = Map.of("mode", "ANY", "allowedFunctionNames", List.of(toolName));
+        return ", \"tools\": [{\"functionDeclarations\": ["
+            + StringUtils.toJson(declaration)
+            + "]}], \"toolConfig\": {\"functionCallingConfig\": "
+            + StringUtils.toJson(callingConfig)
+            + "}";
+    }
+
+    /**
+     * Adapt a JSON Schema to Gemini's function-declaration subset, which allows {@code enum} only on a
+     * STRING and requires a {@code type}: an enum of numbers or booleans, or one with no declared type,
+     * becomes a string enum of the members' text. A caller mapping the fill back to its schema must accept
+     * the text form of such a member.
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> geminiSchema(Map<String, Object> schema) {
+        Map<String, Object> out = new LinkedHashMap<>(schema);
+        Object enumValues = schema.get("enum");
+        if (enumValues instanceof List) {
+            List<?> members = (List<?>) enumValues;
+            if (!"string".equals(schema.get("type")) || !members.stream().allMatch(m -> m instanceof String)) {
+                List<String> text = new ArrayList<>();
+                for (Object member : members) {
+                    text.add(String.valueOf(member));
+                }
+                out.put("type", "string");
+                out.put("enum", text);
+            }
+        }
+        Object properties = schema.get("properties");
+        if (properties instanceof Map) {
+            Map<String, Object> adapted = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) properties).entrySet()) {
+                Object value = entry.getValue();
+                adapted.put(entry.getKey(), value instanceof Map ? geminiSchema((Map<String, Object>) value) : value);
+            }
+            out.put("properties", adapted);
+        }
+        return out;
+    }
+
+    @Override
+    public String extractForcedToolInput(ModelTensorOutput modelTensorOutput, String toolName) {
+        Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        List<?> functionCalls;
+        try {
+            functionCalls = JsonPath.read(dataAsMap, CALL_PATH);
+        } catch (PathNotFoundException e) {
+            return null;
+        }
+        for (Object call : functionCalls) {
+            if (call instanceof Map && toolName.equals(((Map<?, ?>) call).get(NAME))) {
+                return StringUtils.toJson(((Map<?, ?>) call).get(INPUT));
+            }
+        }
+        return null;
     }
 }

@@ -9,25 +9,36 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
+import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.MultiGetItemResponse;
+import org.opensearch.action.get.MultiGetRequest;
+import org.opensearch.action.get.MultiGetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -47,6 +58,7 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
+import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplateResolver;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
@@ -70,7 +82,7 @@ import lombok.extern.log4j.Log4j2;
  * first query. The derived schema is then the customer's editable tuning surface.
  */
 @Log4j2
-public class AgenticSearchTemplateService {
+public class AgenticSearchTemplateService implements AgenticSearchTemplateResolver {
 
     private static final String INDEX = CommonValue.ML_AGENTIC_SEARCH_TEMPLATES_INDEX;
     private static final String NOT_FOUND_ERROR = "Agentic search template not found: ";
@@ -372,9 +384,7 @@ public class AgenticSearchTemplateService {
     private void renderAndCheckJson(String body, Map<String, Object> params, String label) {
         String rendered;
         try {
-            Script script = new Script(ScriptType.INLINE, "mustache", body, Collections.emptyMap());
-            TemplateScript.Factory factory = scriptService.compile(script, TemplateScript.CONTEXT);
-            rendered = factory.newInstance(params).execute();
+            rendered = render(body, params);
         } catch (Exception e) {
             throw new IllegalArgumentException("Template failed to render (" + label + "): " + e.getMessage(), e);
         }
@@ -399,9 +409,7 @@ public class AgenticSearchTemplateService {
      */
     private Map<String, Object> renderToMap(String body, Map<String, Object> params) {
         try {
-            Script script = new Script(ScriptType.INLINE, "mustache", body, Collections.emptyMap());
-            TemplateScript.Factory factory = scriptService.compile(script, TemplateScript.CONTEXT);
-            String rendered = factory.newInstance(params).execute();
+            String rendered = render(body, params);
             try (
                 XContentParser parser = MediaTypeRegistry.JSON
                     .xContent()
@@ -413,6 +421,13 @@ public class AgenticSearchTemplateService {
             log.debug("Structural render did not produce parseable JSON: {}", e.getMessage());
             return null;
         }
+    }
+
+    /** Render a Mustache body with the given params through the cluster's own engine. */
+    private String render(String body, Map<String, Object> params) {
+        Script script = new Script(ScriptType.INLINE, "mustache", body, Collections.emptyMap());
+        TemplateScript.Factory factory = scriptService.compile(script, TemplateScript.CONTEXT);
+        return factory.newInstance(params).execute();
     }
 
     /** Build a placeholder param set for pre-flight: sample values by type. */
@@ -452,16 +467,29 @@ public class AgenticSearchTemplateService {
 
     private void fetchTemplateBody(String templateId, ActionListener<String> listener) {
         GetStoredScriptRequest request = new GetStoredScriptRequest(templateId);
-        client.admin().cluster().getStoredScript(request, ActionListener.wrap(response -> {
-            if (response.getSource() == null || response.getSource().getSource() == null) {
-                listener
-                    .onFailure(
-                        new OpenSearchStatusException("No stored search template found at _scripts/" + templateId, RestStatus.BAD_REQUEST)
-                    );
-                return;
+        // Not ActionListener.wrap: an exception thrown by the listener's own onResponse must not be routed
+        // back into its onFailure, which would answer it twice.
+        client.admin().cluster().getStoredScript(request, new ActionListener<>() {
+            @Override
+            public void onResponse(GetStoredScriptResponse response) {
+                if (response.getSource() == null || response.getSource().getSource() == null) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "No stored search template found at _scripts/" + templateId,
+                                RestStatus.BAD_REQUEST
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(response.getSource().getSource());
             }
-            listener.onResponse(response.getSource().getSource());
-        }, listener::onFailure));
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 
     /** Fetch the index mapping and flatten it to the list of leaf field names. */
@@ -528,6 +556,215 @@ public class AgenticSearchTemplateService {
                     out.add(name + "." + sub);
                 }
             }
+        }
+    }
+
+    // ---- Query-time resolution (template-fill tool) -----------------------
+
+    @Override
+    public void getTemplates(List<String> templateIds, String indexName, ActionListener<Map<String, AgenticSearchTemplate>> delegate) {
+        // Answered once even if the caller's onResponse throws into a dispatch-failure catch below.
+        ActionListener<Map<String, AgenticSearchTemplate>> listener = ActionListener.notifyOnce(delegate);
+        if (templateIds == null || templateIds.isEmpty()) {
+            listener.onResponse(Collections.emptyMap());
+            return;
+        }
+        readTemplateDocs(templateIds, new ActionListener<>() {
+            @Override
+            public void onResponse(Map<String, AgenticSearchTemplate> registered) {
+                Map<String, AgenticSearchTemplate> bound = new LinkedHashMap<>();
+                try {
+                    for (AgenticSearchTemplate template : registered.values()) {
+                        if (indexMatches(template.getIndexBinding(), indexName)) {
+                            bound.put(template.getTemplateId(), template);
+                        } else {
+                            log
+                                .debug(
+                                    "Search template {} is bound to {}, not {}",
+                                    template.getTemplateId(),
+                                    template.getIndexBinding(),
+                                    indexName
+                                );
+                        }
+                    }
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                    return;
+                }
+                keepCallerReadable(bound, listener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    /** Read the schema docs. They live in a system index, so the read runs with the plugin's identity. */
+    private void readTemplateDocs(List<String> templateIds, ActionListener<Map<String, AgenticSearchTemplate>> listener) {
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Map<String, AgenticSearchTemplate>> wrapped = ActionListener.runBefore(listener, ctx::restore);
+            MultiGetRequest request = new MultiGetRequest();
+            for (String templateId : templateIds) {
+                request.add(INDEX, templateId);
+            }
+            client.multiGet(request, new ActionListener<>() {
+                @Override
+                public void onResponse(MultiGetResponse response) {
+                    Map<String, AgenticSearchTemplate> templates = new LinkedHashMap<>();
+                    try {
+                        for (MultiGetItemResponse item : response.getResponses()) {
+                            // A missing doc or a missing index both mean the id is not registered.
+                            if (item.isFailed() || item.getResponse() == null || !item.getResponse().isExists()) {
+                                continue;
+                            }
+                            templates.put(item.getId(), parse(item.getResponse().getSourceAsBytesRef()));
+                        }
+                    } catch (Exception e) {
+                        wrapped.onFailure(e);
+                        return;
+                    }
+                    wrapped.onResponse(templates);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    if (e instanceof IndexNotFoundException) {
+                        wrapped.onResponse(Collections.emptyMap());
+                    } else {
+                        wrapped.onFailure(e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Whether a template bound to {@code binding} applies to a search on {@code indexName}. An exact match
+     * or an unbound template applies; otherwise both are resolved to concrete indices and the searched
+     * indices must all fall within the binding, so an alias or pattern over the bound index still matches.
+     */
+    boolean indexMatches(String binding, String indexName) {
+        if (binding == null || binding.equals(indexName)) {
+            return true;
+        }
+        if (indexName == null || indexName.isBlank()) {
+            return false;
+        }
+        try {
+            IndexNameExpressionResolver resolver = new IndexNameExpressionResolver(client.threadPool().getThreadContext());
+            ClusterState state = clusterService.state();
+            Set<String> searched = new HashSet<>(
+                Arrays.asList(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), indexName))
+            );
+            Set<String> bound = new HashSet<>(
+                Arrays.asList(resolver.concreteIndexNames(state, IndicesOptions.lenientExpandOpen(), binding))
+            );
+            return !searched.isEmpty() && bound.containsAll(searched);
+        } catch (Exception e) {
+            log.debug("Could not resolve index {} against binding {}: {}", indexName, binding, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Keep only the templates whose stored script the caller can read. Rendering reads the script as the
+     * caller, so a template failing this check could never be rendered for them; dropping it here, before
+     * the model call, means its schema is never shown to a model and the caller is not charged for a fill
+     * that must fall back.
+     */
+    private void keepCallerReadable(
+        Map<String, AgenticSearchTemplate> templates,
+        ActionListener<Map<String, AgenticSearchTemplate>> listener
+    ) {
+        if (templates.isEmpty()) {
+            listener.onResponse(templates);
+            return;
+        }
+        Set<String> readable = ConcurrentHashMap.newKeySet();
+        AtomicInteger pending = new AtomicInteger(templates.size());
+        Runnable finish = () -> {
+            if (pending.decrementAndGet() == 0) {
+                Map<String, AgenticSearchTemplate> usable = new LinkedHashMap<>();
+                templates.forEach((id, template) -> {
+                    if (readable.contains(id)) {
+                        usable.put(id, template);
+                    }
+                });
+                listener.onResponse(usable);
+            }
+        };
+        for (String templateId : templates.keySet()) {
+            fetchTemplateBody(templateId, new ActionListener<>() {
+                @Override
+                public void onResponse(String body) {
+                    readable.add(templateId);
+                    finish.run();
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    log
+                        .warn(
+                            "Skipping search template {}: its stored script could not be read as the caller "
+                                + "(requires cluster:admin/script/get): {}",
+                            templateId,
+                            e.getMessage()
+                        );
+                    finish.run();
+                }
+            });
+        }
+    }
+
+    /**
+     * Render a stored template for a search. The stored script is read in the caller's context, as at
+     * registration, so a caller who cannot read the script cannot have it rendered on their behalf.
+     */
+    @Override
+    public void renderTemplate(String templateId, Map<String, Object> params, ActionListener<String> delegate) {
+        // Answered once even if the caller's onResponse throws into the dispatch-failure catch below.
+        ActionListener<String> listener = ActionListener.notifyOnce(delegate);
+        try {
+            fetchTemplateBody(templateId, new ActionListener<>() {
+                @Override
+                public void onResponse(String body) {
+                    String rendered;
+                    try {
+                        rendered = render(body, params);
+                        // Confirm the render is exactly one JSON object, i.e. a _search body, before it reaches
+                        // the search; content after it would be ignored by a lenient reader.
+                        try (
+                            XContentParser parser = MediaTypeRegistry.JSON
+                                .xContent()
+                                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, rendered)
+                        ) {
+                            // map() reads a scalar or empty input as an empty map, so require an object first.
+                            if (parser.nextToken() != XContentParser.Token.START_OBJECT) {
+                                throw new IllegalArgumentException("the render is not a JSON object");
+                            }
+                            parser.map();
+                            if (parser.nextToken() != null) {
+                                throw new IllegalArgumentException("unexpected content after the query object");
+                            }
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(new IllegalArgumentException("Template " + templateId + " did not render a valid query", e));
+                        return;
+                    }
+                    listener.onResponse(rendered);
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    listener.onFailure(e);
+                }
+            });
+        } catch (Exception e) {
+            listener.onFailure(e);
         }
     }
 
