@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.prediction;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
@@ -16,6 +18,7 @@ import java.io.UncheckedIOException;
 import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.DocRequest;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
@@ -35,7 +38,7 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
-public class MLPredictionTaskRequest extends MLTaskRequest {
+public class MLPredictionTaskRequest extends MLTaskRequest implements DocRequest {
 
     @Getter
     @Setter
@@ -120,4 +123,18 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         }
     }
 
+    @Override
+    public String type() {
+        return ML_MODEL_RESOURCE_TYPE;
+    }
+
+    @Override
+    public String index() {
+        return ML_MODEL_INDEX;
+    }
+
+    @Override
+    public String id() {
+        return modelId;
+    }
 }

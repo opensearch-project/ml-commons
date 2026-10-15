@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RESOURCE_TYPE;
 import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
@@ -17,6 +19,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.DocRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -32,7 +35,7 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLUpdateModelRequest extends ActionRequest {
+public class MLUpdateModelRequest extends ActionRequest implements DocRequest {
 
     MLUpdateModelInput updateModelInput;
 
@@ -76,5 +79,20 @@ public class MLUpdateModelRequest extends ActionRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to parse ActionRequest into MLUpdateModelRequest", e);
         }
+    }
+
+    @Override
+    public String type() {
+        return ML_MODEL_RESOURCE_TYPE;
+    }
+
+    @Override
+    public String index() {
+        return ML_MODEL_INDEX;
+    }
+
+    @Override
+    public String id() {
+        return updateModelInput == null ? null : updateModelInput.getModelId();
     }
 }
