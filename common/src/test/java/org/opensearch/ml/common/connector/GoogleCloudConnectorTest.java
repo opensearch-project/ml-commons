@@ -140,12 +140,11 @@ public class GoogleCloudConnectorTest {
         Assert.assertEquals(GoogleCloudConnector.DEFAULT_TOKEN_URI, connector.getTokenUri());
     }
 
-    @Test
-    public void validate_batchPredictUrlMissingVersionSegment_throws() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("batch_predict");
-        exceptionRule.expectMessage("/v1");
+    private static final String VERSIONLESS_BATCH_URL =
+        "https://us-central1-aiplatform.googleapis.com/projects/p/locations/l/batchPredictionJobs";
+    private static final List<String> TRUSTED_VERTEX_REGEX = List.of("^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$");
 
+    private static GoogleCloudConnector batchConnector(String batchUrl, Map<String, String> parameters) {
         Map<String, String> credential = new HashMap<>();
         credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
         credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
@@ -153,67 +152,103 @@ public class GoogleCloudConnectorTest {
             .builder()
             .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
             .method("POST")
-            .url("https://us-central1-aiplatform.googleapis.com/projects/p/locations/l/batchPredictionJobs")
+            .url(batchUrl)
             .requestBody("{}")
             .build();
-        GoogleCloudConnector
+        return GoogleCloudConnector
             .googleCloudConnectorBuilder()
             .name("gcp")
             .version("1")
             .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters)
             .credential(credential)
             .actions(List.of(batchAction))
             .build();
     }
 
     @Test
-    public void validate_batchPredictUrlWithV1_ok() {
-        Map<String, String> credential = new HashMap<>();
-        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
-        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
-        ConnectorAction batchAction = ConnectorAction
-            .builder()
-            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-            .method("POST")
-            .url("https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/l/batchPredictionJobs")
-            .requestBody("{}")
-            .build();
-        GoogleCloudConnector connector = GoogleCloudConnector
-            .googleCloudConnectorBuilder()
-            .name("gcp")
-            .version("1")
-            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
-            .credential(credential)
-            .actions(List.of(batchAction))
-            .build();
-        Assert.assertNotNull(connector);
+    public void storedConnector_versionlessBatchUrl_stillParses() throws IOException {
+        // A connector persisted before create-time batch URL validation existed must stay readable after
+        // upgrade: stored connectors are re-parsed through the XContent constructor on every GET, update,
+        // deploy and predict, so rejecting it there would make it unloadable and unfixable.
+        String jsonStr = "{\"name\":\"gcp\",\"version\":\"1\",\"protocol\":\"google_cloud\","
+            + "\"credential\":{\"private_key\":\"pk\",\"client_email\":\"sa@project.iam.gserviceaccount.com\"},"
+            + "\"actions\":[{\"action_type\":\"BATCH_PREDICT\",\"method\":\"POST\",\"url\":\""
+            + VERSIONLESS_BATCH_URL
+            + "\",\"request_body\":\"{}\"}]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        Connector connector = Connector.createConnector(parser);
+
+        Assert.assertTrue(connector instanceof GoogleCloudConnector);
+        Assert.assertEquals(VERSIONLESS_BATCH_URL, connector.getActions().get(0).getUrl());
     }
 
     @Test
-    public void validate_batchPredictUrlWithV1beta1_ok() {
-        Map<String, String> credential = new HashMap<>();
-        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
-        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
-        ConnectorAction batchAction = ConnectorAction
-            .builder()
-            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-            .method("POST")
-            .url("https://us-central1-aiplatform.googleapis.com/v1beta1/projects/p/locations/l/batchPredictionJobs")
-            .requestBody("{}")
-            .build();
-        GoogleCloudConnector connector = GoogleCloudConnector
-            .googleCloudConnectorBuilder()
-            .name("gcp")
-            .version("1")
-            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
-            .credential(credential)
-            .actions(List.of(batchAction))
-            .build();
-        Assert.assertNotNull(connector);
+    public void storedConnector_versionlessBatchUrl_survivesStreamRoundTrip() throws IOException {
+        GoogleCloudConnector connector = batchConnector(VERSIONLESS_BATCH_URL, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        connector.writeTo(output);
+
+        GoogleCloudConnector copy = new GoogleCloudConnector(output.bytes().streamInput());
+
+        Assert.assertEquals(VERSIONLESS_BATCH_URL, copy.getActions().get(0).getUrl());
     }
 
     @Test
-    public void validate_noBatchPredictAction_ok() {
+    public void validateConnectorURL_batchPredictUrlMissingVersionSegment_throws() {
+        GoogleCloudConnector connector = batchConnector(VERSIONLESS_BATCH_URL, null);
+
+        IllegalArgumentException e = Assert
+            .assertThrows(IllegalArgumentException.class, () -> connector.validateConnectorURL(TRUSTED_VERTEX_REGEX));
+
+        Assert
+            .assertEquals(
+                "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment, got: " + VERSIONLESS_BATCH_URL,
+                e.getMessage()
+            );
+    }
+
+    @Test
+    public void validateConnectorURL_untrustedBatchUrl_reportsTrustFailureFirst() {
+        GoogleCloudConnector connector = batchConnector("https://evil.example.com/projects/p/batchPredictionJobs", null);
+
+        IllegalArgumentException e = Assert
+            .assertThrows(IllegalArgumentException.class, () -> connector.validateConnectorURL(TRUSTED_VERTEX_REGEX));
+
+        Assert.assertEquals("Connector URL is not matching the trusted connector endpoint regex", e.getMessage());
+    }
+
+    @Test
+    public void validateConnectorURL_batchPredictUrlWithV1_ok() {
+        batchConnector("https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/l/batchPredictionJobs", null)
+            .validateConnectorURL(TRUSTED_VERTEX_REGEX);
+    }
+
+    @Test
+    public void validateConnectorURL_batchPredictUrlWithV1beta1_ok() {
+        batchConnector("https://us-central1-aiplatform.googleapis.com/v1beta1/projects/p/locations/l/batchPredictionJobs", null)
+            .validateConnectorURL(TRUSTED_VERTEX_REGEX);
+    }
+
+    @Test
+    public void validateConnectorURL_batchPredictVersionFromParameters_ok() {
+        // The runtime check resolves ${parameters.*} before matching, so the create-time check must too.
+        batchConnector(
+            "https://${parameters.region}-aiplatform.googleapis.com/${parameters.api_version}/projects/p/locations/l/batchPredictionJobs",
+            Map.of("region", "us-central1", "api_version", "v1")
+        ).validateConnectorURL(TRUSTED_VERTEX_REGEX);
+    }
+
+    @Test
+    public void validateConnectorURL_noBatchPredictAction_ok() {
         Map<String, String> credential = new HashMap<>();
         credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, "pk");
         credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@project.iam.gserviceaccount.com");
@@ -225,15 +260,15 @@ public class GoogleCloudConnectorTest {
             .url("https://us-central1-aiplatform.googleapis.com/projects/p/locations/l/x:generateContent")
             .requestBody("{}")
             .build();
-        GoogleCloudConnector connector = GoogleCloudConnector
+        GoogleCloudConnector
             .googleCloudConnectorBuilder()
             .name("gcp")
             .version("1")
             .protocol(ConnectorProtocols.GOOGLE_CLOUD)
             .credential(credential)
             .actions(List.of(predictAction))
-            .build();
-        Assert.assertNotNull(connector);
+            .build()
+            .validateConnectorURL(TRUSTED_VERTEX_REGEX);
     }
 
     @Test
