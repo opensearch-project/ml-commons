@@ -132,11 +132,14 @@ public class MLEngine {
             if (component == null || component.isBlank()) {
                 throw new IllegalArgumentException("Model path component must not be empty");
             }
-            Path componentPath = Path.of(component);
+            // Use the cache path's own filesystem. Integ tests install a Lucene mock
+            // filesystem, and Path.of() would create a default-provider path that cannot
+            // be resolved against that root.
+            Path componentPath = root.getFileSystem().getPath(component);
             if (componentPath.isAbsolute()) {
                 throw new IllegalArgumentException("Model path component must be a relative path inside the cache directory");
             }
-            resolved = resolved.resolve(componentPath);
+            resolved = resolved.resolve(component);
         }
         Path normalized = resolved.normalize();
         if (!normalized.startsWith(root.normalize())) {
