@@ -221,13 +221,14 @@ public class SearchIndexTool implements Tool {
             }
         }
 
-        Map<String, Object> responseMap = convertSearchResponseToMap(searchResponse);
-        Object aggregations = responseMap.get(AGGREGATIONS_FIELD);
-        if (aggregations != null) {
-            if (contextBuilder.length() > 0) {
-                contextBuilder.append("\n");
+        if (searchResponse.getAggregations() != null) {
+            Object aggregations = convertSearchResponseToMap(searchResponse).get(AGGREGATIONS_FIELD);
+            if (aggregations != null) {
+                if (contextBuilder.length() > 0) {
+                    contextBuilder.append("\n");
+                }
+                contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregations)));
             }
-            contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregations)));
         }
         return contextBuilder.toString();
     }
