@@ -954,7 +954,9 @@ public class SearchIndexToolTests {
     public void testBuildSimplifiedSearchResponse_withAggregationsOnly() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
+            .when(tool)
+            .convertSearchResponseToMap(aggregationResponse);
 
         String result = tool.buildSimplifiedSearchResponse(aggregationResponse);
 
@@ -1015,7 +1017,9 @@ public class SearchIndexToolTests {
     public void testRunWithAggregationsOnlyReturnRawResponseFalse() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
+            .when(tool)
+            .convertSearchResponseToMap(aggregationResponse);
         mockSearchResponse(aggregationResponse);
 
         String inputString =
@@ -1072,7 +1076,9 @@ public class SearchIndexToolTests {
     public void testRunWithAggregationsOnlyAndOutputParser() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
+            .when(tool)
+            .convertSearchResponseToMap(aggregationResponse);
         mockSearchResponse(aggregationResponse);
         tool.setOutputParser(output -> "parsed_aggregations");
 
