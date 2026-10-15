@@ -88,6 +88,7 @@ public class SearchIndexTool implements Tool {
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
     public static final String RETURN_RAW_RESPONSE = "return_raw_response";
+    public static final String AGGREGATIONS_FIELD = "aggregations";
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -204,6 +205,33 @@ public class SearchIndexTool implements Tool {
         }
     }
 
+    /**
+     * Builds a simplified tool response containing document hits and/or aggregations.
+     * Document hits are returned as newline-separated JSON objects. When aggregations
+     * are present, they are appended as a JSON object with an {@value #AGGREGATIONS_FIELD} key.
+     */
+    @VisibleForTesting
+    String buildSimplifiedSearchResponse(SearchResponse searchResponse) throws IOException {
+        StringBuilder contextBuilder = new StringBuilder();
+        SearchHit[] hits = searchResponse.getHits().getHits();
+        if (hits != null && hits.length > 0) {
+            for (SearchHit hit : hits) {
+                Map<String, Object> docContent = processResponse(hit);
+                contextBuilder.append(GSON.toJson(docContent)).append("\n");
+            }
+        }
+
+        Map<String, Object> responseMap = convertSearchResponseToMap(searchResponse);
+        Object aggregations = responseMap.get(AGGREGATIONS_FIELD);
+        if (aggregations != null) {
+            if (contextBuilder.length() > 0) {
+                contextBuilder.append("\n");
+            }
+            contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregations)));
+        }
+        return contextBuilder.toString();
+    }
+
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
@@ -313,7 +341,6 @@ public class SearchIndexTool implements Tool {
             }
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
-                SearchHit[] hits = r.getHits().getHits();
                 if (returnFullResponse) {
                     List<ModelTensors> outputs = new ArrayList<>();
                     List<ModelTensor> tensors = new ArrayList<>();
@@ -327,20 +354,16 @@ public class SearchIndexTool implements Tool {
                     }
                     return;
                 }
-                if (hits != null && hits.length > 0) {
-                    StringBuilder contextBuilder = new StringBuilder();
-                    for (SearchHit hit : hits) {
-                        Map<String, Object> docContent = processResponse(hit);
-                        String doc = GSON.toJson(docContent);
-                        contextBuilder.append(doc).append("\n");
-                    }
+                try {
+                    String response = buildSimplifiedSearchResponse(r);
                     if (outputParser != null) {
-                        listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                        listener.onResponse((T) outputParser.parse(response));
                     } else {
-                        listener.onResponse((T) contextBuilder.toString());
+                        listener.onResponse((T) response);
                     }
-                } else {
-                    listener.onResponse((T) "");
+                } catch (IOException e) {
+                    log.error("Failed to build simplified search response", e);
+                    listener.onFailure(e);
                 }
             }, e -> {
                 log.error("Failed to search index", e);
