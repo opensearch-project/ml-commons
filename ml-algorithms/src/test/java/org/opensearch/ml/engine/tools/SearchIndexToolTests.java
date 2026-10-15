@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,7 +48,10 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
+import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.transport.client.Client;
 
 import lombok.SneakyThrows;
@@ -943,6 +947,206 @@ public class SearchIndexToolTests {
         String sourceString = capturedRequest.source().toString();
         assertTrue("Should contain term query", sourceString.contains("term"));
         assertTrue("Should contain status field", sourceString.contains("status"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testBuildSimplifiedSearchResponse_withAggregationsOnly() {
+        SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+
+        String result = tool.buildSimplifiedSearchResponse(aggregationResponse);
+
+        assertFalse(result.isEmpty());
+        assertFalse(result.contains("_index"));
+        assertFalse(result.contains("_shards"));
+        assertFalse(result.contains("took"));
+        assertTrue(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(result.contains("unique_services"));
+        assertTrue(result.contains("service-a"));
+        assertTrue(result.contains("service-b"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testBuildSimplifiedSearchResponse_withHitsAndAggregations() {
+        SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
+        SearchHit[] hits = hitsResponse.getHits().getHits();
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] }, sampleAggregationsMap());
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(searchResponse);
+
+        String result = tool.buildSimplifiedSearchResponse(searchResponse);
+
+        assertTrue(result.contains("_index"));
+        assertTrue(result.contains("_source"));
+        assertTrue(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(result.contains("unique_services"));
+        assertTrue(result.indexOf("_index") < result.indexOf("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testBuildSimplifiedSearchResponse_withHitsOnly() {
+        SearchResponse searchResponse = parseSearchResponse(mockedSearchResponseString);
+
+        String result = mockedSearchIndexTool.buildSimplifiedSearchResponse(searchResponse);
+
+        assertFalse(result.isEmpty());
+        assertTrue(result.contains("_index"));
+        assertFalse(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testBuildSimplifiedSearchResponse_withNoHitsOrAggregations() {
+        String emptySearchResponseString =
+            "{\"took\":1,\"timed_out\":false,\"_shards\":{\"total\":1,\"successful\":1,\"skipped\":0,\"failed\":0},\"hits\":{\"total\":{\"value\":0,\"relation\":\"eq\"},\"max_score\":null,\"hits\":[]}}";
+        SearchResponse emptySearchResponse = parseSearchResponse(emptySearchResponseString);
+
+        String result = mockedSearchIndexTool.buildSimplifiedSearchResponse(emptySearchResponse);
+
+        assertEquals("", result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithAggregationsOnlyReturnRawResponseFalse() {
+        SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+        mockSearchResponse(aggregationResponse);
+
+        String inputString =
+            "{\"index\": \"test-index\", \"query\": {\"size\": 0, \"aggs\": {\"unique_services\": {\"terms\": {\"field\": \"serviceName\", \"size\": 20}}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "false");
+
+        tool.run(parameters, listener);
+
+        Object result = future.join();
+        assertTrue(result instanceof String);
+        String resultString = (String) result;
+        assertFalse(resultString.isEmpty());
+        assertTrue(resultString.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(resultString.contains("unique_services"));
+        assertFalse(resultString.contains("_shards"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithHitsAndAggregationsReturnRawResponseFalse() {
+        SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(
+            new SearchHit[] { hitsResponse.getHits().getHits()[0] },
+            sampleAggregationsMap()
+        );
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(searchResponse);
+        mockSearchResponse(searchResponse);
+
+        String inputString =
+            "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}, \"aggs\": {\"unique_services\": {\"terms\": {\"field\": \"serviceName\", \"size\": 20}}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = Map.of("input", inputString);
+
+        tool.run(parameters, listener);
+
+        Object result = future.join();
+        assertTrue(result instanceof String);
+        String resultString = (String) result;
+        assertTrue(resultString.contains("_index"));
+        assertTrue(resultString.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertFalse(resultString.contains("_shards"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithAggregationsOnlyAndOutputParser() {
+        SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(aggregationResponse);
+        mockSearchResponse(aggregationResponse);
+        tool.setOutputParser(output -> "parsed_aggregations");
+
+        String inputString =
+            "{\"index\": \"test-index\", \"query\": {\"size\": 0, \"aggs\": {\"unique_services\": {\"terms\": {\"field\": \"serviceName\", \"size\": 20}}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = Map.of("input", inputString);
+        tool.run(parameters, listener);
+
+        assertEquals("parsed_aggregations", future.join());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withIOExceptionInBuildSimplifiedSearchResponse() {
+        SearchIndexTool spyTool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
+        doThrow(new IOException("Test IO Exception")).when(spyTool).buildSimplifiedSearchResponse(any());
+
+        SearchResponse searchResponse = parseSearchResponse(mockedSearchResponseString);
+        mockSearchResponse(searchResponse);
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        Map<String, String> parameters = Map.of("input", inputString);
+
+        ActionListener<Object> listener = mock(ActionListener.class);
+        spyTool.run(parameters, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IOException);
+        assertEquals("Test IO Exception", exceptionCaptor.getValue().getMessage());
+    }
+
+    private SearchResponse parseSearchResponse(String responseJson) throws IOException {
+        return SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(TEST_XCONTENT_REGISTRY_FOR_QUERY, DeprecationHandler.IGNORE_DEPRECATIONS, responseJson)
+            );
+    }
+
+    private Map<String, Object> sampleAggregationsMap() {
+        Map<String, Object> bucketA = new HashMap<>();
+        bucketA.put("key", "service-a");
+        bucketA.put("doc_count", 10);
+        Map<String, Object> bucketB = new HashMap<>();
+        bucketB.put("key", "service-b");
+        bucketB.put("doc_count", 5);
+        Map<String, Object> uniqueServices = new HashMap<>();
+        uniqueServices.put("doc_count_error_upper_bound", 0);
+        uniqueServices.put("sum_other_doc_count", 0);
+        uniqueServices.put("buckets", List.of(bucketA, bucketB));
+        Map<String, Object> aggregations = new HashMap<>();
+        aggregations.put("unique_services", uniqueServices);
+        return aggregations;
+    }
+
+    private SearchResponse mockSearchResponseWithAggregations(SearchHit[] hits, Map<String, Object> aggregationsMap) {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        float maxScore = hits.length > 0 ? hits[0].getScore() : 0f;
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), maxScore);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        when(searchResponse.getAggregations()).thenReturn(mock(Aggregations.class));
+        return searchResponse;
+    }
+
+    private void mockSearchResponse(SearchResponse searchResponse) {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
     }
 
 }
