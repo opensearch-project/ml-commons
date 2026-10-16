@@ -251,12 +251,24 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
             String[] targetWorkerNodes = mlModelManager.getTargetWorkerNodes(modelId);
 
-            if (requiresAutoDeployment(workerNodes, targetWorkerNodes)) {
-                if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
+            boolean noWorkerNode = workerNodes == null || workerNodes.length == 0;
+            boolean canAutoDeploy = FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName);
+            // A model that is loaded on some, but not all, of its target nodes can still serve predictions from the nodes
+            // that have it. Only models that can auto-deploy (remote models) should try to fill the remaining nodes first;
+            // for every other model (e.g. local text embedding models), rejecting the request here turns a node join or a
+            // single failed node into a cluster-wide outage.
+            if (noWorkerNode || (canAutoDeploy && isPartiallyDeployed(workerNodes, targetWorkerNodes))) {
+                if (canAutoDeploy) {
+                    final String[] currentWorkerNodes = workerNodes;
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         mlModelManager.getModel(modelId, request.getTenantId(), ActionListener.runBefore(ActionListener.wrap(model -> {
                             Boolean isHidden = model.getIsHidden();
                             if (!checkModelAutoDeployEnabled(model)) {
+                                if (!noWorkerNode) {
+                                    // Auto deploy is disabled for this model, but it is already deployed on some nodes.
+                                    mlTaskDispatcher.dispatchPredictTask(currentWorkerNodes, actionListener);
+                                    return;
+                                }
                                 final String errorMsg = getErrorMessage(
                                     "Auto deployment disabled for this model, please deploy model first",
                                     modelId,
@@ -786,9 +798,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return true;
     }
 
-    private boolean requiresAutoDeployment(String[] workerNodes, String[] targetWorkerNodes) {
-        return workerNodes == null
-            || workerNodes.length == 0
-            || (targetWorkerNodes != null && workerNodes.length < targetWorkerNodes.length);
+    private static boolean isPartiallyDeployed(String[] workerNodes, String[] targetWorkerNodes) {
+        return workerNodes != null && targetWorkerNodes != null && workerNodes.length < targetWorkerNodes.length;
     }
 }
