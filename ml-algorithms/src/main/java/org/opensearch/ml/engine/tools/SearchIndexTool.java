@@ -195,7 +195,6 @@ public class SearchIndexTool implements Tool {
     Map<String, Object> convertToXContentMap(ToXContent toXContent) throws IOException {
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             // Aggregations.toXContent writes named aggregation fields and must run inside an object
-            // (SearchResponse opens the "aggregations" object before delegating; we emulate that root here).
             if (toXContent instanceof Aggregations) {
                 builder.startObject();
                 toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -236,7 +235,7 @@ public class SearchIndexTool implements Tool {
             if (contextBuilder.length() > 0) {
                 contextBuilder.append("\n");
             }
-            contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregationsMap)));
+            contextBuilder.append(GSON.toJson(aggregationsMap));
         }
         return contextBuilder.toString();
     }
