@@ -265,7 +265,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             Boolean isHidden = model.getIsHidden();
                             if (!checkModelAutoDeployEnabled(model)) {
                                 if (!noWorkerNode) {
-                                    // Auto deploy is disabled for this model, but it is already deployed on some nodes.
+                                    // The cluster allows auto deploy, but this model's deploy_setting.is_auto_deploy_enabled is
+                                    // false. It is already deployed on some nodes, so serve from those instead of rejecting.
+                                    // The usual way to get here is nodes joining (scale-out, node replacement, blue/green):
+                                    // the model is not on the new nodes yet. deploy_setting.is_auto_deploy_enabled only controls
+                                    // deploying the model because of a predict request; auto redeploy on node join
+                                    // (plugins.ml_commons.model_auto_redeploy.enable) does not read it and deploys the model to
+                                    // the new nodes independently.
                                     mlTaskDispatcher.dispatchPredictTask(currentWorkerNodes, actionListener);
                                     return;
                                 }
