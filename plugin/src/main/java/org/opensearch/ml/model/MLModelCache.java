@@ -6,7 +6,9 @@
 package org.opensearch.ml.model;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -58,6 +60,11 @@ public class MLModelCache {
     // Identity of the deploy attempt that created this entry. Failure cleanup removes the entry only when it still
     // belongs to the failing attempt, so a late failure cannot evict a deployment another attempt created.
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Object deployOwner;
+    // Identities of the deploy attempts bound to this entry: the one that created it and any that joined it. An
+    // attempt may publish its predictor only into an entry it is bound to, so an attempt that outlived this entry
+    // (undeployed, or replaced by a newer deploy) can never publish into its replacement. Guarded by
+    // MLModelCacheHelper's lock.
+    private final Set<Object> deployAttempts = Collections.newSetFromMap(new IdentityHashMap<>());
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
@@ -156,6 +163,16 @@ public class MLModelCache {
 
     public boolean isDeployToAllNodes() {
         return this.deployToAllNodes != null && this.deployToAllNodes;
+    }
+
+    protected void bindDeployAttempt(Object deployAttempt) {
+        if (deployAttempt != null) {
+            deployAttempts.add(deployAttempt);
+        }
+    }
+
+    protected boolean isBoundTo(Object deployAttempt) {
+        return deployAttempt != null && deployAttempts.contains(deployAttempt);
     }
 
     public void clearWorkerNodes() {
