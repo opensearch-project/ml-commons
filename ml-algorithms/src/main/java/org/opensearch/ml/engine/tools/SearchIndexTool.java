@@ -187,7 +187,7 @@ public class SearchIndexTool implements Tool {
     /**
      * Converts a {@link ToXContent} value to a Map representation for easier processing.
      *
-     * @param toXContent the value to convert (for example, a search response or aggregations)
+     * @param toXContent the value to convert
      * @return Map representation of the search response
      * @throws IOException if conversion fails
      */
