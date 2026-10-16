@@ -193,23 +193,24 @@ public class SearchIndexTool implements Tool {
      */
     @VisibleForTesting
     Map<String, Object> convertToXContentMap(ToXContent toXContent) throws IOException {
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        // Aggregations.toXContent writes named aggregation fields and must run inside an object
-        // (SearchResponse opens the "aggregations" object before delegating; we emulate that root here).
-        if (toXContent instanceof Aggregations) {
-            builder.startObject();
-            toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
-            builder.endObject();
-        } else {
-            toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        }
-        BytesReference bytes = BytesReference.bytes(builder);
-        try (
-            XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
-        ) {
-            return parser.map();
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            // Aggregations.toXContent writes named aggregation fields and must run inside an object
+            // (SearchResponse opens the "aggregations" object before delegating; we emulate that root here).
+            if (toXContent instanceof Aggregations) {
+                builder.startObject();
+                toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                builder.endObject();
+            } else {
+                toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            }
+            BytesReference bytes = BytesReference.bytes(builder);
+            try (
+                XContentParser parser = XContentType.JSON
+                    .xContent()
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
+            ) {
+                return parser.map();
+            }
         }
     }
 
