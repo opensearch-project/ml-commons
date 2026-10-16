@@ -231,7 +231,7 @@ public class SearchIndexTool implements Tool {
         }
 
         Aggregations aggregations = searchResponse.getAggregations();
-        if (aggregations != null) {
+        if (aggregations != null && !aggregations.asList().isEmpty()) {
             Map<String, Object> aggregationsMap = convertToXContentMap(aggregations);
             if (contextBuilder.length() > 0) {
                 contextBuilder.append("\n");
