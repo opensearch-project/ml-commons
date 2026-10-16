@@ -16,6 +16,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.engine.tools.SearchIndexTool.AGGREGATIONS_FIELD;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
@@ -963,7 +964,7 @@ public class SearchIndexToolTests {
         assertFalse(result.contains("_index"));
         assertFalse(result.contains("_shards"));
         assertFalse(result.contains("took"));
-        assertTrue(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(result.contains("\"" + AGGREGATIONS_FIELD + "\""));
         assertTrue(result.contains("unique_services"));
         assertTrue(result.contains("service-a"));
         assertTrue(result.contains("service-b"));
@@ -982,9 +983,9 @@ public class SearchIndexToolTests {
 
         assertTrue(result.contains("_index"));
         assertTrue(result.contains("_source"));
-        assertTrue(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(result.contains("\"" + AGGREGATIONS_FIELD + "\""));
         assertTrue(result.contains("unique_services"));
-        assertTrue(result.indexOf("_index") < result.indexOf("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(result.indexOf("_index") < result.indexOf("\"" + AGGREGATIONS_FIELD + "\""));
     }
 
     @Test
@@ -996,7 +997,7 @@ public class SearchIndexToolTests {
 
         assertFalse(result.isEmpty());
         assertTrue(result.contains("_index"));
-        assertFalse(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertFalse(result.contains("\"" + AGGREGATIONS_FIELD + "\""));
     }
 
     @Test
@@ -1010,7 +1011,7 @@ public class SearchIndexToolTests {
         String result = mockedSearchIndexTool.buildSimplifiedSearchResponse(searchResponse);
 
         assertTrue(result.contains("_index"));
-        assertFalse(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertFalse(result.contains("\"" + AGGREGATIONS_FIELD + "\""));
     }
 
     @Test
@@ -1048,7 +1049,7 @@ public class SearchIndexToolTests {
         assertTrue(result instanceof String);
         String resultString = (String) result;
         assertFalse(resultString.isEmpty());
-        assertTrue(resultString.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(resultString.contains("\"" + AGGREGATIONS_FIELD + "\""));
         assertTrue(resultString.contains("unique_services"));
         assertFalse(resultString.contains("_shards"));
     }
@@ -1075,7 +1076,7 @@ public class SearchIndexToolTests {
         assertTrue(result instanceof String);
         String resultString = (String) result;
         assertTrue(resultString.contains("_index"));
-        assertTrue(resultString.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+        assertTrue(resultString.contains("\"" + AGGREGATIONS_FIELD + "\""));
         assertFalse(resultString.contains("_shards"));
     }
 
@@ -1141,7 +1142,7 @@ public class SearchIndexToolTests {
         uniqueServices.put("buckets", List.of(bucketA, bucketB));
         Map<String, Object> aggregations = new HashMap<>();
         aggregations.put("unique_services", uniqueServices);
-        return Map.of(SearchIndexTool.AGGREGATIONS_FIELD, aggregations);
+        return Map.of(AGGREGATIONS_FIELD, aggregations);
     }
 
     private SearchResponse mockSearchResponseWithAggregations(SearchHit[] hits) {
