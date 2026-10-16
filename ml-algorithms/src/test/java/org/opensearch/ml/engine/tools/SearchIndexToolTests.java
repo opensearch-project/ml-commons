@@ -954,7 +954,7 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testBuildSimplifiedSearchResponse_withAggregationsOnly() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
-        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0]);
         doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
 
         String result = tool.buildSimplifiedSearchResponse(aggregationResponse);
@@ -975,7 +975,7 @@ public class SearchIndexToolTests {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
         SearchHit[] hits = hitsResponse.getHits().getHits();
-        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] }, sampleAggregationsMap());
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] });
         doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
 
         String result = tool.buildSimplifiedSearchResponse(searchResponse);
@@ -1004,7 +1004,7 @@ public class SearchIndexToolTests {
     public void testBuildSimplifiedSearchResponse_withHitsAndEmptyAggregationsContainer() {
         SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
         SearchHit[] hits = hitsResponse.getHits().getHits();
-        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] }, sampleAggregationsMap());
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] });
         when(searchResponse.getAggregations()).thenReturn(new Aggregations(Collections.emptyList()));
 
         String result = mockedSearchIndexTool.buildSimplifiedSearchResponse(searchResponse);
@@ -1029,7 +1029,7 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testRunWithAggregationsOnlyReturnRawResponseFalse() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
-        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0]);
         doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(aggregationResponse);
 
@@ -1058,10 +1058,7 @@ public class SearchIndexToolTests {
     public void testRunWithHitsAndAggregationsReturnRawResponseFalse() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
-        SearchResponse searchResponse = mockSearchResponseWithAggregations(
-            new SearchHit[] { hitsResponse.getHits().getHits()[0] },
-            sampleAggregationsMap()
-        );
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hitsResponse.getHits().getHits()[0] });
         doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(searchResponse);
 
@@ -1086,7 +1083,7 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testRunWithAggregationsOnlyAndOutputParser() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
-        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
+        SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0]);
         doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(aggregationResponse);
         tool.setOutputParser(output -> "parsed_aggregations");
@@ -1144,10 +1141,10 @@ public class SearchIndexToolTests {
         uniqueServices.put("buckets", List.of(bucketA, bucketB));
         Map<String, Object> aggregations = new HashMap<>();
         aggregations.put("unique_services", uniqueServices);
-        return aggregations;
+        return Map.of(SearchIndexTool.AGGREGATIONS_FIELD, aggregations);
     }
 
-    private SearchResponse mockSearchResponseWithAggregations(SearchHit[] hits, Map<String, Object> aggregationsMap) {
+    private SearchResponse mockSearchResponseWithAggregations(SearchHit[] hits) {
         SearchResponse searchResponse = mock(SearchResponse.class);
         float maxScore = hits.length > 0 ? hits[0].getScore() : 0f;
         SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), maxScore);
