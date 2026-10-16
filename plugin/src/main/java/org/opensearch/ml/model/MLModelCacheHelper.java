@@ -23,6 +23,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -89,6 +90,7 @@ public class MLModelCacheHelper {
         modelCache.setDeployToAllNodes(deployToAllNodes);
         modelCache.setLastAccessTime(Instant.now());
         modelCache.setDeployOwner(deployOwner);
+        modelCache.bindDeployAttempt(deployOwner);
         modelCaches.put(modelId, modelCache);
     }
 
@@ -103,7 +105,8 @@ public class MLModelCacheHelper {
 
     /**
      * Initialize model state for an automatic deploy attempt. If another deploy already put the model into a running
-     * state on this node, the existing entry is kept and stays owned by that deploy, not by {@code deployOwner}.
+     * state on this node, the attempt joins that entry: it is bound to it (see {@link #publishDeployedPredictor}) but
+     * the entry stays owned by that deploy, not by {@code deployOwner}.
      *
      * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, Object)}
      */
@@ -117,6 +120,7 @@ public class MLModelCacheHelper {
         log.debug("init local model deployment state for model {}, state: {}", modelId, state);
         if (isModelRunningOnNode(modelId)) {
             // model state initialized
+            modelCaches.get(modelId).bindDeployAttempt(deployOwner);
             return;
         }
         MLModelCache modelCache = new MLModelCache();
@@ -126,6 +130,7 @@ public class MLModelCacheHelper {
         modelCache.setDeployToAllNodes(false);
         modelCache.setLastAccessTime(Instant.now());
         modelCache.setDeployOwner(deployOwner);
+        modelCache.bindDeployAttempt(deployOwner);
         modelCaches.put(modelId, modelCache);
         setIsAutoDeploying(modelId, true);
     }
@@ -323,7 +328,13 @@ public class MLModelCacheHelper {
      */
     public synchronized void setIsAutoDeploying(String modelId, Boolean isModelAutoDeploying) {
         log.debug("Setting the auto deploying flag for Model {}", modelId);
-        getExistingModelCache(modelId).setIsAutoDeploying(isModelAutoDeploying);
+        // Only update an existing entry. Every deploy clears the flag when it completes, including one whose entry
+        // was already removed (by its own failure cleanup, or an undeploy); recreating the entry here would leave an
+        // empty one behind.
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache != null) {
+            modelCache.setIsAutoDeploying(isModelAutoDeploying);
+        }
     }
 
     /**
@@ -549,25 +560,52 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Publish a freshly deployed predictor for a deploy attempt, unless another attempt has already published one.
-     * The first attempt to publish wins: it stores its predictor, marks the model DEPLOYED and takes ownership of the
-     * entry, so a later failure of whichever attempt created the entry can no longer evict it. A losing attempt must
-     * close its own predictor; the model is already deployed on this node.
+     * Publish a freshly deployed predictor for a deploy attempt. The attempt may publish only into the cache entry it
+     * created or joined; the entry is never looked up and recreated by model id alone, so an attempt cannot write into
+     * a replacement entry or an empty one.
+     * <ul>
+     *   <li>Bound entry, no predictor yet: this attempt's predictor is stored, the model is marked DEPLOYED and the
+     *   attempt takes ownership of the entry, so a later failure of whichever attempt created it can no longer evict
+     *   it. Returns true.</li>
+     *   <li>Bound entry that already holds a predictor, or an entry this attempt is not bound to that holds one (the
+     *   model was redeployed while this attempt ran): the model is deployed on this node by another attempt and
+     *   nothing is changed. Returns false; the caller must close its own predictor.</li>
+     *   <li>No entry, or an entry this attempt is not bound to that holds no predictor: this attempt is stale and the
+     *   model is not deployed on this node. Nothing is changed; throws {@link StaleDeployAttemptException} and the
+     *   caller must close its own predictor.</li>
+     * </ul>
      *
      * @param modelId     model id
      * @param predictor   the predictor this attempt deployed
      * @param deployOwner identity of the deploy attempt
-     * @return true if this attempt's predictor was published; false if another attempt's predictor already is
+     * @return true if this attempt's predictor was published; false if another attempt's predictor is serving
+     * @throws StaleDeployAttemptException if this attempt's entry is gone and the model is not deployed on this node
      */
     public synchronized boolean publishDeployedPredictor(String modelId, Predictable predictor, Object deployOwner) {
-        MLModelCache modelCache = getExistingModelCache(modelId);
-        if (modelCache.getPredictor() != null) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        boolean bound = modelCache != null && modelCache.isBoundTo(deployOwner);
+        if (bound && modelCache.getPredictor() == null) {
+            modelCache.setPredictor(predictor);
+            modelCache.setModelState(MLModelState.DEPLOYED);
+            modelCache.setDeployOwner(deployOwner);
+            return true;
+        }
+        if (modelCache != null && modelCache.getPredictor() != null) {
             return false;
         }
-        modelCache.setPredictor(predictor);
-        modelCache.setModelState(MLModelState.DEPLOYED);
-        modelCache.setDeployOwner(deployOwner);
-        return true;
+        throw new StaleDeployAttemptException(
+            "Model " + modelId + " was undeployed or redeployed on this node while this deploy was running"
+        );
+    }
+
+    /**
+     * A deploy attempt finished after the cache entry it belonged to was removed or replaced, and the model is not
+     * deployed on this node. The attempt's result is discarded.
+     */
+    public static class StaleDeployAttemptException extends MLException {
+        public StaleDeployAttemptException(String message) {
+            super(message);
+        }
     }
 
     /**
