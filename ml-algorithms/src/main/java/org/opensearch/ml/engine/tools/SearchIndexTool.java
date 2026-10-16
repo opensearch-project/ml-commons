@@ -351,15 +351,20 @@ public class SearchIndexTool implements Tool {
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 if (returnFullResponse) {
-                    List<ModelTensors> outputs = new ArrayList<>();
-                    List<ModelTensor> tensors = new ArrayList<>();
-                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertToXContentMap(r)).build());
-                    outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
-                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
-                    if (outputParser != null) {
-                        listener.onResponse((T) outputParser.parse(output));
-                    } else {
-                        listener.onResponse((T) output);
+                    try {
+                        List<ModelTensors> outputs = new ArrayList<>();
+                        List<ModelTensor> tensors = new ArrayList<>();
+                        tensors.add(ModelTensor.builder().name(name).dataAsMap(convertToXContentMap(r)).build());
+                        outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+                        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+                        if (outputParser != null) {
+                            listener.onResponse((T) outputParser.parse(output));
+                        } else {
+                            listener.onResponse((T) output);
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to convert search response for raw tool output", e);
+                        listener.onFailure(e);
                     }
                     return;
                 }
