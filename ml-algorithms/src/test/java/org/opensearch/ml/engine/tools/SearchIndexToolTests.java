@@ -346,7 +346,7 @@ public class SearchIndexToolTests {
             );
 
         // When converting to map
-        Map<String, Object> resultMap = mockedSearchIndexTool.convertSearchResponseToMap(mockedSearchResponse);
+        Map<String, Object> resultMap = mockedSearchIndexTool.convertToXContentMap(mockedSearchResponse);
 
         // Then the map should contain expected keys
         assertFalse(resultMap.isEmpty());
@@ -634,14 +634,14 @@ public class SearchIndexToolTests {
     @Test
     @SneakyThrows
     public void testConvertSearchResponseToMap_withIOException() {
-        // Test convertSearchResponseToMap when IOException occurs
+        // Test convertToXContentMap when IOException occurs
         SearchResponse mockResponse = mock(SearchResponse.class);
 
         // Mock the response to throw IOException during toXContent
         doThrow(new IOException("Test IO Exception")).when(mockResponse).toXContent(any(), any());
 
         try {
-            mockedSearchIndexTool.convertSearchResponseToMap(mockResponse);
+            mockedSearchIndexTool.convertToXContentMap(mockResponse);
             fail("Expected IOException to be thrown");
         } catch (IOException e) {
             assertEquals("Test IO Exception", e.getMessage());
@@ -651,12 +651,12 @@ public class SearchIndexToolTests {
     @Test
     @SneakyThrows
     public void testRun_withIOExceptionInConvertSearchResponseToMap() {
-        // Test run method when convertSearchResponseToMap throws IOException
-        // Create a spy to override the convertSearchResponseToMap method
+        // Test run method when convertToXContentMap throws IOException
+        // Create a spy to override the convertToXContentMap method
         SearchIndexTool spyTool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
 
-        // Mock convertSearchResponseToMap to throw IOException
-        doThrow(new IOException("Test IO Exception")).when(spyTool).convertSearchResponseToMap(any());
+        // Mock convertToXContentMap to throw IOException
+        doThrow(new IOException("Test IO Exception")).when(spyTool).convertToXContentMap(any());
 
         // Use a real SearchResponse with empty hits instead of mocking final classes
         String emptySearchResponseString =
@@ -954,9 +954,7 @@ public class SearchIndexToolTests {
     public void testBuildSimplifiedSearchResponse_withAggregationsOnly() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
-            .when(tool)
-            .convertSearchResponseToMap(aggregationResponse);
+        doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
 
         String result = tool.buildSimplifiedSearchResponse(aggregationResponse);
 
@@ -977,7 +975,7 @@ public class SearchIndexToolTests {
         SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
         SearchHit[] hits = hitsResponse.getHits().getHits();
         SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] }, sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(searchResponse);
+        doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
 
         String result = tool.buildSimplifiedSearchResponse(searchResponse);
 
@@ -1017,9 +1015,7 @@ public class SearchIndexToolTests {
     public void testRunWithAggregationsOnlyReturnRawResponseFalse() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
-            .when(tool)
-            .convertSearchResponseToMap(aggregationResponse);
+        doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(aggregationResponse);
 
         String inputString =
@@ -1051,7 +1047,7 @@ public class SearchIndexToolTests {
             new SearchHit[] { hitsResponse.getHits().getHits()[0] },
             sampleAggregationsMap()
         );
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap())).when(tool).convertSearchResponseToMap(searchResponse);
+        doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(searchResponse);
 
         String inputString =
@@ -1076,9 +1072,7 @@ public class SearchIndexToolTests {
     public void testRunWithAggregationsOnlyAndOutputParser() {
         SearchIndexTool tool = spy(new SearchIndexTool(client, TEST_XCONTENT_REGISTRY_FOR_QUERY));
         SearchResponse aggregationResponse = mockSearchResponseWithAggregations(new SearchHit[0], sampleAggregationsMap());
-        doReturn(Map.of(SearchIndexTool.AGGREGATIONS_FIELD, sampleAggregationsMap()))
-            .when(tool)
-            .convertSearchResponseToMap(aggregationResponse);
+        doReturn(sampleAggregationsMap()).when(tool).convertToXContentMap(any());
         mockSearchResponse(aggregationResponse);
         tool.setOutputParser(output -> "parsed_aggregations");
 

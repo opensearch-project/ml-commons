@@ -41,6 +41,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
@@ -184,17 +185,24 @@ public class SearchIndexTool implements Tool {
     }
 
     /**
-     * Converts a SearchResponse to a Map representation for easier processing.
+     * Converts a {@link ToXContent} value to a Map representation for easier processing.
      *
-     * @param searchResponse The search response to convert
+     * @param toXContent the value to convert (for example, a search response or aggregations)
      * @return Map representation of the search response
      * @throws IOException if conversion fails
      */
-    public Map<String, Object> convertSearchResponseToMap(SearchResponse searchResponse) throws IOException {
+    @VisibleForTesting
+    Map<String, Object> convertToXContentMap(ToXContent toXContent) throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
-
-        // Convert to bytes and then to map
+        // Aggregations.toXContent writes named aggregation fields and must run inside an object
+        // (SearchResponse opens the "aggregations" object before delegating; we emulate that root here).
+        if (toXContent instanceof Aggregations) {
+            builder.startObject();
+            toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            builder.endObject();
+        } else {
+            toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        }
         BytesReference bytes = BytesReference.bytes(builder);
         try (
             XContentParser parser = XContentType.JSON
@@ -221,14 +229,13 @@ public class SearchIndexTool implements Tool {
             }
         }
 
-        if (searchResponse.getAggregations() != null) {
-            Object aggregations = convertSearchResponseToMap(searchResponse).get(AGGREGATIONS_FIELD);
-            if (aggregations != null) {
-                if (contextBuilder.length() > 0) {
-                    contextBuilder.append("\n");
-                }
-                contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregations)));
+        Aggregations aggregations = searchResponse.getAggregations();
+        if (aggregations != null) {
+            Map<String, Object> aggregationsMap = convertToXContentMap(aggregations);
+            if (contextBuilder.length() > 0) {
+                contextBuilder.append("\n");
             }
+            contextBuilder.append(GSON.toJson(Map.of(AGGREGATIONS_FIELD, aggregationsMap)));
         }
         return contextBuilder.toString();
     }
@@ -345,7 +352,7 @@ public class SearchIndexTool implements Tool {
                 if (returnFullResponse) {
                     List<ModelTensors> outputs = new ArrayList<>();
                     List<ModelTensor> tensors = new ArrayList<>();
-                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
+                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertToXContentMap(r)).build());
                     outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
                     ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
                     if (outputParser != null) {
