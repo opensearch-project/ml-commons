@@ -41,6 +41,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
@@ -88,6 +89,7 @@ public class SearchIndexTool implements Tool {
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
     public static final String RETURN_RAW_RESPONSE = "return_raw_response";
+    public static final String AGGREGATIONS_FIELD = "aggregations";
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -183,25 +185,59 @@ public class SearchIndexTool implements Tool {
     }
 
     /**
-     * Converts a SearchResponse to a Map representation for easier processing.
+     * Converts a {@link ToXContent} value to a Map representation for easier processing.
      *
-     * @param searchResponse The search response to convert
+     * @param toXContent the value to convert
      * @return Map representation of the search response
      * @throws IOException if conversion fails
      */
-    public Map<String, Object> convertSearchResponseToMap(SearchResponse searchResponse) throws IOException {
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
-
-        // Convert to bytes and then to map
-        BytesReference bytes = BytesReference.bytes(builder);
-        try (
-            XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
-        ) {
-            return parser.map();
+    @VisibleForTesting
+    Map<String, Object> convertToXContentMap(ToXContent toXContent) throws IOException {
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            // Aggregations.toXContent writes named aggregation fields and must run inside an object
+            if (toXContent instanceof Aggregations) {
+                builder.startObject();
+                toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                builder.endObject();
+            } else {
+                toXContent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            }
+            BytesReference bytes = BytesReference.bytes(builder);
+            try (
+                XContentParser parser = XContentType.JSON
+                    .xContent()
+                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
+            ) {
+                return parser.map();
+            }
         }
+    }
+
+    /**
+     * Builds a simplified tool response containing document hits and/or aggregations.
+     * Document hits are returned as newline-separated JSON objects. When aggregations
+     * are present, they are appended as a JSON object with an {@value #AGGREGATIONS_FIELD} key.
+     */
+    @VisibleForTesting
+    String buildSimplifiedSearchResponse(SearchResponse searchResponse) throws IOException {
+        StringBuilder contextBuilder = new StringBuilder();
+        SearchHit[] hits = searchResponse.getHits().getHits();
+        if (hits != null && hits.length > 0) {
+            for (SearchHit hit : hits) {
+                Map<String, Object> docContent = processResponse(hit);
+                contextBuilder.append(GSON.toJson(docContent)).append("\n");
+            }
+        }
+
+        Aggregations aggregations = searchResponse.getAggregations();
+        if (aggregations != null && !aggregations.asList().isEmpty()) {
+            Map<String, Object> aggregationsMap = convertToXContentMap(aggregations);
+            if (contextBuilder.length() > 0) {
+                contextBuilder.append("\n");
+            }
+            contextBuilder.append(GSON.toJson(aggregationsMap));
+        }
+        return contextBuilder.toString();
     }
 
     @Override
@@ -313,34 +349,34 @@ public class SearchIndexTool implements Tool {
             }
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
-                SearchHit[] hits = r.getHits().getHits();
                 if (returnFullResponse) {
-                    List<ModelTensors> outputs = new ArrayList<>();
-                    List<ModelTensor> tensors = new ArrayList<>();
-                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
-                    outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
-                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
-                    if (outputParser != null) {
-                        listener.onResponse((T) outputParser.parse(output));
-                    } else {
-                        listener.onResponse((T) output);
+                    try {
+                        List<ModelTensors> outputs = new ArrayList<>();
+                        List<ModelTensor> tensors = new ArrayList<>();
+                        tensors.add(ModelTensor.builder().name(name).dataAsMap(convertToXContentMap(r)).build());
+                        outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+                        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+                        if (outputParser != null) {
+                            listener.onResponse((T) outputParser.parse(output));
+                        } else {
+                            listener.onResponse((T) output);
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to convert search response for raw tool output", e);
+                        listener.onFailure(e);
                     }
                     return;
                 }
-                if (hits != null && hits.length > 0) {
-                    StringBuilder contextBuilder = new StringBuilder();
-                    for (SearchHit hit : hits) {
-                        Map<String, Object> docContent = processResponse(hit);
-                        String doc = GSON.toJson(docContent);
-                        contextBuilder.append(doc).append("\n");
-                    }
+                try {
+                    String response = buildSimplifiedSearchResponse(r);
                     if (outputParser != null) {
-                        listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                        listener.onResponse((T) outputParser.parse(response));
                     } else {
-                        listener.onResponse((T) contextBuilder.toString());
+                        listener.onResponse((T) response);
                     }
-                } else {
-                    listener.onResponse((T) "");
+                } catch (IOException e) {
+                    log.error("Failed to build simplified search response", e);
+                    listener.onFailure(e);
                 }
             }, e -> {
                 log.error("Failed to search index", e);
