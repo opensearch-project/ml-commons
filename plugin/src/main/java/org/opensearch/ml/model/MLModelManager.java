@@ -1737,14 +1737,25 @@ public class MLModelManager {
 
     /**
      * Deploy path counterpart of {@link #setupParamsAndPredictable}. Another deploy attempt of the same model can be
-     * running on this node (a cluster-wide deploy and a predict-triggered local auto-deploy, for example), so the
-     * predictor is published only if no other attempt's predictor already is; otherwise this attempt closes its own
-     * instead of overwriting and leaking the one in use. Either way the model is deployed on this node.
+     * running on this node (a cluster-wide deploy and a predict-triggered local auto-deploy, for example), and the
+     * model can be undeployed or redeployed while this attempt runs. So the predictor is published only into the cache
+     * entry this attempt created or joined, and only if no other attempt's predictor is already there. Otherwise this
+     * attempt closes its own predictor and leaves the cache untouched: it reports success if the model is deployed on
+     * this node by another attempt, and fails if the model is not deployed here at all.
      */
     private void deployPredictable(String modelId, MLModel mlModel, Object deployOwner, ActionListener<String> listener) {
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         mlEngine.deploy(mlModel, params, ActionListener.wrap(predictor -> {
-            if (modelCacheHelper.publishDeployedPredictor(modelId, predictor, deployOwner)) {
+            boolean published;
+            try {
+                published = modelCacheHelper.publishDeployedPredictor(modelId, predictor, deployOwner);
+            } catch (MLModelCacheHelper.StaleDeployAttemptException e) {
+                log.info("Discarding a stale deploy of model {}: {}", modelId, e.getMessage());
+                predictor.close();
+                listener.onFailure(e);
+                return;
+            }
+            if (published) {
                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                 modelCacheHelper.refreshLastAccessTime(modelId);
             } else {
