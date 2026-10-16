@@ -51,6 +51,7 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
+import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.transport.client.Client;
 
@@ -1000,6 +1001,20 @@ public class SearchIndexToolTests {
 
     @Test
     @SneakyThrows
+    public void testBuildSimplifiedSearchResponse_withHitsAndEmptyAggregationsContainer() {
+        SearchResponse hitsResponse = parseSearchResponse(mockedSearchResponseString);
+        SearchHit[] hits = hitsResponse.getHits().getHits();
+        SearchResponse searchResponse = mockSearchResponseWithAggregations(new SearchHit[] { hits[0] }, sampleAggregationsMap());
+        when(searchResponse.getAggregations()).thenReturn(new Aggregations(Collections.emptyList()));
+
+        String result = mockedSearchIndexTool.buildSimplifiedSearchResponse(searchResponse);
+
+        assertTrue(result.contains("_index"));
+        assertFalse(result.contains("\"" + SearchIndexTool.AGGREGATIONS_FIELD + "\""));
+    }
+
+    @Test
+    @SneakyThrows
     public void testBuildSimplifiedSearchResponse_withNoHitsOrAggregations() {
         String emptySearchResponseString =
             "{\"took\":1,\"timed_out\":false,\"_shards\":{\"total\":1,\"successful\":1,\"skipped\":0,\"failed\":0},\"hits\":{\"total\":{\"value\":0,\"relation\":\"eq\"},\"max_score\":null,\"hits\":[]}}";
@@ -1137,7 +1152,7 @@ public class SearchIndexToolTests {
         float maxScore = hits.length > 0 ? hits[0].getScore() : 0f;
         SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), maxScore);
         when(searchResponse.getHits()).thenReturn(searchHits);
-        when(searchResponse.getAggregations()).thenReturn(mock(Aggregations.class));
+        when(searchResponse.getAggregations()).thenReturn(new Aggregations(List.of(mock(Aggregation.class))));
         return searchResponse;
     }
 
