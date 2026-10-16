@@ -642,3 +642,14 @@ GET /{{memory_index_prefix}}-short-term-memory/_search
   ]
 }
 ```
+
+## Related documentation
+
+The topics in this tutorial are documented in the OpenSearch documentation:
+
+- [Agentic memory](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/)
+- [Create memory container](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-memory-container/)
+- [Add agentic memory](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/add-memory/)
+- [Search agentic memory](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/search-memory/)
+- [Update agentic memory](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/update-memory/)
+- [Using agentic memory](https://docs.opensearch.org/latest/vector-search/ai-search/agentic-search/agentic-memory/)

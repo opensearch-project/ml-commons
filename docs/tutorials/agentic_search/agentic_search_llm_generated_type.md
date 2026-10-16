@@ -506,3 +506,13 @@ This is an experimental feature. See the following GitHub issues for information
 
 - [[RFC] Design for Agentic Search #1479](https://github.com/opensearch-project/ml-commons/issues/1479)
 - [[RFC] Agentic Search in OpenSearch #4005](https://github.com/opensearch-project/OpenSearch/issues/4005)
+
+## Related documentation
+
+The topics in this tutorial are documented in the OpenSearch documentation:
+
+- [Agentic search](https://docs.opensearch.org/latest/vector-search/ai-search/agentic-search/)
+- [Using flow agents](https://docs.opensearch.org/latest/vector-search/ai-search/agentic-search/flow-agent/)
+- [Query Planning tool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/query-planning-tool/)
+- [Agentic query](https://docs.opensearch.org/latest/query-dsl/specialized/agentic/)
+- [Agentic query translator](https://docs.opensearch.org/latest/search-plugins/search-pipelines/agentic-query-translator-processor/)
