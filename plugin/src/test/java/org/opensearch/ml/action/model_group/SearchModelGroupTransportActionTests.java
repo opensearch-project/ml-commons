@@ -36,6 +36,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -302,7 +303,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testResourceSharingEnabled_failSafePath_usesEmptySet_andCallsSdkClient() {
+    public void testResourceSharingEnabled_emptyAccessibleIds_searchesWithEmptySet() {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
         when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
@@ -317,9 +318,9 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         searchModelGroupTransportAction.doExecute(null, req, actionListener);
 
-        // Simulate failure -> deny-all (empty set)
+        // A successful lookup with no accessible model groups is a valid empty result
         verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
-        rscListenerCaptor.getValue().onFailure(new RuntimeException("boom"));
+        rscListenerCaptor.getValue().onResponse(Collections.emptySet());
 
         future.complete(emptySearchDataObjectResponse());
 
@@ -327,6 +328,46 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
         verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testResourceSharingEnabled_accessibleIdsLookupFails_failsWithoutSearch() {
+        Exception failure = failAccessibleIdsLookup(new RuntimeException("boom"));
+        assertTrue(failure instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) failure).status());
+    }
+
+    @Test
+    public void testResourceSharingEnabled_accessibleIdsLookupFailsWithIndexNotFound_failsWithoutSearch() {
+        // Must not be turned into an empty result like an IndexNotFoundException from the model group search itself
+        IndexNotFoundException lookupFailure = new IndexNotFoundException("resource-sharing");
+        assertSame(lookupFailure, failAccessibleIdsLookup(lookupFailure));
+    }
+
+    /**
+     * Fails the accessible-ids lookup, verifies that no search is issued, and returns the exception sent to the caller.
+     */
+    private Exception failAccessibleIdsLookup(Exception lookupFailure) {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+
+        SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, new SearchSourceBuilder());
+        MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-2");
+
+        searchModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
+        rscListenerCaptor.getValue().onFailure(lookupFailure);
+
+        verify(sdkClient, never()).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+        verify(actionListener, never()).onResponse(any(SearchResponse.class));
+
+        ArgumentCaptor<Exception> failureCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(failureCaptor.capture());
+        return failureCaptor.getValue();
     }
 
     @Test
