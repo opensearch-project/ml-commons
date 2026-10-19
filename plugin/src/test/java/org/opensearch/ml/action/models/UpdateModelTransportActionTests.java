@@ -85,6 +85,7 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -1021,6 +1022,66 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             "Space type must be provided in additional_config for remote text embedding model",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    // The update path keeps the space_type requirement for remote text-embedding models: a new model_config
+    // without space_type is rejected unless the stored config already has one.
+    @Test
+    public void testUpdateRemoteTextEmbeddingModelConfig_MissingSpaceType_Rejected() {
+        MLModel storedModel = prepareMLModel("REMOTE_EXTERNAL", MLModelState.REGISTERED)
+            .toBuilder()
+            .modelConfig(textEmbeddingConfig(null))
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(storedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, remoteModelConfigUpdateRequest(textEmbeddingConfig(null)), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        assertEquals(
+            "Space type must be provided in additional_config for remote text embedding model",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateRemoteTextEmbeddingModelConfig_SpaceTypeFromStoredConfig_Accepted() {
+        MLModel storedModel = prepareMLModel("REMOTE_EXTERNAL", MLModelState.REGISTERED)
+            .toBuilder()
+            .modelConfig(textEmbeddingConfig(Map.of("space_type", "l2")))
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(storedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, remoteModelConfigUpdateRequest(textEmbeddingConfig(null)), actionListener);
+
+        // Validation passes; whatever the rest of the update does, it must not be rejected for space_type.
+        verify(actionListener, never())
+            .onFailure(argThat(e -> e.getMessage() != null && e.getMessage().startsWith("Space type must be provided")));
+    }
+
+    private static BaseModelConfig textEmbeddingConfig(Map<String, Object> additionalConfig) {
+        return BaseModelConfig
+            .baseModelConfigBuilder()
+            .modelType("text_embedding")
+            .embeddingDimension(768)
+            .frameworkType(BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .additionalConfig(additionalConfig)
+            .build();
+    }
+
+    private static MLUpdateModelRequest remoteModelConfigUpdateRequest(BaseModelConfig modelConfig) {
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("test_model_id").modelConfig(modelConfig).build();
+        return MLUpdateModelRequest.builder().updateModelInput(input).build();
     }
 
     @Test

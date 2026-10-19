@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
@@ -651,6 +652,32 @@ public class MLModelTests {
             assertNotNull(parsed.getModelConfig());
             assertEquals("TEXT_EMBEDDING", parsed.getModelConfig().getModelType());
             assertNull(((BaseModelConfig) parsed.getModelConfig()).getAdditionalConfig());
+        }
+    }
+
+    // A stored document with additional_config was written by 3.1+, so the space_type rule still applies on read.
+    @Test
+    public void parseRemoteModel_storedDocWithAdditionalConfigMissingSpaceType_Rejected() throws IOException {
+        String source = "{"
+            + "\"name\":\"remote_text_embedding_model\","
+            + "\"algorithm\":\"REMOTE\","
+            + "\"model_version\":\"1\","
+            + "\"model_state\":\"REGISTERED\","
+            + "\"connector_id\":\"test_connector_id\","
+            + "\"model_config\":{"
+            + "\"model_type\":\"TEXT_EMBEDDING\","
+            + "\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\","
+            + "\"additional_config\":{}"
+            + "}"
+            + "}";
+        try (XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, source)) {
+            parser.nextToken();
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> MLModel.parse(parser, FunctionName.REMOTE.name())
+            );
+            assertEquals("Space type must be provided in additional_config for remote text embedding model", e.getMessage());
         }
     }
 }
