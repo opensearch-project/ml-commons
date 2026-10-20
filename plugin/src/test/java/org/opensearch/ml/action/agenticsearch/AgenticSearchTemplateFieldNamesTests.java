@@ -142,6 +142,49 @@ public class AgenticSearchTemplateFieldNamesTests {
     }
 
     @Test
+    public void versionField_isSortable() {
+        // OpenSearch sorts a version field via its doc_values, like the other sortable types.
+        Map<String, Object> props = map("app_version", map("type", "version"), "released_at", map("type", "date"));
+
+        assertEquals(List.of("app_version", "released_at"), collect(props));
+        assertEquals(Set.of("app_version", "released_at"), sortable(props));
+    }
+
+    @Test
+    public void versionFieldWithoutDocValues_notSortable() {
+        Map<String, Object> props = map("app_version", map("type", "version", "doc_values", false), "released_at", map("type", "date"));
+
+        assertEquals(Set.of("released_at"), sortable(props));
+    }
+
+    @Test
+    public void constantKeywordAndWildcard_areSortable() {
+        // Both sort through doc_values like keyword; wildcard honours doc_values:false like the rest.
+        Map<String, Object> props = map(
+            "env",
+            map("type", "constant_keyword", "value", "prod"),
+            "path",
+            map("type", "wildcard"),
+            "raw",
+            map("type", "wildcard", "doc_values", false)
+        );
+
+        assertEquals(Set.of("env", "path"), sortable(props));
+    }
+
+    @Test
+    public void deriveSchema_versionFieldInSortEnum() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("apps", map("app_version", map("type", "version"), "released_at", map("type", "date")));
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":[{\"{{sort_by}}\":\"asc\"}]}";
+
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        Map<String, Object> schema = service.deriveSchema(body, AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex)));
+
+        assertEquals(List.of("app_version", "released_at"), enumOf(schema, "sort_by"));
+    }
+
+    @Test
     public void disabledObject_skippedEntirely() {
         // enabled:false is not indexed, so neither the object nor its children can be queried.
         Map<String, Object> props = map(

@@ -576,6 +576,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
     private static final Set<String> SORTABLE_TYPES = Set
         .of(
             "keyword",
+            "constant_keyword",
+            "wildcard",
             "long",
             "integer",
             "short",
@@ -589,7 +591,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             "date",
             "date_nanos",
             "boolean",
-            "ip"
+            "ip",
+            "version"
         );
 
     /**
