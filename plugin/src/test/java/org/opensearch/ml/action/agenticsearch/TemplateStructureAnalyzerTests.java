@@ -613,6 +613,54 @@ public class TemplateStructureAnalyzerTests {
         assertEquals("Full-text search.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
     }
 
+    // ---- sortUnmappedType ----------------------------------------------------
+
+    /** Locate and classify the one-param schema rendered by {@code renderWith}. */
+    private static TemplateStructureAnalyzer.Facts classifySortKey(Function<Object, Map<String, Object>> renderWith) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("p", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = renderWith.apply(markers.renderParams().get("p"));
+        TemplateStructureAnalyzer.Located loc = TemplateStructureAnalyzer.locate(rendered, markers).get("p");
+        return TemplateStructureAnalyzer.classify(loc, rendered);
+    }
+
+    @Test
+    public void classify_sortKey_readsLiteralUnmappedType() {
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map("sort", List.of(map((String) mk, map("order", "asc", "unmapped_type", "double"))))
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_SORT_FIELD, f.role);
+        assertEquals("double", f.sortUnmappedType);
+    }
+
+    @Test
+    public void classify_sortKey_noUnmappedType_isNull() {
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("order", "asc"))))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, "asc")))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", mk)).sortUnmappedType);
+    }
+
+    @Test
+    public void classify_sortKey_emptyNonStringOrMarkerUnmappedType_isNull() {
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("unmapped_type", ""))))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("unmapped_type", 5))))).sortUnmappedType);
+        assertNull(
+            classifySortKey(
+                mk -> map("sort", List.of(map((String) mk, map("unmapped_type", TemplateStructureAnalyzer.MARKER_PREFIX + "7__"))))
+            ).sortUnmappedType
+        );
+    }
+
+    @Test
+    public void classify_geoDistanceSelector_hasNoUnmappedType() {
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map("sort", List.of(map("_geo_distance", map((String) mk, "0,0", "unmapped_type", "geo_point"))))
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, f.role);
+        assertNull(f.sortUnmappedType);
+    }
+
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
     private static void checkSingle(
         String type,

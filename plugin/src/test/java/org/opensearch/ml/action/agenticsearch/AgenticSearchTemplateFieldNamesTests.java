@@ -282,6 +282,44 @@ public class AgenticSearchTemplateFieldNamesTests {
     }
 
     @Test
+    public void extractFieldNames_sortableWhereMapped_tolerates_missingButNotUnsortable() {
+        // price is missing from b: a sort with unmapped_type can still use it, a plain sort cannot.
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "id", map("type", "keyword")));
+        byIndex.put("b", map("id", map("type", "keyword")));
+
+        AgenticSearchTemplateService.MappingFields result = AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex));
+
+        assertEquals(List.of("price", "id"), result.all);
+        assertEquals(List.of("id"), new ArrayList<>(result.sortable));
+        assertEquals(List.of("price", "id"), new ArrayList<>(result.sortableWhereMapped));
+    }
+
+    @Test
+    public void extractFieldNames_sortableWhereMapped_excludesFieldUnsortableInAnyIndex() {
+        // price is text without fielddata in b: no sort can use it, unmapped_type or not.
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double")));
+        byIndex.put("b", map("price", map("type", "text")));
+
+        AgenticSearchTemplateService.MappingFields result = AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex));
+
+        assertTrue(result.sortable.isEmpty());
+        assertTrue(result.sortableWhereMapped.isEmpty());
+    }
+
+    @Test
+    public void extractFieldNames_singleIndex_bothSortSetsAgree() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "title", map("type", "text")));
+
+        AgenticSearchTemplateService.MappingFields result = AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex));
+
+        assertEquals(List.of("price"), new ArrayList<>(result.sortable));
+        assertEquals(result.sortable, result.sortableWhereMapped);
+    }
+
+    @Test
     public void extractFieldNames_noMappings_isEmpty() {
         GetIndexResponse response = mock(GetIndexResponse.class);
         when(response.mappings()).thenReturn(Map.of());
@@ -370,7 +408,7 @@ public class AgenticSearchTemplateFieldNamesTests {
             "sort",
             List.of(map((String) rp.get("sort_by"), "desc"), rp.get("order_field"))
         );
-        service.applyStructuralEnrichment(schema, markers, rendered, null, sortable);
+        service.applyStructuralEnrichment(schema, markers, rendered, null, fields(all, sortable));
         return schema;
     }
 
@@ -432,7 +470,7 @@ public class AgenticSearchTemplateFieldNamesTests {
         Map<String, Object> schema = service.deriveSchema(body, fields(all, sortable));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
         Map<String, Object> rendered = renderWith.apply(markers.renderParams());
-        service.applyStructuralEnrichment(schema, markers, rendered, null, sortable);
+        service.applyStructuralEnrichment(schema, markers, rendered, null, fields(all, sortable));
         return schema;
     }
 
@@ -549,6 +587,153 @@ public class AgenticSearchTemplateFieldNamesTests {
         assertFalse(enumOf(schema, "sort_by").contains("title"));
         assertFalse(specOf(schema, "query_text").containsKey("enum"));
         assertFalse(specOf(schema, "query_text").containsKey("source"));
+    }
+
+    // ---- unmapped_type on a multi-index sort ----------------------------------
+
+    // Index a has price and id; index b only id. A plain sort on price fails on b.
+    private static GetIndexResponse priceOnlyInA() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "id", map("type", "keyword")));
+        byIndex.put("b", map("id", map("type", "keyword")));
+        return indexResponse(byIndex);
+    }
+
+    /** Derive {@code body} against {@code response}, then enrich with {@code renderWith} applied to the marker values. */
+    private static Map<String, Object> deriveAndEnrichAgainst(
+        String body,
+        GetIndexResponse response,
+        java.util.function.Function<Map<String, Object>, Map<String, Object>> renderWith
+    ) {
+        AgenticSearchTemplateService service = new AgenticSearchTemplateService(null, null, null, null, null);
+        AgenticSearchTemplateService.MappingFields mappingFields = AgenticSearchTemplateService.extractFieldNames(response);
+        Map<String, Object> schema = service.deriveSchema(body, mappingFields);
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = renderWith.apply(markers.renderParams());
+        service.applyStructuralEnrichment(schema, markers, rendered, null, mappingFields);
+        return schema;
+    }
+
+    private static final String SORT_WITH_UNMAPPED =
+        "{\"query\":{\"match_all\":{}},\"sort\":[{\"{{sort_by}}\":{\"order\":\"asc\",\"unmapped_type\":\"double\"}}]}";
+    private static final String SORT_PLAIN = "{\"query\":{\"match_all\":{}},\"sort\":[{\"{{sort_by}}\":{\"order\":\"asc\"}}]}";
+
+    private static Map<String, Object> renderSortClause(Map<String, Object> rp, Map<String, Object> clause) {
+        return map("query", map("match_all", map()), "sort", List.of(map((String) rp.get("sort_by"), clause)));
+    }
+
+    @Test
+    public void enrichment_sortWithUnmappedType_admitsFieldMissingFromSomeIndices() {
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            SORT_WITH_UNMAPPED,
+            priceOnlyInA(),
+            rp -> renderSortClause(rp, map("order", "asc", "unmapped_type", "double"))
+        );
+
+        assertEquals(List.of("price", "id"), enumOf(schema, "sort_by"));
+    }
+
+    @Test
+    public void enrichment_sortWithoutUnmappedType_keepsEverywhereSortableOnly() {
+        Map<String, Object> schema = deriveAndEnrichAgainst(SORT_PLAIN, priceOnlyInA(), rp -> renderSortClause(rp, map("order", "asc")));
+
+        assertEquals(List.of("id"), enumOf(schema, "sort_by"));
+    }
+
+    @Test
+    public void enrichment_bareSortKey_keepsEverywhereSortableOnly() {
+        // "sort":"{{x}}" has no clause object, so there is no unmapped_type to honor.
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":\"{{sort_by}}\"}";
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            body,
+            priceOnlyInA(),
+            rp -> map("query", map("match_all", map()), "sort", rp.get("sort_by"))
+        );
+
+        assertEquals(List.of("id"), enumOf(schema, "sort_by"));
+    }
+
+    @Test
+    public void enrichment_unmappedType_doesNotAdmitFieldUnsortableSomewhere() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "id", map("type", "keyword")));
+        byIndex.put("b", map("price", map("type", "text"), "id", map("type", "keyword")));
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            SORT_WITH_UNMAPPED,
+            indexResponse(byIndex),
+            rp -> renderSortClause(rp, map("order", "asc", "unmapped_type", "double"))
+        );
+
+        assertEquals(List.of("id"), enumOf(schema, "sort_by"));
+    }
+
+    @Test
+    public void enrichment_unmappedType_whenNothingIsSortableEverywhere_stillOffersEnum() {
+        // No field is sortable in both indices, so the name pass writes no enum; the located
+        // sort with unmapped_type must still get the wider set.
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "title", map("type", "text")));
+        byIndex.put("b", map("title", map("type", "text")));
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            SORT_WITH_UNMAPPED,
+            indexResponse(byIndex),
+            rp -> renderSortClause(rp, map("order", "asc", "unmapped_type", "double"))
+        );
+
+        assertEquals(List.of("price"), enumOf(schema, "sort_by"));
+        assertEquals("mapping", specOf(schema, "sort_by").get("source"));
+    }
+
+    @Test
+    public void enrichment_plainSort_whenNothingIsSortableEverywhere_hasNoEnum() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("price", map("type", "double"), "title", map("type", "text")));
+        byIndex.put("b", map("title", map("type", "text")));
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            SORT_PLAIN,
+            indexResponse(byIndex),
+            rp -> renderSortClause(rp, map("order", "asc"))
+        );
+
+        assertFalse(specOf(schema, "sort_by").containsKey("enum"));
+        assertFalse(specOf(schema, "sort_by").containsKey("source"));
+    }
+
+    @Test
+    public void enrichment_fieldNamedSortKey_withUnmappedType_narrowsToSortableWhereMapped() {
+        // order_field seeds from the full list; the located sort narrows it to the wider sort set.
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":[{\"{{order_field}}\":{\"order\":\"asc\",\"unmapped_type\":\"double\"}}]}";
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            body,
+            priceOnlyInA(),
+            rp -> map(
+                "query",
+                map("match_all", map()),
+                "sort",
+                List.of(map((String) rp.get("order_field"), map("order", "asc", "unmapped_type", "double")))
+            )
+        );
+
+        assertEquals(List.of("price", "id"), enumOf(schema, "order_field"));
+    }
+
+    @Test
+    public void enrichment_parameterizedUnmappedType_staysStrict() {
+        // "unmapped_type":"{{ut}}" may be omitted at query time, so it cannot widen the enum.
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":[{\"{{sort_by}}\":{\"order\":\"asc\",\"unmapped_type\":\"{{ut}}\"}}]}";
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            body,
+            priceOnlyInA(),
+            rp -> renderSortClause(rp, map("order", "asc", "unmapped_type", rp.get("ut")))
+        );
+
+        assertEquals(List.of("id"), enumOf(schema, "sort_by"));
     }
 
     @SuppressWarnings("unchecked")

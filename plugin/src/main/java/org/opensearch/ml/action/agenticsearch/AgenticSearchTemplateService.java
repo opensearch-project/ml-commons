@@ -166,7 +166,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                             // fixed-value enums recovered from where each param renders, and
                             // derive a template-level description for multi-template selection.
                             // Best-effort: on any failure the base derivation stands.
-                            derivedDescription = enrichStructurally(body, paramSchema, mappingFields.sortable);
+                            derivedDescription = enrichStructurally(body, paramSchema, mappingFields);
                         }
                         // 4. Pre-flight validate: render all-filled + required-only.
                         preflightValidate(body, paramSchema);
@@ -282,7 +282,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * from {@link #deriveSchema} is kept only for a field role: a sort slot narrows it to
      * {@code sortable}, a field-selector slot keeps it, and any other recovered role drops it.
      */
-    String enrichStructurally(String body, Map<String, Object> schema, Set<String> sortable) {
+    String enrichStructurally(String body, Map<String, Object> schema, MappingFields mappingFields) {
         try {
             TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
             Map<String, Object> rendered = renderToMap(body, markers.renderParams());
@@ -292,7 +292,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             // Render with optionals omitted so an optional param's slot shows the body's own
             // default; read that value at the param's (stable) path below.
             Map<String, Object> defaults = renderToMap(body, sampleParams(schema, true));
-            applyStructuralEnrichment(schema, markers, rendered, defaults, sortable);
+            applyStructuralEnrichment(schema, markers, rendered, defaults, mappingFields);
             // Derive a one-line template-level description (capabilities grouped by clause)
             // for multi-template selection. Null when no role is recovered.
             return TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered);
@@ -312,7 +312,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         TemplateStructureAnalyzer.MarkerSet markers,
         Map<String, Object> rendered,
         Map<String, Object> defaults,
-        Set<String> sortable
+        MappingFields mappingFields
     ) {
         Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
         for (Map.Entry<String, Object> entry : schema.entrySet()) {
@@ -321,7 +321,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> spec = (Map<String, Object>) entry.getValue();
-            enrichParam(entry.getKey(), spec, located.get(entry.getKey()), rendered, defaults, sortable);
+            enrichParam(entry.getKey(), spec, located.get(entry.getKey()), rendered, defaults, mappingFields);
         }
     }
 
@@ -332,7 +332,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         TemplateStructureAnalyzer.Located located,
         Map<String, Object> rendered,
         Map<String, Object> defaults,
-        Set<String> sortable
+        MappingFields mappingFields
     ) {
         Object existing = spec.get(MustacheTemplateAnalyzer.DESCRIPTION_KEY);
         boolean hasDescription = existing instanceof String && !((String) existing).isEmpty();
@@ -355,7 +355,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             return;
         }
         TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer.classify(located, rendered);
-        reconcileMappingEnum(spec, facts.role, sortable);
+        reconcileMappingEnum(param, spec, facts, mappingFields);
 
         // A closed-vocabulary slot becomes an enum: only for a string param with no enum yet,
         // so a field-name enum that survived reconcileMappingEnum is left as is.
@@ -383,18 +383,40 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * narrowed to {@code sortable} (dropped when none is); a field-selector slot takes any
      * field, so the enum is kept; every other role is a value or option slot that never takes
      * a field name, so the enum is removed (letting a closed vocabulary such as asc/desc apply
-     * instead). No role leaves the enum as is.
+     * instead). A sort whose clause carries {@code unmapped_type} tolerates a field missing from
+     * some indices, so it is narrowed to the wider {@code sortableWhereMapped} set instead; this
+     * also covers a {@code sort_by} that got no enum because nothing is sortable everywhere.
+     * No role leaves the enum as is.
      */
-    private static void reconcileMappingEnum(Map<String, Object> spec, String role, Set<String> sortable) {
-        if (role == null || !MustacheTemplateAnalyzer.SOURCE_MAPPING.equals(spec.get(MustacheTemplateAnalyzer.SOURCE_KEY))) {
+    private static void reconcileMappingEnum(
+        String param,
+        Map<String, Object> spec,
+        TemplateStructureAnalyzer.Facts facts,
+        MappingFields mappingFields
+    ) {
+        String role = facts.role;
+        if (role == null) {
             return;
         }
-        if (TemplateStructureAnalyzer.ROLE_SORT_FIELD.equals(role)) {
+        boolean fromMapping = MustacheTemplateAnalyzer.SOURCE_MAPPING.equals(spec.get(MustacheTemplateAnalyzer.SOURCE_KEY));
+        boolean sortField = TemplateStructureAnalyzer.ROLE_SORT_FIELD.equals(role);
+        boolean bareSortBy = sortField
+            && isSortSelector(param)
+            && MustacheTemplateAnalyzer.TYPE_STRING.equals(spec.get(MustacheTemplateAnalyzer.TYPE_KEY))
+            && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY);
+        if (!fromMapping && !bareSortBy) {
+            return;
+        }
+        if (sortField) {
+            Set<String> sortable = mappingFields == null ? null
+                : facts.sortUnmappedType != null ? mappingFields.sortableWhereMapped
+                : mappingFields.sortable;
             if (sortable == null || sortable.isEmpty()) {
                 spec.remove(MustacheTemplateAnalyzer.ENUM_KEY);
                 spec.remove(MustacheTemplateAnalyzer.SOURCE_KEY);
             } else {
                 spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(sortable));
+                spec.put(MustacheTemplateAnalyzer.SOURCE_KEY, MustacheTemplateAnalyzer.SOURCE_MAPPING);
             }
         } else if (!TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR.equals(role)) {
             spec.remove(MustacheTemplateAnalyzer.ENUM_KEY);
@@ -556,19 +578,27 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
     }
 
     /**
-     * The target's flattened mapping: every leaf field name, and the subset a {@code sort} can
+     * The target's flattened mapping: every leaf field name, and the subsets a {@code sort} can
      * use. Kept apart because only a sort selector is limited to sortable fields; a match or
-     * neural field selector may legitimately target a field that cannot be sorted on.
+     * neural field selector may legitimately target a field that cannot be sorted on. Two sort
+     * sets are kept because a sort with {@code unmapped_type} tolerates a field missing from some
+     * indices while a plain sort does not.
      */
     static final class MappingFields {
-        static final MappingFields EMPTY = new MappingFields(List.of(), Set.of());
+        static final MappingFields EMPTY = new MappingFields(List.of(), Set.of(), Set.of());
 
-        final List<String> all;      // ordered union of leaf field names across the target's indices
-        final Set<String> sortable;  // fields sortable in every index of the target, in `all` order
+        final List<String> all;                 // ordered union of leaf field names across the target's indices
+        final Set<String> sortable;             // fields sortable in every index of the target, in `all` order
+        final Set<String> sortableWhereMapped;  // fields sortable in every index that maps them, in `all` order
 
         MappingFields(List<String> all, Set<String> sortable) {
+            this(all, sortable, sortable);
+        }
+
+        MappingFields(List<String> all, Set<String> sortable, Set<String> sortableWhereMapped) {
             this.all = all;
             this.sortable = sortable;
+            this.sortableWhereMapped = sortableWhereMapped;
         }
     }
 
@@ -598,8 +628,9 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
     /**
      * Flatten every mapping of the target, not just the first: an alias or wildcard can span
      * several indices. Indices are visited in name order so the enum order is deterministic.
-     * A field is sortable only if it is sortable in every index, since a sort on a field that
-     * is missing or unsortable in any one index fails the search.
+     * {@code sortable} holds the fields sortable in every index, since a plain sort on a field
+     * that is missing or unsortable in any one index fails the search; {@code sortableWhereMapped}
+     * also admits fields missing from some indices, which a sort with {@code unmapped_type} tolerates.
      */
     @SuppressWarnings("unchecked")
     static MappingFields extractFieldNames(GetIndexResponse response) {
@@ -609,6 +640,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         }
         Set<String> all = new LinkedHashSet<>();
         Set<String> sortableEverywhere = null;
+        Set<String> sortableSomewhere = new HashSet<>();
+        Set<String> unsortableSomewhere = new HashSet<>();
         for (MappingMetadata mapping : new TreeMap<>(mappings).values()) {
             List<String> fields = new ArrayList<>();
             Set<String> sortable = new LinkedHashSet<>();
@@ -617,6 +650,12 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                 collectFieldNames((Map<String, Object>) props, "", fields, sortable);
             }
             all.addAll(fields);
+            sortableSomewhere.addAll(sortable);
+            for (String field : fields) {
+                if (!sortable.contains(field)) {
+                    unsortableSomewhere.add(field);
+                }
+            }
             if (sortableEverywhere == null) {
                 sortableEverywhere = sortable;
             } else {
@@ -624,12 +663,16 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             }
         }
         Set<String> sortableInOrder = new LinkedHashSet<>();
+        Set<String> sortableWhereMapped = new LinkedHashSet<>();
         for (String field : all) {
             if (sortableEverywhere.contains(field)) {
                 sortableInOrder.add(field);
             }
+            if (sortableSomewhere.contains(field) && !unsortableSomewhere.contains(field)) {
+                sortableWhereMapped.add(field);
+            }
         }
-        return new MappingFields(new ArrayList<>(all), sortableInOrder);
+        return new MappingFields(new ArrayList<>(all), sortableInOrder, sortableWhereMapped);
     }
 
     /**

@@ -101,13 +101,19 @@ public final class TemplateStructureAnalyzer {
     /** A param's recovered clause role and the field(s) it targets. */
     static final class Facts {
         final String role;
-        final List<String> fields; // target field name(s); may be empty when not recoverable
-        final String bound;        // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final List<String> fields;       // target field name(s); may be empty when not recoverable
+        final String bound;              // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final String sortUnmappedType;   // the sort clause's unmapped_type for ROLE_SORT_FIELD, else null
 
         Facts(String role, List<String> fields, String bound) {
+            this(role, fields, bound, null);
+        }
+
+        Facts(String role, List<String> fields, String bound, String sortUnmappedType) {
             this.role = role;
             this.fields = fields;
             this.bound = bound;
+            this.sortUnmappedType = sortUnmappedType;
         }
     }
 
@@ -204,7 +210,8 @@ public final class TemplateStructureAnalyzer {
 
         if (located.asKey) {
             // The param supplies a field name (e.g. the sort key), not a value.
-            return new Facts(sortOrSelector(keys), List.of(), null);
+            String role = sortOrSelector(keys);
+            return new Facts(role, List.of(), null, ROLE_SORT_FIELD.equals(role) ? sortUnmappedType(located.path, renderedRoot) : null);
         }
 
         // A key literally named "field" always holds a field name in the DSL (terms agg,
@@ -549,6 +556,23 @@ public final class TemplateStructureAnalyzer {
             }
         }
         return out;
+    }
+
+    /**
+     * A sort key's literal {@code unmapped_type}, read from the clause object the key names, or
+     * null. Only its presence matters: it tells the enum a field missing from some indices is
+     * allowed. A marker (the value is itself a param) does not count, since it may be omitted.
+     */
+    private static String sortUnmappedType(List<Object> keyPath, Object root) {
+        Object clause = navigate(root, keyPath);
+        if (!(clause instanceof Map)) {
+            return null;
+        }
+        Object unmappedType = ((Map<?, ?>) clause).get("unmapped_type");
+        if (!(unmappedType instanceof String) || ((String) unmappedType).isEmpty() || ((String) unmappedType).startsWith(MARKER_PREFIX)) {
+            return null;
+        }
+        return (String) unmappedType;
     }
 
     /** Navigate to a (possibly container) node at a key-path, for reading a clause's siblings. */
