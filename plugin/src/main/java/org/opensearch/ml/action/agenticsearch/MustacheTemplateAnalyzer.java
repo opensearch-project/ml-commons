@@ -38,7 +38,7 @@ import org.opensearch.ml.common.agenticsearch.AgenticSearchTemplate;
  *   <tr><td>{@code {{x}}{{^x}}default{{/x}}}</td><td>optional, with default</td></tr>
  *   <tr><td>{@code {{{x}}}} or {@code {{&x}}} in an unquoted slot</td><td>array (raw JSON injected as-is)</td></tr>
  *   <tr><td>{@code {{{x}}}} or {@code {{&x}}} inside {@code "..."}</td><td>string (unescaped)</td></tr>
- *   <tr><td>{@code {{#xs}}..{{.}}..{{/xs}}}</td><td>optional list (the section repeats per value)</td></tr>
+ *   <tr><td>{@code {{#xs}}..{{.}}..{{/xs}}} where xs is never a plain value</td><td>optional list (the section repeats per value)</td></tr>
  * </table>
  *
  * <p>Some legal bodies cannot be typed from the body alone: the {@code lang-mustache}
@@ -93,7 +93,7 @@ public class MustacheTemplateAnalyzer {
         boolean usedAsValueAtRoot;  // a value use OUTSIDE any section -> unconditionally rendered
         boolean tripleUnquoted;     // a {{{x}}}/{{&x}} OUTSIDE "..." -> raw JSON array/object
         boolean quotedScalar;       // a value that sat inside "..." -> string, else number
-        boolean iteratedWithDot;    // its {{#x}} section renders {{.}} -> x is a list of values
+        boolean iteratedWithDot;    // its {{#x}} section renders {{.}} -> a list, unless x is also a value
     }
 
     /** An open section on the scan stack. */
@@ -402,10 +402,12 @@ public class MustacheTemplateAnalyzer {
             // an inverted-section default (optional). A triple-stache in an unquoted slot
             // is an injected JSON array/object; one inside "..." is just an unescaped
             // string. A param used both ways keeps array, so its unquoted use still fits.
-            // A section that renders {{.}} iterates a list, and a section is always optional.
+            // A section that renders {{.}} makes a list only when nothing else establishes
+            // the type, since Mustache iterates a scalar context as one item and a list would
+            // break the param's value use. A section is always optional.
             if (f.tripleUnquoted) {
                 spec.put(TYPE_KEY, TYPE_ARRAY);
-            } else if (f.iteratedWithDot) {
+            } else if (f.iteratedWithDot && !f.usedAsValue) {
                 spec.put(TYPE_KEY, TYPE_LIST);
             } else if (f.usedAsSection && !f.usedAsValue) {
                 spec.put(TYPE_KEY, TYPE_BOOLEAN);

@@ -210,6 +210,33 @@ public class MustacheTemplateAnalyzerTests {
     }
 
     @Test
+    public void derive_quotedValueAndImplicitIterator_keepsString() {
+        // Mustache iterates a scalar context as one item, so the value use fixes the type;
+        // a list would render "{0=acme}" in the {{q}} slot.
+        Map<String, Object> schema = MustacheTemplateAnalyzer
+            .derive(
+                "{\"query\":{\"bool\":{\"must\":{\"match\":{\"title\":\"{{q}}\"}},\"filter\":[{{#q}}{\"term\":{\"tag\":\"{{.}}\"}},{{/q}}{}]}}}"
+            );
+        assertEquals(Set.of("q"), schema.keySet());
+        assertEquals("string", spec(schema, "q").get("type"));
+        assertEquals(Boolean.FALSE, spec(schema, "q").get("required"));
+        assertEquals("", spec(schema, "q").get("description"));
+    }
+
+    @Test
+    public void derive_unquotedValueAndImplicitIterator_keepsNumber() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"size\":{{q}},\"a\":[{{#q}}{{.}},{{/q}}0]}");
+        assertEquals("number", spec(schema, "q").get("type"));
+        assertEquals(Boolean.FALSE, spec(schema, "q").get("required"));
+    }
+
+    @Test
+    public void derive_unquotedTripleAndImplicitIterator_staysArray() {
+        Map<String, Object> schema = MustacheTemplateAnalyzer.derive("{\"a\":{{{q}}},\"b\":[{{#q}}{{.}},{{/q}}0]}");
+        assertEquals("array", spec(schema, "q").get("type"));
+    }
+
+    @Test
     public void paramNames_implicitIteratorInSection_returnsSectionName() {
         assertEquals(Set.of("brands"), MustacheTemplateAnalyzer.paramNames(ITERATOR_BODY));
     }
