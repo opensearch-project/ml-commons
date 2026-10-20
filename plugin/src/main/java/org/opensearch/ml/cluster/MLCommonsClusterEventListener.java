@@ -123,7 +123,9 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         if (delta.removed()) {
             Set<String> removedNodeIds = delta.removedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toSet());
             mlModelManager.removeWorkerNodes(removedNodeIds, false);
-        } else if (delta.added()) {
+        }
+        // Not "else if": one cluster state update can both remove and add nodes, and the added nodes still need the models.
+        if (delta.added()) {
             List<String> addedNodesIds = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
             mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
         }
