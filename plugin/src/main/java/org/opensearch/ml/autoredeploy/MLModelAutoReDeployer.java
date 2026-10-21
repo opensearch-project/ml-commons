@@ -181,6 +181,12 @@ public class MLModelAutoReDeployer {
                         if (notExist)
                             modelAutoRedeployArrangements.add(modelAutoRedeployArrangement);
                     });
+                // The sync up cron must not run before this query has read the deployed models: on a full cluster restart it
+                // would mark them DEPLOY_FAILED and they would never be picked up here. Once they are queued it is safe, and
+                // it must not wait for the redeploy tasks to finish: a task that never completes, or finishes below the
+                // success ratio, would otherwise leave a new cluster manager without the sync up cron (no routing table for
+                // new nodes, no model state refresh, no task timeout).
+                startCronjobAndClearListener();
                 redeployAModel();
             } else {
                 log.info("Could not find any models in the index, not performing auto reloading!");
@@ -325,7 +331,7 @@ public class MLModelAutoReDeployer {
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
     }
 
-    private void startCronjobAndClearListener() {
+    private synchronized void startCronjobAndClearListener() {
         boolean managerNode = clusterService.localNode().isClusterManagerNode();
         if (managerNode && startCronJobListener != null) {
             startCronJobListener.onResponse(true);

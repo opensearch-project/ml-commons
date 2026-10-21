@@ -127,6 +127,38 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
     }
 
+    public void test_buildAutoReloadArrangement_startsSyncUpCronBeforeRedeployTaskFinishes() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false)
+            .build();
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
+
+        mlModelAutoReDeployer = new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory);
+        ActionListener<Boolean> startCronJobListener = mock(ActionListener.class);
+        mlModelAutoReDeployer.setStartCronJobListener(startCronJobListener);
+
+        SearchResponse searchResponse = buildDeployToAllNodesTrueSearchResponse("ModelResult.json");
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        // the deploy request is sent but never answered: the redeploy task is still running
+
+        mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
+
+        verify(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
+        verify(startCronJobListener, times(1)).onResponse(true);
+    }
+
     public void test_buildAutoReloadArrangement_searchResponseEmpty_failure() throws Exception {
         Settings settings = Settings
             .builder()

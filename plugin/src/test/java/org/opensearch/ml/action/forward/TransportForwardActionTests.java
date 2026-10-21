@@ -279,7 +279,9 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_DeployModelDone_AllFailed() {
+        // the task is still waiting for nodeId1, the node that reports the error
         Set<String> workerNodes = new HashSet<>();
+        workerNodes.add(nodeId1);
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
         MLTaskCache mlTaskCache = MLTaskCache
             .builder()
