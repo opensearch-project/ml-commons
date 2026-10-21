@@ -106,22 +106,19 @@ public class ConnectorProtocolValidator {
     /**
      * Protocols whose executors build their HTTP client without the mutual-TLS material. Accepting
      * {@code mutual_tls_enabled} on these reports a transport protection that is never actually applied.
+     * <p>
+     * The MCP protocols are not listed: their executors install the client certificate on the JDK HTTP
+     * client through {@code MLSslContextFactory}.
      */
-    private static final Set<String> PROTOCOLS_WITHOUT_MUTUAL_TLS = Set
-        .of(
-            ConnectorProtocols.AWS_SIGV4,
-            ConnectorProtocols.GOOGLE_CLOUD,
-            ConnectorProtocols.MCP_SSE,
-            ConnectorProtocols.MCP_STREAMABLE_HTTP
-        );
+    private static final Set<String> PROTOCOLS_WITHOUT_MUTUAL_TLS = Set.of(ConnectorProtocols.AWS_SIGV4, ConnectorProtocols.GOOGLE_CLOUD);
 
     /**
      * Rejects {@code mutual_tls_enabled} on protocols that do not implement it.
      * <p>
-     * The field is accepted on every protocol but only honoured by the non-streaming {@code http} executor.
-     * On the others the connector is created, reported back with {@code mutual_tls_enabled: true}, and then
-     * connects without a client certificate - so an operator believes a control is in force that is not.
-     * Failing the request is the only way they find out.
+     * The field is accepted on every protocol but only honoured by the non-streaming {@code http} executor and
+     * the MCP executors. On the others the connector is created, reported back with
+     * {@code mutual_tls_enabled: true}, and then connects without a client certificate - so an operator believes
+     * a control is in force that is not. Failing the request is the only way they find out.
      *
      * @param protocol the resulting connector protocol
      * @param clientConfig the resulting connector client config; {@code null} or mTLS-off is ignored
@@ -138,7 +135,7 @@ public class ConnectorProtocolValidator {
                 + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
                 + " is only applied to the non-streaming ["
                 + ConnectorProtocols.HTTP
-                + "] protocol, so enabling it here would have no effect."
+                + "] protocol and the MCP protocols, so enabling it here would have no effect."
         );
     }
 
@@ -265,6 +262,62 @@ public class ConnectorProtocolValidator {
             mergedParameters,
             updatedConfig != null ? updatedConfig : storedConfig
         );
+    }
+
+    /**
+     * MCP counterpart of {@link #validateMutualTlsScheme(List, Map, ConnectorClientConfig)}.
+     * <p>
+     * An MCP connector has no actions: its endpoint is the top-level {@code url}, which the action-based check
+     * never sees. Against an {@code http://} MCP server the client certificate is never presented, exactly as
+     * for an action URL, so the same rejection applies.
+     *
+     * @param protocol the resulting connector protocol; non-MCP protocols are ignored
+     * @param url the resulting connector url
+     * @param clientConfig the resulting connector client config; {@code null} or mTLS-off is ignored
+     * @throws IllegalArgumentException if mutual TLS is requested alongside a cleartext MCP url
+     */
+    public static void validateMcpMutualTlsScheme(String protocol, String url, ConnectorClientConfig clientConfig) {
+        if (!isCleartextMcpUrl(protocol, url, clientConfig)) {
+            return;
+        }
+        throw new IllegalArgumentException(
+            "Mutual TLS cannot be used with the cleartext endpoint ["
+                + url.trim()
+                + "]. "
+                + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                + " requires an https:// MCP server url: over http:// there is no TLS handshake, so the client "
+                + "certificate is never presented and the request is not encrypted."
+        );
+    }
+
+    /**
+     * Update variant of {@link #validateMcpMutualTlsScheme(String, String, ConnectorClientConfig)}, validating
+     * the url and client config the connector will have once the request is applied. As with the other update
+     * variants, a connector already in this state whose url the request leaves alone is not blocked.
+     */
+    public static void validateMcpMutualTlsSchemeAfterUpdate(
+        String protocol,
+        String storedUrl,
+        ConnectorClientConfig storedConfig,
+        String updatedUrl,
+        ConnectorClientConfig updatedConfig
+    ) {
+        if (updatedUrl == null && isCleartextMcpUrl(protocol, storedUrl, storedConfig)) {
+            return;
+        }
+        validateMcpMutualTlsScheme(
+            protocol,
+            updatedUrl != null ? updatedUrl : storedUrl,
+            updatedConfig != null ? updatedConfig : storedConfig
+        );
+    }
+
+    private static boolean isCleartextMcpUrl(String protocol, String url, ConnectorClientConfig clientConfig) {
+        return ConnectorProtocols.isMcpProtocol(protocol)
+            && url != null
+            && clientConfig != null
+            && Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())
+            && CLEARTEXT_URL.matcher(url).find();
     }
 
     /** Mirrors {@code HttpConnector#update}, which merges parameters with putAll rather than replacing them. */
