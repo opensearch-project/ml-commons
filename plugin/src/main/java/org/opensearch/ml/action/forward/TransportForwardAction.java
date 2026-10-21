@@ -183,7 +183,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize() - mlTaskCache.getErrors().size();
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
-                        boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
+                        boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfResetRetryTimes(mlTaskCache, workNodes);
                         mlTaskManager.updateMLTask(taskId, tenantId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
@@ -228,21 +228,28 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         }
     }
 
-    private boolean triggerNextModelDeployAndCheckIfRestRetryTimes(Set<String> workNodes, String taskId) {
-        if (enableAutoReDeployModel && workNodes != null && mlTaskManager.getMLTaskCache(taskId) != null) {
-            MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
-            int expectedWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
-            int receivedWorkerNodesCount = expectedWorkerNodeCount - workNodes.size();
-            int successWorkerNodesCount = receivedWorkerNodesCount - mlTaskCache.errorNodesCount();
-            if ((float) successWorkerNodesCount / expectedWorkerNodeCount >= modelAutoRedeploySuccessRatio) {
-                // Trigger next model auto redeploy.
-                mlModelAutoReDeployer.redeployAModel();
-                // clear the auto reload retry time by setting the times value to 0.
-                return true;
-            }
+    /**
+     * Continues the auto redeploy chain with the next queued model and tells whether the deployment is healthy enough to
+     * reset the model's auto redeploy retry counter.
+     */
+    private boolean triggerNextModelDeployAndCheckIfResetRetryTimes(MLTaskCache mlTaskCache, Set<String> workNodes) {
+        Integer workerNodeSize = mlTaskCache.getWorkerNodeSize();
+        int expectedWorkerNodeCount = workerNodeSize == null ? 0 : workerNodeSize;
+        int pendingWorkerNodesCount = workNodes == null ? 0 : workNodes.size();
+        int successWorkerNodesCount = expectedWorkerNodeCount - pendingWorkerNodesCount - mlTaskCache.errorNodesCount();
+        boolean healthy = expectedWorkerNodeCount > 0
+            && (float) successWorkerNodesCount / expectedWorkerNodeCount >= modelAutoRedeploySuccessRatio;
+        // before the task leaves the cache: a follow-up auto redeploy of the model starts when it does
+        MLTask mlTask = mlTaskCache.getMlTask();
+        mlModelAutoReDeployer.onDeployTaskResult(mlTask.getModelId(), mlTask.getTaskId(), healthy);
+        if (enableAutoReDeployModel) {
+            // Always move on to the next queued model. Previously the chain only continued after a deployment that met the
+            // success ratio, so one model that failed on some nodes stopped every model queued behind it from redeploying.
+            mlModelAutoReDeployer.redeployAModel();
         }
-        // Failure case or auto redeploy is not enable case, return false, do not update the corresponding field in the index.
-        return false;
+        // A deployment that meets the success ratio proves the model is healthy, whether auto redeploy is on or the model
+        // was deployed by hand; previously a manual deploy with auto redeploy off left an exhausted counter in place.
+        return healthy;
     }
 
     private void syncModelWorkerNodes(String modelId, FunctionName functionName) {

@@ -1369,7 +1369,7 @@ public class MLModelManager {
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, tenantId, mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
+                redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1520,7 +1520,7 @@ public class MLModelManager {
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
+                redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1947,6 +1947,19 @@ public class MLModelManager {
                 "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),
                 RestStatus.CONFLICT
             );
+        }
+        redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount);
+    }
+
+    /**
+     * Loads the model controller (user level rate limits) while this node deploys the model. Deliberately does not check
+     * the model state in the model index: that document is shared by every node and is rewritten concurrently by the sync
+     * up job and by other deploy tasks (for example to PARTIALLY_DEPLOYED while new nodes are still joining), so checking
+     * it here failed this node's deploy for no reason of its own.
+     */
+    private void redeployModelControllerWhileDeploying(MLModel mlModel, Integer eligibleNodeCount) {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
         }
         deployControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
             if (response.startsWith("Successfully")) {
