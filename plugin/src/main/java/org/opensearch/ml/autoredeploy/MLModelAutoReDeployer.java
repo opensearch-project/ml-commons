@@ -9,10 +9,15 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -27,6 +32,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -36,6 +42,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -65,7 +72,24 @@ public class MLModelAutoReDeployer {
     private boolean allowCustomDeploymentPlan;
 
     private final MLModelManager mlModelManager;
+    private final MLTaskManager mlTaskManager;
     private final Queue<ModelAutoRedeployArrangement> modelAutoRedeployArrangements = new ConcurrentLinkedQueue<>();
+
+    /**
+     * An in-flight redeploy whose deploy task was never reported back is treated as finished after this long, so a lost
+     * response can never block a model's auto redeploy forever.
+     */
+    static final long IN_FLIGHT_REDEPLOY_STALE_AFTER_MS = TimeUnit.MINUTES.toMillis(10);
+
+    /**
+     * Auto redeploys currently running, by model id. Node joins usually come in bursts (scale-out, blue/green), and every
+     * join used to start another cluster-wide deploy task of the same model. Those tasks collide on the nodes that are
+     * still loading the model ("Duplicate deploy model task"), end below the success ratio, and each one consumes one
+     * of the model's lifetime auto redeploy retries, so after a few joins the model was excluded from auto redeploy for
+     * good. Instead, joins that arrive while a redeploy of the model is running are coalesced into one follow-up
+     * redeploy that starts when the running one finishes.
+     */
+    private final Map<String, InFlightRedeploy> inFlightRedeploys = new ConcurrentHashMap<>();
 
     private final SearchRequestBuilderFactory searchRequestBuilderFactory;
 
@@ -79,11 +103,32 @@ public class MLModelAutoReDeployer {
         MLModelManager mlModelManager,
         SearchRequestBuilderFactory searchRequestBuilderFactory
     ) {
+        this(clusterService, client, settings, mlModelManager, null, searchRequestBuilderFactory);
+    }
+
+    public MLModelAutoReDeployer(
+        ClusterService clusterService,
+        Client client,
+        Settings settings,
+        MLModelManager mlModelManager,
+        MLTaskManager mlTaskManager,
+        SearchRequestBuilderFactory searchRequestBuilderFactory
+    ) {
         this.clusterService = clusterService;
         this.client = client;
         this.settings = settings;
         this.mlModelManager = mlModelManager;
+        this.mlTaskManager = mlTaskManager;
         this.searchRequestBuilderFactory = searchRequestBuilderFactory;
+        if (mlTaskManager != null) {
+            // every way a deploy task ends on its coordinating node (all nodes replied, nodes left, failed, timed out)
+            // removes it from the task cache
+            mlTaskManager.addTaskRemovedListener(task -> {
+                if (task.getTaskType() == MLTaskType.DEPLOY_MODEL) {
+                    onDeployTaskCompleted(task.getModelId(), task.getTaskId());
+                }
+            });
+        }
 
         enableAutoReDeployModel = MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
         onlyRunOnMlNode = MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE.get(settings);
@@ -141,7 +186,7 @@ public class MLModelAutoReDeployer {
                 );
             return;
         }
-        triggerAutoDeployModels(addedNodes);
+        triggerAutoDeployModels(addedNodes, null);
     }
 
     public void redeployAModel() {
@@ -159,11 +204,12 @@ public class MLModelAutoReDeployer {
         triggerModelRedeploy(modelAutoRedeployArrangement);
     }
 
-    private void triggerAutoDeployModels(List<String> addedNodes) {
+    private void triggerAutoDeployModels(List<String> addedNodes, Set<String> onlyModelIds) {
         ActionListener<SearchResponse> listener = ActionListener.wrap(res -> {
             if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null) {
                 Arrays
                     .stream(res.getHits().getHits())
+                    .filter(x -> onlyModelIds == null || (x != null && onlyModelIds.contains(x.getId())))
                     .filter(
                         x -> x != null
                             && x.getSourceAsMap() != null
@@ -263,6 +309,24 @@ public class MLModelAutoReDeployer {
         }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
+        InFlightRedeploy previous = inFlightRedeploys.get(modelId == null ? "" : modelId);
+        InFlightRedeploy started = tryStartRedeploy(modelId, addedNodes);
+        if (started == null) {
+            log
+                .info(
+                    "Auto redeploy of model {} is already running, will redeploy again when it finishes. Added nodes: {}",
+                    modelId,
+                    addedNodes
+                );
+            redeployAModel();
+            return;
+        }
+        if (previous != null && previous != started) {
+            // the previous attempt went stale; make sure the nodes it was asked to cover are covered by this one
+            Set<String> merged = new HashSet<>(Optional.ofNullable(addedNodes).orElse(List.of()));
+            merged.addAll(previous.pendingAddedNodes);
+            addedNodes = new ArrayList<>(merged);
+        }
         List<String> planningWorkerNodes = (List<String>) modelAutoRedeployArrangement
             .getSearchResponse()
             .getSourceAsMap()
@@ -292,13 +356,20 @@ public class MLModelAutoReDeployer {
                 .info(
                     "Allow custom deployment plan is true and deploy to all nodes is false and added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!"
                 );
+            finishRedeploy(modelId, started);
             redeployAModel();
             return;
         }
 
         ActionListener<MLDeployModelResponse> listener = ActionListener.wrap(res -> {
             log.info("Triggered model auto redeploy, task id is: {}, task status is: {}", res.getTaskId(), res.getStatus());
+            started.taskId = res.getTaskId();
+            if (started.taskId == null || (mlTaskManager != null && !mlTaskManager.contains(started.taskId))) {
+                // the task already finished (or was never tracked) before its id was recorded
+                finishRedeploy(modelId, started);
+            }
         }, e -> {
+            finishRedeploy(modelId, started);
             log
                 .error(
                     "Exception occurred when auto redeploying the model, model id is: {}, exception is: {}, skipping current model auto redeploy and starting next model redeploy!",
@@ -325,12 +396,100 @@ public class MLModelAutoReDeployer {
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
     }
 
+    /**
+     * Registers a new auto redeploy of the model, unless one is already running. In that case the added nodes are
+     * remembered for a follow-up redeploy and null is returned.
+     */
+    synchronized InFlightRedeploy tryStartRedeploy(String modelId, List<String> addedNodes) {
+        if (modelId == null) {
+            return new InFlightRedeploy();
+        }
+        InFlightRedeploy current = inFlightRedeploys.get(modelId);
+        if (current != null && !isStale(current)) {
+            if (addedNodes != null) {
+                current.pendingAddedNodes.addAll(addedNodes);
+            }
+            current.rerunRequested = true;
+            return null;
+        }
+        InFlightRedeploy started = new InFlightRedeploy();
+        if (current != null) {
+            log
+                .warn(
+                    "Previous auto redeploy of model {} (task {}) is considered finished as it is no longer tracked",
+                    modelId,
+                    current.taskId
+                );
+        }
+        inFlightRedeploys.put(modelId, started);
+        return started;
+    }
+
+    private boolean isStale(InFlightRedeploy redeploy) {
+        if (redeploy.taskId != null && mlTaskManager != null && !mlTaskManager.contains(redeploy.taskId)) {
+            return true;
+        }
+        return System.currentTimeMillis() - redeploy.startedAtMillis > IN_FLIGHT_REDEPLOY_STALE_AFTER_MS;
+    }
+
+    /**
+     * Called on the deploy task's coordinating node when a deploy task finishes (all nodes replied, nodes left the cluster,
+     * or the task timed out). If the task was an auto redeploy and more nodes joined while it was running, start one
+     * follow-up redeploy of the model for them.
+     */
+    public void onDeployTaskCompleted(String modelId, String taskId) {
+        if (modelId == null || taskId == null) {
+            return;
+        }
+        InFlightRedeploy current = inFlightRedeploys.get(modelId);
+        if (current == null || !taskId.equals(current.taskId)) {
+            return;
+        }
+        finishRedeploy(modelId, current);
+    }
+
+    private void finishRedeploy(String modelId, InFlightRedeploy redeploy) {
+        List<String> pendingNodes;
+        // under the same lock as tryStartRedeploy, so a join is either recorded before the entry is removed (and gets the
+        // follow-up) or sees no entry (and starts its own redeploy); otherwise a join recorded on an entry that was just
+        // removed would be lost
+        synchronized (this) {
+            if (modelId == null || !inFlightRedeploys.remove(modelId, redeploy) || !redeploy.rerunRequested) {
+                return;
+            }
+            pendingNodes = new ArrayList<>(redeploy.pendingAddedNodes);
+        }
+        if (!enableAutoReDeployModel) {
+            return;
+        }
+        if (!clusterService.state().nodes().isLocalNodeElectedClusterManager()) {
+            // the new cluster manager redeploys for the nodes that joined; a second redeploy from here would collide with it
+            log.info("Not redeploying model {} for nodes {}: this node is no longer the cluster manager", modelId, pendingNodes);
+            return;
+        }
+        log.info("Nodes {} joined while model {} was being redeployed, redeploying it again", pendingNodes, modelId);
+        triggerAutoDeployModels(pendingNodes, Set.of(modelId));
+    }
+
+    @VisibleForTesting
+    boolean isRedeployInFlight(String modelId) {
+        InFlightRedeploy current = inFlightRedeploys.get(modelId);
+        return current != null && !isStale(current);
+    }
+
     private void startCronjobAndClearListener() {
         boolean managerNode = clusterService.localNode().isClusterManagerNode();
         if (managerNode && startCronJobListener != null) {
             startCronJobListener.onResponse(true);
             startCronJobListener = null;
         }
+    }
+
+    static class InFlightRedeploy {
+        final long startedAtMillis = System.currentTimeMillis();
+        final Set<String> pendingAddedNodes = ConcurrentHashMap.newKeySet();
+        volatile boolean rerunRequested;
+        volatile String taskId;
     }
 
     @Data
