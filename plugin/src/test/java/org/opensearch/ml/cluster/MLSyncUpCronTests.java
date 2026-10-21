@@ -19,7 +19,10 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
@@ -46,6 +49,7 @@ import org.opensearch.Version;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -696,5 +700,91 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             ShardSearchFailure.EMPTY_ARRAY,
             SearchResponse.Clusters.EMPTY
         );
+    }
+
+    // ---- orphaned deploy tasks (coordinating node left the cluster) ----
+
+    private void taskIndexExists(boolean exists) {
+        ClusterState state = mock(ClusterState.class);
+        org.opensearch.cluster.metadata.Metadata metadata = mock(org.opensearch.cluster.metadata.Metadata.class);
+        when(state.metadata()).thenReturn(metadata);
+        when(metadata.hasIndex(ML_TASK_INDEX)).thenReturn(exists);
+        when(clusterService.state()).thenReturn(state);
+        Settings settings = Settings.builder().put(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.getKey(), 600).build();
+        when(clusterService.getClusterSettings()).thenReturn(clusterSetting(settings, ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS));
+    }
+
+    private void taskSearchReturns(String... taskIds) {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            SearchHit[] hits = Arrays.stream(taskIds).map(id -> new SearchHit(0, id, Map.of(), Map.of())).toArray(SearchHit[]::new);
+            SearchResponse response = mock(SearchResponse.class);
+            when(response.getHits()).thenReturn(new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), 1.0f));
+            listener.onResponse(response);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+    }
+
+    public void testFailOrphanedDeployModelTasks_marksOnlyUntrackedTasksFailed() {
+        taskIndexExists(true);
+        taskSearchReturns("orphan", "live");
+
+        syncUpCron.failOrphanedDeployModelTasks(Set.of("live"));
+
+        ArgumentCaptor<SearchRequest> search = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(search.capture(), any());
+        String query = search.getValue().source().query().toString();
+        assertTrue(query, query.contains("DEPLOY_MODEL"));
+        assertTrue(query, query.contains("RUNNING") && query.contains("CREATED"));
+        assertTrue(query, query.contains("last_update_time"));
+
+        ArgumentCaptor<UpdateRequest> update = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client, times(1)).update(update.capture(), any());
+        assertEquals("orphan", update.getValue().id());
+        assertEquals(ML_TASK_INDEX, update.getValue().index());
+        Map<String, Object> doc = update.getValue().doc().sourceAsMap();
+        assertEquals("FAILED", doc.get("state"));
+        assertEquals(MLSyncUpCron.ORPHANED_DEPLOY_TASK_ERROR, doc.get("error"));
+    }
+
+    public void testFailOrphanedDeployModelTasks_onlyTasksWellPastTimeout() {
+        taskIndexExists(true);
+        taskSearchReturns();
+        long before = Instant.now().toEpochMilli();
+
+        syncUpCron.failOrphanedDeployModelTasks(Set.of());
+
+        ArgumentCaptor<SearchRequest> search = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(search.capture(), any());
+        org.opensearch.index.query.BoolQueryBuilder bool = (org.opensearch.index.query.BoolQueryBuilder) search.getValue().source().query();
+        org.opensearch.index.query.RangeQueryBuilder range = (org.opensearch.index.query.RangeQueryBuilder) bool
+            .filter()
+            .stream()
+            .filter(q -> q instanceof org.opensearch.index.query.RangeQueryBuilder)
+            .findFirst()
+            .orElseThrow();
+        long cutoff = ((Number) range.to()).longValue();
+        assertTrue(
+            "cutoff is two task timeouts ago: " + cutoff,
+            cutoff >= before - 2 * 600_000L && cutoff < before - 2 * 600_000L + 60_000L
+        );
+        verify(client, never()).update(any(UpdateRequest.class), any());
+    }
+
+    public void testFailOrphanedDeployModelTasks_skippedWithoutTaskIndexOrUnderMultiTenancy() {
+        taskIndexExists(false);
+        syncUpCron.failOrphanedDeployModelTasks(Set.of());
+        verify(client, never()).search(any(SearchRequest.class), any());
+
+        taskIndexExists(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        syncUpCron.failOrphanedDeployModelTasks(Set.of());
+        verify(client, never()).search(any(SearchRequest.class), any());
+    }
+
+    public void testFailOrphanedDeployModelTasks_neverThrows() {
+        when(clusterService.state()).thenThrow(new IllegalStateException("no state"));
+        syncUpCron.failOrphanedDeployModelTasks(Set.of());
+        verify(client, never()).search(any(SearchRequest.class), any());
     }
 }

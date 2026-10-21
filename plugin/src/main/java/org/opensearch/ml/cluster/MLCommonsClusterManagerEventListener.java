@@ -78,15 +78,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     @Override
     public void onClusterManager() {
-        ActionListener<Boolean> listener = ActionListener.wrap(r -> {
-            if (syncModelRoutingCron == null) {
-                startSyncModelRoutingCron();
-            }
-        }, e -> {
-            if (syncModelRoutingCron == null) {
-                startSyncModelRoutingCron();
-            }
-        });
+        ActionListener<Boolean> listener = ActionListener
+            .wrap(r -> startSyncModelRoutingCronIfStillClusterManager(false), e -> startSyncModelRoutingCronIfStillClusterManager(false));
         mlModelAutoReDeployer.setStartCronJobListener(listener);
         String localNodeId = clusterService.localNode().getId();
         threadPool
@@ -95,6 +88,31 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
                 TimeValue.timeValueSeconds(jobInterval),
                 GENERAL_THREAD_POOL
             );
+        // The auto redeployer starts the sync up job once it has read the models to redeploy. Never let a new cluster
+        // manager run without the sync up job (routing table, model state, task timeouts) if that signal is lost.
+        threadPool
+            .schedule(
+                () -> startSyncModelRoutingCronIfStillClusterManager(true),
+                TimeValue.timeValueSeconds(Math.max(SYNC_UP_CRON_FALLBACK_START_SECONDS, jobInterval * 6L)),
+                GENERAL_THREAD_POOL
+            );
+    }
+
+    static final long SYNC_UP_CRON_FALLBACK_START_SECONDS = 60;
+
+    /**
+     * Starts the sync up job unless it is already running or this node is no longer the elected cluster manager. Both
+     * starters can fire late: the auto redeployer's signal belongs to the term it was registered in, so without the check
+     * a node that lost cluster manager meanwhile would run the job next to the new cluster manager.
+     */
+    private synchronized void startSyncModelRoutingCronIfStillClusterManager(boolean fallback) {
+        if (syncModelRoutingCron != null || !clusterService.state().nodes().isLocalNodeElectedClusterManager()) {
+            return;
+        }
+        if (fallback) {
+            log.warn("ML sync up job was not started by model auto redeploy, starting it now");
+        }
+        startSyncModelRoutingCron();
     }
 
     private void startSyncModelRoutingCron() {
@@ -119,7 +137,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     }
 
     @Override
-    public void offClusterManager() {
+    public synchronized void offClusterManager() {
         cancel(syncModelRoutingCron);
         syncModelRoutingCron = null;
     }
