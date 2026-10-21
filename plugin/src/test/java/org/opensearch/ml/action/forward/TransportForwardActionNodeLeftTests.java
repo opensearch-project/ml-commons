@@ -7,6 +7,7 @@ package org.opensearch.ml.action.forward;
 
 import static java.util.Collections.emptyMap;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -208,7 +209,19 @@ public class TransportForwardActionNodeLeftTests extends OpenSearchTestCase {
         return fields.getValue();
     }
 
+    /**
+     * The auto redeployer must learn a deploy task's result while the task is still cached: removing the task releases its
+     * in-flight redeploy, and the follow-up for nodes that joined meanwhile starts from that result.
+     */
+    private void expectDeployResultWhileTaskCached() {
+        doAnswer(inv -> {
+            assertTrue("deploy result reported after the task left the cache", mlTaskManager.contains(TASK_ID));
+            return null;
+        }).when(mlModelAutoReDeployer).onDeployTaskResult(eq(MODEL_ID), eq(TASK_ID), anyBoolean());
+    }
+
     public void testLastPendingNodeLeaves_taskCompletesWithRemainingNodes() {
+        expectDeployResultWhileTaskCached();
         clusterHas("n1", "n2", "old1");
         startDeployTask("n1", "n2", "old1");
         reply("n1", null);
@@ -225,9 +238,12 @@ public class TransportForwardActionNodeLeftTests extends OpenSearchTestCase {
         assertEquals(2, model.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD));
         assertEquals("2 of 2 remaining nodes succeeded: healthy", 0, model.get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD));
         verify(mlModelManager).removeModelWorkerNode(eq(MODEL_ID), eq(false), eq("old1"));
+        verify(mlModelAutoReDeployer).onDeployTaskResult(MODEL_ID, TASK_ID, true);
+        verify(mlModelAutoReDeployer).redeployAModel();
     }
 
     public void testAllPendingNodesLeave_taskFails() {
+        expectDeployResultWhileTaskCached();
         clusterHas("old1", "old2");
         startDeployTask("old1", "old2");
 
@@ -237,6 +253,9 @@ public class TransportForwardActionNodeLeftTests extends OpenSearchTestCase {
         assertFalse(mlTaskManager.contains(TASK_ID));
         assertEquals(MLTaskState.FAILED, completedTaskFields().get(MLTask.STATE_FIELD));
         assertEquals(MLModelState.DEPLOY_FAILED, modelUpdateFields().get(MLModel.MODEL_STATE_FIELD));
+        verify(mlModelAutoReDeployer).onDeployTaskResult(MODEL_ID, TASK_ID, false);
+        // the chain moves on to the next queued model even though this deploy failed
+        verify(mlModelAutoReDeployer).redeployAModel();
     }
 
     public void testUnrelatedNodeLeaves_taskKeepsWaiting() {
