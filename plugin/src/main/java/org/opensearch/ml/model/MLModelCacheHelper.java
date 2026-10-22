@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
@@ -69,7 +70,7 @@ public class MLModelCacheHelper {
     /**
      * Initialize model state on behalf of a deploy attempt.
      *
-     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, Object)}
+     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, DeployAttempt)}
      */
     public synchronized void initModelState(
         String modelId,
@@ -77,7 +78,7 @@ public class MLModelCacheHelper {
         FunctionName functionName,
         List<String> targetWorkerNodes,
         boolean deployToAllNodes,
-        Object deployOwner
+        DeployAttempt deployOwner
     ) {
         if (isModelRunningOnNode(modelId) && !isAutoDeploying(modelId)) {
             throw new MLLimitExceededException("Duplicate deploy model task");
@@ -90,7 +91,7 @@ public class MLModelCacheHelper {
         modelCache.setDeployToAllNodes(deployToAllNodes);
         modelCache.setLastAccessTime(Instant.now());
         modelCache.setDeployOwner(deployOwner);
-        modelCache.bindDeployAttempt(deployOwner);
+        bind(modelCache, deployOwner);
         modelCaches.put(modelId, modelCache);
     }
 
@@ -108,19 +109,19 @@ public class MLModelCacheHelper {
      * state on this node, the attempt joins that entry: it is bound to it (see {@link #publishDeployedPredictor}) but
      * the entry stays owned by that deploy, not by {@code deployOwner}.
      *
-     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, Object)}
+     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, DeployAttempt)}
      */
     public synchronized void initModelStateAutoDeploy(
         String modelId,
         MLModelState state,
         FunctionName functionName,
         List<String> targetWorkerNodes,
-        Object deployOwner
+        DeployAttempt deployOwner
     ) {
         log.debug("init local model deployment state for model {}, state: {}", modelId, state);
         if (isModelRunningOnNode(modelId)) {
             // model state initialized
-            modelCaches.get(modelId).bindDeployAttempt(deployOwner);
+            bind(modelCaches.get(modelId), deployOwner);
             return;
         }
         MLModelCache modelCache = new MLModelCache();
@@ -130,7 +131,7 @@ public class MLModelCacheHelper {
         modelCache.setDeployToAllNodes(false);
         modelCache.setLastAccessTime(Instant.now());
         modelCache.setDeployOwner(deployOwner);
-        modelCache.bindDeployAttempt(deployOwner);
+        bind(modelCache, deployOwner);
         modelCaches.put(modelId, modelCache);
         setIsAutoDeploying(modelId, true);
     }
@@ -328,13 +329,7 @@ public class MLModelCacheHelper {
      */
     public synchronized void setIsAutoDeploying(String modelId, Boolean isModelAutoDeploying) {
         log.debug("Setting the auto deploying flag for Model {}", modelId);
-        // Only update an existing entry. Every deploy clears the flag when it completes, including one whose entry
-        // was already removed (by its own failure cleanup, or an undeploy); recreating the entry here would leave an
-        // empty one behind.
-        MLModelCache modelCache = modelCaches.get(modelId);
-        if (modelCache != null) {
-            modelCache.setIsAutoDeploying(isModelAutoDeploying);
-        }
+        getExistingModelCache(modelId).setIsAutoDeploying(isModelAutoDeploying);
     }
 
     /**
@@ -541,7 +536,9 @@ public class MLModelCacheHelper {
      */
     public void refreshLastAccessTime(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
-        modelCache.setLastAccessTime(Instant.now());
+        if (modelCache != null) {
+            modelCache.setLastAccessTime(Instant.now());
+        }
     }
 
     /**
@@ -564,13 +561,13 @@ public class MLModelCacheHelper {
      * created or joined; the entry is never looked up and recreated by model id alone, so an attempt cannot write into
      * a replacement entry or an empty one.
      * <ul>
-     *   <li>Bound entry, no predictor yet: this attempt's predictor is stored, the model is marked DEPLOYED and the
-     *   attempt takes ownership of the entry, so a later failure of whichever attempt created it can no longer evict
-     *   it. Returns true.</li>
-     *   <li>Bound entry that already holds a predictor, or an entry this attempt is not bound to that holds one (the
+     *   <li>Bound entry, nothing deployed yet: this attempt's predictor is stored, the model is marked DEPLOYED, its
+     *   last access time is refreshed and the attempt takes ownership of the entry, so a later failure of whichever
+     *   attempt created it can no longer evict it. Returns true.</li>
+     *   <li>Bound entry that is already deployed, or an entry this attempt is not bound to that is deployed (the
      *   model was redeployed while this attempt ran): the model is deployed on this node by another attempt and
      *   nothing is changed. Returns false; the caller must close its own predictor.</li>
-     *   <li>No entry, or an entry this attempt is not bound to that holds no predictor: this attempt is stale and the
+     *   <li>No entry, or an entry this attempt is not bound to that is not deployed: this attempt is stale and the
      *   model is not deployed on this node. Nothing is changed; throws {@link StaleDeployAttemptException} and the
      *   caller must close its own predictor.</li>
      * </ul>
@@ -578,24 +575,97 @@ public class MLModelCacheHelper {
      * @param modelId     model id
      * @param predictor   the predictor this attempt deployed
      * @param deployOwner identity of the deploy attempt
-     * @return true if this attempt's predictor was published; false if another attempt's predictor is serving
+     * @return true if this attempt's predictor was published; false if another attempt's deployment is serving
      * @throws StaleDeployAttemptException if this attempt's entry is gone and the model is not deployed on this node
      */
-    public synchronized boolean publishDeployedPredictor(String modelId, Predictable predictor, Object deployOwner) {
+    public synchronized boolean publishDeployedPredictor(String modelId, Predictable predictor, DeployAttempt deployOwner) {
+        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setPredictor(predictor));
+    }
+
+    /**
+     * Executor counterpart of {@link #publishDeployedPredictor}, with the same rules.
+     *
+     * @return true if this attempt's executor was published; false if another attempt's deployment is serving
+     * @throws StaleDeployAttemptException if this attempt's entry is gone and the model is not deployed on this node
+     */
+    public synchronized boolean publishDeployedExecutor(String modelId, MLExecutable executor, DeployAttempt deployOwner) {
+        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setExecutor(executor));
+    }
+
+    private boolean publishDeployed(String modelId, DeployAttempt deployOwner, Consumer<MLModelCache> install) {
         MLModelCache modelCache = modelCaches.get(modelId);
-        boolean bound = modelCache != null && modelCache.isBoundTo(deployOwner);
-        if (bound && modelCache.getPredictor() == null) {
-            modelCache.setPredictor(predictor);
+        boolean deployed = modelCache != null && (modelCache.getPredictor() != null || modelCache.getExecutor() != null);
+        if (!deployed && modelCache != null && modelCache.isBoundTo(deployOwner)) {
+            install.accept(modelCache);
             modelCache.setModelState(MLModelState.DEPLOYED);
+            modelCache.setLastAccessTime(Instant.now());
             modelCache.setDeployOwner(deployOwner);
             return true;
         }
-        if (modelCache != null && modelCache.getPredictor() != null) {
+        if (deployed) {
             return false;
         }
         throw new StaleDeployAttemptException(
             "Model " + modelId + " was undeployed or redeployed on this node while this deploy was running"
         );
+    }
+
+    /**
+     * Whether the model's current cache entry is the one {@code deployOwner} created or joined. False once the model
+     * has been undeployed or its entry replaced by another deploy.
+     */
+    public synchronized boolean isBoundTo(String modelId, DeployAttempt deployOwner) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        return modelCache != null && modelCache.isBoundTo(deployOwner);
+    }
+
+    /**
+     * Apply a write made while deploying the model, such as its metadata, rate limiters, guardrails or model
+     * interface, only if the model's cache entry is still the one {@code deployOwner} created or joined. A deploy
+     * attempt must not write by model id alone: if the model was undeployed (and possibly updated and redeployed)
+     * while the attempt ran, that would put its stale configuration into the replacement entry, or recreate an entry
+     * for a model that is no longer deployed.
+     *
+     * @return true if the write was applied; false if this attempt's entry is gone and nothing was changed
+     */
+    public synchronized boolean updateIfBound(String modelId, DeployAttempt deployOwner, Consumer<MLModelCache> update) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null || !modelCache.isBoundTo(deployOwner)) {
+            log.debug("Skipped a deploy-time cache update for model {}: the deploy's cache entry is gone", modelId);
+            return false;
+        }
+        update.accept(modelCache);
+        return true;
+    }
+
+    /** {@link #setMemSizeEstimation(String, MLModelFormat, Long)} for a deploy attempt; see {@link #updateIfBound}. */
+    public synchronized void setMemSizeEstimation(String modelId, DeployAttempt deployOwner, MLModelFormat format, Long size) {
+        Long memSize = getMemSizeEstimation(format, size);
+        updateIfBound(modelId, deployOwner, modelCache -> {
+            modelCache.setMemSizeEstimationCPU(memSize);
+            modelCache.setMemSizeEstimationGPU(memSize);
+        });
+    }
+
+    /**
+     * Identity of one deploy attempt of a model on this node. Cache entries record the attempts bound to them, so a
+     * late callback of an attempt can tell whether the entry it worked on is still the current one.
+     */
+    public static final class DeployAttempt {
+        // Set once the attempt has created or joined a cache entry. Before that, it cannot have been invalidated.
+        private volatile boolean bound;
+
+        /** Whether this attempt has created or joined a cache entry yet. */
+        public boolean hasBound() {
+            return bound;
+        }
+    }
+
+    private static void bind(MLModelCache modelCache, DeployAttempt deployOwner) {
+        if (deployOwner != null) {
+            modelCache.bindDeployAttempt(deployOwner);
+            deployOwner.bound = true;
+        }
     }
 
     /**
@@ -618,7 +688,7 @@ public class MLModelCacheHelper {
      * @param deployOwner identity of the failing deploy attempt; null never owns an entry
      * @return true if the entry was removed
      */
-    public synchronized boolean removeModelIfOwner(String modelId, Object deployOwner) {
+    public synchronized boolean removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (deployOwner == null || modelCache == null || modelCache.getDeployOwner() != deployOwner) {
             return false;

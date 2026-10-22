@@ -152,6 +152,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
+import org.opensearch.ml.model.MLModelCacheHelper.DeployAttempt;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -1306,16 +1307,19 @@ public class MLModelManager {
         MLTask mlTask,
         ActionListener<String> listener
     ) {
+        // Identifies this deploy attempt. It may only write to, publish into or clean up the cache entry it created or
+        // joined, never a replacement found by model id.
+        DeployAttempt deployOwner = new DeployAttempt();
         if (!autoDeployModel) {
-            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, autoDeployModel, mlTask, listener);
+            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, false, mlTask, deployOwner, listener);
             return;
         }
-        AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, listener);
+        AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, deployOwner, listener);
         if (deployListener == null) {
             return;
         }
         try {
-            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, autoDeployModel, mlTask, deployListener);
+            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, true, mlTask, deployOwner, deployListener);
         } catch (Exception e) {
             if (deployListener.isCompleted()) {
                 throw e;
@@ -1334,6 +1338,7 @@ public class MLModelManager {
         boolean deployToAllNodes,
         boolean autoDeployModel,
         MLTask mlTask,
+        DeployAttempt deployOwner,
         ActionListener<String> listener
     ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
@@ -1356,8 +1361,6 @@ public class MLModelManager {
             return;
         }
         int eligibleNodeCount = workerNodes.size();
-        // Identifies this deploy attempt. Its failure paths may only clean up a cache entry this attempt created.
-        Object deployOwner = new Object();
         if (!autoDeployModel) {
             modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes, deployOwner);
         } else {
@@ -1368,14 +1371,17 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
-                modelCacheHelper.setIsAutoDeploying(modelId, false);
+                // Only this attempt's own entry: a replacement may be another automatic deploy that is still running.
+                modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setIsAutoDeploying(false));
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
             this.getModel(modelId, tenantId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                modelCacheHelper.setModelInfo(modelId, mlModel);
+                modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
+                    modelCache.setIsModelEnabled(mlModel.getIsEnabled());
+                    modelCache.setModelInfo(mlModel);
+                });
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
@@ -1383,7 +1389,7 @@ public class MLModelManager {
                     // algorithm like kmeans
                     if (BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                         getController(modelId, ActionListener.wrap(controller -> {
-                            setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
+                            setupUserRateLimiterMap(modelId, deployOwner, eligibleNodeCount, controller.getUserRateLimiter());
                             log.info("Successfully redeployed model controller for model " + modelId);
                             log.info("Trying to deploy remote model with model controller configured.");
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, deployOwner, wrappedListener);
@@ -1404,10 +1410,10 @@ public class MLModelManager {
                     return;
                 }
 
-                setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-                setupMLGuard(modelId, tenantId, mlModel.getGuardrails());
-                setupModelInterface(modelId, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
+                setupRateLimiter(modelId, deployOwner, eligibleNodeCount, mlModel.getRateLimiter());
+                setupMLGuard(modelId, deployOwner, tenantId, mlModel.getGuardrails());
+                setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
+                deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1422,33 +1428,43 @@ public class MLModelManager {
                     Map<String, Object> params = Map.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
+                        boolean published = false;
                         try {
-                            modelCacheHelper.setMLExecutor(modelId, mlExecutable);
-                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.refreshLastAccessTime(modelId);
+                            published = modelCacheHelper.publishDeployedExecutor(modelId, mlExecutable, deployOwner);
+                            if (published) {
+                                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                            } else {
+                                mlExecutable.close();
+                            }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
-                            mlExecutable.close();
+                            if (!published) {
+                                mlExecutable.close();
+                            }
                             wrappedListener.onFailure(e);
                         }
                     } else {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
+                        boolean published = false;
                         try {
-                            modelCacheHelper.setPredictor(modelId, predictable);
-                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.refreshLastAccessTime(modelId);
-                            Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
-                            long contentSize = modelContentSizeInBytes == null
-                                ? mlModel.getTotalChunks() * CHUNK_SIZE
-                                : modelContentSizeInBytes;
-                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), contentSize);
+                            published = modelCacheHelper.publishDeployedPredictor(modelId, predictable, deployOwner);
+                            if (published) {
+                                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                                Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
+                                long contentSize = modelContentSizeInBytes == null
+                                    ? mlModel.getTotalChunks() * CHUNK_SIZE
+                                    : modelContentSizeInBytes;
+                                modelCacheHelper.setMemSizeEstimation(modelId, deployOwner, mlModel.getModelFormat(), contentSize);
+                            } else {
+                                predictable.close();
+                            }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
-                            predictable.close();
+                            if (!published) {
+                                predictable.close();
+                            }
                             wrappedListener.onFailure(e);
                         }
                     }
@@ -1489,16 +1505,19 @@ public class MLModelManager {
         MLTask mlTask,
         ActionListener<String> listener
     ) {
+        // Identifies this deploy attempt. It may only write to, publish into or clean up the cache entry it created or
+        // joined, never a replacement found by model id.
+        DeployAttempt deployOwner = new DeployAttempt();
         if (!autoDeployModel) {
-            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, autoDeployModel, mlTask, listener);
+            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, false, mlTask, deployOwner, listener);
             return;
         }
-        AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, listener);
+        AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, deployOwner, listener);
         if (deployListener == null) {
             return;
         }
         try {
-            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, autoDeployModel, mlTask, deployListener);
+            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, true, mlTask, deployOwner, deployListener);
         } catch (Exception e) {
             if (deployListener.isCompleted()) {
                 throw e;
@@ -1516,6 +1535,7 @@ public class MLModelManager {
         boolean deployToAllNodes,
         boolean autoDeployModel,
         MLTask mlTask,
+        DeployAttempt deployOwner,
         ActionListener<String> listener
     ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
@@ -1538,8 +1558,6 @@ public class MLModelManager {
             return;
         }
         int eligibleNodeCount = workerNodes.size();
-        // Identifies this deploy attempt. Its failure paths may only clean up a cache entry this attempt created.
-        Object deployOwner = new Object();
         if (!autoDeployModel) {
             modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes, deployOwner);
         } else {
@@ -1550,14 +1568,17 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
-                modelCacheHelper.setIsAutoDeploying(modelId, false);
+                // Only this attempt's own entry: a replacement may be another automatic deploy that is still running.
+                modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setIsAutoDeploying(false));
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
-                modelCacheHelper.setModelInfo(modelId, mlModel);
+                modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
+                    modelCache.setIsModelEnabled(mlModel.getIsEnabled());
+                    modelCache.setModelInfo(mlModel);
+                });
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
                     || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
@@ -1565,7 +1586,7 @@ public class MLModelManager {
                     // algorithm like kmeans
                     if (BooleanUtils.isTrue(mlModel.getIsControllerEnabled())) {
                         getController(modelId, ActionListener.wrap(controller -> {
-                            setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
+                            setupUserRateLimiterMap(modelId, deployOwner, eligibleNodeCount, controller.getUserRateLimiter());
                             log.info("Successfully redeployed model controller for model " + modelId);
                             log.info("Trying to deploy remote model with model controller configured.");
                             deployRemoteOrBuiltInModel(mlModel, eligibleNodeCount, deployOwner, wrappedListener);
@@ -1586,10 +1607,10 @@ public class MLModelManager {
                     return;
                 }
 
-                setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-                setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
-                setupModelInterface(modelId, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
+                setupRateLimiter(modelId, deployOwner, eligibleNodeCount, mlModel.getRateLimiter());
+                setupMLGuard(modelId, deployOwner, mlModel.getTenantId(), mlModel.getGuardrails());
+                setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
+                deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1604,33 +1625,43 @@ public class MLModelManager {
                     Map<String, Object> params = Map.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
+                        boolean published = false;
                         try {
-                            modelCacheHelper.setMLExecutor(modelId, mlExecutable);
-                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.refreshLastAccessTime(modelId);
+                            published = modelCacheHelper.publishDeployedExecutor(modelId, mlExecutable, deployOwner);
+                            if (published) {
+                                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                            } else {
+                                mlExecutable.close();
+                            }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
-                            mlExecutable.close();
+                            if (!published) {
+                                mlExecutable.close();
+                            }
                             wrappedListener.onFailure(e);
                         }
                     } else {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
+                        boolean published = false;
                         try {
-                            modelCacheHelper.setPredictor(modelId, predictable);
-                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.refreshLastAccessTime(modelId);
-                            Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
-                            long contentSize = modelContentSizeInBytes == null
-                                ? mlModel.getTotalChunks() * CHUNK_SIZE
-                                : modelContentSizeInBytes;
-                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), contentSize);
+                            published = modelCacheHelper.publishDeployedPredictor(modelId, predictable, deployOwner);
+                            if (published) {
+                                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                                Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
+                                long contentSize = modelContentSizeInBytes == null
+                                    ? mlModel.getTotalChunks() * CHUNK_SIZE
+                                    : modelContentSizeInBytes;
+                                modelCacheHelper.setMemSizeEstimation(modelId, deployOwner, mlModel.getModelFormat(), contentSize);
+                            } else {
+                                predictable.close();
+                            }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
-                            predictable.close();
+                            if (!published) {
+                                predictable.close();
+                            }
                             wrappedListener.onFailure(e);
                         }
                     }
@@ -1652,16 +1683,16 @@ public class MLModelManager {
     private void deployRemoteOrBuiltInModel(
         MLModel mlModel,
         Integer eligibleNodeCount,
-        Object deployOwner,
+        DeployAttempt deployOwner,
         ActionListener<String> wrappedListener
     ) {
         String modelId = mlModel.getModelId();
         if (rejectMcpBackedRemoteModel(mlModel, deployOwner, wrappedListener)) {
             return;
         }
-        setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-        setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
-        setupModelInterface(modelId, mlModel.getModelInterface());
+        setupRateLimiter(modelId, deployOwner, eligibleNodeCount, mlModel.getRateLimiter());
+        setupMLGuard(modelId, deployOwner, mlModel.getTenantId(), mlModel.getGuardrails());
+        setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
         ActionListener<String> initModelActionListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
             log.error("Failed to deploy model, model id: {}", modelId, e);
             // deployModel has already put this model into DEPLOYING in the node cache. If that entry is left behind,
@@ -1703,7 +1734,7 @@ public class MLModelManager {
      *
      * @return true if the model was rejected and the listener has been failed
      */
-    private boolean rejectMcpBackedRemoteModel(MLModel mlModel, Object deployOwner, ActionListener<String> listener) {
+    private boolean rejectMcpBackedRemoteModel(MLModel mlModel, DeployAttempt deployOwner, ActionListener<String> listener) {
         if (FunctionName.REMOTE != mlModel.getAlgorithm() || mlModel.getConnector() == null) {
             return false;
         }
@@ -1743,7 +1774,7 @@ public class MLModelManager {
      * attempt closes its own predictor and leaves the cache untouched: it reports success if the model is deployed on
      * this node by another attempt, and fails if the model is not deployed here at all.
      */
-    private void deployPredictable(String modelId, MLModel mlModel, Object deployOwner, ActionListener<String> listener) {
+    private void deployPredictable(String modelId, MLModel mlModel, DeployAttempt deployOwner, ActionListener<String> listener) {
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         mlEngine.deploy(mlModel, params, ActionListener.wrap(predictor -> {
             boolean published;
@@ -1757,7 +1788,6 @@ public class MLModelManager {
             }
             if (published) {
                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-                modelCacheHelper.refreshLastAccessTime(modelId);
             } else {
                 log.info("Model {} was already deployed on this node by another deploy, discarding this deploy's predictor", modelId);
                 predictor.close();
@@ -1822,7 +1852,7 @@ public class MLModelManager {
 
     private void handleDeployModelException(
         String modelId,
-        Object deployOwner,
+        DeployAttempt deployOwner,
         FunctionName functionName,
         ActionListener<String> listener,
         Exception e
@@ -1843,15 +1873,20 @@ public class MLModelManager {
      * unloaded and trigger a deploy; if each ran its own attempt, a late failure of one would clean up the cache entry
      * and close the predictor that another had just deployed successfully. Instead, the first caller leads a single
      * attempt and later callers wait for its result.
+     * <p>
+     * An attempt in flight whose cache entry has since been removed (undeployed) or replaced (by an explicit deploy)
+     * can only end in a discarded result, so a new caller never joins it: it leads a fresh attempt instead, and the
+     * old one still completes for the callers that had already joined it.
      *
      * @return the listener the leader must deploy with, which also notifies every waiter; null if the caller joined
      *         an attempt already in flight and must not deploy
      */
-    private AutoDeployLeader joinOrLeadAutoDeploy(String modelId, ActionListener<String> listener) {
-        AutoDeployLeader leader = new AutoDeployLeader(modelId, listener);
-        // A waiter list is only mutated inside compute and only read after a successful remove, both atomic per key.
+    private AutoDeployLeader joinOrLeadAutoDeploy(String modelId, DeployAttempt deployOwner, ActionListener<String> listener) {
+        AutoDeployLeader leader = new AutoDeployLeader(modelId, deployOwner, listener);
+        // A leader's waiter list is only touched inside compute on its model id, which is atomic per key: joins add
+        // to it only while it is the registered leader, and finish() takes it while unregistering it.
         AutoDeployLeader current = autoDeployLeaders.compute(modelId, (id, inFlight) -> {
-            if (inFlight == null) {
+            if (inFlight == null || inFlight.isStale()) {
                 return leader;
             }
             // Waiters are notified on the leader's thread, in the leader's restored thread context. Capture this
@@ -1869,13 +1904,20 @@ public class MLModelManager {
     /** Completes one automatic deploy attempt for its leader and for every caller that joined it, exactly once. */
     private final class AutoDeployLeader implements ActionListener<String> {
         private final String modelId;
+        private final DeployAttempt deployOwner;
         private final ActionListener<String> listener;
         private final List<ActionListener<String>> waiters = new ArrayList<>();
         private final AtomicBoolean completed = new AtomicBoolean(false);
 
-        private AutoDeployLeader(String modelId, ActionListener<String> listener) {
+        private AutoDeployLeader(String modelId, DeployAttempt deployOwner, ActionListener<String> listener) {
             this.modelId = modelId;
+            this.deployOwner = deployOwner;
             this.listener = listener;
+        }
+
+        // The attempt has created or joined a cache entry that is no longer the model's current one.
+        private boolean isStale() {
+            return deployOwner.hasBound() && !modelCacheHelper.isBoundTo(modelId, deployOwner);
         }
 
         boolean isCompleted() {
@@ -1909,10 +1951,16 @@ public class MLModelManager {
         }
 
         // Ends the attempt before anyone is notified, so a request arriving from here on starts a fresh deploy (or
-        // finds the model deployed) instead of joining one that has finished. Removal is by identity, so it can
-        // never end a newer attempt.
+        // finds the model deployed) instead of joining one that has finished. It unregisters only itself, never a
+        // newer attempt that replaced it, and returns its own waiters either way: callers that joined it before it was
+        // replaced are still waiting on it.
         private List<ActionListener<String>> finish() {
-            return autoDeployLeaders.remove(modelId, this) ? waiters : List.of();
+            List<ActionListener<String>> joined = new ArrayList<>();
+            autoDeployLeaders.compute(modelId, (id, current) -> {
+                joined.addAll(waiters);
+                return current == this ? null : current;
+            });
+            return joined;
         }
     }
 
@@ -2063,6 +2111,7 @@ public class MLModelManager {
     private synchronized void deployControllerWithDeployingModel(
         MLModel mlModel,
         Integer eligibleNodeCount,
+        DeployAttempt deployOwner,
         ActionListener<String> listener
     ) {
         String modelId = mlModel.getModelId();
@@ -2073,7 +2122,11 @@ public class MLModelManager {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLController controller = MLController.parse(parser);
-                    setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
+                    if (deployOwner == null) {
+                        setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
+                    } else {
+                        setupUserRateLimiterMap(modelId, deployOwner, eligibleNodeCount, controller.getUserRateLimiter());
+                    }
                     log.info("Successfully redeployed model controller for model " + modelId);
                     listener.onResponse("Successfully redeployed model controller for model " + modelId);
                 } catch (Exception e) {
@@ -2132,6 +2185,14 @@ public class MLModelManager {
      * @param mlModel ml model
      */
     public void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
+        deployControllerWithDeployingModel(mlModel, eligibleNodeCount, (DeployAttempt) null);
+    }
+
+    /**
+     * {@link #deployControllerWithDeployingModel(MLModel, Integer)} on behalf of a deploy attempt: the user rate
+     * limiters it loads are written only into the cache entry that attempt created or joined.
+     */
+    private void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount, DeployAttempt deployOwner) {
         if (!mlFeatureEnabledSetting.isControllerEnabled()) {
             throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
         }
@@ -2141,7 +2202,7 @@ public class MLModelManager {
                 RestStatus.CONFLICT
             );
         }
-        deployControllerWithDeployingModel(mlModel, eligibleNodeCount, ActionListener.wrap(response -> {
+        deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner, ActionListener.wrap(response -> {
             if (response.startsWith("Successfully")) {
                 log.debug(response, mlModel.getModelId());
             } else if (response
@@ -2171,6 +2232,43 @@ public class MLModelManager {
         } else {
             modelCacheHelper.removeUserRateLimiterMap(modelId);
         }
+    }
+
+    // Deploy-path counterparts of the setup methods above and below: each writes only into the cache entry the deploy
+    // attempt created or joined (see MLModelCacheHelper#updateIfBound), never into a replacement found by model id.
+
+    private void setupRateLimiter(String modelId, DeployAttempt deployOwner, Integer eligibleNodeCount, MLRateLimiter rateLimiter) {
+        TokenBucket tokenBucket = rateLimiter == null ? null : createTokenBucket(eligibleNodeCount, rateLimiter);
+        modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setRateLimiter(tokenBucket));
+    }
+
+    private void setupUserRateLimiterMap(
+        String modelId,
+        DeployAttempt deployOwner,
+        Integer eligibleNodeCount,
+        Map<String, MLRateLimiter> userRateLimiter
+    ) {
+        Map<String, TokenBucket> userRateLimiterMap = null;
+        if (userRateLimiter != null && !userRateLimiter.isEmpty()) {
+            Map<String, TokenBucket> buckets = new HashMap<>();
+            userRateLimiter.forEach((user, rateLimiter) -> buckets.put(user, createTokenBucket(eligibleNodeCount, rateLimiter)));
+            userRateLimiterMap = buckets;
+        }
+        Map<String, TokenBucket> finalUserRateLimiterMap = userRateLimiterMap;
+        modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setUserRateLimiterMap(finalUserRateLimiterMap));
+    }
+
+    private void setupModelInterface(String modelId, DeployAttempt deployOwner, Map<String, String> modelInterface) {
+        modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setModelInterface(modelInterface));
+    }
+
+    private void setupMLGuard(String modelId, DeployAttempt deployOwner, String tenantId, Guardrails guardrails) {
+        // Building a guard initializes its guardrails, so skip it for an attempt whose entry is already gone.
+        if (!modelCacheHelper.isBoundTo(modelId, deployOwner)) {
+            return;
+        }
+        MLGuard mlGuard = guardrails == null ? null : createMLGuard(guardrails, xContentRegistry, client, sdkClient, tenantId);
+        modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setMlGuard(mlGuard));
     }
 
     private void removeUserRateLimiterMap(String modelId) {
@@ -2846,7 +2944,7 @@ public class MLModelManager {
     }
 
     /** Failure cleanup for a deploy attempt: removes the cache entry and local model files only if the attempt owns them. */
-    private void removeModelIfOwner(String modelId, Object deployOwner) {
+    private void removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
         if (modelCacheHelper.removeModelIfOwner(modelId, deployOwner)) {
             modelHelper.deleteFileCache(modelId);
         } else {

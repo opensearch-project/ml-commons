@@ -75,6 +75,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -132,6 +133,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -1670,6 +1672,152 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(predictor).close();
         assertFalse(cacheHelper.isModelRunningOnNode(modelId));
         assertFalse(Arrays.asList(cacheHelper.getAllModels()).contains(modelId));
+    }
+
+    /**
+     * An automatic deploy in flight when the model is undeployed can only end in a discarded result, so a request that
+     * arrives after the undeploy must not join it. It starts its own deploy and gets the model deployed, while the
+     * callers that had joined the old attempt still get that attempt's result.
+     */
+    public void testAutoDeploy_UndeployedWhileInFlight_newRequestStartsFreshDeploy() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> staleLeader = mock(ActionListener.class);
+        ActionListener<String> joinedStale = mock(ActionListener.class);
+        ActionListener<String> afterUndeploy = mock(ActionListener.class);
+        ActionListener<String> joinedFresh = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), staleLeader);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joinedStale);
+        cacheHelper.removeModel(modelId);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), afterUndeploy);
+        assertEquals(2, engineDeploys.size());
+
+        Predictable stalePredictor = mock(Predictable.class);
+        engineDeploys.get(0).onResponse(stalePredictor);
+        verify(staleLeader).onFailure(any(MLModelCacheHelper.StaleDeployAttemptException.class));
+        verify(joinedStale).onFailure(any(MLModelCacheHelper.StaleDeployAttemptException.class));
+        verify(stalePredictor).close();
+
+        // The old attempt finishing must not unregister the new one: a request arriving now still joins it.
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joinedFresh);
+        assertEquals(2, engineDeploys.size());
+
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(1).onResponse(predictor);
+        verify(afterUndeploy).onResponse("successful");
+        verify(joinedFresh).onResponse("successful");
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        verify(predictor, never()).close();
+    }
+
+    /**
+     * A stale automatic deploy completing must not clear the auto-deploy flag of the automatic deploy that replaced
+     * it. Otherwise an explicit deploy arriving while the new one runs is refused as a duplicate deploy task, where it
+     * would otherwise take over the entry.
+     */
+    public void testAutoDeploy_StaleAttemptCompletes_keepsReplacementAutoDeployFlag() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> staleDeploy = mock(ActionListener.class);
+        ActionListener<String> autoDeploy = mock(ActionListener.class);
+        ActionListener<String> explicitDeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), staleDeploy);
+        cacheHelper.removeModel(modelId);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), autoDeploy);
+        engineDeploys.get(0).onResponse(mock(Predictable.class));
+        verify(staleDeploy).onFailure(any(MLModelCacheHelper.StaleDeployAttemptException.class));
+
+        assertTrue(cacheHelper.isAutoDeploying(modelId));
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), explicitDeploy);
+        verify(explicitDeploy, never()).onFailure(any());
+        assertEquals(3, engineDeploys.size());
+    }
+
+    /**
+     * A deploy that fetched the model before it was undeployed, updated and redeployed must not write its stale
+     * configuration into the redeploy's cache entry. Here the stale attempt's model has a batch limit of 10 and a rate
+     * limiter; the redeployed model has a limit of 2 and none. The cache must keep the redeployed model's settings.
+     */
+    public void testDeploy_StaleAttemptFetchedOldModel_doesNotOverwriteRedeployConfig() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<MLModel>> modelFetches = captureGetModel(manager);
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        MLModel oldModel = remoteModelWithConnector()
+            .toBuilder()
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(10).build())
+            .rateLimiter(MLRateLimiter.builder().limit("1").unit(TimeUnit.SECONDS).build())
+            .build();
+        MLModel updatedModel = remoteModelWithConnector()
+            .toBuilder()
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(2).build())
+            .build();
+        ActionListener<String> staleDeploy = mock(ActionListener.class);
+        ActionListener<String> redeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), staleDeploy);
+        cacheHelper.removeModel(modelId);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, false, localDeployTask(), redeploy);
+        // Release the redeploy's model fetch first, so it is the first attempt to reach the engine: engineDeploys
+        // index 0 is the redeploy's deploy and index 1 the stale attempt's, the reverse of modelFetches.
+        modelFetches.get(1).onResponse(updatedModel);
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(0).onResponse(predictor);
+        verify(redeploy).onResponse("successful");
+
+        modelFetches.get(0).onResponse(oldModel);
+        engineDeploys.get(1).onResponse(mock(Predictable.class));
+
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        assertEquals(2, (int) cacheHelper.getModelInfo(modelId).getBatchInferenceConfig().getMaxItemsPerRequest());
+        assertNull(cacheHelper.getRateLimiter(modelId));
+    }
+
+    /**
+     * A deploy whose model fetch returns after the model was undeployed must not recreate a cache entry for it: its
+     * writes are dropped, it fails as stale, and the node is left with no entry for the model.
+     */
+    public void testDeploy_UndeployedWhileFetchingModel_doesNotRecreateEntry() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<MLModel>> modelFetches = captureGetModel(manager);
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> staleDeploy = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), staleDeploy);
+        cacheHelper.removeModel(modelId);
+        modelFetches
+            .get(0)
+            .onResponse(
+                remoteModelWithConnector()
+                    .toBuilder()
+                    .rateLimiter(MLRateLimiter.builder().limit("1").unit(TimeUnit.SECONDS).build())
+                    .modelInterface(Map.of("input", "{}"))
+                    .build()
+            );
+        assertFalse(Arrays.asList(cacheHelper.getAllModels()).contains(modelId));
+
+        Predictable predictor = mock(Predictable.class);
+        engineDeploys.get(0).onResponse(predictor);
+
+        verify(staleDeploy).onFailure(any(MLModelCacheHelper.StaleDeployAttemptException.class));
+        verify(predictor).close();
+        assertFalse(Arrays.asList(cacheHelper.getAllModels()).contains(modelId));
+    }
+
+    /** Holds every getModel call open so the test decides when each attempt's model fetch returns, and with what. */
+    private List<ActionListener<MLModel>> captureGetModel(MLModelManager manager) {
+        List<ActionListener<MLModel>> modelFetches = new ArrayList<>();
+        doAnswer(invocation -> {
+            modelFetches.add(invocation.getArgument(2));
+            return null;
+        }).when(manager).getModel(any(), any(), any());
+        return modelFetches;
     }
 
     private MLModelManager managerWithRealCache(MLModelCacheHelper cacheHelper, MLModel remoteModel) {
