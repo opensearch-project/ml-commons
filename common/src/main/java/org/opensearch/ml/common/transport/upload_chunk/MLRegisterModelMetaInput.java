@@ -158,6 +158,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         if (totalChunks == null) {
             throw new IllegalArgumentException("total chunks field is null");
         }
+        if (totalChunks <= 0) {
+            throw new IllegalArgumentException("total chunks must be a positive integer");
+        }
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.version = version;

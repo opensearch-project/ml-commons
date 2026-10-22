@@ -10,13 +10,16 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
@@ -148,32 +151,19 @@ public class MLModelChunkUploader {
                                                 if (existingModel.getTotalChunks() == (uploadModelChunkInput.getChunkNumber() + 1)) {
                                                     Semaphore semaphore = new Semaphore(1);
                                                     semaphore.acquire();
-                                                    MLModel mlModelMeta = MLModel
-                                                        .builder()
-                                                        .name(existingModel.getName())
-                                                        .algorithm(existingModel.getAlgorithm())
-                                                        .version(existingModel.getVersion())
-                                                        .modelGroupId((existingModel.getModelGroupId()))
-                                                        .modelFormat(existingModel.getModelFormat())
-                                                        .modelState(MLModelState.REGISTERED)
-                                                        .modelConfig(existingModel.getModelConfig())
-                                                        .totalChunks(existingModel.getTotalChunks())
-                                                        .modelContentHash(existingModel.getModelContentHash())
-                                                        .modelContentSizeInBytes(existingModel.getModelContentSizeInBytes())
-                                                        .createdTime(existingModel.getCreatedTime())
-                                                        .build();
-                                                    IndexRequest indexReq = new IndexRequest(ML_MODEL_INDEX);
-                                                    indexReq.id(modelId);
-                                                    indexReq
-                                                        .source(
-                                                            mlModelMeta
-                                                                .toXContent(
-                                                                    XContentBuilder.builder(XContentType.JSON.xContent()),
-                                                                    ToXContent.EMPTY_PARAMS
+                                                    // Partial update: re-indexing would drop every field not copied over.
+                                                    UpdateRequest updateReq = new UpdateRequest(ML_MODEL_INDEX, modelId)
+                                                        .doc(
+                                                            Map
+                                                                .of(
+                                                                    MLModel.MODEL_STATE_FIELD,
+                                                                    MLModelState.REGISTERED,
+                                                                    MLModel.LAST_UPDATED_TIME_FIELD,
+                                                                    Instant.now().toEpochMilli()
                                                                 )
                                                         );
-                                                    indexReq.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                                                    client.index(indexReq, ActionListener.wrap(re -> {
+                                                    updateReq.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                                                    client.update(updateReq, ActionListener.wrap(re -> {
                                                         log.debug("Index model successful", existingModel.getName());
                                                         semaphore.release();
                                                     }, e -> {

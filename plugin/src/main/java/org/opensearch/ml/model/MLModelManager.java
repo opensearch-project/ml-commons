@@ -852,16 +852,6 @@ public class MLModelManager {
             configureModelMetaPutRequest(putModelMetaRequestBuilder, registerModelInput.getIsHidden(), customDocumentId, modelName);
             PutDataObjectRequest putModelMetaRequest = putModelMetaRequestBuilder.build();
 
-            IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
-            configureModelMetaIndexRequest(
-                indexModelMetaRequest,
-                registerModelInput.getIsHidden(),
-                customDocumentId,
-                modelName,
-                functionName
-            );
-            indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
-            indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             // create model meta doc
             ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
                 String modelId = modelMetaRes.getId();

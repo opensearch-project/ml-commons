@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.upload_chunk;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
@@ -235,5 +236,29 @@ public class MLRegisterModelMetaInputTest {
         streamInput.setVersion(VERSION_3_9_0);
         MLRegisterModelMetaInput deserialized = new MLRegisterModelMetaInput(streamInput);
         assertEquals("text_embedding_v1", deserialized.getModelId());
+    }
+
+    @Test
+    public void builder_RejectsNonPositiveTotalChunks() {
+        for (int totalChunks : new int[] { 0, -1 }) {
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> mLRegisterModelMetaInput.toBuilder().totalChunks(totalChunks).build()
+            );
+            assertEquals("total chunks must be a positive integer", e.getMessage());
+        }
+    }
+
+    @Test
+    public void parse_RejectsNegativeTotalChunks() throws Exception {
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        mLRegisterModelMetaInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = builder.toString().replace("\"total_chunks\":2", "\"total_chunks\":-1");
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MLRegisterModelMetaInput.parse(parser));
+        assertEquals("total chunks must be a positive integer", e.getMessage());
     }
 }

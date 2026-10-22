@@ -8,10 +8,13 @@ package org.opensearch.ml.action.upload_chunk;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
@@ -20,7 +23,9 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -36,6 +41,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -177,6 +183,25 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<MLUploadModelChunkResponse> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelChunkResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testUploadLastChunk_UpdatesModelStateWithoutReindexingMetaDoc() {
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(1);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
+
+        // only the chunk document is indexed; the meta document gets a partial update
+        ArgumentCaptor<IndexRequest> indexCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client, times(1)).index(indexCaptor.capture(), any());
+        assertEquals("someModelId_1", indexCaptor.getValue().id());
+
+        ArgumentCaptor<UpdateRequest> updateCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client).update(updateCaptor.capture(), any());
+        UpdateRequest updateRequest = updateCaptor.getValue();
+        assertEquals("someModelId", updateRequest.id());
+        Map<String, Object> doc = updateRequest.doc().sourceAsMap();
+        assertEquals(Set.of(MLModel.MODEL_STATE_FIELD, MLModel.LAST_UPDATED_TIME_FIELD), doc.keySet());
+        assertEquals(MLModelState.REGISTERED.name(), doc.get(MLModel.MODEL_STATE_FIELD));
     }
 
     public void testDoExecute_userHasNoAccessException() {

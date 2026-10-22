@@ -376,6 +376,25 @@ public class ModelHelperTest {
     }
 
     @Test
+    public void testDownloadPrebuiltModelConfig_KeepsCustomModelId() {
+        String taskId = "test_task_id";
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .modelId("custom-model-id")
+            .build();
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
+        ArgumentCaptor<MLRegisterModelInput> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelInput.class);
+        verify(registerModelListener).onResponse(argumentCaptor.capture());
+        assertEquals("custom-model-id", argumentCaptor.getValue().getModelId());
+    }
+
+    @Test
     public void testDownloadPrebuiltModelMetaList() throws PrivilegedActionException {
         String taskId = "test_task_id";
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
