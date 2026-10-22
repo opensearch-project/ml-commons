@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -1778,6 +1779,300 @@ public class ConnectorUtilsTest {
         assertTrue(messages.get(0).get("content").contains("\"steps\": array[string]"));
         assertEquals("user", messages.get(1).get("role"));
         assertEquals(plannerPrompt, messages.get(1).get("content"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_SystemPromptThatIsItselfJson_IsStillEscaped() {
+        // Arrange — every provider template puts system_prompt inside a JSON string, so a value that
+        // happens to be a JSON object must not be waved through the isJson shortcut
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "{\"steps\":\"array\",\"result\":\"string\"}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        // Assert
+        assertEquals("{\\\"steps\\\":\\\"array\\\",\\\"result\\\":\\\"string\\\"}", inputData.getParameters().get("system_prompt"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_SystemPromptInNoEscapeParams_StaysRaw() {
+        // Arrange — no_escape_params is the documented opt-out and has to keep winning, so a custom
+        // connector that interpolates system_prompt in a raw JSON position still works
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "[{\"text\":\"raw\"}]");
+        params.put(NO_ESCAPE_PARAMS, "system_prompt");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        // Assert
+        assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_UserPromptThatIsItselfJson_IsStillEscaped() {
+        // Arrange — the blueprints interpolate user_prompt inside a JSON string in exactly the same shape as
+        // system_prompt, so a user whose whole question is a JSON document must not break the payload
+        Map<String, String> params = new HashMap<>();
+        params.put("user_prompt", "{\"a\":1}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\\\"a\\\":1}", inputData.getParameters().get("user_prompt"));
+    }
+
+    /** The structure-injection shape: a value that is valid JSON and would splice a sibling object into messages. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_UserPromptStructureInjection_IsEscaped() {
+        Map<String, String> params = new HashMap<>();
+        params.put("user_prompt", "[\"},{\",\":\"]");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertFalse(inputData.getParameters().get("user_prompt").contains("\"},{\""));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_PromptQuestionSystemInstructionThatAreJson_AreEscaped() {
+        for (String key : new String[] { "prompt", "question", "system_instruction" }) {
+            Map<String, String> params = new HashMap<>();
+            params.put(key, "{\"a\":1}");
+            RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+            ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+            assertEquals("escaping " + key, "{\\\"a\\\":1}", inputData.getParameters().get(key));
+        }
+    }
+
+    /**
+     * sagemaker_connector_copali_blueprint.md makes inputs the entire request body, and its documented predict
+     * example sends a JSON object, so inputs must keep reaching the template raw. This is why the allowlist cannot
+     * simply grow to cover every prompt-shaped key.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_InputsStaysRawForWholeBodyTemplates() {
+        Map<String, String> params = new HashMap<>();
+        params.put("inputs", "{\"queries\": [\"hello world\"]}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"queries\": [\"hello world\"]}", inputData.getParameters().get("inputs"));
+    }
+
+    /** Raw-position parameters must keep being spliced in raw, or every blueprint using them breaks. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_RawPositionParamsAreNotEscaped() {
+        Map<String, String> params = new HashMap<>();
+        params.put("messages", "[{\"role\":\"user\"}]");
+        params.put("dimensions", "1024");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("[{\"role\":\"user\"}]", inputData.getParameters().get("messages"));
+        assertEquals("1024", inputData.getParameters().get("dimensions"));
+    }
+
+    /**
+     * The opt-out has to work where an operator declares it: on the connector. Its parameters are merged into the
+     * request only after escaping runs, so reading it from the request alone made the documented escape hatch
+     * unreachable for a connector that interpolates one of these in a raw JSON position.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_NoEscapeParamsFromConnectorParameters_StaysRaw() {
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "[{\"text\":\"raw\"}]");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        Map<String, String> connectorParameters = Map.of(NO_ESCAPE_PARAMS, "system_prompt");
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData, connectorParameters);
+
+        assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+    }
+
+    /** Request-level and connector-level declarations are unioned, so neither silently disables the other. */
+    @Test
+    public void testEscapeRemoteInferenceInputData_NoEscapeParamsUnionedAcrossRequestAndConnector() {
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", "[{\"text\":\"raw\"}]");
+        params.put("user_prompt", "{\"a\":1}");
+        params.put(NO_ESCAPE_PARAMS, "user_prompt");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        Map<String, String> connectorParameters = Map.of(NO_ESCAPE_PARAMS, "system_prompt");
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData, connectorParameters);
+
+        assertEquals("[{\"text\":\"raw\"}]", inputData.getParameters().get("system_prompt"));
+        assertEquals("{\"a\":1}", inputData.getParameters().get("user_prompt"));
+    }
+
+    @Test
+    public void testOpenaiAgentConnector_SystemPromptThatIsJsonObjectStillBuildsAValidPayload() {
+        // Arrange — a user asking for a fixed output shape pastes the schema in as the whole system prompt
+        String systemPrompt = "{\"steps\":\"array\",\"result\":\"string\"}";
+        Connector connector = new OpenaiV1ChatCompletionsModelProvider()
+            .createConnector("gpt-4o", ImmutableMap.of("openai_api_key", "test_key"), new HashMap<>());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", systemPrompt);
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        params.put(NO_ESCAPE_PARAMS, "body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — the prompt arrives as text rather than breaking the payload
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        List<Map<String, String>> messages = (List<Map<String, String>>) gson.fromJson(payload, Map.class).get("messages");
+        assertEquals(2, messages.size());
+        assertEquals(systemPrompt, messages.get(0).get("content"));
+    }
+
+    @Test
+    public void testOpenaiAgentConnector_SystemPromptCannotInjectExtraMessages() {
+        // Arrange — a JSON array crafted so that unescaped interpolation flips quote parity and splices a
+        // second object into the messages array
+        String systemPrompt = "[\"},{\",\":\"]";
+        Connector connector = new OpenaiV1ChatCompletionsModelProvider()
+            .createConnector("gpt-4o", ImmutableMap.of("openai_api_key", "test_key"), new HashMap<>());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", systemPrompt);
+        params.put("body", "{\"role\":\"user\",\"content\":\"hi\"}");
+        params.put(NO_ESCAPE_PARAMS, "body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert — exactly two messages, and the crafted value stays inert text
+        connector.validatePayload(payload);
+        List<Map<String, String>> messages = (List<Map<String, String>>) gson.fromJson(payload, Map.class).get("messages");
+        assertEquals(2, messages.size());
+        assertEquals(systemPrompt, messages.get(0).get("content"));
+        assertEquals("user", messages.get(1).get("role"));
+    }
+
+    @Test
+    public void testBedrockAgentConnector_SystemPromptThatIsJsonObjectStillBuildsAValidPayload() {
+        // Arrange — the same exposure exists in the Bedrock Converse template
+        String systemPrompt = "{\"steps\":\"array\"}";
+        Connector connector = new BedrockConverseModelProvider()
+            .createConnector(
+                "anthropic.claude-v2",
+                ImmutableMap.of("access_key", "test_key", "secret_key", "test_secret"),
+                new HashMap<>()
+            );
+
+        Map<String, String> params = new HashMap<>();
+        params.put("system_prompt", systemPrompt);
+        params.put("body", "{\"role\":\"user\",\"content\":[{\"text\":\"hi\"}]}");
+        params.put(NO_ESCAPE_PARAMS, "body");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        String payload = buildAgentConnectorPayload(connector, inputData);
+
+        // Assert
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        List<Map<String, Object>> system = (List<Map<String, Object>>) gson.fromJson(payload, Map.class).get("system");
+        assertEquals(systemPrompt, system.get(0).get("text"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_NullKeyIsTolerated() {
+        // Arrange — a null key is not reachable through XContent parsing, but the map permits one and the
+        // pre-existing branch ordering tolerated it. Set.of#contains would throw here instead.
+        Map<String, String> params = new HashMap<>();
+        params.put(null, "plain value");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Act
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        // Assert
+        assertEquals("plain value", inputData.getParameters().get(null));
+    }
+
+    /**
+     * The prompt keys are not the only ones a template puts inside a JSON string. These five carry
+     * caller-supplied free text and are string-positioned in every request_body template in the repo, so a value
+     * that is itself a JSON document has to be escaped for the same reason system_prompt does.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_ContentKeysThatAreJson_AreEscaped() {
+        for (String key : new String[] { "inputText", "text", "Text", "message", "context" }) {
+            Map<String, String> params = new HashMap<>();
+            params.put(key, "{\"a\":1}");
+            RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+            ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+            assertEquals("escaping " + key, "{\\\"a\\\":1}", inputData.getParameters().get(key));
+        }
+    }
+
+    /**
+     * query is deliberately left off the allowlist: its in-repo request_body uses are all string positions, but it
+     * is the natural name for a raw query DSL object and PPLTool templates already interpolate it raw.
+     */
+    @Test
+    public void testEscapeRemoteInferenceInputData_QueryStaysRaw() {
+        Map<String, String> params = new HashMap<>();
+        params.put("query", "{\"match_all\":{}}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"match_all\":{}}", inputData.getParameters().get("query"));
+    }
+
+    /**
+     * The Titan embedding shape from bedrock_connector_titan_embedding_blueprint.md, whose documented predict body
+     * sends inputText directly: embedding a document that happens to be a JSON object used to fail at
+     * createPayload, while the raw-positioned dimensions next to it still has to be spliced in unescaped.
+     */
+    @Test
+    public void testEmbeddingConnector_JsonDocumentAsInputTextStillBuildsAValidPayload() {
+        String document = "{\"title\":\"a doc\",\"body\":\"that is itself json\"}";
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("inputText", document);
+        params.put("dimensions", "1024");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+        String payload = connector.createPayload(PREDICT.name(), new HashMap<>(inputData.getParameters()));
+
+        connector.validatePayload(payload);
+        assertTrue(StringUtils.isJson(payload));
+        Map<String, Object> parsed = gson.fromJson(payload, Map.class);
+        assertEquals(document, parsed.get("inputText"));
+        assertEquals(1024.0, (double) (Double) parsed.get("dimensions"), 0.0);
     }
 
     /**
