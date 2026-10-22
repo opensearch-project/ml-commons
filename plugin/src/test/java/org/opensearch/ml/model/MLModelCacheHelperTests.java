@@ -415,4 +415,70 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertEquals("mockId", cacheHelper.getModelInfo(modelId).getModelId());
     }
 
+    public void testPublishDeployedExecutor_boundEntry_publishes() {
+        MLModelCacheHelper.DeployAttempt attempt = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true, attempt);
+
+        assertTrue(cacheHelper.publishDeployedExecutor(modelId, mlExecutor, attempt));
+
+        assertSame(mlExecutor, cacheHelper.getMLExecutor(modelId));
+        assertTrue(cacheHelper.isModelDeployed(modelId));
+    }
+
+    public void testPublishDeployedExecutor_entryRemoved_throwsAndDoesNotRecreateEntry() {
+        MLModelCacheHelper.DeployAttempt attempt = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true, attempt);
+        cacheHelper.removeModel(modelId);
+
+        expectThrows(
+            MLModelCacheHelper.StaleDeployAttemptException.class,
+            () -> cacheHelper.publishDeployedExecutor(modelId, mlExecutor, attempt)
+        );
+        assertEquals(0, cacheHelper.getAllModels().length);
+    }
+
+    public void testPublishDeployedPredictor_replacementDeployedByExecutor_returnsFalse() {
+        MLModelCacheHelper.DeployAttempt stale = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt current = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true, stale);
+        cacheHelper.removeModel(modelId);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.METRICS_CORRELATION, targetWorkerNodes, true, current);
+        assertTrue(cacheHelper.publishDeployedExecutor(modelId, mlExecutor, current));
+
+        assertFalse(cacheHelper.publishDeployedPredictor(modelId, predictor, stale));
+
+        assertSame(mlExecutor, cacheHelper.getMLExecutor(modelId));
+        assertNull(cacheHelper.getPredictor(modelId));
+    }
+
+    public void testUpdateIfBound_onlyWritesTheAttemptsOwnEntry() {
+        MLModelCacheHelper.DeployAttempt stale = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt current = new MLModelCacheHelper.DeployAttempt();
+        assertFalse(stale.hasBound());
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true, stale);
+        assertTrue(stale.hasBound());
+        assertTrue(cacheHelper.isBoundTo(modelId, stale));
+        cacheHelper.removeModel(modelId);
+        assertFalse(cacheHelper.isBoundTo(modelId, stale));
+
+        assertFalse(cacheHelper.updateIfBound(modelId, stale, modelCache -> modelCache.setRateLimiter(rateLimiter)));
+        cacheHelper.setMemSizeEstimation(modelId, stale, MLModelFormat.TORCH_SCRIPT, 1000L);
+        assertEquals(0, cacheHelper.getAllModels().length);
+
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true, current);
+        assertFalse(cacheHelper.updateIfBound(modelId, stale, modelCache -> modelCache.setRateLimiter(rateLimiter)));
+        cacheHelper.setMemSizeEstimation(modelId, stale, MLModelFormat.TORCH_SCRIPT, 1000L);
+        assertNull(cacheHelper.getRateLimiter(modelId));
+        assertNull(cacheHelper.getMemEstCPU(modelId));
+
+        assertTrue(cacheHelper.updateIfBound(modelId, current, modelCache -> modelCache.setRateLimiter(rateLimiter)));
+        cacheHelper.setMemSizeEstimation(modelId, current, MLModelFormat.TORCH_SCRIPT, 1000L);
+        assertSame(rateLimiter, cacheHelper.getRateLimiter(modelId));
+        assertNotNull(cacheHelper.getMemEstCPU(modelId));
+    }
+
+    public void testRefreshLastAccessTime_modelNotCached_doesNothing() {
+        cacheHelper.refreshLastAccessTime(modelId);
+        assertEquals(0, cacheHelper.getAllModels().length);
+    }
 }
