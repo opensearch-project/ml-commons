@@ -40,7 +40,8 @@ public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunctio
             Double[] scores = new Double[rerankResults.size()];
             for (int i = 0; i < rerankResults.size(); i++) {
                 Integer index = (Integer) rerankResults.get(i).get("index");
-                scores[index] = (Double) rerankResults.get(i).get("relevance_score");
+                Object score = rerankResults.get(i).get("relevance_score");
+                scores[index] = score == null ? null : ((Number) score).doubleValue();
             }
 
             for (int i = 0; i < scores.length; i++) {
