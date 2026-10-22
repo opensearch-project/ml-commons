@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
@@ -199,6 +200,48 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
         assertEquals("model group id 'my-model-group' already exists", exceptionCaptor.getValue().getMessage());
         assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    public void test_createModelGroup_sameNameAndSameCustomIdReturnsConflict() throws IOException {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+        stubNameSearch(getNonEmptySearchResponse("my-model-group"));
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("my-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(input, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model group id 'my-model-group' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+        verify(sdkClient, never()).putDataObjectAsync(any());
+    }
+
+    public void test_createModelGroup_sameNameAndDifferentCustomIdStaysBadRequest() throws IOException {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+        stubNameSearch(getNonEmptySearchResponse("model_group_ID"));
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("other-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(input, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "The name you provided is already being used by a model group with ID: model_group_ID.",
+            exceptionCaptor.getValue().getMessage()
+        );
+        verify(sdkClient, never()).putDataObjectAsync(any());
     }
 
     public void test_SuccessAddAllBackendRolesTrue() {
@@ -507,14 +550,28 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         return searchResponse;
     }
 
+    private void stubNameSearch(SearchResponse searchResponse) {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+    }
+
     private SearchResponse getNonEmptySearchResponse() throws IOException {
+        return getNonEmptySearchResponse("model_group_ID");
+    }
+
+    private SearchResponse getNonEmptySearchResponse(String id) throws IOException {
         SearchHit[] hits = new SearchHit[1];
         String modelContent = "{\n"
             + "                    \"created_time\": 1684981986069,\n"
             + "                    \"access\": \"public\",\n"
             + "                    \"latest_version\": 0,\n"
             + "                    \"last_updated_time\": 1684981986069,\n"
-            + "                    \"_id\": \"model_group_ID\",\n"
+            + "                    \"_id\": \""
+            + id
+            + "\",\n"
             + "                    \"name\": \"model_group_IT\",\n"
             + "                    \"description\": \"This is an example description\"\n"
             + "                }";
