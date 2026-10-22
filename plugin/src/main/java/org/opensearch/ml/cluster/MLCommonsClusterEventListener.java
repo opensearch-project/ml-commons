@@ -62,16 +62,36 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         this.client = client;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
-        // Apply live changes to the retention job interval (dynamic PUT _cluster/settings) by upserting the persisted
-        // job document. The version bump is observed by JobScheduler's JobSweeper, which reschedules with no restart.
+        // Apply live changes to the retention job (dynamic PUT _cluster/settings) with no restart. One grouped consumer
+        // fires when the interval or either gating flag changes, with all new values in one Settings, so an interval
+        // set while retention was disabled is applied on re-enable, and a combined PUT cannot race two writers.
+        // - enabled: upsert the job doc with the current interval (also re-creates a deleted doc). The version bump is
+        // observed by JobScheduler's JobSweeper, which reschedules.
+        // - disabled: delete the job doc so JobSweeper deschedules it. Skipped when the jobs index does not exist, so a
+        // cluster that never enabled retention never gets the index.
         // The consumer runs on every node, so gate the write on the elected cluster manager to avoid multi-node churn.
+        // The flags are read from mlFeatureEnabledSetting, whose consumers are registered (and so run) before this one.
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS, newIntervalHours -> {
-                if (shouldManageMemoryRetentionJob()) {
-                    mlTaskManager.upsertMemoryRetentionJob(newIntervalHours);
-                }
-            });
+            .addSettingsUpdateConsumer(
+                this::onMemoryRetentionSettingsChanged,
+                List
+                    .of(
+                        MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                        MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                        MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS
+                    )
+            );
+    }
+
+    private void onMemoryRetentionSettingsChanged(Settings settings) {
+        if (shouldManageMemoryRetentionJob()) {
+            mlTaskManager.upsertMemoryRetentionJob(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.get(settings));
+        } else if (!(mlFeatureEnabledSetting.isAgenticMemoryEnabled() && mlFeatureEnabledSetting.isMemoryRetentionEnabled())
+            && clusterService.state().nodes().isLocalNodeElectedClusterManager()
+            && clusterService.state().getMetadata().hasIndex(ML_JOBS_INDEX)) {
+            mlTaskManager.deleteMemoryRetentionJob();
+        }
     }
 
     /**
@@ -95,7 +115,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     }
 
     /**
-     * Rolling-upgrade guard shared by the startup scheduling path and the live interval-change consumer. It is safe to
+     * Rolling-upgrade guard shared by the startup scheduling path and the live settings consumer. It is safe to
      * write the {@code .plugins-ml-jobs} job document only when:
      *   - the index already exists (writing a document to an existing index cannot strand a replica), or
      *   - every node in the cluster is on at least this node's version, so a newly created index's replicas are

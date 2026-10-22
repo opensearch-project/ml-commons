@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -700,6 +701,32 @@ public class MLTaskManager implements SettingsChangeListener {
                     log.error("Failed to get memory retention job during reconcile", e);
                 }
             }), context::restore));
+        }
+    }
+
+    /**
+     * Delete the memory retention job document so JobScheduler's {@code JobSweeper.postDelete} hook deschedules it.
+     * Used when memory retention (or agentic memory) is disabled; re-enabling re-creates the document through
+     * {@link #upsertMemoryRetentionJob(int)} with the then-current interval. A missing document or index is a no-op,
+     * and a delete never auto-creates the jobs index. Callers MUST gate this on the elected cluster manager.
+     */
+    public void deleteMemoryRetentionJob() {
+        DeleteRequest deleteRequest = new DeleteRequest(CommonValue.ML_JOBS_INDEX, MLJobType.MEMORY_RETENTION.name())
+            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client
+                .delete(
+                    deleteRequest,
+                    ActionListener
+                        .runBefore(
+                            ActionListener
+                                .wrap(
+                                    r -> log.info("Memory retention job {}", r.getResult().getLowercase()),
+                                    e -> log.error("Failed to delete memory retention job", e)
+                                ),
+                            context::restore
+                        )
+                );
         }
     }
 

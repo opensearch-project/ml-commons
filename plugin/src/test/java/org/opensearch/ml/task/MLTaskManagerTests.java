@@ -35,6 +35,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -580,6 +581,17 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.reconcileMemoryRetentionJob(1);
 
         verify(client, never()).index(any(), any());
+    }
+
+    public void testDeleteMemoryRetentionJob() {
+        mlTaskManager.deleteMemoryRetentionJob();
+
+        ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
+        verify(client).delete(deleteRequestCaptor.capture(), any());
+        assertEquals(ML_JOBS_INDEX, deleteRequestCaptor.getValue().index());
+        assertEquals(MLJobType.MEMORY_RETENTION.name(), deleteRequestCaptor.getValue().id());
+        // A delete must never go through initMLJobsIndex: disabling retention must not create the jobs index.
+        verify(mlIndicesHandler, never()).initMLJobsIndex(any());
     }
 
     private GetResponse buildMemoryRetentionJobGetResponse(int intervalHours) throws IOException {

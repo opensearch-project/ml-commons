@@ -72,6 +72,10 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
     @Mock
     private RoutingTable routingTable;
 
+    private static final String RETENTION_INTERVAL_KEY = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS.getKey();
+    private static final String RETENTION_ENABLED_KEY = MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+    private static final String AGENTIC_MEMORY_ENABLED_KEY = MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
+
     private MLCommonsClusterEventListener listener;
     private ClusterSettings clusterSettings;
 
@@ -80,7 +84,14 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         clusterSettings = new ClusterSettings(
             Settings.EMPTY,
-            new HashSet<>(Arrays.asList(MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS))
+            new HashSet<>(
+                Arrays
+                    .asList(
+                        MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                        MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                        MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS
+                    )
+            )
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         listener = new MLCommonsClusterEventListener(
@@ -427,6 +438,91 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         clusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_job_interval_hours", 2).build());
 
         verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+        // The jobs index does not exist, so nothing is deleted either (and the index is never created).
+        verify(mlTaskManager, never()).deleteMemoryRetentionJob();
+    }
+
+    public void testSettingsUpdateConsumer_ReEnableAppliesIntervalSetWhileDisabled() {
+        // #5037: enable -> disable -> change interval -> re-enable must schedule the job with the interval that was set
+        // while disabled, without a further interval change.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_INTERVAL_KEY, 12).build());
+        verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_INTERVAL_KEY, 12).put(RETENTION_ENABLED_KEY, true).build());
+
+        verify(mlTaskManager).upsertMemoryRetentionJob(12);
+    }
+
+    public void testSettingsUpdateConsumer_CombinedEnableAndIntervalUpsertsOnce() {
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_INTERVAL_KEY, 12).put(RETENTION_ENABLED_KEY, true).build());
+
+        verify(mlTaskManager).upsertMemoryRetentionJob(12);
+        verify(mlTaskManager).upsertMemoryRetentionJob(anyInt());
+    }
+
+    public void testSettingsUpdateConsumer_DisablingRetentionDeletesJob() {
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
+        when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(true);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_ENABLED_KEY, true).build());
+        verify(mlTaskManager).upsertMemoryRetentionJob(24);
+
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_ENABLED_KEY, false).build());
+
+        verify(mlTaskManager).deleteMemoryRetentionJob();
+    }
+
+    public void testSettingsUpdateConsumer_AgenticMemoryToggleDeletesAndRecreatesJob() {
+        // The agentic memory flag gates the job exactly like retention_enabled, so toggling it must behave the same.
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        setupElectedClusterManagerConsumerState(dataNode);
+        when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(true);
+        when(clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(true);
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+        clusterSettings.applySettings(Settings.builder().put(AGENTIC_MEMORY_ENABLED_KEY, false).build());
+        verify(mlTaskManager).deleteMemoryRetentionJob();
+
+        clusterSettings.applySettings(Settings.builder().put(AGENTIC_MEMORY_ENABLED_KEY, false).put(RETENTION_INTERVAL_KEY, 12).build());
+        verify(mlTaskManager, never()).upsertMemoryRetentionJob(anyInt());
+
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        clusterSettings.applySettings(Settings.builder().put(AGENTIC_MEMORY_ENABLED_KEY, true).put(RETENTION_INTERVAL_KEY, 12).build());
+        verify(mlTaskManager).upsertMemoryRetentionJob(12);
+    }
+
+    public void testSettingsUpdateConsumer_DisableSkippedWhenNotElectedClusterManager() {
+        DiscoveryNode dataNode = createDataNode("dataNode", Version.CURRENT);
+        DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode).localNodeId(dataNode.getId()).build();
+        when(clusterState.nodes()).thenReturn(nodes);
+        when(clusterService.state()).thenReturn(clusterState);
+        when(clusterState.getMetadata()).thenReturn(metadata);
+        when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMemoryRetentionEnabled()).thenReturn(false);
+
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_ENABLED_KEY, true).build());
+        clusterSettings.applySettings(Settings.builder().put(RETENTION_ENABLED_KEY, false).build());
+
+        verify(mlTaskManager, never()).deleteMemoryRetentionJob();
     }
 
     private void setupElectedClusterManagerConsumerState(DiscoveryNode node) {
