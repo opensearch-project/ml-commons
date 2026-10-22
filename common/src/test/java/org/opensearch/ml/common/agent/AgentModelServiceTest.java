@@ -48,6 +48,8 @@ public class AgentModelServiceTest {
         assertNotNull(result);
         assertNotNull(result.getConnector());
         assertFalse(result.isDeployModel());
+        // No model_config: the remote text-embedding checks (space_type etc.) do not apply to agent-created models.
+        assertNull(result.getModelConfig());
     }
 
     @Test

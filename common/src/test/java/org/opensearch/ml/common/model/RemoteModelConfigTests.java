@@ -167,6 +167,32 @@ public class RemoteModelConfigTests {
     }
 
     @Test
+    public void parseLenient_withAdditionalConfigMissingSpaceType_Rejected() throws IOException {
+        // additional_config means the document was written by 3.1+, under the space_type rule.
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Space type must be provided in additional_config for remote text embedding model");
+        String content = "{\"model_type\":\"text_embedding\",\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"additional_config\":{\"other_key\":\"value\"}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, content);
+        parser.nextToken();
+        RemoteModelConfig.parse(parser, false);
+    }
+
+    @Test
+    public void parseLenient_withSpaceType() throws IOException {
+        String content = "{\"model_type\":\"text_embedding\",\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"additional_config\":{\"space_type\":\"l2\"}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, content);
+        parser.nextToken();
+        RemoteModelConfig config = RemoteModelConfig.parse(parser, false);
+        assertEquals("l2", config.getAdditionalConfig().get("space_type"));
+    }
+
+    @Test
     public void frameworkType_wrongValue() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Wrong framework type");
