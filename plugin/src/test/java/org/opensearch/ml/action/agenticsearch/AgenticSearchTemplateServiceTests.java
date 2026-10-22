@@ -370,6 +370,74 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void applyStructuralEnrichment_keepsInvertedOnlyBooleanDescription() {
+        // The analyzer describes a {{^x}}-only boolean; enrichment must not replace it with
+        // the generic "enable" wording.
+        Map<String, Object> schema = MustacheTemplateAnalyzer
+            .derive("{ \"query\": { \"match_all\": {} }{{^skip_explain}}, \"explain\": true{{/skip_explain}} }");
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+
+        service.applyStructuralEnrichment(schema, markers, new LinkedHashMap<>(), null);
+
+        assertEquals("Set to true to omit the optional skip_explain clause.", descOf(schema, "skip_explain"));
+    }
+
+    @Test
+    public void applyStructuralEnrichment_readsDefaultInsideAlignedArray() {
+        // sort is always an array; with the same length in both renders its default is read.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("sort_order", specMap("string", false, ""));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Object marker = markers.renderParams().get("sort_order");
+        Map<String, Object> rendered = ImmutableMap.of("sort", List.of(ImmutableMap.of("price", ImmutableMap.of("order", marker))));
+        Map<String, Object> defaults = ImmutableMap.of("sort", List.of(ImmutableMap.of("price", ImmutableMap.of("order", "desc"))));
+
+        service.applyStructuralEnrichment(schema, markers, rendered, defaults);
+
+        assertEquals("Sort direction for the price sort. Defaults to \"desc\" if unset.", descOf(schema, "sort_order"));
+    }
+
+    @Test
+    public void applyStructuralEnrichment_skipsDefaultWhenArrayLengthsDiffer() {
+        // An optional clause dropped from the defaults render shifts later elements, so index 1
+        // names a different clause there: no default is reported.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("color", specMap("string", false, ""));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Object marker = markers.renderParams().get("color");
+        Map<String, Object> rendered = ImmutableMap
+            .of(
+                "filter",
+                List.of(ImmutableMap.of("term", ImmutableMap.of("brand", "x")), ImmutableMap.of("term", ImmutableMap.of("color", marker)))
+            );
+        Map<String, Object> defaults = ImmutableMap.of("filter", List.of(ImmutableMap.of("term", ImmutableMap.of("color", "red"))));
+
+        service.applyStructuralEnrichment(schema, markers, rendered, defaults);
+
+        assertEquals("Filter by exact color value.", descOf(schema, "color"));
+    }
+
+    @Test
+    public void applyStructuralEnrichment_discardsDefaultThatIsAnotherParam() {
+        // {"size": {{size}}{{^size}}{{from}}{{/size}}, "from": {{from}}}: the defaults render fills
+        // the required from with its marker, so size's slot shows a marker, not a default.
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("size", specMap("number", false, ""));
+        schema.put("from", specMap("number", true, ""));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rp = markers.renderParams();
+        Map<String, Object> rendered = ImmutableMap.of("size", rp.get("size"), "from", rp.get("from"));
+        Map<String, Object> defaultsParams = TemplateStructureAnalyzer.defaultsRenderParams(schema, markers);
+        // Only the required param is rendered, and it renders as its marker.
+        assertEquals(ImmutableMap.of("from", rp.get("from")), defaultsParams);
+        Map<String, Object> defaults = ImmutableMap.of("size", rp.get("from"), "from", rp.get("from"));
+
+        service.applyStructuralEnrichment(schema, markers, rendered, defaults);
+
+        assertEquals("Number of results to return.", descOf(schema, "size"));
+    }
+
+    @Test
     public void register_enrichmentRuns_addsDescriptionFromRender() {
         // End-to-end through register: the marker render locates lex_query in a match on
         // title, so the stored schema gets a full-text description.
