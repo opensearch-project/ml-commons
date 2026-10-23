@@ -5,24 +5,29 @@
 
 package org.opensearch.ml.batch;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.transport.TransportChannel;
 
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  * One predict request waiting in a DynamicBatchingQueue: its input, listener, predictor and channel, plus what
  * is derived from the input once at enqueue so flush need not re-parse it — the decomposed items, the group
  * key deciding which requests may coalesce, the item count and payload byte size for the queue's batching
  * thresholds, and an estimated retained byte size for node-level memory backpressure. items and groupKey are
- * null when the input type has no batch handler, and such an entry is rejected as unsupported at flush.
+ * null when the input type has no batch handler, and such an entry is rejected as unsupported at enqueue.
  */
 @Getter
 public class QueueEntry {
@@ -41,6 +46,15 @@ public class QueueEntry {
     private final long retainedByteSize;
     @Getter(AccessLevel.NONE)
     private final AtomicBoolean budgetReleased = new AtomicBoolean(false);
+    @Getter(AccessLevel.NONE)
+    private final MLOutput[] results;
+    @Getter(AccessLevel.NONE)
+    private final AtomicInteger unsettledItems;
+    @Getter(AccessLevel.NONE)
+    private final AtomicReference<Exception> failure = new AtomicReference<>();
+    @Getter(AccessLevel.PACKAGE)
+    @Setter(AccessLevel.PACKAGE)
+    private long enqueuedAtNanos;
 
     public QueueEntry(
         MLInput input,
@@ -77,6 +91,28 @@ public class QueueEntry {
                     Math.multiplyExact((long) count, ESTIMATED_ITEM_OVERHEAD_BYTES)
                 );
         }
+        this.results = new MLOutput[itemCount];
+        this.unsettledItems = new AtomicInteger(itemCount);
+    }
+
+    void setResult(int position, MLOutput output) {
+        results[position] = output;
+    }
+
+    void recordFailure(Exception error) {
+        failure.compareAndSet(null, error);
+    }
+
+    Exception getFailure() {
+        return failure.get();
+    }
+
+    List<MLOutput> getResults() {
+        return Arrays.asList(results);
+    }
+
+    boolean settle(int count) {
+        return unsettledItems.addAndGet(-count) == 0;
     }
 
     boolean markBudgetReleased() {
