@@ -9,6 +9,8 @@ import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
@@ -28,17 +30,23 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -68,6 +76,10 @@ import lombok.extern.log4j.Log4j2;
 public class MLSyncUpCron implements Runnable {
 
     public static final int DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS = 20_000;
+    static final int ORPHANED_DEPLOY_TASK_CHECK_EVERY_N_RUNS = 6;
+    static final String ORPHANED_DEPLOY_TASK_ERROR =
+        "Deploy model task is no longer tracked by any node in the cluster; its coordinating node may have left the cluster";
+    private int runCount;
     private Client client;
     private final SdkClient sdkClient;
     private ClusterService clusterService;
@@ -164,6 +176,10 @@ public class MLSyncUpCron implements Runnable {
                         workerNodes.add(nodeId);
                     }
                 }
+            }
+
+            if (++runCount % ORPHANED_DEPLOY_TASK_CHECK_EVERY_N_RUNS == 0) {
+                failOrphanedDeployModelTasks(runningDeployModelTasks.keySet());
             }
 
             Set<String> modelsToUndeploy = new HashSet<>();
@@ -506,6 +522,67 @@ public class MLSyncUpCron implements Runnable {
             log.warn("Ignoring non-numeric worker node count [{}] on model [{}]", raw, modelId);
         }
         return defaultValue;
+    }
+
+    /**
+     * A deploy task's progress lives only in the memory of its coordinating node, and the task timeout only applies to
+     * tasks still in some live node's memory. When the coordinating node leaves the cluster (cluster manager replaced
+     * in a blue/green, node crash), its tasks stay CREATED/RUNNING in the task index forever. Mark such tasks FAILED
+     * once no node is working on them any more and they are well past the task timeout.
+     *
+     * @param liveDeployTaskIds deploy tasks some node reported as running in this sync up round
+     */
+    @VisibleForTesting
+    void failOrphanedDeployModelTasks(Set<String> liveDeployTaskIds) {
+        try {
+            searchAndFailOrphanedDeployModelTasks(liveDeployTaskIds);
+        } catch (Exception e) {
+            // best effort; never let this break the sync up job
+            log.debug("Failed to check for orphaned deploy model tasks", e);
+        }
+    }
+
+    private void searchAndFailOrphanedDeployModelTasks(Set<String> liveDeployTaskIds) {
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled() || !clusterService.state().metadata().hasIndex(ML_TASK_INDEX)) {
+            return;
+        }
+        long taskTimeoutMs = clusterService.getClusterSettings().get(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS) * 1000L;
+        // twice the timeout: a live coordinating node times out its own tasks after one timeout, so only orphans remain
+        long olderThan = Instant.now().toEpochMilli() - 2 * taskTimeoutMs;
+        BoolQueryBuilder query = new BoolQueryBuilder()
+            .filter(new TermsQueryBuilder(MLTask.TASK_TYPE_FIELD, MLTaskType.DEPLOY_MODEL.name()))
+            .filter(new TermsQueryBuilder(MLTask.STATE_FIELD, MLTaskState.CREATED.name(), MLTaskState.RUNNING.name()))
+            .filter(new RangeQueryBuilder(MLTask.LAST_UPDATE_TIME_FIELD).lt(olderThan));
+        SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX)
+            .source(new SearchSourceBuilder().query(query).size(100).fetchSource(false));
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(response -> {
+                for (SearchHit hit : response.getHits().getHits()) {
+                    String taskId = hit.getId();
+                    if (liveDeployTaskIds.contains(taskId)) {
+                        continue;
+                    }
+                    log.warn("Marking orphaned deploy model task {} as FAILED", taskId);
+                    UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId)
+                        .doc(
+                            ImmutableMap
+                                .of(
+                                    MLTask.STATE_FIELD,
+                                    MLTaskState.FAILED.name(),
+                                    MLTask.ERROR_FIELD,
+                                    ORPHANED_DEPLOY_TASK_ERROR,
+                                    MLTask.LAST_UPDATE_TIME_FIELD,
+                                    Instant.now().toEpochMilli()
+                                )
+                        );
+                    client
+                        .update(
+                            updateRequest,
+                            ActionListener.wrap(r -> {}, e -> log.warn("Failed to mark orphaned deploy model task {} as FAILED", taskId, e))
+                        );
+                }
+            }, e -> log.debug("Failed to search for orphaned deploy model tasks", e)), context::restore));
+        }
     }
 
     private void bulkUpdateModelState(
