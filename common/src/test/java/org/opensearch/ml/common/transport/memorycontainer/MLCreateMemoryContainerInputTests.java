@@ -599,6 +599,29 @@ public class MLCreateMemoryContainerInputTests {
     }
 
     @Test
+    public void parse_withNullMemoryContainerId() throws Exception {
+        String json = "{\"name\":\"session-memory\",\"memory_container_id\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLCreateMemoryContainerInput parsed = MLCreateMemoryContainerInput.parse(parser);
+        assertNull(parsed.getMemoryContainerId());
+    }
+
+    @Test
+    public void parse_withNullDescription() throws Exception {
+        String json = "{\"name\":\"session-memory\",\"description\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLCreateMemoryContainerInput parsed = MLCreateMemoryContainerInput.parse(parser);
+        assertEquals("session-memory", parsed.getName());
+        assertNull(parsed.getDescription());
+    }
+
+    @Test
     public void toXContent_WithCustomMemoryContainerId() throws IOException {
         MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
             .builder()

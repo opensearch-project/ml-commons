@@ -20,6 +20,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
+import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -64,6 +65,12 @@ public class RestMLMcpToolsUpdateAction extends BaseRestHandler {
         if (CollectionUtils.isEmpty(updateNodesRequest.getMcpTools())) {
             exception.addValidationError("tools list can not be null");
             throw exception;
+        }
+        for (McpToolUpdateInput mcpTool : updateNodesRequest.getMcpTools()) {
+            if (mcpTool.getName() == null || mcpTool.getName().isBlank()) {
+                exception.addValidationError("tool name can not be null or blank");
+                throw exception;
+            }
         }
         return channel -> client.execute(MLMcpToolsUpdateAction.INSTANCE, getRequest(request), new RestToXContentListener<>(channel));
     }

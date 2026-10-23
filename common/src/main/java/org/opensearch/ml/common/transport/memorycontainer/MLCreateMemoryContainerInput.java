@@ -190,13 +190,13 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
 
             switch (fieldName) {
                 case MEMORY_CONTAINER_ID_FIELD:
-                    memoryContainerId = parser.text();
+                    memoryContainerId = parser.textOrNull();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case MEMORY_CONFIG_FIELD:
                     configuration = MemoryConfiguration.parse(parser);

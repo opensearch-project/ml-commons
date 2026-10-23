@@ -24,6 +24,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -133,6 +134,23 @@ public class RegisterMcpToolTest {
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("type field required");
+        McpToolRegisterInput.parse(parser);
+    }
+
+    @Test
+    public void testParse_ParametersIsArray_ThenFail() throws Exception {
+        String json = "{\"type\":\"stock_tool\",\"name\":\"stock_tool\",\"parameters\":[\"a\",\"b\"]}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                json
+            );
+        parser.nextToken();
+
+        exceptionRule.expect(ParsingException.class);
+        exceptionRule.expectMessage("expecting token of type [FIELD_NAME]");
         McpToolRegisterInput.parse(parser);
     }
 

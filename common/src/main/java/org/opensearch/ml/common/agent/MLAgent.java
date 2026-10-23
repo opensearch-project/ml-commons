@@ -465,7 +465,7 @@ public class MLAgent implements ToXContentObject, Writeable {
 
             switch (fieldName) {
                 case AGENT_ID_FIELD:
-                    agentId = parser.text();
+                    agentId = parser.textOrNull();
                     break;
                 case AGENT_NAME_FIELD:
                     name = parser.text();
@@ -474,7 +474,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                     type = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case LLM_FIELD:
                     llm = LLMSpec.parse(parser);
