@@ -462,11 +462,15 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
 
     private static Object sampleValue(Map<String, Object> spec) {
         Object enumValues = spec.get(MustacheTemplateAnalyzer.ENUM_KEY);
-        Object firstEnum = enumValues instanceof List && !((List<?>) enumValues).isEmpty() ? ((List<?>) enumValues).get(0) : null;
+        List<?> enums = enumValues instanceof List ? (List<?>) enumValues : List.of();
+        Object firstEnum = enums.isEmpty() ? null : enums.get(0);
         String type = String.valueOf(spec.get(MustacheTemplateAnalyzer.TYPE_KEY));
         if (MustacheTemplateAnalyzer.TYPE_LIST.equals(type)) {
-            // A real one-item List, so pre-flight renders the section body once.
-            return List.of(firstEnum != null ? firstEnum : "x");
+            // Two items, so a loop body with no separator renders invalid JSON here rather
+            // than at search time; distinct values keep a key-iterating body legal.
+            Object first = firstEnum != null ? firstEnum : "x";
+            Object second = enums.size() > 1 ? enums.get(1) : (firstEnum != null ? firstEnum : "y");
+            return List.of(first, second);
         }
         if (firstEnum != null) {
             return firstEnum;

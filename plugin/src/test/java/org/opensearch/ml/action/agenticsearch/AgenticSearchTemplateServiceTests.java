@@ -453,24 +453,91 @@ public class AgenticSearchTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void preflight_listParam_rendersWithRealList() {
-        // The sample value must be a real List so the engine iterates the section; a
-        // string would render one bogus item. An enum's first value is the element.
+    public void preflight_listParam_rendersWithTwoItemList() {
+        // The sample must be a real two-item List: a string would render one bogus item, and
+        // one item would let a separator-less loop pass. Enum values are used when present.
         List<Object> sampled = new ArrayList<>();
         stubRenderReturns(params -> {
             if (params.containsKey("brands")) {
                 sampled.add(params.get("brands"));
             }
-            return "{\"query\":{\"terms\":{\"brand\":[\"x\",\"zzz\"]}}}";
+            return "{\"query\":{\"terms\":{\"brand\":[\"x\",\"y\",\"zzz\"]}}}";
         });
         service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", specMap("list", false, "")));
-        assertEquals(List.of(List.of("x")), sampled);
+        assertEquals(List.of(List.of("x", "y")), sampled);
 
         sampled.clear();
         Map<String, Object> withEnum = specMap("list", false, "");
         withEnum.put("enum", List.of("acme", "globex"));
         service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", withEnum));
-        assertEquals(List.of(List.of("acme")), sampled);
+        assertEquals(List.of(List.of("acme", "globex")), sampled);
+
+        sampled.clear();
+        Map<String, Object> oneEnum = specMap("list", false, "");
+        oneEnum.put("enum", List.of("acme"));
+        service.preflightValidate(ITERATOR_BODY, ImmutableMap.of("brands", oneEnum));
+        assertEquals(List.of(List.of("acme", "acme")), sampled);
+    }
+
+    private static final String SEPARATOR_LESS_ITERATOR_BODY = "{\"query\":{\"terms\":{\"brand\":[{{#brands}}\"{{.}}\"{{/brands}}]}}}";
+
+    @Test
+    public void register_separatorLessListLoop_isRejected() {
+        // ["x""y"] is not JSON, so the body is caught here instead of as a 400 at search time.
+        stubStoredScript(SEPARATOR_LESS_ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        stubRenderReturns(params -> expandListSection(SEPARATOR_LESS_ITERATOR_BODY, "brands", params));
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        ArgumentCaptor<Exception> ex = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(ex.capture());
+        assertTrue(ex.getValue() instanceof IllegalArgumentException);
+        assertTrue(ex.getValue().getMessage().contains("rendered invalid JSON (all-filled)"));
+    }
+
+    @Test
+    public void register_separatedListLoop_isAccepted() {
+        stubStoredScript(ITERATOR_BODY);
+        stubIndexMapping(ImmutableMap.of("properties", ImmutableMap.of("brand", ImmutableMap.of("type", "keyword"))));
+        List<String> rendered = new ArrayList<>();
+        stubRenderReturns(params -> {
+            String out = expandListSection(ITERATOR_BODY, "brands", params);
+            rendered.add(out);
+            return out;
+        });
+        stubStoreSucceeds();
+
+        @SuppressWarnings("unchecked")
+        ActionListener<AgenticSearchTemplate> listener = mock(ActionListener.class);
+        service.register("tmpl", "my-index", null, null, null, listener);
+
+        verify(listener).onResponse(any());
+        assertTrue(rendered.contains("{\"query\":{\"terms\":{\"brand\":[\"x\",\"y\",\"zzz\"]}}}"));
+    }
+
+    /**
+     * Expand a single {@code {{#name}}...{{.}}...{{/name}}} section the way the Mustache
+     * engine would: the inner text once per item with {@code {{.}}} replaced, or nothing when
+     * the param is absent.
+     */
+    private static String expandListSection(String body, String name, Map<String, Object> params) {
+        String open = "{{#" + name + "}}";
+        String close = "{{/" + name + "}}";
+        int start = body.indexOf(open);
+        int end = body.indexOf(close);
+        String inner = body.substring(start + open.length(), end);
+        StringBuilder expanded = new StringBuilder();
+        Object value = params.get(name);
+        if (value instanceof List) {
+            for (Object item : (List<?>) value) {
+                expanded.append(inner.replace("{{.}}", String.valueOf(item)));
+            }
+        }
+        return body.substring(0, start) + expanded + body.substring(end + close.length());
     }
 
     @Test
