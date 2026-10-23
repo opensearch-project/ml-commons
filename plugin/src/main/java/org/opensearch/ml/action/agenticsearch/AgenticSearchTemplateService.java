@@ -687,10 +687,18 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * <p>A field is sortable when its type is in {@link #SORTABLE_TYPES} with doc_values on,
      * or it is {@code text} with {@code fielddata:true}. Nothing under a {@code nested}
      * container is sortable from the root, and a sub-field is judged by its own type (so
-     * {@code title.keyword} is sortable while {@code title} is not).
+     * {@code title.keyword} is sortable while {@code title} is not). A field {@code alias} is
+     * sortable when its {@code path} target in the same index is.
      */
     static void collectFieldNames(Map<String, Object> properties, String prefix, List<String> out, Set<String> sortable) {
-        collectFieldNames(properties, prefix, out, sortable, false);
+        Map<String, String> aliases = new LinkedHashMap<>();
+        collectFieldNames(properties, prefix, out, sortable, false, aliases);
+        // An alias sorts as its target does, and the target may be mapped after the alias.
+        for (Map.Entry<String, String> alias : aliases.entrySet()) {
+            if (sortable.contains(alias.getValue())) {
+                sortable.add(alias.getKey());
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -699,7 +707,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         String prefix,
         List<String> out,
         Set<String> sortable,
-        boolean underNested
+        boolean underNested,
+        Map<String, String> aliases
     ) {
         for (Map.Entry<String, Object> e : properties.entrySet()) {
             String name = prefix.isEmpty() ? e.getKey() : prefix + "." + e.getKey();
@@ -716,11 +725,13 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             if (field.get("properties") instanceof Map) {
                 // A container: recurse for its leaves and don't offer the container itself.
                 boolean nested = underNested || "nested".equals(field.get("type"));
-                collectFieldNames((Map<String, Object>) field.get("properties"), name, out, sortable, nested);
+                collectFieldNames((Map<String, Object>) field.get("properties"), name, out, sortable, nested, aliases);
             } else {
                 out.add(name);
                 if (!underNested && isSortable(field)) {
                     sortable.add(name);
+                } else if (!underNested && "alias".equals(field.get("type")) && field.get("path") instanceof String) {
+                    aliases.put(name, (String) field.get("path"));
                 }
             }
             // Expose a text field's keyword sub-field (used for exact/sort).

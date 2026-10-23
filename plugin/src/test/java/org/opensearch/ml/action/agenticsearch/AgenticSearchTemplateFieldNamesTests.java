@@ -220,6 +220,47 @@ public class AgenticSearchTemplateFieldNamesTests {
     }
 
     @Test
+    public void alias_sortableWhenItsTargetIs() {
+        // OpenSearch sorts on an alias as on its target, so an alias to a date must stay in sort_by.
+        Map<String, Object> props = map("year", map("type", "date"), "yr", map("type", "alias", "path", "year"));
+
+        assertEquals(List.of("year", "yr"), collect(props));
+        assertEquals(Set.of("year", "yr"), sortable(props));
+    }
+
+    @Test
+    public void alias_declaredBeforeItsTarget_isStillSortable() {
+        Map<String, Object> props = map("yr", map("type", "alias", "path", "year"), "year", map("type", "date"));
+
+        assertEquals(Set.of("year", "yr"), sortable(props));
+    }
+
+    @Test
+    public void alias_toUnsortableOrMissingTarget_notSortable() {
+        Map<String, Object> props = map(
+            "body",
+            map("type", "text"),
+            "content",
+            map("type", "alias", "path", "body"),
+            "dangling",
+            map("type", "alias", "path", "nope")
+        );
+
+        assertEquals(List.of("body", "content", "dangling"), collect(props));
+        assertTrue(sortable(props).isEmpty());
+    }
+
+    @Test
+    public void alias_underNested_notSortable() {
+        Map<String, Object> props = map(
+            "variants",
+            map("type", "nested", "properties", map("sku", map("type", "keyword"), "code", map("type", "alias", "path", "variants.sku")))
+        );
+
+        assertTrue(sortable(props).isEmpty());
+    }
+
+    @Test
     public void containerWithSubFields_keepsSubFieldsWithoutContainer() {
         // A container carrying `fields` still must not offer itself as a target.
         Map<String, Object> props = map(
@@ -306,6 +347,34 @@ public class AgenticSearchTemplateFieldNamesTests {
 
         assertTrue(result.sortable.isEmpty());
         assertTrue(result.sortableWhereMapped.isEmpty());
+    }
+
+    @Test
+    public void extractFieldNames_aliasResolvesWithinItsOwnIndexOnly() {
+        // yr in a points at year, which only b maps: a sort on yr still fails on a.
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("yr", map("type", "alias", "path", "year"), "id", map("type", "keyword")));
+        byIndex.put("b", map("year", map("type", "date"), "id", map("type", "keyword")));
+
+        AgenticSearchTemplateService.MappingFields result = AgenticSearchTemplateService.extractFieldNames(indexResponse(byIndex));
+
+        assertEquals(List.of("yr", "id", "year"), result.all);
+        assertEquals(List.of("id"), new ArrayList<>(result.sortable));
+        assertEquals(List.of("id", "year"), new ArrayList<>(result.sortableWhereMapped));
+    }
+
+    @Test
+    public void extractFieldNames_aliasToDate_offeredInSortEnum() {
+        Map<String, Map<String, Object>> byIndex = new LinkedHashMap<>();
+        byIndex.put("a", map("year", map("type", "date"), "yr", map("type", "alias", "path", "year")));
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            SORT_PLAIN,
+            indexResponse(byIndex),
+            rp -> renderSortClause(rp, map("order", "asc"))
+        );
+
+        assertEquals(List.of("year", "yr"), enumOf(schema, "sort_by"));
     }
 
     @Test
