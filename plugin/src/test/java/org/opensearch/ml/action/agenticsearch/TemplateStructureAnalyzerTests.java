@@ -203,7 +203,8 @@ public class TemplateStructureAnalyzerTests {
         schema.put("x", spec("string", true));
         TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
         Map<String, Object> rp = markers.renderParams();
-        Map<String, Object> rendered = map("custom_clause", map("field", rp.get("x")));
+        // Not keyed "field": a literal field key is a field selector in any clause.
+        Map<String, Object> rendered = map("custom_clause", map("value", rp.get("x")));
 
         TemplateStructureAnalyzer.Facts f = TemplateStructureAnalyzer
             .classify(TemplateStructureAnalyzer.locate(rendered, markers).get("x"), rendered);
@@ -309,6 +310,63 @@ public class TemplateStructureAnalyzerTests {
             mk -> map("sort", list(map("price", map("order", mk)))),
             TemplateStructureAnalyzer.ROLE_SORT_ORDER,
             "Sort direction for the price sort."
+        );
+    }
+
+    @Test
+    public void classify_sortKeyAsValueIsSortField() {
+        checkSingle("string", mk -> map("sort", mk), TemplateStructureAnalyzer.ROLE_SORT_FIELD, "Field to sort results by.");
+    }
+
+    @Test
+    public void classify_sortKeyInSortArrayIsSortField() {
+        checkSingle(
+            "string",
+            mk -> map("sort", list("_score", mk)),
+            TemplateStructureAnalyzer.ROLE_SORT_FIELD,
+            "Field to sort results by."
+        );
+    }
+
+    @Test
+    public void classify_geoDistanceSortKeyIsFieldSelector() {
+        // The key names a geo_point, which no sortable set contains, so it must not be a sort_field.
+        checkSingle(
+            "string",
+            mk -> map("sort", list(map("_geo_distance", map(mk, "40.7,-74.0", "order", "asc")))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            "Field name to target."
+        );
+    }
+
+    @Test
+    public void classify_termsAggFieldIsFieldSelector() {
+        // A literal "field" key holds a field name, so a terms agg is not read as a terms filter.
+        checkSingle(
+            "string",
+            mk -> map("aggs", map("by_brand", map("terms", map("field", mk)))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            "Field name to target."
+        );
+    }
+
+    @Test
+    public void classify_collapseFieldIsFieldSelector() {
+        checkSingle("string", mk -> map("collapse", map("field", mk)), TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, null);
+    }
+
+    @Test
+    public void classify_existsFieldIsFieldSelector() {
+        checkSingle("string", mk -> map("query", map("exists", map("field", mk))), TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, null);
+    }
+
+    @Test
+    public void classify_rankFeatureFieldIsFieldSelector() {
+        checkSingle(
+            "string",
+            mk -> map("query", map("rank_feature", map("field", mk, "boost", 2))),
+            TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR,
+            null
         );
     }
 
@@ -553,6 +611,94 @@ public class TemplateStructureAnalyzerTests {
         Map<String, Object> rendered = map("query", map("multi_match", map("query", rp.get("q"), "fields", list(rp.get("f1")))));
 
         assertEquals("Full-text search.", TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered));
+    }
+
+    // ---- sortUnmappedType ----------------------------------------------------
+
+    /** Locate and classify the one-param schema rendered by {@code renderWith}. */
+    private static TemplateStructureAnalyzer.Facts classifySortKey(Function<Object, Map<String, Object>> renderWith) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("p", spec("string", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        Map<String, Object> rendered = renderWith.apply(markers.renderParams().get("p"));
+        TemplateStructureAnalyzer.Located loc = TemplateStructureAnalyzer.locate(rendered, markers).get("p");
+        return TemplateStructureAnalyzer.classify(loc, rendered);
+    }
+
+    @Test
+    public void classify_sortKey_readsLiteralUnmappedType() {
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map("sort", List.of(map((String) mk, map("order", "asc", "unmapped_type", "double"))))
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_SORT_FIELD, f.role);
+        assertEquals("double", f.sortUnmappedType);
+    }
+
+    @Test
+    public void classify_sortKey_noUnmappedType_isNull() {
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("order", "asc"))))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, "asc")))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", mk)).sortUnmappedType);
+    }
+
+    @Test
+    public void classify_sortKey_emptyNonStringOrMarkerUnmappedType_isNull() {
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("unmapped_type", ""))))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, map("unmapped_type", 5))))).sortUnmappedType);
+        assertNull(
+            classifySortKey(
+                mk -> map("sort", List.of(map((String) mk, map("unmapped_type", TemplateStructureAnalyzer.MARKER_PREFIX + "7__"))))
+            ).sortUnmappedType
+        );
+    }
+
+    @Test
+    public void classify_geoDistanceSelector_hasNoUnmappedType() {
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map("sort", List.of(map("_geo_distance", map((String) mk, "0,0", "unmapped_type", "geo_point"))))
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, f.role);
+        assertNull(f.sortUnmappedType);
+    }
+
+    @Test
+    public void classify_sortKeyReused_requiresUnmappedTypeOnEveryClause() {
+        Map<String, Object> withUnmapped = map("order", "asc", "unmapped_type", "double");
+        Map<String, Object> plain = map("order", "desc");
+
+        // One clause without unmapped_type still fails on an index missing the field, in either order.
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, withUnmapped), map((String) mk, plain)))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, plain), map((String) mk, withUnmapped)))).sortUnmappedType);
+        assertEquals(
+            "double",
+            classifySortKey(mk -> map("sort", List.of(map((String) mk, withUnmapped), map((String) mk, withUnmapped)))).sortUnmappedType
+        );
+    }
+
+    @Test
+    public void classify_sortKeyReused_ignoresNonSortOccurrences() {
+        // The same param as a term key is not a sort clause, so it does not veto the sort's unmapped_type.
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map(
+                "query",
+                map("term", map((String) mk, "x")),
+                "sort",
+                List.of(map((String) mk, map("order", "asc", "unmapped_type", "double")))
+            )
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, f.role);
+        assertNull(f.sortUnmappedType);
+
+        TemplateStructureAnalyzer.Facts sortFirst = classifySortKey(
+            mk -> map(
+                "sort",
+                List.of(map((String) mk, map("order", "asc", "unmapped_type", "double"))),
+                "query",
+                map("term", map((String) mk, "x"))
+            )
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_SORT_FIELD, sortFirst.role);
+        assertEquals("double", sortFirst.sortUnmappedType);
     }
 
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */

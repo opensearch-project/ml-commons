@@ -81,6 +81,8 @@ public final class TemplateStructureAnalyzer {
     static final class Located {
         final List<Object> path; // object keys (String) and array indices (Integer) from the root
         final boolean asKey;     // the marker was a JSON object key (a field-selector param) not a value
+        // Every path where the marker was a key, since one param may name several sort clauses.
+        final List<List<Object>> keyPaths = new ArrayList<>();
 
         Located(List<Object> path, boolean asKey) {
             this.path = path;
@@ -101,13 +103,19 @@ public final class TemplateStructureAnalyzer {
     /** A param's recovered clause role and the field(s) it targets. */
     static final class Facts {
         final String role;
-        final List<String> fields; // target field name(s); may be empty when not recoverable
-        final String bound;        // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final List<String> fields;       // target field name(s); may be empty when not recoverable
+        final String bound;              // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final String sortUnmappedType;   // the sort clause's unmapped_type for ROLE_SORT_FIELD, else null
 
         Facts(String role, List<String> fields, String bound) {
+            this(role, fields, bound, null);
+        }
+
+        Facts(String role, List<String> fields, String bound, String sortUnmappedType) {
             this.role = role;
             this.fields = fields;
             this.bound = bound;
+            this.sortUnmappedType = sortUnmappedType;
         }
     }
 
@@ -154,7 +162,7 @@ public final class TemplateStructureAnalyzer {
     /**
      * Walk the rendered JSON and record where each param's marker landed. A marker found as
      * an object key marks a field-selector param; found as a scalar value it marks the slot
-     * that param fills. The first occurrence wins.
+     * that param fills. The first occurrence wins the role; every key occurrence is kept.
      */
     static Map<String, Located> locate(Object renderedRoot, MarkerSet markers) {
         Map<String, Located> found = new LinkedHashMap<>();
@@ -171,7 +179,7 @@ public final class TemplateStructureAnalyzer {
                 String keyParam = markers.stringMarkers.get(key);
                 List<Object> childPath = append(path, key);
                 if (keyParam != null) {
-                    found.putIfAbsent(keyParam, new Located(childPath, true));
+                    found.computeIfAbsent(keyParam, k -> new Located(childPath, true)).keyPaths.add(childPath);
                 }
                 walk(entry.getValue(), childPath, markers, found);
             }
@@ -204,13 +212,25 @@ public final class TemplateStructureAnalyzer {
 
         if (located.asKey) {
             // The param supplies a field name (e.g. the sort key), not a value.
-            String role = keys.contains("sort") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
-            return new Facts(role, List.of(), null);
+            String role = sortOrSelector(keys);
+            return new Facts(role, List.of(), null, ROLE_SORT_FIELD.equals(role) ? sortUnmappedType(located, renderedRoot) : null);
+        }
+
+        // A key literally named "field" always holds a field name in the DSL (terms agg,
+        // collapse, exists, rank_feature), never a value, so it must not fall through to the
+        // <clause>.<field> value rules below (e.g. aggs.<name>.terms.field is not a terms filter).
+        if (n >= 1 && "field".equals(keys.get(n - 1))) {
+            return new Facts(sortOrSelector(keys), List.of(), null);
         }
 
         String last = n >= 1 ? keys.get(n - 1) : null;
         String prev = n >= 2 ? keys.get(n - 2) : null;
         String prev2 = n >= 3 ? keys.get(n - 3) : null;
+
+        // A bare sort key given as a value: "sort":"{{x}}" or "sort":["{{x}}"].
+        if ("sort".equals(last)) {
+            return new Facts(ROLE_SORT_FIELD, List.of(), null);
+        }
 
         // Top-level paging controls.
         if (n == 1) {
@@ -480,6 +500,11 @@ public final class TemplateStructureAnalyzer {
 
     // ---- internals ---------------------------------------------------------
 
+    /** A geo-distance sort takes a geo_point, which is never in the sortable set. */
+    private static String sortOrSelector(List<String> keys) {
+        return keys.contains("sort") && !keys.contains("_geo_distance") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
+    }
+
     private static boolean isRangeBound(String key) {
         return "gte".equals(key) || "gt".equals(key) || "lte".equals(key) || "lt".equals(key);
     }
@@ -533,6 +558,35 @@ public final class TemplateStructureAnalyzer {
             }
         }
         return out;
+    }
+
+    /**
+     * The literal {@code unmapped_type} a sort key carries, or null. Only its presence matters: it
+     * tells the enum a field missing from some indices is allowed. One clause without it would
+     * still fail on such an index, so every sort clause the param names must carry one; a marker
+     * (the value is itself a param) does not count, since it may be omitted.
+     */
+    private static String sortUnmappedType(Located located, Object root) {
+        String first = null;
+        for (List<Object> keyPath : located.keyPaths) {
+            if (!ROLE_SORT_FIELD.equals(sortOrSelector(keysOnly(keyPath)))) {
+                continue;
+            }
+            Object clause = navigate(root, keyPath);
+            if (!(clause instanceof Map)) {
+                return null;
+            }
+            Object unmappedType = ((Map<?, ?>) clause).get("unmapped_type");
+            if (!(unmappedType instanceof String)
+                || ((String) unmappedType).isEmpty()
+                || ((String) unmappedType).startsWith(MARKER_PREFIX)) {
+                return null;
+            }
+            if (first == null) {
+                first = (String) unmappedType;
+            }
+        }
+        return first;
     }
 
     /** Navigate to a (possibly container) node at a key-path, for reading a clause's siblings. */
