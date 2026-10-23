@@ -661,6 +661,46 @@ public class TemplateStructureAnalyzerTests {
         assertNull(f.sortUnmappedType);
     }
 
+    @Test
+    public void classify_sortKeyReused_requiresUnmappedTypeOnEveryClause() {
+        Map<String, Object> withUnmapped = map("order", "asc", "unmapped_type", "double");
+        Map<String, Object> plain = map("order", "desc");
+
+        // One clause without unmapped_type still fails on an index missing the field, in either order.
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, withUnmapped), map((String) mk, plain)))).sortUnmappedType);
+        assertNull(classifySortKey(mk -> map("sort", List.of(map((String) mk, plain), map((String) mk, withUnmapped)))).sortUnmappedType);
+        assertEquals(
+            "double",
+            classifySortKey(mk -> map("sort", List.of(map((String) mk, withUnmapped), map((String) mk, withUnmapped)))).sortUnmappedType
+        );
+    }
+
+    @Test
+    public void classify_sortKeyReused_ignoresNonSortOccurrences() {
+        // The same param as a term key is not a sort clause, so it does not veto the sort's unmapped_type.
+        TemplateStructureAnalyzer.Facts f = classifySortKey(
+            mk -> map(
+                "query",
+                map("term", map((String) mk, "x")),
+                "sort",
+                List.of(map((String) mk, map("order", "asc", "unmapped_type", "double")))
+            )
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR, f.role);
+        assertNull(f.sortUnmappedType);
+
+        TemplateStructureAnalyzer.Facts sortFirst = classifySortKey(
+            mk -> map(
+                "sort",
+                List.of(map((String) mk, map("order", "asc", "unmapped_type", "double"))),
+                "query",
+                map("term", map((String) mk, "x"))
+            )
+        );
+        assertEquals(TemplateStructureAnalyzer.ROLE_SORT_FIELD, sortFirst.role);
+        assertEquals("double", sortFirst.sortUnmappedType);
+    }
+
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
     private static void checkSingle(
         String type,

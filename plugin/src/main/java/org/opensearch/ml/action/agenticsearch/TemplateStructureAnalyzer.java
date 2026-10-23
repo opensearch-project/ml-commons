@@ -81,6 +81,8 @@ public final class TemplateStructureAnalyzer {
     static final class Located {
         final List<Object> path; // object keys (String) and array indices (Integer) from the root
         final boolean asKey;     // the marker was a JSON object key (a field-selector param) not a value
+        // Every path where the marker was a key, since one param may name several sort clauses.
+        final List<List<Object>> keyPaths = new ArrayList<>();
 
         Located(List<Object> path, boolean asKey) {
             this.path = path;
@@ -160,7 +162,7 @@ public final class TemplateStructureAnalyzer {
     /**
      * Walk the rendered JSON and record where each param's marker landed. A marker found as
      * an object key marks a field-selector param; found as a scalar value it marks the slot
-     * that param fills. The first occurrence wins.
+     * that param fills. The first occurrence wins the role; every key occurrence is kept.
      */
     static Map<String, Located> locate(Object renderedRoot, MarkerSet markers) {
         Map<String, Located> found = new LinkedHashMap<>();
@@ -177,7 +179,7 @@ public final class TemplateStructureAnalyzer {
                 String keyParam = markers.stringMarkers.get(key);
                 List<Object> childPath = append(path, key);
                 if (keyParam != null) {
-                    found.putIfAbsent(keyParam, new Located(childPath, true));
+                    found.computeIfAbsent(keyParam, k -> new Located(childPath, true)).keyPaths.add(childPath);
                 }
                 walk(entry.getValue(), childPath, markers, found);
             }
@@ -211,7 +213,7 @@ public final class TemplateStructureAnalyzer {
         if (located.asKey) {
             // The param supplies a field name (e.g. the sort key), not a value.
             String role = sortOrSelector(keys);
-            return new Facts(role, List.of(), null, ROLE_SORT_FIELD.equals(role) ? sortUnmappedType(located.path, renderedRoot) : null);
+            return new Facts(role, List.of(), null, ROLE_SORT_FIELD.equals(role) ? sortUnmappedType(located, renderedRoot) : null);
         }
 
         // A key literally named "field" always holds a field name in the DSL (terms agg,
@@ -559,20 +561,32 @@ public final class TemplateStructureAnalyzer {
     }
 
     /**
-     * A sort key's literal {@code unmapped_type}, read from the clause object the key names, or
-     * null. Only its presence matters: it tells the enum a field missing from some indices is
-     * allowed. A marker (the value is itself a param) does not count, since it may be omitted.
+     * The literal {@code unmapped_type} a sort key carries, or null. Only its presence matters: it
+     * tells the enum a field missing from some indices is allowed. One clause without it would
+     * still fail on such an index, so every sort clause the param names must carry one; a marker
+     * (the value is itself a param) does not count, since it may be omitted.
      */
-    private static String sortUnmappedType(List<Object> keyPath, Object root) {
-        Object clause = navigate(root, keyPath);
-        if (!(clause instanceof Map)) {
-            return null;
+    private static String sortUnmappedType(Located located, Object root) {
+        String first = null;
+        for (List<Object> keyPath : located.keyPaths) {
+            if (!ROLE_SORT_FIELD.equals(sortOrSelector(keysOnly(keyPath)))) {
+                continue;
+            }
+            Object clause = navigate(root, keyPath);
+            if (!(clause instanceof Map)) {
+                return null;
+            }
+            Object unmappedType = ((Map<?, ?>) clause).get("unmapped_type");
+            if (!(unmappedType instanceof String)
+                || ((String) unmappedType).isEmpty()
+                || ((String) unmappedType).startsWith(MARKER_PREFIX)) {
+                return null;
+            }
+            if (first == null) {
+                first = (String) unmappedType;
+            }
         }
-        Object unmappedType = ((Map<?, ?>) clause).get("unmapped_type");
-        if (!(unmappedType instanceof String) || ((String) unmappedType).isEmpty() || ((String) unmappedType).startsWith(MARKER_PREFIX)) {
-            return null;
-        }
-        return (String) unmappedType;
+        return first;
     }
 
     /** Navigate to a (possibly container) node at a key-path, for reading a clause's siblings. */

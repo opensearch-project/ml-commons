@@ -736,6 +736,59 @@ public class AgenticSearchTemplateFieldNamesTests {
         assertEquals(List.of("id"), enumOf(schema, "sort_by"));
     }
 
+    // Two clauses on the same sort_by: only the first (or only the second) carries unmapped_type.
+    private static final String SORT_REUSED_UNMAPPED_FIRST = "{\"query\":{\"match_all\":{}},\"sort\":["
+        + "{\"{{sort_by}}\":{\"order\":\"asc\",\"mode\":\"min\",\"unmapped_type\":\"double\"}},"
+        + "{\"{{sort_by}}\":{\"order\":\"desc\",\"mode\":\"max\"}}]}";
+    private static final String SORT_REUSED_UNMAPPED_SECOND = "{\"query\":{\"match_all\":{}},\"sort\":["
+        + "{\"{{sort_by}}\":{\"order\":\"desc\",\"mode\":\"max\"}},"
+        + "{\"{{sort_by}}\":{\"order\":\"asc\",\"mode\":\"min\",\"unmapped_type\":\"double\"}}]}";
+
+    private static Map<String, Object> renderSortClauses(Map<String, Object> rp, Map<String, Object> first, Map<String, Object> second) {
+        String key = (String) rp.get("sort_by");
+        return map("query", map("match_all", map()), "sort", List.of(map(key, first), map(key, second)));
+    }
+
+    @Test
+    public void enrichment_reusedSortKey_unmappedTypeOnOneClauseOnly_staysStrict() {
+        // The clause without unmapped_type still fails on b, whichever clause comes first.
+        Map<String, Object> withUnmapped = map("order", "asc", "mode", "min", "unmapped_type", "double");
+        Map<String, Object> plain = map("order", "desc", "mode", "max");
+
+        Map<String, Object> unmappedFirst = deriveAndEnrichAgainst(
+            SORT_REUSED_UNMAPPED_FIRST,
+            priceOnlyInA(),
+            rp -> renderSortClauses(rp, withUnmapped, plain)
+        );
+        Map<String, Object> unmappedSecond = deriveAndEnrichAgainst(
+            SORT_REUSED_UNMAPPED_SECOND,
+            priceOnlyInA(),
+            rp -> renderSortClauses(rp, plain, withUnmapped)
+        );
+
+        assertEquals(List.of("id"), enumOf(unmappedFirst, "sort_by"));
+        assertEquals(List.of("id"), enumOf(unmappedSecond, "sort_by"));
+    }
+
+    @Test
+    public void enrichment_reusedSortKey_unmappedTypeOnEveryClause_admitsMissingField() {
+        String body = "{\"query\":{\"match_all\":{}},\"sort\":["
+            + "{\"{{sort_by}}\":{\"order\":\"asc\",\"mode\":\"min\",\"unmapped_type\":\"double\"}},"
+            + "{\"{{sort_by}}\":{\"order\":\"desc\",\"mode\":\"max\",\"unmapped_type\":\"double\"}}]}";
+
+        Map<String, Object> schema = deriveAndEnrichAgainst(
+            body,
+            priceOnlyInA(),
+            rp -> renderSortClauses(
+                rp,
+                map("order", "asc", "mode", "min", "unmapped_type", "double"),
+                map("order", "desc", "mode", "max", "unmapped_type", "double")
+            )
+        );
+
+        assertEquals(List.of("price", "id"), enumOf(schema, "sort_by"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> specOf(Map<String, Object> schema, String param) {
         return (Map<String, Object>) schema.get(param);
