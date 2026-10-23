@@ -962,6 +962,7 @@ public class MachineLearningPlugin extends Plugin
             client,
             settings,
             mlModelManager,
+            mlTaskManager,
             new MLModelAutoReDeployer.SearchRequestBuilderFactory()
         );
         MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(

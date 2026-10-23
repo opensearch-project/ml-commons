@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MON
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
@@ -38,9 +40,11 @@ public class MLModelCacheHelper {
     private final Map<String, MLModelCache> modelCaches;
 
     private final Map<String, MLModel> autoDeployModels;
+    private final ClusterService clusterService;
     private volatile Long maxRequestCount;
 
     public MLModelCacheHelper(ClusterService clusterService, Settings settings) {
+        this.clusterService = clusterService;
         this.modelCaches = new ConcurrentHashMap<>();
         this.autoDeployModels = new ConcurrentHashMap<>();
 
@@ -72,7 +76,42 @@ public class MLModelCacheHelper {
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(deployToAllNodes);
         modelCache.setLastAccessTime(Instant.now());
+        keepRoutingTable(modelCaches.get(modelId), modelCache);
         modelCaches.put(modelId, modelCache);
+    }
+
+    /**
+     * A node that does not host a model still holds its routing table (the nodes that do host it), synced by the sync up
+     * job, so it can forward predict requests. Starting a deploy on such a node replaces that cache entry; keep the
+     * routing table, or the node rejects every predict it coordinates until the next sync up even though other nodes
+     * are serving the model. This node itself is left out: it is only now starting to deploy the model.
+     */
+    private void keepRoutingTable(MLModelCache previous, MLModelCache replacement) {
+        if (previous == null) {
+            return;
+        }
+        String[] workerNodes = previous.getWorkerNodes();
+        if (workerNodes == null || workerNodes.length == 0) {
+            return;
+        }
+        Set<String> routing = new HashSet<>(Arrays.asList(workerNodes));
+        String localNodeId = localNodeId();
+        if (localNodeId != null) {
+            routing.remove(localNodeId);
+        }
+        if (!routing.isEmpty()) {
+            replacement.syncWorkerNode(routing);
+        }
+    }
+
+    private String localNodeId() {
+        try {
+            DiscoveryNode localNode = clusterService.localNode();
+            return localNode == null ? null : localNode.getId();
+        } catch (RuntimeException e) {
+            // no applied cluster state yet; keeping the routing table is an optimization, never fail the deploy for it
+            return null;
+        }
     }
 
     public synchronized void initModelStateAutoDeploy(
@@ -92,6 +131,7 @@ public class MLModelCacheHelper {
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCache.setDeployToAllNodes(false);
         modelCache.setLastAccessTime(Instant.now());
+        keepRoutingTable(modelCaches.get(modelId), modelCache);
         modelCaches.put(modelId, modelCache);
         setIsAutoDeploying(modelId, true);
     }
