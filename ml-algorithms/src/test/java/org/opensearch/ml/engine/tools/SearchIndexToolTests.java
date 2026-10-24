@@ -57,7 +57,6 @@ import org.opensearch.search.DocValueFormat;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
-import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.aggregations.BucketOrder;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.aggregations.bucket.terms.StringTerms;
@@ -1189,25 +1188,8 @@ public class SearchIndexToolTests {
     private SearchResponse createSearchResponseWithAggregations(SearchHit[] hits, InternalAggregations aggregations) {
         float maxScore = hits.length > 0 ? hits[0].getScore() : Float.NaN;
         SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, TotalHits.Relation.EQUAL_TO), maxScore);
-        SearchResponseSections sections = new SearchResponseSections(
-            searchHits,
-            aggregations,
-            null,
-            false,
-            false,
-            null,
-            1
-        );
-        return new SearchResponse(
-            sections,
-            null,
-            1,
-            1,
-            0,
-            11,
-            ShardSearchFailure.EMPTY_ARRAY,
-            SearchResponse.Clusters.EMPTY
-        );
+        SearchResponseSections sections = new SearchResponseSections(searchHits, aggregations, null, false, false, null, 1);
+        return new SearchResponse(sections, null, 1, 1, 0, 11, ShardSearchFailure.EMPTY_ARRAY, SearchResponse.Clusters.EMPTY);
     }
 
     private void mockSearchResponse(SearchResponse searchResponse) {

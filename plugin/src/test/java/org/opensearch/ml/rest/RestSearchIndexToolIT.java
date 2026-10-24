@@ -43,24 +43,9 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
                 + "  }\n"
                 + "}"
         );
-        addDocToIndex(
-            TEST_INDEX_NAME,
-            "0",
-            List.of("text", "category", "value"),
-            List.of("text doc 1", "billing", 100)
-        );
-        addDocToIndex(
-            TEST_INDEX_NAME,
-            "1",
-            List.of("text", "category", "value"),
-            List.of("text doc 2", "search", 50)
-        );
-        addDocToIndex(
-            TEST_INDEX_NAME,
-            "2",
-            List.of("text", "category", "value"),
-            List.of("text doc 3", "billing", 75)
-        );
+        addDocToIndex(TEST_INDEX_NAME, "0", List.of("text", "category", "value"), List.of("text doc 1", "billing", 100));
+        addDocToIndex(TEST_INDEX_NAME, "1", List.of("text", "category", "value"), List.of("text doc 2", "search", 50));
+        addDocToIndex(TEST_INDEX_NAME, "2", List.of("text", "category", "value"), List.of("text doc 3", "billing", 75));
     }
 
     @Before
