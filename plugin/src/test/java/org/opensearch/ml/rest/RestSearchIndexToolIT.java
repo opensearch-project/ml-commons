@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,14 +32,20 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
                 + "    \"properties\": {\n"
                 + "      \"text\": {\n"
                 + "        \"type\": \"text\"\n"
+                + "      },\n"
+                + "      \"category\": {\n"
+                + "        \"type\": \"keyword\"\n"
+                + "      },\n"
+                + "      \"value\": {\n"
+                + "        \"type\": \"long\"\n"
                 + "      }\n"
                 + "    }\n"
                 + "  }\n"
                 + "}"
         );
-        addDocToIndex(TEST_INDEX_NAME, "0", List.of("text"), List.of("text doc 1"));
-        addDocToIndex(TEST_INDEX_NAME, "1", List.of("text"), List.of("text doc 2"));
-        addDocToIndex(TEST_INDEX_NAME, "2", List.of("text"), List.of("text doc 3"));
+        addDocToIndex(TEST_INDEX_NAME, "0", List.of("text", "category", "value"), List.of("text doc 1", "billing", 100));
+        addDocToIndex(TEST_INDEX_NAME, "1", List.of("text", "category", "value"), List.of("text doc 2", "search", 50));
+        addDocToIndex(TEST_INDEX_NAME, "2", List.of("text", "category", "value"), List.of("text doc 3", "billing", 75));
     }
 
     @Before
@@ -127,6 +134,46 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
                 exception.getMessage(),
                 containsString("SearchIndexTool's two parameters: index and query are required and should be in valid format")
             );
+    }
+
+    public void testSearchIndexToolInFlowAgent_withTermsAggregationAndSubAggregation() throws IOException, ParseException {
+        String agentId = createAgent(registerAgentRequestBody);
+        String agentInput = "{\n"
+            + "  \"parameters\": {\n"
+            + "    \"input\": {\n"
+            + "      \"index\": \"test_index\",\n"
+            + "      \"query\": {\n"
+            + "        \"size\": 0,\n"
+            + "        \"aggs\": {\n"
+            + "          \"by_category\": {\n"
+            + "            \"terms\": {\n"
+            + "              \"field\": \"category\",\n"
+            + "              \"size\": 10\n"
+            + "            },\n"
+            + "            \"aggs\": {\n"
+            + "              \"max_value\": {\n"
+            + "                \"max\": {\n"
+            + "                  \"field\": \"value\"\n"
+            + "                }\n"
+            + "              }\n"
+            + "            }\n"
+            + "          }\n"
+            + "        }\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "}\n";
+        String result = executeAgent(agentId, agentInput);
+
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+        MatcherAssert.assertThat(result, containsString("\"aggregations\""));
+        MatcherAssert.assertThat(result, not(containsString("\"aggregations\":{\"aggregations\"")));
+        MatcherAssert.assertThat(result, containsString("by_category"));
+        MatcherAssert.assertThat(result, containsString("billing"));
+        MatcherAssert.assertThat(result, containsString("search"));
+        MatcherAssert.assertThat(result, containsString("max_value"));
+        MatcherAssert.assertThat(result, not(containsString("_shards")));
     }
 
     public void testSearchIndexToolInFlowAgent_withIllegalQueryField_thenThrowException() throws IOException, ParseException {
