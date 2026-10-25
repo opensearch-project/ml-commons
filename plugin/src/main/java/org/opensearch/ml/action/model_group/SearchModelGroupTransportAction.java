@@ -121,7 +121,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
             search(tenantId, request, searchListener);
         }, e -> {
             // Fail the request instead of returning an empty result that looks like "no accessible model groups"
-            log.error("Failed to get accessible model group ids", e);
+            log.error("Failed to build or run accessible model group search", e);
             wrappedListener.onFailure(e);
         }));
     }
