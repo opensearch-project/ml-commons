@@ -114,8 +114,9 @@ public final class TemplateStructureAnalyzer {
     /**
      * Build a unique marker value per param, typed so the rendered body stays legal JSON:
      * a string param renders a token into its quoted slot, a number param a large distinct
-     * integer, a boolean {@code true} (so its section renders), and an array an empty array
-     * (kept legal but not located, since a raw-JSON slot has no single field to describe).
+     * integer, a boolean {@code true} (so its section renders), a list a two-item list of
+     * string tokens, and an array an empty array (kept legal but not located, since a raw-JSON
+     * slot has no single field to describe).
      */
     static MarkerSet buildMarkers(Map<String, Object> schema) {
         MarkerSet markers = new MarkerSet();
@@ -139,6 +140,16 @@ public final class TemplateStructureAnalyzer {
                     // pre-flight) but carries no single field, so it is not tracked for a role.
                     markers.renderParams.put(param, "[]");
                     break;
+                case MustacheTemplateAnalyzer.TYPE_LIST: {
+                    // Two distinct tokens, so the render mirrors pre-flight's two-item sample
+                    // and a key-iterating body stays legal JSON; both map back to this param.
+                    String token = MARKER_PREFIX + index + MARKER_SUFFIX;
+                    String second = MARKER_PREFIX + index + "b" + MARKER_SUFFIX;
+                    markers.stringMarkers.put(token, param);
+                    markers.stringMarkers.put(second, param);
+                    markers.renderParams.put(param, List.of(token, second));
+                    break;
+                }
                 default: {
                     String token = MARKER_PREFIX + index + MARKER_SUFFIX;
                     markers.stringMarkers.put(token, param);
