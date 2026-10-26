@@ -91,9 +91,9 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         String result = executeAgent(agentId, agentInput);
         assertEquals(
             "The search index result not equal with expected.",
-            "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 1\"},\"_id\":\"0\",\"_score\":1.0}\n"
-                + "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 2\"},\"_id\":\"1\",\"_score\":1.0}\n"
-                + "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 3\"},\"_id\":\"2\",\"_score\":1.0}\n",
+            "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 1\",\"category\":\"billing\",\"value\":100},\"_id\":\"0\",\"_score\":1.0}\n"
+                + "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 2\",\"category\":\"search\",\"value\":50},\"_id\":\"1\",\"_score\":1.0}\n"
+                + "{\"_index\":\"test_index\",\"_source\":{\"text\":\"text doc 3\",\"category\":\"billing\",\"value\":75},\"_id\":\"2\",\"_score\":1.0}\n",
             result
         );
     }
