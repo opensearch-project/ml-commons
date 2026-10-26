@@ -25,6 +25,7 @@ import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
@@ -89,6 +90,7 @@ public class RestSearchTemplateFillToolIT extends MLCommonsRestTestCase {
 
     @Before
     public void setUpTemplateFill() throws Exception {
+        Assume.assumeFalse("Containerized node cannot reach the test-JVM loopback mock LLM", isContainerizedCluster());
         mockLlm = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         mockLlm.createContext("/", this::handleLlmRequest);
         mockLlm.start();
@@ -109,6 +111,9 @@ public class RestSearchTemplateFillToolIT extends MLCommonsRestTestCase {
 
     @After
     public void tearDownTemplateFill() throws IOException {
+        if (isContainerizedCluster()) {
+            return;
+        }
         if (mockLlm != null) {
             mockLlm.stop(0);
         }
@@ -122,6 +127,10 @@ public class RestSearchTemplateFillToolIT extends MLCommonsRestTestCase {
                 // Already gone.
             }
         }
+    }
+
+    private static boolean isContainerizedCluster() {
+        return "docker-cluster".equals(System.getProperty("tests.clustername"));
     }
 
     // ---- tests -------------------------------------------------------------
