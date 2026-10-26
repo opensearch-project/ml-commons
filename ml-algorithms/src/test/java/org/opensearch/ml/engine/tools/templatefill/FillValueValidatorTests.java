@@ -167,4 +167,59 @@ public class FillValueValidatorTests {
         assertEquals("5", FillValueValidator.validate(schema, filled("s", 5)).get("s"));
         assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("s", Map.of("a", 1))));
     }
+
+    @Test
+    public void list_isARealListOfStrings() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("terms", spec("list", true, "", null));
+        assertEquals(List.of("a", "b"), FillValueValidator.validate(schema, filled("terms", List.of("a", "b"))).get("terms"));
+        assertEquals(List.of("a", "5"), FillValueValidator.validate(schema, filled("terms", List.of("a", 5))).get("terms"));
+        // A model that sends the array as a JSON string still yields a list.
+        assertEquals(List.of("a", "b"), FillValueValidator.validate(schema, filled("terms", "[\"a\", \"b\"]")).get("terms"));
+    }
+
+    @Test
+    public void list_wrapsScalars_andDoesNotSplitPlainText() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("terms", spec("list", true, "", null));
+        assertEquals(List.of("red"), FillValueValidator.validate(schema, filled("terms", "red")).get("terms"));
+        assertEquals(List.of("5"), FillValueValidator.validate(schema, filled("terms", 5)).get("terms"));
+        // A comma-joined string is one element by design; splitting would guess at the model's intent.
+        assertEquals(List.of("red, blue"), FillValueValidator.validate(schema, filled("terms", "red, blue")).get("terms"));
+    }
+
+    @Test
+    public void list_enumConstrainsEachElement() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("colors", spec("list", true, "", List.of("red", "blue")));
+        assertEquals(List.of("red", "blue"), FillValueValidator.validate(schema, filled("colors", List.of("red", "blue"))).get("colors"));
+        assertEquals(List.of("red"), FillValueValidator.validate(schema, filled("colors", "red")).get("colors"));
+        assertEquals(List.of("red"), FillValueValidator.validate(schema, filled("colors", "[\"red\"]")).get("colors"));
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("colors", List.of("red", "green"))));
+    }
+
+    @Test
+    public void list_rejectsNestedAndNullElements() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("terms", spec("list", true, "", null));
+        assertEquals(List.of("true"), FillValueValidator.validate(schema, filled("terms", List.of(true))).get("terms"));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FillValueValidator.validate(schema, filled("terms", List.of("a", List.of("b"))))
+        );
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("terms", "[[\"a\"]]")));
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("terms", "[\"a\", null]")));
+    }
+
+    @Test
+    public void list_rejectsObjects() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("terms", spec("list", true, "", null));
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("terms", Map.of("a", 1))));
+        assertThrows(IllegalArgumentException.class, () -> FillValueValidator.validate(schema, filled("terms", "{\"a\":1}")));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FillValueValidator.validate(schema, filled("terms", List.of("a", Map.of("b", 2))))
+        );
+    }
 }
