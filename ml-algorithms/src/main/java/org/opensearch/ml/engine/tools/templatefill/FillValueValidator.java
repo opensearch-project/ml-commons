@@ -10,6 +10,7 @@ import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.REQUIRE
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.TYPE_ARRAY;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.TYPE_BOOLEAN;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.TYPE_INTEGER;
+import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.TYPE_LIST;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.TYPE_NUMBER;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.asMap;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.jsonType;
@@ -17,6 +18,7 @@ import static org.opensearch.ml.engine.tools.templatefill.FillToolSchema.rawType
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -73,11 +75,16 @@ public final class FillValueValidator {
     }
 
     private static Object coerce(String name, Map<String, Object> spec, Object value) {
-        Object enumValues = spec.get(ENUM_KEY);
-        if (enumValues instanceof List && !((List<?>) enumValues).isEmpty()) {
-            return enumMember(name, (List<?>) enumValues, value);
-        }
         String rawType = rawType(spec);
+        Object enumValues = spec.get(ENUM_KEY);
+        List<?> members = enumValues instanceof List && !((List<?>) enumValues).isEmpty() ? (List<?>) enumValues : null;
+        // A list's enum constrains each element, so it must not resolve the whole value to one member.
+        if (TYPE_LIST.equals(rawType)) {
+            return list(name, members, value);
+        }
+        if (members != null) {
+            return enumMember(name, members, value);
+        }
         switch (jsonType(rawType)) {
             case TYPE_INTEGER:
                 return integer(name, value);
@@ -190,6 +197,33 @@ public final class FillValueValidator {
             return StringUtils.toJson(List.of(parsed));
         }
         throw new IllegalArgumentException("param '" + name + "' expects a JSON array literal, got '" + value + "'");
+    }
+
+    /**
+     * A list slot is iterated by a Mustache section, so the script engine needs a real {@code List}. Models
+     * sometimes send the array as a JSON string, which is parsed first; a comma-joined plain string is by
+     * design one element, not split.
+     */
+    private static Object list(String name, List<?> members, Object value) {
+        Object parsed = value instanceof String ? parseSingleJsonValue((String) value) : value;
+        List<?> elements;
+        if (parsed instanceof List) {
+            elements = (List<?>) parsed;
+        } else if (parsed instanceof String || parsed instanceof Number || parsed instanceof Boolean) {
+            elements = List.of(parsed);
+        } else {
+            throw new IllegalArgumentException("param '" + name + "' expects a list of strings, got '" + value + "'");
+        }
+        List<Object> out = new ArrayList<>(elements.size());
+        for (Object element : elements) {
+            if (!(element instanceof String || element instanceof Number || element instanceof Boolean)) {
+                throw new IllegalArgumentException(
+                    "param '" + name + "' expects a list of strings, element '" + element + "' is not a string"
+                );
+            }
+            out.add(members == null ? string(name, element) : enumMember(name, members, element));
+        }
+        return out;
     }
 
     /**

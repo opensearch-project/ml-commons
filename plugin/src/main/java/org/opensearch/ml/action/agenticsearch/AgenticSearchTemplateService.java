@@ -13,9 +13,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -163,7 +166,7 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                             // fixed-value enums recovered from where each param renders, and
                             // derive a template-level description for multi-template selection.
                             // Best-effort: on any failure the base derivation stands.
-                            derivedDescription = enrichStructurally(body, paramSchema);
+                            derivedDescription = enrichStructurally(body, paramSchema, mappingFields);
                         }
                         // 4. Pre-flight validate: render all-filled + required-only.
                         preflightValidate(body, paramSchema);
@@ -240,11 +243,13 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * Combine the two automatic inputs into a param-schema: parse-tree structure
      * (names/types/required) plus mapping-derived field-name enums. A param named
      * like {@code sort_by}/{@code *_field} that selects a field is scoped to the
-     * mapping's field names, so the model can only target an existing field.
+     * mapping's field names, so the model can only target an existing field. {@code sort_by}
+     * is scoped to the sortable fields only; other selectors may also target fields that
+     * cannot be sorted on (a {@code text} match field, a {@code knn_vector} neural target).
      */
-    Map<String, Object> deriveSchema(String body, List<String> mappingFields) {
+    Map<String, Object> deriveSchema(String body, MappingFields mappingFields) {
         Map<String, Object> schema = MustacheTemplateAnalyzer.derive(body);
-        if (mappingFields == null || mappingFields.isEmpty()) {
+        if (mappingFields == null || mappingFields.all.isEmpty()) {
             return schema;
         }
         for (Map.Entry<String, Object> e : schema.entrySet()) {
@@ -257,8 +262,12 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             if (targetsAField(name)
                 && MustacheTemplateAnalyzer.TYPE_STRING.equals(spec.get(MustacheTemplateAnalyzer.TYPE_KEY))
                 && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY)) {
-                spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(mappingFields));
-                spec.put(MustacheTemplateAnalyzer.SOURCE_KEY, MustacheTemplateAnalyzer.SOURCE_MAPPING);
+                List<String> fields = isSortSelector(name) ? new ArrayList<>(mappingFields.sortable) : new ArrayList<>(mappingFields.all);
+                // An empty enum fails validateParamSchema, so omit it when nothing qualifies.
+                if (!fields.isEmpty()) {
+                    spec.put(MustacheTemplateAnalyzer.ENUM_KEY, fields);
+                    spec.put(MustacheTemplateAnalyzer.SOURCE_KEY, MustacheTemplateAnalyzer.SOURCE_MAPPING);
+                }
             }
         }
         return schema;
@@ -269,10 +278,11 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * param, recovered from where each param renders in the body (see
      * {@link TemplateStructureAnalyzer}). Best-effort: any failure, or a body that will not
      * render to parseable JSON, leaves the base derivation untouched. Only writes an empty
-     * description and only adds an enum a param does not already carry, so a field-name enum
-     * from {@link #deriveSchema} is preserved.
+     * description and only adds an enum a param does not already carry. A field-name enum
+     * from {@link #deriveSchema} is kept only for a field role: a sort slot narrows it to
+     * {@code sortable}, a field-selector slot keeps it, and any other recovered role drops it.
      */
-    String enrichStructurally(String body, Map<String, Object> schema) {
+    String enrichStructurally(String body, Map<String, Object> schema, MappingFields mappingFields) {
         try {
             TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
             Map<String, Object> rendered = renderToMap(body, markers.renderParams());
@@ -280,9 +290,10 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                 return null;
             }
             // Render with optionals omitted so an optional param's slot shows the body's own
-            // default; read that value at the param's (stable) path below.
-            Map<String, Object> defaults = renderToMap(body, sampleParams(schema, true));
-            applyStructuralEnrichment(schema, markers, rendered, defaults);
+            // default; read that value at the param's (aligned) path below. Required params
+            // render as markers so a default that is another param's value is recognizable.
+            Map<String, Object> defaults = renderToMap(body, TemplateStructureAnalyzer.defaultsRenderParams(schema, markers));
+            applyStructuralEnrichment(schema, markers, rendered, defaults, mappingFields);
             // Derive a one-line template-level description (capabilities grouped by clause)
             // for multi-template selection. Null when no role is recovered.
             return TemplateStructureAnalyzer.describeTemplate(schema, markers, rendered);
@@ -301,16 +312,20 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         Map<String, Object> schema,
         TemplateStructureAnalyzer.MarkerSet markers,
         Map<String, Object> rendered,
-        Map<String, Object> defaults
+        Map<String, Object> defaults,
+        MappingFields mappingFields
     ) {
         Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
+        // A slot whose default is another param's value renders that param's marker; it has no
+        // literal default, so blank it before any default is read.
+        defaults = TemplateStructureAnalyzer.withoutMarkers(defaults, markers);
         for (Map.Entry<String, Object> entry : schema.entrySet()) {
             if (!(entry.getValue() instanceof Map)) {
                 continue;
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> spec = (Map<String, Object>) entry.getValue();
-            enrichParam(entry.getKey(), spec, located.get(entry.getKey()), rendered, defaults);
+            enrichParam(entry.getKey(), spec, located.get(entry.getKey()), rendered, defaults, mappingFields);
         }
     }
 
@@ -320,7 +335,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         Map<String, Object> spec,
         TemplateStructureAnalyzer.Located located,
         Map<String, Object> rendered,
-        Map<String, Object> defaults
+        Map<String, Object> defaults,
+        MappingFields mappingFields
     ) {
         Object existing = spec.get(MustacheTemplateAnalyzer.DESCRIPTION_KEY);
         boolean hasDescription = existing instanceof String && !((String) existing).isEmpty();
@@ -328,10 +344,14 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             ? (String) spec.get(MustacheTemplateAnalyzer.TYPE_KEY)
             : MustacheTemplateAnalyzer.TYPE_STRING;
 
-        // Array and boolean params carry no single clause or field, so describe them from
-        // their type alone (no marker to locate).
+        // Array, list and boolean params carry no single clause or field, so describe them
+        // from their type alone (no marker to locate).
         if (!hasDescription && MustacheTemplateAnalyzer.TYPE_ARRAY.equals(type)) {
             spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, "A JSON array or object passed as a raw JSON string.");
+            return;
+        }
+        if (!hasDescription && MustacheTemplateAnalyzer.TYPE_LIST.equals(type)) {
+            spec.put(MustacheTemplateAnalyzer.DESCRIPTION_KEY, MustacheTemplateAnalyzer.LIST_DESCRIPTION);
             return;
         }
         if (!hasDescription && MustacheTemplateAnalyzer.TYPE_BOOLEAN.equals(type)) {
@@ -343,9 +363,10 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             return;
         }
         TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer.classify(located, rendered);
+        reconcileMappingEnum(param, spec, facts, mappingFields);
 
         // A closed-vocabulary slot becomes an enum: only for a string param with no enum yet,
-        // so a field-name enum from deriveSchema is left as is.
+        // so a field-name enum that survived reconcileMappingEnum is left as is.
         List<String> vocab = TemplateStructureAnalyzer.vocabEnum(facts);
         if (vocab != null && MustacheTemplateAnalyzer.TYPE_STRING.equals(type) && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY)) {
             spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(vocab));
@@ -355,8 +376,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             return;
         }
         Object defaultValue = null;
-        if (Boolean.FALSE.equals(spec.get(MustacheTemplateAnalyzer.REQUIRED_KEY)) && located.isStablePath() && defaults != null) {
-            defaultValue = TemplateStructureAnalyzer.valueAt(defaults, located.path);
+        if (Boolean.FALSE.equals(spec.get(MustacheTemplateAnalyzer.REQUIRED_KEY)) && defaults != null) {
+            defaultValue = TemplateStructureAnalyzer.alignedValueAt(rendered, defaults, located.path);
         }
         String description = TemplateStructureAnalyzer.describe(facts, defaultValue);
         if (description != null) {
@@ -364,9 +385,61 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         }
     }
 
+    /**
+     * Let the recovered role beat the name heuristic for a mapping-derived field-name enum
+     * ({@code source=mapping}): a sort slot can only take a sortable field, so the enum is
+     * narrowed to {@code sortable} (dropped when none is); a field-selector slot takes any
+     * field, so the enum is kept; every other role is a value or option slot that never takes
+     * a field name, so the enum is removed (letting a closed vocabulary such as asc/desc apply
+     * instead). A sort whose clause carries {@code unmapped_type} tolerates a field missing from
+     * some indices, so it is narrowed to the wider {@code sortableWhereMapped} set instead; this
+     * also covers a {@code sort_by} that got no enum because nothing is sortable everywhere.
+     * No role leaves the enum as is.
+     */
+    private static void reconcileMappingEnum(
+        String param,
+        Map<String, Object> spec,
+        TemplateStructureAnalyzer.Facts facts,
+        MappingFields mappingFields
+    ) {
+        String role = facts.role;
+        if (role == null) {
+            return;
+        }
+        boolean fromMapping = MustacheTemplateAnalyzer.SOURCE_MAPPING.equals(spec.get(MustacheTemplateAnalyzer.SOURCE_KEY));
+        boolean sortField = TemplateStructureAnalyzer.ROLE_SORT_FIELD.equals(role);
+        boolean bareSortBy = sortField
+            && isSortSelector(param)
+            && MustacheTemplateAnalyzer.TYPE_STRING.equals(spec.get(MustacheTemplateAnalyzer.TYPE_KEY))
+            && !spec.containsKey(MustacheTemplateAnalyzer.ENUM_KEY);
+        if (!fromMapping && !bareSortBy) {
+            return;
+        }
+        if (sortField) {
+            Set<String> sortable = mappingFields == null ? null
+                : facts.sortUnmappedType != null ? mappingFields.sortableWhereMapped
+                : mappingFields.sortable;
+            if (sortable == null || sortable.isEmpty()) {
+                spec.remove(MustacheTemplateAnalyzer.ENUM_KEY);
+                spec.remove(MustacheTemplateAnalyzer.SOURCE_KEY);
+            } else {
+                spec.put(MustacheTemplateAnalyzer.ENUM_KEY, new ArrayList<>(sortable));
+                spec.put(MustacheTemplateAnalyzer.SOURCE_KEY, MustacheTemplateAnalyzer.SOURCE_MAPPING);
+            }
+        } else if (!TemplateStructureAnalyzer.ROLE_FIELD_SELECTOR.equals(role)) {
+            spec.remove(MustacheTemplateAnalyzer.ENUM_KEY);
+            spec.remove(MustacheTemplateAnalyzer.SOURCE_KEY);
+        }
+    }
+
+    /** A field selector that picks the sort key, scoped to sortable fields only. */
+    private static boolean isSortSelector(String name) {
+        return name.toLowerCase(Locale.ROOT).equals("sort_by");
+    }
+
     /** Heuristic: a param that selects a field (named "field", "sort_by", or ending in _field). */
     private static boolean targetsAField(String name) {
-        String n = name.toLowerCase(java.util.Locale.ROOT);
+        String n = name.toLowerCase(Locale.ROOT);
         return n.equals("field") || n.equals("sort_by") || n.endsWith("_field");
     }
 
@@ -390,17 +463,26 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         } catch (Exception e) {
             throw new IllegalArgumentException("Template failed to render (" + label + "): " + e.getMessage(), e);
         }
-        // JSON-legality only. Parsing as a search body would be stricter, but the
-        // sampleValue placeholders aren't domain-valid ("x" for a sort order or a
+        // JSON-legality plus a top-level object. Parsing as a search body would be stricter,
+        // but the sampleValue placeholders aren't domain-valid ("x" for a sort order or a
         // boost_mode), so real templates would fail here on the placeholder, not the body.
+        // parser.map() alone accepts an empty or scalar render, which search rejects; {}
+        // stays valid (match_all).
+        boolean isObject;
         try (
             XContentParser parser = MediaTypeRegistry.JSON
                 .xContent()
                 .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, rendered)
         ) {
-            parser.map();
+            isObject = parser.nextToken() == XContentParser.Token.START_OBJECT;
+            if (isObject) {
+                parser.map();
+            }
         } catch (Exception e) {
             throw new IllegalArgumentException("Template rendered invalid JSON (" + label + "): " + e.getMessage(), e);
+        }
+        if (!isObject) {
+            throw new IllegalArgumentException("Template must render to a JSON object (" + label + ")");
         }
     }
 
@@ -449,10 +531,19 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
 
     private static Object sampleValue(Map<String, Object> spec) {
         Object enumValues = spec.get(MustacheTemplateAnalyzer.ENUM_KEY);
-        if (enumValues instanceof List && !((List<?>) enumValues).isEmpty()) {
-            return ((List<?>) enumValues).get(0);
-        }
+        List<?> enums = enumValues instanceof List ? (List<?>) enumValues : List.of();
+        Object firstEnum = enums.isEmpty() ? null : enums.get(0);
         String type = String.valueOf(spec.get(MustacheTemplateAnalyzer.TYPE_KEY));
+        if (MustacheTemplateAnalyzer.TYPE_LIST.equals(type)) {
+            // Two items, so a loop body with no separator renders invalid JSON here rather
+            // than at search time; distinct values keep a key-iterating body legal.
+            Object first = firstEnum != null ? firstEnum : "x";
+            Object second = enums.size() > 1 ? enums.get(1) : (firstEnum != null ? firstEnum : "y");
+            return List.of(first, second);
+        }
+        if (firstEnum != null) {
+            return firstEnum;
+        }
         switch (type) {
             case MustacheTemplateAnalyzer.TYPE_NUMBER:
                 return 1;
@@ -494,8 +585,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         });
     }
 
-    /** Fetch the index mapping and flatten it to the list of leaf field names. */
-    private void fetchFlattenedMapping(String index, ActionListener<List<String>> listener) {
+    /** Fetch the index mapping and flatten it to the leaf field names and their sortable subset. */
+    private void fetchFlattenedMapping(String index, ActionListener<MappingFields> listener) {
         GetIndexRequest request = new GetIndexRequest().indices(index).indicesOptions(IndicesOptions.strictExpand()).local(false);
         client.admin().indices().getIndex(request, ActionListener.wrap(response -> {
             try {
@@ -512,32 +603,139 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         }));
     }
 
+    /**
+     * The target's flattened mapping: every leaf field name, and the subsets a {@code sort} can
+     * use. Kept apart because only a sort selector is limited to sortable fields; a match or
+     * neural field selector may legitimately target a field that cannot be sorted on. Two sort
+     * sets are kept because a sort with {@code unmapped_type} tolerates a field missing from some
+     * indices while a plain sort does not.
+     */
+    static final class MappingFields {
+        static final MappingFields EMPTY = new MappingFields(List.of(), Set.of(), Set.of());
+
+        final List<String> all;                 // ordered union of leaf field names across the target's indices
+        final Set<String> sortable;             // fields sortable in every index of the target, in `all` order
+        final Set<String> sortableWhereMapped;  // fields sortable in every index that maps them, in `all` order
+
+        MappingFields(List<String> all, Set<String> sortable) {
+            this(all, sortable, sortable);
+        }
+
+        MappingFields(List<String> all, Set<String> sortable, Set<String> sortableWhereMapped) {
+            this.all = all;
+            this.sortable = sortable;
+            this.sortableWhereMapped = sortableWhereMapped;
+        }
+    }
+
+    // Field types that sort via doc_values (text sorts only with fielddata:true instead).
+    private static final Set<String> SORTABLE_TYPES = Set
+        .of(
+            "keyword",
+            "constant_keyword",
+            "wildcard",
+            "long",
+            "integer",
+            "short",
+            "byte",
+            "double",
+            "float",
+            "half_float",
+            "scaled_float",
+            "unsigned_long",
+            "token_count",
+            "date",
+            "date_nanos",
+            "boolean",
+            "ip",
+            "version"
+        );
+
+    /**
+     * Flatten every mapping of the target, not just the first: an alias or wildcard can span
+     * several indices. Indices are visited in name order so the enum order is deterministic.
+     * {@code sortable} holds the fields sortable in every index, since a plain sort on a field
+     * that is missing or unsortable in any one index fails the search; {@code sortableWhereMapped}
+     * also admits fields missing from some indices, which a sort with {@code unmapped_type} tolerates.
+     */
     @SuppressWarnings("unchecked")
-    private static List<String> extractFieldNames(GetIndexResponse response) {
+    static MappingFields extractFieldNames(GetIndexResponse response) {
         Map<String, MappingMetadata> mappings = response.mappings();
-        List<String> fields = new ArrayList<>();
         if (mappings == null || mappings.isEmpty()) {
-            return fields;
+            return MappingFields.EMPTY;
         }
-        MappingMetadata mapping = mappings.values().iterator().next();
-        Map<String, Object> source = mapping.getSourceAsMap();
-        Object props = source.get("properties");
-        if (props instanceof Map) {
-            collectFieldNames((Map<String, Object>) props, "", fields);
+        Set<String> all = new LinkedHashSet<>();
+        Set<String> sortableEverywhere = null;
+        Set<String> sortableSomewhere = new HashSet<>();
+        Set<String> unsortableSomewhere = new HashSet<>();
+        for (MappingMetadata mapping : new TreeMap<>(mappings).values()) {
+            List<String> fields = new ArrayList<>();
+            Set<String> sortable = new LinkedHashSet<>();
+            Object props = mapping == null ? null : mapping.getSourceAsMap().get("properties");
+            if (props instanceof Map) {
+                collectFieldNames((Map<String, Object>) props, "", fields, sortable);
+            }
+            all.addAll(fields);
+            sortableSomewhere.addAll(sortable);
+            for (String field : fields) {
+                if (!sortable.contains(field)) {
+                    unsortableSomewhere.add(field);
+                }
+            }
+            if (sortableEverywhere == null) {
+                sortableEverywhere = sortable;
+            } else {
+                sortableEverywhere.retainAll(sortable);
+            }
         }
-        return fields;
+        Set<String> sortableInOrder = new LinkedHashSet<>();
+        Set<String> sortableWhereMapped = new LinkedHashSet<>();
+        for (String field : all) {
+            if (sortableEverywhere.contains(field)) {
+                sortableInOrder.add(field);
+            }
+            if (sortableSomewhere.contains(field) && !unsortableSomewhere.contains(field)) {
+                sortableWhereMapped.add(field);
+            }
+        }
+        return new MappingFields(new ArrayList<>(all), sortableInOrder, sortableWhereMapped);
     }
 
     /**
      * Collect the mapping's leaf field names, skipping the {@code object}/{@code nested}
-     * containers on the way down.
+     * containers on the way down, and record which of them can be sorted on.
      *
      * <p>Only leaves are valid targets for a field-selector param: a container like
      * {@code spec} in {@code spec.os} cannot be sorted on or matched against, so
-     * including it would let the model pick a field that fails at query time.
+     * including it would let the model pick a field that fails at query time. An
+     * {@code enabled:false} object is not indexed at all, so it is skipped with its children.
+     *
+     * <p>A field is sortable when its type is in {@link #SORTABLE_TYPES} with doc_values on,
+     * or it is {@code text} with {@code fielddata:true}. Nothing under a {@code nested}
+     * container is sortable from the root, and a sub-field is judged by its own type (so
+     * {@code title.keyword} is sortable while {@code title} is not). A field {@code alias} is
+     * sortable when its {@code path} target in the same index is.
      */
+    static void collectFieldNames(Map<String, Object> properties, String prefix, List<String> out, Set<String> sortable) {
+        Map<String, String> aliases = new LinkedHashMap<>();
+        collectFieldNames(properties, prefix, out, sortable, false, aliases);
+        // An alias sorts as its target does, and the target may be mapped after the alias.
+        for (Map.Entry<String, String> alias : aliases.entrySet()) {
+            if (sortable.contains(alias.getValue())) {
+                sortable.add(alias.getKey());
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    static void collectFieldNames(Map<String, Object> properties, String prefix, List<String> out) {
+    private static void collectFieldNames(
+        Map<String, Object> properties,
+        String prefix,
+        List<String> out,
+        Set<String> sortable,
+        boolean underNested,
+        Map<String, String> aliases
+    ) {
         for (Map.Entry<String, Object> e : properties.entrySet()) {
             String name = prefix.isEmpty() ? e.getKey() : prefix + "." + e.getKey();
             Object value = e.getValue();
@@ -546,16 +744,30 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                 continue;
             }
             Map<String, Object> field = (Map<String, Object>) value;
+            if (isFlag(field.get("enabled"), false)) {
+                // Not indexed: neither the object nor anything under it can be queried or sorted.
+                continue;
+            }
             if (field.get("properties") instanceof Map) {
                 // A container: recurse for its leaves and don't offer the container itself.
-                collectFieldNames((Map<String, Object>) field.get("properties"), name, out);
+                boolean nested = underNested || "nested".equals(field.get("type"));
+                collectFieldNames((Map<String, Object>) field.get("properties"), name, out, sortable, nested, aliases);
             } else {
                 out.add(name);
+                if (!underNested && isSortable(field)) {
+                    sortable.add(name);
+                } else if (!underNested && "alias".equals(field.get("type")) && field.get("path") instanceof String) {
+                    aliases.put(name, (String) field.get("path"));
+                }
             }
             // Expose a text field's keyword sub-field (used for exact/sort).
             if (field.get("fields") instanceof Map) {
-                for (String sub : ((Map<String, Object>) field.get("fields")).keySet()) {
-                    out.add(name + "." + sub);
+                for (Map.Entry<String, Object> sub : ((Map<String, Object>) field.get("fields")).entrySet()) {
+                    String subName = name + "." + sub.getKey();
+                    out.add(subName);
+                    if (!underNested && sub.getValue() instanceof Map && isSortable((Map<String, Object>) sub.getValue())) {
+                        sortable.add(subName);
+                    }
                 }
             }
         }
@@ -770,6 +982,19 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
         }
     }
 
+    private static boolean isSortable(Map<String, Object> field) {
+        Object type = field.get("type");
+        if ("text".equals(type)) {
+            return isFlag(field.get("fielddata"), true);
+        }
+        return type instanceof String && SORTABLE_TYPES.contains(type) && !isFlag(field.get("doc_values"), false);
+    }
+
+    /** A mapping flag set to {@code expected}, given as a JSON boolean or its string form. */
+    private static boolean isFlag(Object value, boolean expected) {
+        return value != null && String.valueOf(expected).equals(String.valueOf(value));
+    }
+
     // ---- Get / List / Delete / Update --------------------------------------
 
     public void getTemplate(String templateId, ActionListener<AgenticSearchTemplate> listener) {
@@ -977,9 +1202,14 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * enforce the same contract.
      */
     void rejectUnknownParams(Map<String, Object> paramSchema, String body) {
-        Map<String, Object> bodyParams = MustacheTemplateAnalyzer.derive(body);
+        // Lenient name collection: a body derive() rejects (e.g. list iteration) is exactly
+        // the one a caller must supply a schema for, so that schema must still pass here.
+        Set<String> bodyParams = MustacheTemplateAnalyzer.paramNames(body);
+        // A schema saved from 3.9.0 may name a built-in section ({{#url}}) that release derived
+        // as a boolean param; keep accepting it so such a schema still registers.
+        Set<String> builtins = MustacheTemplateAnalyzer.builtinSectionNames(body);
         for (String name : paramSchema.keySet()) {
-            if (!bodyParams.containsKey(name)) {
+            if (!bodyParams.contains(name) && !builtins.contains(name)) {
                 throw new IllegalArgumentException(
                     "param '"
                         + name
@@ -1019,8 +1249,10 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
             if (!(enumValues instanceof List) || ((List<?>) enumValues).isEmpty()) {
                 throw new IllegalArgumentException("param '" + name + "' has an empty or non-list 'enum'");
             }
+            // A list's enum names the values its elements may take, so check each as a string.
+            String elementType = MustacheTemplateAnalyzer.TYPE_LIST.equals(type) ? MustacheTemplateAnalyzer.TYPE_STRING : (String) type;
             for (Object value : (List<?>) enumValues) {
-                if (!valueFitsType(value, (String) type)) {
+                if (!valueFitsType(value, elementType)) {
                     throw new IllegalArgumentException(
                         "param '" + name + "' enum value '" + value + "' does not fit declared type '" + type + "'"
                     );
@@ -1033,9 +1265,10 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
      * Whether a schema-supplied value is usable for a param of {@code type}. An
      * {@code array} param is a triple-stache slot and must carry raw JSON as a string:
      * the Mustache engine stringifies a {@code List} instead of emitting JSON
-     * ({@code [{"term":{"t":"a"}}]} becomes {@code {0={term={t=a}}}}).
+     * ({@code [{"term":{"t":"a"}}]} becomes {@code {0={term={t=a}}}}). A {@code list}
+     * param is the opposite: a section iterates it, so it must be a real {@code List} of strings.
      */
-    private static boolean valueFitsType(Object value, String type) {
+    static boolean valueFitsType(Object value, String type) {
         if (value == null) {
             return false;
         }
@@ -1046,6 +1279,8 @@ public class AgenticSearchTemplateService implements AgenticSearchTemplateResolv
                 return value instanceof Boolean;
             case MustacheTemplateAnalyzer.TYPE_ARRAY:
                 return value instanceof String;
+            case MustacheTemplateAnalyzer.TYPE_LIST:
+                return value instanceof List && ((List<?>) value).stream().allMatch(v -> v instanceof String);
             default:
                 return value instanceof String;
         }

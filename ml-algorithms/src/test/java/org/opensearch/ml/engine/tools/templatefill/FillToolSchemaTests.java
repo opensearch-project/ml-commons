@@ -102,6 +102,23 @@ public class FillToolSchemaTests {
     }
 
     @Test
+    public void list_isAnArrayOfStrings() {
+        Map<String, Object> out = FillToolSchema.paramJsonSchema(spec("list", false, "Terms to match.", null));
+        assertEquals("array", out.get("type"));
+        assertEquals(Map.of("type", "string"), out.get("items"));
+        // Only the raw array slot carries the JSON-literal hint.
+        assertEquals("Terms to match.", out.get("description"));
+    }
+
+    @Test
+    public void list_putsEnumOnItems() {
+        Map<String, Object> out = FillToolSchema.paramJsonSchema(spec("list", false, "", List.of("red", "blue")));
+        assertEquals("array", out.get("type"));
+        assertEquals(Map.of("type", "string", "enum", List.of("red", "blue")), out.get("items"));
+        assertFalse(out.containsKey("enum"));
+    }
+
+    @Test
     public void multi_namespacesParamsAndRequiresOnlyTheChoice() {
         Map<String, Object> other = new LinkedHashMap<>();
         other.put("query_text", spec("string", true, "Semantic query.", null));
