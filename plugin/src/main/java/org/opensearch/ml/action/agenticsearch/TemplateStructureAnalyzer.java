@@ -112,21 +112,25 @@ public final class TemplateStructureAnalyzer {
         final String bound;              // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
         final String sortUnmappedType;   // the sort clause's unmapped_type for ROLE_SORT_FIELD, else null
         final String occur;              // nearest enclosing bool occurrence (must/filter/should/must_not), else null
+        // A should clause is optional (only scores) when its bool also has must/filter and no
+        // minimum_should_match; otherwise at least one should must match, so it decides inclusion.
+        final boolean shouldIsOptional;
 
         Facts(String role, List<String> fields, String bound) {
-            this(role, fields, bound, null, null);
+            this(role, fields, bound, null, null, false);
         }
 
         Facts(String role, List<String> fields, String bound, String sortUnmappedType) {
-            this(role, fields, bound, sortUnmappedType, null);
+            this(role, fields, bound, sortUnmappedType, null, false);
         }
 
-        Facts(String role, List<String> fields, String bound, String sortUnmappedType, String occur) {
+        Facts(String role, List<String> fields, String bound, String sortUnmappedType, String occur, boolean shouldIsOptional) {
             this.role = role;
             this.fields = fields;
             this.bound = bound;
             this.sortUnmappedType = sortUnmappedType;
             this.occur = occur;
+            this.shouldIsOptional = shouldIsOptional;
         }
     }
 
@@ -238,7 +242,9 @@ public final class TemplateStructureAnalyzer {
             return new Facts(null, List.of(), null);
         }
         Facts facts = classifyClause(located, renderedRoot);
-        return new Facts(facts.role, facts.fields, facts.bound, facts.sortUnmappedType, nearestOccur(keys));
+        String occur = nearestOccur(keys);
+        boolean shouldIsOptional = OCCUR_SHOULD.equals(occur) && isShouldOptional(governingBool(renderedRoot, located.path));
+        return new Facts(facts.role, facts.fields, facts.bound, facts.sortUnmappedType, occur, shouldIsOptional);
     }
 
     /**
@@ -644,6 +650,39 @@ public final class TemplateStructureAnalyzer {
         return null;
     }
 
+    /** The bool map whose occurrence {@link #nearestOccur} found, located on the full path; null if none. */
+    private static Map<?, ?> governingBool(Object root, List<Object> path) {
+        for (int i = path.size() - 1; i >= 1; i--) {
+            Object step = path.get(i);
+            boolean occur = OCCUR_MUST.equals(step)
+                || OCCUR_FILTER.equals(step)
+                || OCCUR_SHOULD.equals(step)
+                || OCCUR_MUST_NOT.equals(step);
+            if (occur && "bool".equals(path.get(i - 1))) {
+                Object bool = navigate(root, path.subList(0, i));
+                return bool instanceof Map ? (Map<?, ?>) bool : null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether a should clause in this bool is optional, i.e. only scores. Only claimed when
+     * provable: a missing bool, an empty must/filter array (how an unset raw-JSON param renders)
+     * or a non-literal minimum_should_match all fall back to the base wording.
+     */
+    private static boolean isShouldOptional(Map<?, ?> bool) {
+        if (bool == null || (!hasClauses(bool.get(OCCUR_MUST)) && !hasClauses(bool.get(OCCUR_FILTER)))) {
+            return false;
+        }
+        Object msm = bool.get("minimum_should_match");
+        return msm == null || (msm instanceof Number && ((Number) msm).intValue() == 0);
+    }
+
+    private static boolean hasClauses(Object occurValue) {
+        return occurValue instanceof Map || (occurValue instanceof List && !((List<?>) occurValue).isEmpty());
+    }
+
     /** Roles that match documents by a value, so their meaning depends on the bool occurrence. */
     private static boolean isValueRole(String role) {
         switch (role) {
@@ -662,8 +701,9 @@ public final class TemplateStructureAnalyzer {
 
     /**
      * Reword a value-clause description for its bool occurrence: under must_not the clause
-     * excludes matches, and under should it contributes to the score rather than filtering.
-     * Option slots (operator, boost) and must/filter clauses keep the base wording.
+     * excludes matches, and under an optional should it contributes to the score rather than
+     * filtering. Option slots (operator, boost), must/filter clauses and a should that must
+     * match keep the base wording.
      */
     private static String withOccur(String base, Facts facts, String field) {
         if (!isValueRole(facts.role)) {
@@ -681,7 +721,7 @@ public final class TemplateStructureAnalyzer {
                     return "Excludes results that match: " + Character.toLowerCase(base.charAt(0)) + base.substring(1);
             }
         }
-        if (OCCUR_SHOULD.equals(facts.occur)) {
+        if (OCCUR_SHOULD.equals(facts.occur) && facts.shouldIsOptional) {
             switch (facts.role) {
                 case ROLE_FILTER_TERM:
                     return (field == null ? "Exact value to match" : "Match on exact " + field + " value")

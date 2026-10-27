@@ -745,9 +745,48 @@ public class TemplateStructureAnalyzerTests {
 
     @Test
     public void classify_shouldTerm_describedAsScoringMatch() {
+        // A should only scores when the bool also has must/filter and no minimum_should_match.
+        checkSingle(
+            "string",
+            mk -> map("bool", map("must", list(map("match_all", map())), "should", list(map("term", map("brand", mk))))),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Match on exact brand value (should clause, contributes to scoring)."
+        );
+        // Otherwise at least one should must match, so the base wording stays (an empty filter
+        // array is how an unset raw-JSON filters param renders).
         checkSingle(
             "string",
             mk -> map("bool", map("should", list(map("term", map("brand", mk))))),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Filter by exact brand value."
+        );
+        checkSingle(
+            "string",
+            mk -> map(
+                "bool",
+                map("must", list(map("match_all", map())), "should", list(map("term", map("brand", mk))), "minimum_should_match", 1)
+            ),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Filter by exact brand value."
+        );
+        checkSingle(
+            "string",
+            mk -> map(
+                "bool",
+                map("must", list(map("match_all", map())), "should", list(map("term", map("brand", mk))), "minimum_should_match", "75%")
+            ),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Filter by exact brand value."
+        );
+        checkSingle(
+            "string",
+            mk -> map("bool", map("should", list(map("term", map("brand", mk))), "filter", list())),
+            TemplateStructureAnalyzer.ROLE_FILTER_TERM,
+            "Filter by exact brand value."
+        );
+        checkSingle(
+            "string",
+            mk -> map("bool", map("filter", list(map("term", map("cat", "x"))), "should", list(map("term", map("brand", mk))))),
             TemplateStructureAnalyzer.ROLE_FILTER_TERM,
             "Match on exact brand value (should clause, contributes to scoring)."
         );
@@ -870,18 +909,25 @@ public class TemplateStructureAnalyzerTests {
                 map(
                     "should",
                     list(map("multi_match", map("query", rp.get("lex_query"), "fields", list("*^1.0"), "type", rp.get("lex_type")))),
+                    "filter",
+                    list(),
                     "minimum_should_match",
                     1
                 )
             )
         );
+        Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
 
-        TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer
-            .classify(TemplateStructureAnalyzer.locate(rendered, markers).get("lex_type"), rendered);
+        TemplateStructureAnalyzer.Facts facts = TemplateStructureAnalyzer.classify(located.get("lex_type"), rendered);
         assertEquals(TemplateStructureAnalyzer.ROLE_MULTI_MATCH_TYPE, facts.role);
         assertTrue(TemplateStructureAnalyzer.vocabEnum(facts).contains("best_fields"));
         // An option slot keeps its wording under should.
         assertEquals("How the multi_match query combines matches across its fields.", TemplateStructureAnalyzer.describe(facts, null));
+
+        // With minimum_should_match set, the should is how documents match, not a scoring bonus.
+        TemplateStructureAnalyzer.Facts lexQuery = TemplateStructureAnalyzer.classify(located.get("lex_query"), rendered);
+        assertEquals(TemplateStructureAnalyzer.ROLE_FULL_TEXT, lexQuery.role);
+        assertEquals("Full-text query matched against the * field.", TemplateStructureAnalyzer.describe(lexQuery, null));
     }
 
     /** Builds a one-param schema, renders it via {@code renderWith}, then classifies and describes it. */
