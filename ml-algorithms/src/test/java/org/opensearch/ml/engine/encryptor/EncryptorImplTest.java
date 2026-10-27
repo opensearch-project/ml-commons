@@ -38,6 +38,8 @@ import org.opensearch.ResourceNotFoundException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.cluster.ClusterChangedEvent;
+import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.Metadata;
@@ -1144,6 +1146,140 @@ public class EncryptorImplTest {
         // Key should not exist in cache initially
         Assert.assertNull(encryptor.getMasterKey("nonexistent-tenant"));
         Assert.assertNull(encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexReplaced_RefetchesMasterKey() throws IOException {
+        // The cutover of a cloned blue/green upgrade restores .plugins-ml-config from the old cluster's snapshot over the
+        // new cluster's own copy. The key cached before that is the new cluster's, so it must not be used afterwards.
+        mockInitMLConfigIndexSucceeds();
+        String oldMasterKey = encryptor.generateMasterKey();
+        GetResponse oldKeyResponse = prepareMLConfigResponseWithKey(null, oldMasterKey);
+        GetResponse restoredKeyResponse = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(oldKeyResponse);
+            return null;
+        }).doAnswer(invocation -> {
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(restoredKeyResponse);
+            return null;
+        }).when(client).get(any(), any());
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        MLTestHelper.encryptCredentials(List.of("test"), null, encryptor);
+        Assert.assertEquals(oldMasterKey, encryptor.getMasterKey(null));
+
+        encryptor.clusterChanged(configIndexChange("uuid-before-restore", "uuid-after-restore"));
+        Assert.assertNull(encryptor.getMasterKey(null));
+
+        String encrypted = MLTestHelper.encryptCredentials(List.of("test"), null, encryptor);
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
+        Assert
+            .assertEquals("test", MLTestHelper.decryptCredentials(List.of(encrypted), null, new EncryptorImpl(null, GENERATED_MASTER_KEY)));
+        verify(client, times(2)).get(any(), any());
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexDeleted_ClearsCachedMasterKey() {
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        encryptor.setMasterKey(null, GENERATED_MASTER_KEY);
+
+        encryptor.clusterChanged(configIndexChange("uuid-1", null));
+
+        Assert.assertNull(encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void clusterChanged_SameConfigIndex_KeepsCachedMasterKey() {
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        encryptor.setMasterKey(null, GENERATED_MASTER_KEY);
+        encryptor.setMasterKey(TENANT_ID, GENERATED_MASTER_KEY);
+
+        encryptor.clusterChanged(configIndexChange("uuid-1", "uuid-1"));
+        encryptor.clusterChanged(configIndexChange(null, null));
+
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(TENANT_ID));
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexCreatedWhileInitializing_KeepsFetchedMasterKey() throws IOException {
+        // On a new cluster the first encrypt creates the config index, which itself changes its uuid (none -> new).
+        // That must not discard the key the same request then reads.
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        doAnswer(invocation -> {
+            encryptor.clusterChanged(configIndexChange(null, "uuid-created"));
+            ((ActionListener<Boolean>) invocation.getArgument(0)).onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Assert.assertNotNull(MLTestHelper.encryptCredentials(List.of("test"), null, encryptor));
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexReplacedDuringFetch_DiscardsFetchedMasterKey() throws IOException {
+        // A read that was sent to the old config index and completes after it was replaced returns the old key. It is
+        // not cached, and the waiting request fails with the retryable "not ready" error.
+        mockInitMLConfigIndexSucceeds();
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        String oldMasterKey = encryptor.generateMasterKey();
+        GetResponse oldKeyResponse = prepareMLConfigResponseWithKey(null, oldMasterKey);
+        GetResponse restoredKeyResponse = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            encryptor.clusterChanged(configIndexChange("uuid-before-restore", "uuid-after-restore"));
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(oldKeyResponse);
+            return null;
+        }).doAnswer(invocation -> {
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(restoredKeyResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        ResourceNotFoundException e = Assert
+            .assertThrows(ResourceNotFoundException.class, () -> MLTestHelper.encryptCredentials(List.of("test"), null, encryptor));
+        Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, e.getMessage());
+        Assert.assertNull(encryptor.getMasterKey(null));
+
+        MLTestHelper.encryptCredentials(List.of("test"), null, encryptor);
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
+    }
+
+    private void mockInitMLConfigIndexSucceeds() {
+        doAnswer(invocation -> {
+            ((ActionListener<Boolean>) invocation.getArgument(0)).onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+    }
+
+    /** A cluster state change in which the ML config index goes from previousUuid to currentUuid (null = absent). */
+    private static ClusterChangedEvent configIndexChange(String previousUuid, String currentUuid) {
+        return new ClusterChangedEvent("test", stateWithConfigIndex(currentUuid), stateWithConfigIndex(previousUuid));
+    }
+
+    private static ClusterState stateWithConfigIndex(String uuid) {
+        Metadata.Builder metadata = Metadata.builder();
+        if (uuid != null) {
+            metadata
+                .put(
+                    IndexMetadata
+                        .builder(ML_CONFIG_INDEX)
+                        .settings(
+                            Settings
+                                .builder()
+                                .put(IndexMetadata.SETTING_INDEX_UUID, uuid)
+                                .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)
+                                .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 1)
+                                .put(IndexMetadata.SETTING_VERSION_CREATED, Version.CURRENT.id)
+                        )
+                        .build(),
+                    false
+                );
+        }
+        return ClusterState.builder(ClusterName.DEFAULT).metadata(metadata).build();
     }
 
     // Helper method to prepare a valid IndexResponse
