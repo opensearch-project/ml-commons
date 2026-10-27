@@ -50,6 +50,8 @@ public final class FillToolSchema {
     static final String TYPE_NUMBER = "number";
     static final String TYPE_BOOLEAN = "boolean";
     static final String TYPE_ARRAY = "array";
+    static final String TYPE_LIST = "list";
+    static final String ITEMS_KEY = "items";
 
     // Provider property-name grammar (the strictest, Bedrock's, is ^[a-zA-Z0-9_.-]{1,64}$).
     private static final int MAX_PROPERTY_LENGTH = 64;
@@ -193,7 +195,17 @@ public final class FillToolSchema {
         String text = description instanceof String ? (String) description : "";
 
         Object enumValues = spec.get(ENUM_KEY);
-        if (enumValues instanceof List && !((List<?>) enumValues).isEmpty()) {
+        boolean hasEnum = enumValues instanceof List && !((List<?>) enumValues).isEmpty();
+        if (TYPE_LIST.equals(rawType)) {
+            // Enum members constrain each element, not the list, so they belong on items.
+            Map<String, Object> items = new LinkedHashMap<>();
+            items.put(TYPE_KEY, TYPE_STRING);
+            if (hasEnum) {
+                items.put(ENUM_KEY, new ArrayList<>((List<?>) enumValues));
+            }
+            out.put(TYPE_KEY, TYPE_ARRAY);
+            out.put(ITEMS_KEY, items);
+        } else if (hasEnum) {
             List<?> members = (List<?>) enumValues;
             // Take the declared type rather than assuming string, so a numeric enum is emitted as numbers.
             boolean allStrings = members.stream().allMatch(v -> v instanceof String);
@@ -234,6 +246,8 @@ public final class FillToolSchema {
             case "boolean":
             case "bool":
                 return TYPE_BOOLEAN;
+            case "list":
+                return TYPE_ARRAY;
             default:
                 // string, text, keyword, and array (a JSON literal carried as a string)
                 return TYPE_STRING;
