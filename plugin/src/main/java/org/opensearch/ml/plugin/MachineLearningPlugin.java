@@ -732,7 +732,10 @@ public class MachineLearningPlugin extends Plugin
                 client.threadPool().executor(ThreadPool.Names.GENERIC)
             );
 
-        encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        EncryptorImpl encryptorImpl = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        // Drop cached master keys when .plugins-ml-config is replaced (e.g. restored from a snapshot).
+        clusterService.addListener(encryptorImpl);
+        encryptor = encryptorImpl;
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
