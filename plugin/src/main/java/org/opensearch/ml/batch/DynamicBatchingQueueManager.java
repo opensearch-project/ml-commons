@@ -86,11 +86,11 @@ public class DynamicBatchingQueueManager {
             return queue;
         });
 
-        // Model calls, timer scheduling and listener callbacks must not run under the map's bin lock.
+        // Install the replacement before flushing the old queue.
+        target[0].completeEnqueue(entry, decision[0]);
         if (replaced[0] != null) {
             replaced[0].flush();
         }
-        target[0].completeEnqueue(entry, decision[0]);
         return decision[0] != DynamicBatchingQueue.EnqueueDecision.TOO_LARGE;
     }
 
