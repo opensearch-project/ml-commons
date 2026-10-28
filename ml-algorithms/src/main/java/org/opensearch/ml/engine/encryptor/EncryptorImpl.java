@@ -153,28 +153,34 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
     }
 
     /**
-     * Clears every cached master key when the ML config index that holds them is replaced, i.e. when its index UUID
-     * changes: deleted, recreated, or restored from a snapshot over the existing one. The cache would otherwise keep
-     * serving the key of the old index, so this node would fail to decrypt credentials encrypted with the new key and
-     * would encrypt new credentials with a key no other node has. The next encrypt or decrypt reads the key again.
+     * Clears every cached master key when the ML config index that holds them is replaced: deleted, recreated, or
+     * restored from a snapshot. Deleting or recreating the index changes its index UUID; restoring a snapshot over the
+     * existing (closed) index keeps the index UUID but sets a new history UUID, so both are compared. The cache would
+     * otherwise keep serving the key of the old index, so this node would fail to decrypt credentials encrypted with
+     * the new key and would encrypt new credentials with a key no other node has. The next encrypt or decrypt reads
+     * the key again.
      */
     @Override
     public void clusterChanged(ClusterChangedEvent event) {
         if (!event.metadataChanged()) {
             return;
         }
-        String previousUuid = configIndexUuid(event.previousState());
-        String currentUuid = configIndexUuid(event.state());
-        if (!Objects.equals(previousUuid, currentUuid)) {
+        String previousIdentity = configIndexIdentity(event.previousState());
+        String currentIdentity = configIndexIdentity(event.state());
+        if (!Objects.equals(previousIdentity, currentIdentity)) {
             keyGeneration.incrementAndGet();
             tenantMasterKeys.invalidateAll();
-            log.info("ML config index changed (uuid {} -> {}), cleared cached master keys", previousUuid, currentUuid);
+            log.info("ML config index changed ({} -> {}), cleared cached master keys", previousIdentity, currentIdentity);
         }
     }
 
-    private static String configIndexUuid(ClusterState state) {
+    /** The config index's UUID and history UUID, or null if the index does not exist. */
+    private static String configIndexIdentity(ClusterState state) {
         IndexMetadata indexMetadata = state.metadata().index(ML_CONFIG_INDEX);
-        return indexMetadata == null ? null : indexMetadata.getIndexUUID();
+        if (indexMetadata == null) {
+            return null;
+        }
+        return indexMetadata.getIndexUUID() + "/" + indexMetadata.getSettings().get(IndexMetadata.SETTING_HISTORY_UUID);
     }
 
     @Override

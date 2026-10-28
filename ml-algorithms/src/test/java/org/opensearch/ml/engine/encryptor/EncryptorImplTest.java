@@ -1179,6 +1179,17 @@ public class EncryptorImplTest {
     }
 
     @Test
+    public void clusterChanged_ConfigIndexRestoredOverClosedIndex_ClearsCachedMasterKey() {
+        // _close + _restore over the existing index keeps its index UUID; only the history UUID changes.
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        encryptor.setMasterKey(null, GENERATED_MASTER_KEY);
+
+        encryptor.clusterChanged(configIndexChange("uuid-1", "history-1", "uuid-1", "history-restored"));
+
+        Assert.assertNull(encryptor.getMasterKey(null));
+    }
+
+    @Test
     public void clusterChanged_ConfigIndexDeleted_ClearsCachedMasterKey() {
         EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         encryptor.setMasterKey(null, GENERATED_MASTER_KEY);
@@ -1195,6 +1206,7 @@ public class EncryptorImplTest {
         encryptor.setMasterKey(TENANT_ID, GENERATED_MASTER_KEY);
 
         encryptor.clusterChanged(configIndexChange("uuid-1", "uuid-1"));
+        encryptor.clusterChanged(configIndexChange("uuid-1", "history-1", "uuid-1", "history-1"));
         encryptor.clusterChanged(configIndexChange(null, null));
 
         Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
@@ -1257,10 +1269,24 @@ public class EncryptorImplTest {
 
     /** A cluster state change in which the ML config index goes from previousUuid to currentUuid (null = absent). */
     private static ClusterChangedEvent configIndexChange(String previousUuid, String currentUuid) {
-        return new ClusterChangedEvent("test", stateWithConfigIndex(currentUuid), stateWithConfigIndex(previousUuid));
+        return configIndexChange(previousUuid, null, currentUuid, null);
     }
 
-    private static ClusterState stateWithConfigIndex(String uuid) {
+    /** As above, also setting each side's history UUID (null = not set). */
+    private static ClusterChangedEvent configIndexChange(
+        String previousUuid,
+        String previousHistoryUuid,
+        String currentUuid,
+        String currentHistoryUuid
+    ) {
+        return new ClusterChangedEvent(
+            "test",
+            stateWithConfigIndex(currentUuid, currentHistoryUuid),
+            stateWithConfigIndex(previousUuid, previousHistoryUuid)
+        );
+    }
+
+    private static ClusterState stateWithConfigIndex(String uuid, String historyUuid) {
         Metadata.Builder metadata = Metadata.builder();
         if (uuid != null) {
             metadata
@@ -1271,6 +1297,7 @@ public class EncryptorImplTest {
                             Settings
                                 .builder()
                                 .put(IndexMetadata.SETTING_INDEX_UUID, uuid)
+                                .put(IndexMetadata.SETTING_HISTORY_UUID, historyUuid)
                                 .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)
                                 .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 1)
                                 .put(IndexMetadata.SETTING_VERSION_CREATED, Version.CURRENT.id)
