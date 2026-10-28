@@ -63,6 +63,16 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class AbstractV2AgentRunner implements MLAgentRunner {
 
+    /**
+     * Upper bound for the max_iteration value a request or an agent configuration can ask for.
+     * Every iteration triggers one LLM call, so an unbounded value lets a single execution request
+     * drive an arbitrary number of remote model invocations. The highest iteration limit used
+     * anywhere in the agent framework is 20 (the ReAct executor of the plan-execute-and-reflect
+     * agent), so this leaves ample headroom for long running agents while keeping the cost of a
+     * single request bounded.
+     */
+    public static final int MAX_ITERATION_UPPER_BOUND = 100;
+
     // Dependencies
     protected final Client client;
     protected final Settings settings;
@@ -488,17 +498,49 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         }
     }
 
-    protected int getMaxIterations(Map<String, String> params) {
-        String maxIterStr = params.get("max_iteration");
-        if (maxIterStr != null) {
-            try {
-                return Integer.parseInt(maxIterStr);
-            } catch (NumberFormatException e) {
-                log.warn("Invalid max_iteration value: {}", maxIterStr);
+    /**
+     * Get max iterations with fallback.
+     * Default implementation checks params → agent params → default, like {@link #getSystemPrompt}.
+     * Override if agent needs custom max iteration logic.
+     *
+     * @param params Execution parameters
+     * @param mlAgent Agent configuration
+     * @return Max iterations
+     * @throws IllegalArgumentException if max_iteration is not an integer within the supported range
+     */
+    protected int getMaxIterations(Map<String, String> params, MLAgent mlAgent) {
+        String maxIterStr = params.get(MLChatAgentRunner.MAX_ITERATION);
+        if (maxIterStr == null || maxIterStr.isEmpty()) {
+            if (mlAgent.getParameters() != null) {
+                maxIterStr = mlAgent.getParameters().get(MLChatAgentRunner.MAX_ITERATION);
             }
         }
 
-        return getDefaultMaxIterations();
+        if (maxIterStr == null || maxIterStr.isEmpty()) {
+            return getDefaultMaxIterations();
+        }
+
+        int maxIterations;
+        try {
+            maxIterations = Integer.parseInt(maxIterStr);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(buildInvalidMaxIterationMessage(maxIterStr));
+        }
+
+        if (maxIterations < 1 || maxIterations > MAX_ITERATION_UPPER_BOUND) {
+            throw new IllegalArgumentException(buildInvalidMaxIterationMessage(maxIterStr));
+        }
+
+        return maxIterations;
+    }
+
+    private String buildInvalidMaxIterationMessage(String maxIterStr) {
+        return String
+            .format(
+                "Invalid max_iteration value: %s. max_iteration must be an integer between 1 and %d.",
+                maxIterStr,
+                MAX_ITERATION_UPPER_BOUND
+            );
     }
 
     protected FunctionCalling getFunctionCalling(MLAgent mlAgent, Map<String, String> params) {

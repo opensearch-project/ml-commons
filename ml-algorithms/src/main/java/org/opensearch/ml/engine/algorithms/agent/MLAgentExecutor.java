@@ -1693,18 +1693,35 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
         MLAgentType agentType = MLAgentType.from(mlAgent.getType());
 
+        // No processing required for V2 besides the legacy payload conversion, native support for Messages
+        if (agentType.isV2()) {
+            if (agentMLInput.getInputDataset() == null) {
+                agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+            }
+
+            // V2 agents execute from AgentInput, so a legacy question payload has to be converted first
+            convertLegacyQuestionToAgentInput(agentMLInput);
+            if (agentMLInput.getAgentInput() == null) {
+                throw new IllegalArgumentException(
+                    String
+                        .format(
+                            "%s agents require an input. Please use the unified input (e.g., {\"input\": \"your text here\"}) "
+                                + "or provide the question parameter (e.g., {\"parameters\": {\"question\": \"your text here\"}}).",
+                            agentType
+                        )
+                );
+            }
+            return;
+        }
+
         // old style agent registration, except AG_UI agent
         if (!mlAgent.usesUnifiedInterface() && agentType != MLAgentType.AG_UI) {
+            convertAgentInputToLegacyParameters(agentMLInput, agentType);
             return;
         }
 
         if (agentMLInput.getInputDataset() == null) {
             agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
-        }
-
-        // No processing required for V2, native support for Messages
-        if (agentType.isV2()) {
-            return;
         }
 
         // Validate V1 agents with unified interface only support TEXT input (fail early)
@@ -1727,13 +1744,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         // If legacy question input is provided and no structured input exists, parse to new standard input
-        if (agentMLInput.getAgentInput() == null && agentMLInput.getInputDataset() != null) {
-            RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
-                AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
-                agentMLInput.setAgentInput(standardInput);
-            }
-        }
+        convertLegacyQuestionToAgentInput(agentMLInput);
 
         try {
             // Set parameters to processed params
@@ -1771,6 +1782,66 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Converts the legacy question parameter into standardized AgentInput.
+     * Agents using the unified interface execute from AgentInput, so a legacy payload has to be
+     * translated before execution.
+     *
+     * @param agentMLInput the input to convert in place
+     */
+    private void convertLegacyQuestionToAgentInput(AgentMLInput agentMLInput) {
+        if (agentMLInput.getAgentInput() != null || agentMLInput.getInputDataset() == null) {
+            return;
+        }
+
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+            AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+            agentMLInput.setAgentInput(standardInput);
+        }
+    }
+
+    /**
+     * Converts standardized AgentInput into the legacy question parameter.
+     * Agents registered without the unified agent interface are executed from the input dataset only,
+     * so unified input has to be translated to the legacy parameters, otherwise the request would be
+     * executed without any input dataset.
+     *
+     * The standardized input is cleared once converted so the request follows exactly the same
+     * execution path as a legacy payload, including memory and interaction handling.
+     *
+     * @param agentMLInput the input to convert in place
+     * @param agentType the type of the agent being executed
+     * @throws IllegalArgumentException if the unified input can not be expressed as a legacy question
+     */
+    private void convertAgentInputToLegacyParameters(AgentMLInput agentMLInput, MLAgentType agentType) {
+        if (agentMLInput.getAgentInput() == null) {
+            return;
+        }
+
+        InputType inputType = agentMLInput.getAgentInput().getInputType();
+        if (inputType != InputType.TEXT) {
+            throw new IllegalArgumentException(
+                String
+                    .format(
+                        "%s agents registered without the unified agent interface only support TEXT input type. "
+                            + "Found input type: %s. Please use TEXT input (e.g., {\"input\": \"your text here\"}), "
+                            + "or upgrade to CONVERSATIONAL_V2 agent type for multi-modal support (CONTENT_BLOCKS, MESSAGES).",
+                        agentType,
+                        inputType
+                    )
+            );
+        }
+
+        String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+        if (agentMLInput.getInputDataset() == null) {
+            agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+        }
+        RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+        remoteDataSet.getParameters().putIfAbsent(QUESTION, question);
+        agentMLInput.setAgentInput(null);
     }
 
     /**
