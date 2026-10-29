@@ -84,6 +84,9 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
     // Per tenant, the key generation at which the in-flight master key fetch started. A fetch that completes after
     // the index was replaced read the old index, so its key is not cached.
     private final Map<String, Long> fetchGenerations = new ConcurrentHashMap<>();
+    // Makes "check the fetch's generation, then cache its key" atomic with "bump the generation, then clear the cache",
+    // so a fetch that passed the check cannot cache an old key after clusterChanged has cleared the cache.
+    private final Object keyCacheLock = new Object();
 
     // concurrent map can't have null as a key. This is to support single tenancy
     // assigning some random string so that it can't be duplicate
@@ -167,11 +170,17 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
         }
         String previousIdentity = configIndexIdentity(event.previousState());
         String currentIdentity = configIndexIdentity(event.state());
-        if (!Objects.equals(previousIdentity, currentIdentity)) {
+        // Creating the index (none -> new) replaces nothing: the cache was cleared when an earlier index was deleted.
+        // A request can see the new index and fetch its key before this node's listeners run, so clearing here would
+        // discard a valid key.
+        if (previousIdentity == null || previousIdentity.equals(currentIdentity)) {
+            return;
+        }
+        synchronized (keyCacheLock) {
             keyGeneration.incrementAndGet();
             tenantMasterKeys.invalidateAll();
-            log.info("ML config index changed ({} -> {}), cleared cached master keys", previousIdentity, currentIdentity);
         }
+        log.info("ML config index changed ({} -> {}), cleared cached master keys", previousIdentity, currentIdentity);
     }
 
     /** The config index's UUID and history UUID, or null if the index does not exist. */
@@ -247,6 +256,10 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
     }
 
     private JceMasterKey createJceMasterKey(String masterKey) {
+        if (masterKey == null) {
+            // The key was cached for a waiting request, then cleared by clusterChanged before the request read it.
+            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
+        }
         byte[] bytes = Base64.getDecoder().decode(masterKey);
         return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
     }
@@ -289,12 +302,19 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
 
     private void handleSuccess(String tenantId, String masterKey) {
         Long fetchGeneration = fetchGenerations.remove(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
-        if (fetchGeneration != null && fetchGeneration != keyGeneration.get()) {
+        boolean stale;
+        synchronized (keyCacheLock) {
+            stale = fetchGeneration != null && fetchGeneration != keyGeneration.get();
+            if (!stale) {
+                this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
+            }
+        }
+        if (stale) {
+            // Outside the lock: this notifies the waiting requests.
             log.info("ML config index was replaced while the master key for tenant {} was being fetched, discarding it", tenantId);
             handleError(tenantId, null);
             return;
         }
-        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap
             .remove(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
         if (waitingListeners != null) {
