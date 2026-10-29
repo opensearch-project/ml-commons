@@ -70,3 +70,8 @@ PUT /_cluster/settings
 }
 ```
 
+## Related documentation
+
+The topics in this tutorial are documented in the OpenSearch documentation:
+
+- [ML Commons cluster settings](https://docs.opensearch.org/latest/ml-commons-plugin/cluster-settings/)
