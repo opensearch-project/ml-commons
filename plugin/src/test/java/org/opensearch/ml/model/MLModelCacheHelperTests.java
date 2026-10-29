@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -415,4 +416,70 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertEquals("mockId", cacheHelper.getModelInfo(modelId).getModelId());
     }
 
+    // A node that only routes for a model starts deploying it (it joined the cluster): it must keep routing to the
+    // nodes that already serve the model while it loads, instead of rejecting predict requests until the next sync up.
+
+    public void testInitModelState_keepsRoutingTableOfRoutingOnlyEntry() {
+        cacheHelper.syncWorkerNodes(Map.of(modelId, Set.of("node_a", "node_b")));
+        assertFalse(cacheHelper.isModelRunningOnNode(modelId));
+
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+
+        assertEquals(Set.of("node_a", "node_b"), Set.of(cacheHelper.getWorkerNodes(modelId)));
+        assertFalse("routing does not make this node a worker", cacheHelper.isModelDeployed(modelId));
+        assertEquals(0, cacheHelper.getLocalDeployedModels().length);
+    }
+
+    public void testInitModelStateAutoDeploy_keepsRoutingTableOfRoutingOnlyEntry() {
+        cacheHelper.syncWorkerNodes(Map.of(modelId, Set.of("node_a")));
+
+        cacheHelper.initModelStateAutoDeploy(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes);
+
+        assertEquals(Set.of("node_a"), Set.of(cacheHelper.getWorkerNodes(modelId)));
+    }
+
+    public void testInitModelState_withoutPreviousEntry_hasNoWorkerNodes() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+        String[] workers = cacheHelper.getWorkerNodes(modelId);
+        assertTrue(workers == null || workers.length == 0);
+    }
+
+    public void testInitModelState_duplicateDeployStillRejected() {
+        cacheHelper.syncWorkerNodes(Map.of(modelId, Set.of("node_a")));
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+        assertThrows(
+            org.opensearch.ml.common.exception.MLLimitExceededException.class,
+            () -> cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true)
+        );
+    }
+
+    public void testInitModelState_routingTableExcludesThisNode() {
+        org.opensearch.cluster.node.DiscoveryNode local = new org.opensearch.cluster.node.DiscoveryNode(
+            "local_node",
+            buildNewFakeTransportAddress(),
+            org.opensearch.Version.CURRENT
+        );
+        doReturn(local).when(clusterService).localNode();
+        // a stale routing table still lists this node, which is only now starting to deploy the model
+        cacheHelper.syncWorkerNodes(Map.of(modelId, Set.of("node_a", "local_node")));
+
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+
+        assertEquals(Set.of("node_a"), Set.of(cacheHelper.getWorkerNodes(modelId)));
+    }
+
+    public void testInitModelState_routingTableOnlyThisNode_keepsNoRouting() {
+        org.opensearch.cluster.node.DiscoveryNode local = new org.opensearch.cluster.node.DiscoveryNode(
+            "local_node",
+            buildNewFakeTransportAddress(),
+            org.opensearch.Version.CURRENT
+        );
+        doReturn(local).when(clusterService).localNode();
+        cacheHelper.syncWorkerNodes(Map.of(modelId, Set.of("local_node")));
+
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+
+        String[] workers = cacheHelper.getWorkerNodes(modelId);
+        assertTrue(workers == null || workers.length == 0);
+    }
 }

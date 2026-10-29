@@ -1200,6 +1200,57 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     /**
+     * The model document is shared by every node and is rewritten concurrently: while new nodes join, the sync up job or
+     * another deploy task can set it to PARTIALLY_DEPLOYED right after a redeploy set it to DEPLOYING. A node's own deploy
+     * must not fail because of that.
+     */
+    public void testDeployModel_modelDocNoLongerDeploying_notRejectedByStateCheck() {
+        for (MLModelState docState : List.of(MLModelState.PARTIALLY_DEPLOYED, MLModelState.DEPLOYED)) {
+            org.mockito.Mockito.clearInvocations(modelCacheHelper);
+            MLModelConfig modelConfig = TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build();
+            model = MLModel
+                .builder()
+                .modelId(modelId)
+                .modelState(docState)
+                .algorithm(FunctionName.TEXT_EMBEDDING)
+                .name(modelName)
+                .version(version)
+                .totalChunks(2)
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .modelConfig(modelConfig)
+                .modelContentHash(modelContentHashValue)
+                .modelContentSizeInBytes(modelContentSize)
+                .build();
+            mlTask.setWorkerNodes(List.of("node1", "node2"));
+            ActionListener<String> listener = mock(ActionListener.class);
+            when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+            when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+            when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+            mock_client_ThreadContext(client, threadPool, threadContext);
+            mock_threadpool(threadPool, taskExecutorService);
+            setUpMock_GetModelChunks(model);
+
+            modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
+
+            ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+            verify(listener).onFailure(exception.capture());
+            // the mocked chunks cannot be loaded, so the deploy still fails later, but never on the shared doc's state
+            for (Throwable t = exception.getValue(); t != null; t = t.getCause()) {
+                assertFalse(
+                    docState + ": " + t.getMessage(),
+                    String.valueOf(t.getMessage()).contains("should only be called when model is in DEPLOYING state")
+                );
+            }
+            assertEquals("Failed to deploy model " + modelId, exception.getValue().getMessage());
+        }
+    }
+
+    /**
      * Registration and update now refuse to attach an MCP connector to a model, but documents written before those
      * checks existed are still out there. Deploying one used to succeed and then fail as an unclassified 500 on the
      * first predict; the deploy itself should report it.

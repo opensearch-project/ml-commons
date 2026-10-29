@@ -24,9 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.DocWriteRequest;
@@ -86,6 +88,7 @@ import lombok.extern.log4j.Log4j2;
 public class MLTaskManager implements SettingsChangeListener {
     public static int TASK_SEMAPHORE_TIMEOUT = 5000; // 5 seconds
     private final Map<String, MLTaskCache> taskCaches;
+    private final List<Consumer<MLTask>> taskRemovedListeners = new CopyOnWriteArrayList<>();
     private final Client client;
     private final SdkClient sdkClient;
     private final ThreadPool threadPool;
@@ -212,6 +215,9 @@ public class MLTaskManager implements SettingsChangeListener {
     public void remove(String taskId) {
         if (contains(taskId)) {
             MLTaskCache taskCache = taskCaches.remove(taskId);
+            if (taskCache == null) {
+                return;
+            }
             MLTask mlTask = taskCache.getMlTask();
 
             if (mlTask.getState() != CREATED) {
@@ -225,7 +231,21 @@ public class MLTaskManager implements SettingsChangeListener {
                 }
             }
             log.debug("remove ML task from cache {}", taskId);
+            for (Consumer<MLTask> taskRemovedListener : taskRemovedListeners) {
+                try {
+                    taskRemovedListener.accept(mlTask);
+                } catch (Exception e) {
+                    log.warn("Task removed listener failed for task {}", taskId, e);
+                }
+            }
         }
+    }
+
+    /**
+     * Registers a callback that runs whenever a task leaves this node's task cache: it completed, failed, or timed out.
+     */
+    public void addTaskRemovedListener(Consumer<MLTask> taskRemovedListener) {
+        taskRemovedListeners.add(taskRemovedListener);
     }
 
     /**

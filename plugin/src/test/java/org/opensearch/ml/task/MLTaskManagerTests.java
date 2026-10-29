@@ -651,4 +651,39 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.onStaticMetricCollectionEnabledChanged(false);
         verify(mlTaskManager).indexStatsCollectorJob(false);
     }
+
+    public void testTaskRemovedListener_calledOnceWithRemovedTask() {
+        java.util.List<MLTask> removed = new java.util.ArrayList<>();
+        mlTaskManager.addTaskRemovedListener(removed::add);
+        mlTaskManager.add(mlTask);
+
+        mlTaskManager.remove(mlTask.getTaskId());
+        mlTaskManager.remove(mlTask.getTaskId());
+        mlTaskManager.remove("unknown");
+
+        assertEquals(1, removed.size());
+        assertSame(mlTask, removed.get(0));
+    }
+
+    public void testTaskRemovedListener_failureDoesNotPreventRemovalOrOtherListeners() {
+        java.util.List<MLTask> removed = new java.util.ArrayList<>();
+        mlTaskManager.addTaskRemovedListener(task -> { throw new RuntimeException("listener bug"); });
+        mlTaskManager.addTaskRemovedListener(removed::add);
+        mlTaskManager.add(mlTask);
+
+        mlTaskManager.remove(mlTask.getTaskId());
+
+        assertFalse(mlTaskManager.contains(mlTask.getTaskId()));
+        assertEquals(1, removed.size());
+    }
+
+    public void testTaskRemovedListener_calledWhenTaskCompletesThroughUpdate() {
+        java.util.List<MLTask> removed = new java.util.ArrayList<>();
+        mlTaskManager.addTaskRemovedListener(removed::add);
+        mlTaskManager.add(mlTask);
+
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, java.util.Map.of(MLTask.STATE_FIELD, MLTaskState.COMPLETED), 0, true);
+
+        assertEquals(1, removed.size());
+    }
 }
