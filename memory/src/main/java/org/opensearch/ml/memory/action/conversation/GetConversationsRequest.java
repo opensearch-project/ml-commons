@@ -26,6 +26,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.PaginationTokenUtil;
 import org.opensearch.rest.RestRequest;
 
 import lombok.Getter;
@@ -90,6 +91,9 @@ public class GetConversationsRequest extends ActionRequest {
         if (this.maxResults <= 0) {
             exception = addValidationError("Can't list 0 or negative conversations", exception);
         }
+        if (this.from < 0) {
+            exception = addValidationError("The starting position must be nonnegative", exception);
+        }
         return exception;
     }
 
@@ -100,20 +104,15 @@ public class GetConversationsRequest extends ActionRequest {
      * @throws IOException if something breaks
      */
     public static GetConversationsRequest fromRestRequest(RestRequest request) throws IOException {
-        if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
-            int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
-                ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
-                : ActionConstants.DEFAULT_MAX_RESULTS;
+        int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
+            ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
+            : ActionConstants.DEFAULT_MAX_RESULTS;
 
-            int nextToken = Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD));
-
-            return new GetConversationsRequest(maxResults, nextToken);
-        } else {
-            int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
-                ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
-                : ActionConstants.DEFAULT_MAX_RESULTS;
-
-            return new GetConversationsRequest(maxResults);
+        Integer from = PaginationTokenUtil
+            .resolveOffset(request.param(ActionConstants.NEXT_PAGE_TOKEN_FIELD), request.param(ActionConstants.NEXT_TOKEN_FIELD));
+        if (from != null) {
+            return new GetConversationsRequest(maxResults, from);
         }
+        return new GetConversationsRequest(maxResults);
     }
 }
