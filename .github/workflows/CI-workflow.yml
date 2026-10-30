@@ -97,17 +97,46 @@ jobs:
           mv -v plugin/build/distributions/$plugin ./
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
 
-      - name: Upload Coverage Report
-        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
+      - name: Upload Coverage Report Artifact
+        if: ${{ !cancelled() && matrix.java == 21 }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          flags: ml-commons
-          token: ${{ secrets.CODECOV_TOKEN }}
+          name: jacoco-coverage-reports-java${{ matrix.java }}
+          path: '*/build/reports/jacoco/test/jacocoTestReport.xml'
+          retention-days: 1
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ml-plugin-linux-${{ matrix.java }}
           path: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
           if-no-files-found: error
+
+
+  Upload-Coverage-linux:
+    needs: Build-ml-linux
+    name: Upload MLCommons Coverage Report
+    if: ${{ !cancelled() && github.repository == 'opensearch-project/ml-commons' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout MLCommons
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Download Coverage Reports
+        id: download-coverage
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: jacoco-coverage-reports-java21
+
+      - name: Upload Coverage Report
+        if: steps.download-coverage.outcome == 'success'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          flags: ml-commons
+          token: ${{ secrets.CODECOV_TOKEN }}
 
 
   Test-ml-linux-docker:
@@ -203,7 +232,8 @@ jobs:
           fi
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        if: ${{ !cancelled() && env.imagePresent == 'true' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
