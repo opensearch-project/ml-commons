@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.dataset.remote;
 
 import static org.opensearch.ml.common.dataset.MLInputDataType.REMOTE;
