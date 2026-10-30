@@ -6,6 +6,7 @@ package org.opensearch.ml.processor;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -45,18 +46,31 @@ public class MLInferenceSearchResponse extends SearchResponse {
         return this.params;
     }
 
+    /**
+     * The sections of this response, with the ml_inference output as one of their ext entries.
+     * Other response processors, such as agentic_context, rebuild the response from this list of
+     * extensions, so the output has to be in it for them to keep it. The ext section is written once
+     * from that list, so the output also does not become a second ext object next to theirs.
+     */
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+    public SearchResponseSections getInternalResponse() {
+        SearchResponseSections sections = super.getInternalResponse();
         if (this.params == null) {
-            return super.toXContent(builder, params);
+            return sections;
         }
-        // Other response processors, such as agentic_context, add their own entries to the ext section of the
-        // response. The section is written once from the list of extensions, so the ml_inference output has to
-        // join that list instead of being written as a second ext object.
-        SearchResponseSections sections = getInternalResponse();
-        List<SearchExtBuilder> extensions = new ArrayList<>(sections.getSearchExtBuilders());
-        extensions.add(new MLInferenceExtBuilder(this.params));
-        SearchResponseSections merged = new SearchResponseSections(
+        Map<String, Object> output = new HashMap<>();
+        List<SearchExtBuilder> extensions = new ArrayList<>();
+        for (SearchExtBuilder extension : sections.getSearchExtBuilders()) {
+            if (extension instanceof MLInferenceExtBuilder) {
+                // output of an earlier ml_inference processor in the same pipeline
+                output.putAll(((MLInferenceExtBuilder) extension).params);
+            } else {
+                extensions.add(extension);
+            }
+        }
+        output.putAll(this.params);
+        extensions.add(new MLInferenceExtBuilder(output));
+        return new SearchResponseSections(
             sections.hits(),
             sections.aggregations(),
             sections.suggest(),
@@ -67,8 +81,15 @@ public class MLInferenceSearchResponse extends SearchResponse {
             extensions,
             sections.getProcessorResult()
         );
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        if (this.params == null) {
+            return super.toXContent(builder, params);
+        }
         return new SearchResponse(
-            merged,
+            getInternalResponse(),
             getScrollId(),
             getTotalShards(),
             getSuccessfulShards(),
@@ -82,10 +103,10 @@ public class MLInferenceSearchResponse extends SearchResponse {
     /**
      * The ml_inference entry of the ext section. It is only rendered, never sent between nodes.
      */
-    private static final class MLInferenceExtBuilder extends SearchExtBuilder {
+    static final class MLInferenceExtBuilder extends SearchExtBuilder {
         private final Map<String, Object> params;
 
-        private MLInferenceExtBuilder(Map<String, Object> params) {
+        MLInferenceExtBuilder(Map<String, Object> params) {
             this.params = params;
         }
 
