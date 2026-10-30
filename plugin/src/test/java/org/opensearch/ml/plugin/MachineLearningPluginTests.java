@@ -20,16 +20,27 @@ package org.opensearch.ml.plugin;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -38,12 +49,20 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetAction;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.common.CheckedRunnable;
 import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.common.xcontent.yaml.YamlXContent;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.identity.PluginSubject;
 import org.opensearch.indices.SystemIndexDescriptor;
 import org.opensearch.ingest.Processor;
 import org.opensearch.jobscheduler.spi.JobDocVersion;
@@ -68,6 +87,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAR
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 import org.opensearch.threadpool.ExecutorBuilder;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 public class MachineLearningPluginTests {
@@ -263,13 +283,76 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         Collection<SystemIndexDescriptor> descriptors = plugin.getSystemIndexDescriptors(settings);
         assertNotNull(descriptors);
-        assertEquals(16, descriptors.size()); // Plugin defines 16 system indices
+        assertEquals(18, descriptors.size()); // Plugin defines 18 system indices
 
         // Verify we have system index descriptors
         assertFalse(descriptors.isEmpty());
         for (SystemIndexDescriptor descriptor : descriptors) {
             assertNotNull(descriptor.getIndexPattern());
             assertTrue(descriptor.getIndexPattern().startsWith(".plugins-ml") || descriptor.getIndexPattern().startsWith(".plugins-mcp"));
+        }
+    }
+
+    @Test
+    public void testGetSystemIndexDescriptorsRegistersIndexInsightIndices() {
+        Set<String> patterns = plugin
+            .getSystemIndexDescriptors(Settings.EMPTY)
+            .stream()
+            .map(SystemIndexDescriptor::getIndexPattern)
+            .collect(Collectors.toSet());
+
+        assertTrue(patterns.contains(CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX));
+        assertTrue(patterns.contains(CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX));
+    }
+
+    @Test
+    public void testAssignSubjectSetsTheSubjectOfThePluginClient() {
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(client.threadPool()).thenReturn(threadPool);
+        AtomicReference<String> subjectSeenByDelegate = new AtomicReference<>();
+        doAnswer(invocation -> {
+            subjectSeenByDelegate.set(threadContext.getTransient(TestSubject.MARKER));
+            return null;
+        }).when(client).execute(any(), any(), any());
+        // createComponents builds the client before it reads the environment, which this test leaves null.
+        assertThrows(
+            NullPointerException.class,
+            () -> plugin.createComponents(client, null, threadPool, null, null, null, null, null, null, null, null, null, null)
+        );
+
+        plugin.assignSubject(new TestSubject(threadContext));
+        plugin.pluginClient
+            .execute(GetAction.INSTANCE, new GetRequest(CommonValue.ML_MODEL_INDEX, "model-id"), ActionListener.wrap(r -> {}, e -> {}));
+
+        assertEquals("the action must run as the assigned subject", "ml-test-subject", subjectSeenByDelegate.get());
+    }
+
+    @Test
+    public void testAdditionalPermissionsNameOnlyKnownIndices() throws Exception {
+        Set<String> knownIndices = new HashSet<>();
+        for (Field field : CommonValue.class.getFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.get(null) instanceof String value && value.startsWith(".")) {
+                knownIndices.add(value);
+            }
+        }
+        Map<String, Object> permissions;
+        try (
+            InputStream in = MachineLearningPlugin.class.getResourceAsStream("/plugin-additional-permissions.yml");
+            XContentParser parser = YamlXContent.yamlXContent
+                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, in)
+        ) {
+            permissions = parser.map();
+        }
+
+        assertTrue(permissions.containsKey("cluster_permissions"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, List<String>>> indexPermissions = (List<Map<String, List<String>>>) permissions.get("index_permissions");
+        for (Map<String, List<String>> entry : indexPermissions) {
+            for (String pattern : entry.get("index_patterns")) {
+                assertTrue("not an ML Commons index: " + pattern, knownIndices.contains(pattern));
+            }
         }
     }
 
@@ -365,6 +448,31 @@ public class MachineLearningPluginTests {
             holder.close();
         } finally {
             MemoryRetentionJobProcessor.reset();
+        }
+    }
+
+    /** Runs its body in a stashed context that carries a marker, as a real plugin subject runs it as the plugin. */
+    private static final class TestSubject implements PluginSubject {
+
+        static final String MARKER = "ml-test-subject-marker";
+
+        private final ThreadContext threadContext;
+
+        TestSubject(ThreadContext threadContext) {
+            this.threadContext = threadContext;
+        }
+
+        @Override
+        public Principal getPrincipal() {
+            return () -> "plugin:ml-test";
+        }
+
+        @Override
+        public <E extends Exception> void runAs(CheckedRunnable<E> runnable) throws E {
+            try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+                threadContext.putTransient(MARKER, "ml-test-subject");
+                runnable.run();
+            }
         }
     }
 }
