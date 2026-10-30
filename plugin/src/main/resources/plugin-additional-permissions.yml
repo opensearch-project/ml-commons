@@ -13,7 +13,7 @@ index_permissions:
       - ".plugins-ml-task"
       - ".plugins-ml-memory-meta"
       - ".plugins-ml-memory-message"
-      - ".plugins-ml-memory-container"
+      - ".plugins-ml-am-memory-container"
       - ".plugins-ml-stop-words"
       - ".plugins-ml-mcp-session-management"
       - ".plugins-ml-mcp-tools"

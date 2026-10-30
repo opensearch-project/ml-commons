@@ -52,6 +52,7 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.identity.PluginSubject;
 import org.opensearch.index.analysis.AnalyzerProvider;
 import org.opensearch.index.analysis.PreBuiltAnalyzerProviderFactory;
 import org.opensearch.index.analysis.PreConfiguredTokenizer;
@@ -458,6 +459,7 @@ import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.AnalysisPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
+import org.opensearch.plugins.IdentityAwarePlugin;
 import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
@@ -502,7 +504,8 @@ public class MachineLearningPlugin extends Plugin
         IngestPlugin,
         SystemIndexPlugin,
         TelemetryAwarePlugin,
-        JobSchedulerExtension {
+        JobSchedulerExtension,
+        IdentityAwarePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
@@ -539,6 +542,8 @@ public class MachineLearningPlugin extends Plugin
     private MLEngine mlEngine;
 
     private Client client;
+    @VisibleForTesting
+    PluginClient pluginClient;
     private ClusterService clusterService;
     private ThreadPool threadPool;
     private Set<String> indicesToListen;
@@ -690,6 +695,7 @@ public class MachineLearningPlugin extends Plugin
     ) {
         this.indexUtils = new IndexUtils(client, clusterService);
         this.client = client;
+        this.pluginClient = new PluginClient(client);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
@@ -1045,8 +1051,19 @@ public class MachineLearningPlugin extends Plugin
                 sdkClient,
                 toolFactoryWrapper,
                 mcpToolsHelper,
-                agenticSearchTemplateService
+                agenticSearchTemplateService,
+                pluginClient
             );
+    }
+
+    /**
+     * Gives the plugin's client the subject that core assigns after {@code createComponents}.
+     *
+     * @param pluginSubject the plugin's system subject
+     */
+    @Override
+    public void assignSubject(PluginSubject pluginSubject) {
+        pluginClient.setSubject(pluginSubject);
     }
 
     @Override
@@ -1659,6 +1676,8 @@ public class MachineLearningPlugin extends Plugin
             .add(new SystemIndexDescriptor(ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX, "ML Commons Context Management Index "));
         systemIndexDescriptors
             .add(new SystemIndexDescriptor(ML_AGENTIC_SEARCH_TEMPLATES_INDEX, "ML Commons Agentic Search Templates Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_INDEX_INSIGHT_CONFIG_INDEX, "ML Commons Index Insight Config Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_INDEX_INSIGHT_STORAGE_INDEX, "ML Commons Index Insight Storage Index"));
 
         return systemIndexDescriptors;
     }
