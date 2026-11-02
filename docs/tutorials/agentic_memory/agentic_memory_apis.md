@@ -234,3 +234,9 @@ GET _plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/_search
   }
 }
 ```
+
+## Related documentation
+
+The topics in this tutorial are documented in the OpenSearch documentation:
+
+- [Agentic memory APIs](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/)

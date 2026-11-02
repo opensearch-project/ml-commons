@@ -475,3 +475,13 @@ POST _plugins/_ml/models/AFeTb4kBJ1eYAeTMSVl0/_predict
   }
 }
 ```
+
+## Related documentation
+
+The topics in this tutorial are documented in the OpenSearch documentation:
+
+- [Connecting to externally hosted models](https://docs.opensearch.org/latest/ml-commons-plugin/remote-models/)
+- [Connectors](https://docs.opensearch.org/latest/ml-commons-plugin/remote-models/connectors/)
+- [Connector blueprints](https://docs.opensearch.org/latest/ml-commons-plugin/remote-models/blueprints/)
+- [Connector authentication](https://docs.opensearch.org/latest/ml-commons-plugin/remote-models/connector-authentication/)
+- [ML Commons cluster settings](https://docs.opensearch.org/latest/ml-commons-plugin/cluster-settings/)
