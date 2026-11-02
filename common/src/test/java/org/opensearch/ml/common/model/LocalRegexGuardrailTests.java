@@ -25,6 +25,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -33,10 +34,12 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -49,6 +52,7 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.RemoteTransportException;
 import org.opensearch.transport.client.Client;
 
 public class LocalRegexGuardrailTests {
@@ -273,11 +277,68 @@ public class LocalRegexGuardrailTests {
 
         // Create a completable future that throws an exception when get() is called
         CompletableFuture<SearchDataObjectResponse> failedFuture = new CompletableFuture<>();
-        failedFuture.completeExceptionally(new IOException("Index not found"));
+        failedFuture.completeExceptionally(new IOException("search failed"));
         when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
 
         // Covers error "Failed to search stop words index test_index"
         // Fail-closed: when the stop words search fails, the input is rejected
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
+        Assert.assertFalse(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexMissingIndexWrappedInStatusException() throws IOException {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        // Shape the local-cluster SdkClient uses for a missing index
+        CompletableFuture<SearchDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture
+            .completeExceptionally(
+                new OpenSearchStatusException(
+                    "Failed to search indices [" + indexName + "]",
+                    RestStatus.NOT_FOUND,
+                    new IndexNotFoundException(indexName)
+                )
+            );
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
+
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
+        Assert.assertTrue(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexMissingIndexWrappedInRemoteTransportException() throws IOException {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        CompletableFuture<SearchDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new RemoteTransportException("remote", new IndexNotFoundException(indexName)));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
+
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
+        Assert.assertTrue(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexSearchErrorWrappedInStatusException() throws IOException {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        CompletableFuture<SearchDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture
+            .completeExceptionally(
+                new OpenSearchStatusException(
+                    "Failed to search indices [" + indexName + "]",
+                    RestStatus.INTERNAL_SERVER_ERROR,
+                    new IOException("search failed")
+                )
+            );
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
+
         Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
         Assert.assertFalse(res);
         Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
