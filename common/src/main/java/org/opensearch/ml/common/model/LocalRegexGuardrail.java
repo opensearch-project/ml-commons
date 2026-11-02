@@ -23,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -34,6 +35,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -232,7 +234,14 @@ public class LocalRegexGuardrail extends Guardrail {
                 if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                     passedStopWordCheck.set(true);
                 }
-            }, e -> { log.error("Failed to search stop words index {}, rejecting input as a safety measure", indexName, e); }), latch);
+            }, e -> {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                    log.debug("Stop words index {} not found, treating it as no stop words", indexName);
+                    passedStopWordCheck.set(true);
+                } else {
+                    log.error("Failed to search stop words index {}, rejecting input as a safety measure", indexName, e);
+                }
+            }), latch);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest)
