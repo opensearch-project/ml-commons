@@ -17,7 +17,6 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Yaliang Wu           | [ylwu-amzn](https://github.com/ylwu-amzn)           | Amazon    |
 | Zan Niu              | [zane-neo](https://github.com/zane-neo)             | Amazon    |
 | Austin Lee           | [austintlee](https://github.com/austintlee)         | Aryn      |
-| Henry Lindeman       | [HenryL27](https://github.com/HenryL27)             | Aryn      |
 | Samuel Herman        | [samuel-oci](https://github.com/samuel-oci/)        | Oracle    |
 
 ## Emeritus
@@ -26,3 +25,4 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | ----------- | ------------------------------------------------- | ----------- |
 | Jackie Han  | [jackiehanyang](https://github.com/jackiehanyang) | Amazon      |
 | Mingshi Liu | [mingshl](https://github.com/mingshl)             | Amazon      |
+| Henry Lindeman | [HenryL27](https://github.com/HenryL27)        | Aryn        |
