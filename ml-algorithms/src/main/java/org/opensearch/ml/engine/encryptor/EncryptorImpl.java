@@ -359,7 +359,7 @@ public class EncryptorImpl implements Encryptor, ClusterStateListener {
 
     private void handleInitMLConfigIndexFailure(String tenantId, String masterKeyId, Exception e) {
         log.debug("Failed to init ML config index", e);
-        handleError(tenantId, new RuntimeException("No response to create ML Config index"));
+        handleError(tenantId, new RuntimeException("No response to create ML Config index", e));
     }
 
     private void handleGetDataObjectResponse(
