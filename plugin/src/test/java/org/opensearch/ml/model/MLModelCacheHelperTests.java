@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -13,11 +14,13 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -413,6 +416,35 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         when(model.getModelId()).thenReturn("mockId");
         cacheHelper.setModelInfo(modelId, model);
         assertEquals("mockId", cacheHelper.getModelInfo(modelId).getModelId());
+    }
+
+    /**
+     * An undeploy takes the entry out of the cache before clearing it, so a deploy attempt cannot publish into an
+     * entry that is being removed (its predictor would leak and the model would look deployed while missing).
+     */
+    public void testRemoveModel_publishWhileClearing_isStale() throws Exception {
+        MLModelCacheHelper.DeployAttempt attempt = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true, attempt);
+        Field field = MLModelCacheHelper.class.getDeclaredField("modelCaches");
+        field.setAccessible(true);
+        Map<String, MLModelCache> modelCaches = (Map<String, MLModelCache>) field.get(cacheHelper);
+        MLModelCache entry = spy(modelCaches.get(modelId));
+        modelCaches.put(modelId, entry);
+        AtomicReference<Exception> publishFailure = new AtomicReference<>();
+        doAnswer(invocation -> {
+            try {
+                cacheHelper.publishDeployedPredictor(modelId, predictor, attempt);
+            } catch (Exception e) {
+                publishFailure.set(e);
+            }
+            return invocation.callRealMethod();
+        }).when(entry).clear();
+
+        cacheHelper.removeModel(modelId);
+
+        assertTrue(publishFailure.get() instanceof MLModelCacheHelper.StaleDeployAttemptException);
+        assertEquals(0, cacheHelper.getAllModels().length);
+        assertFalse(cacheHelper.isModelDeployed(modelId));
     }
 
     public void testPublishDeployedExecutor_boundEntry_publishes() {

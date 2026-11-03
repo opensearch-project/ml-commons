@@ -24,6 +24,7 @@ import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.model.MLModelCacheHelper.DeployAttempt;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 
 import com.google.common.math.Quantiles;
@@ -57,14 +58,11 @@ public class MLModelCache {
     private Boolean deployToAllNodes;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Instant lastAccessTime;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isAutoDeploying;
-    // Identity of the deploy attempt that created this entry. Failure cleanup removes the entry only when it still
-    // belongs to the failing attempt, so a late failure cannot evict a deployment another attempt created.
-    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Object deployOwner;
-    // Identities of the deploy attempts bound to this entry: the one that created it and any that joined it. An
-    // attempt may publish its predictor only into an entry it is bound to, so an attempt that outlived this entry
-    // (undeployed, or replaced by a newer deploy) can never publish into its replacement. Guarded by
+    // The deploy attempt that may remove this entry on failure: its creator, or the attempt that published into it.
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) DeployAttempt deployOwner;
+    // The attempts allowed to publish into or write to this entry: its creator and any that joined it. Guarded by
     // MLModelCacheHelper's lock.
-    private final Set<Object> deployAttempts = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<DeployAttempt> deployAttempts = Collections.newSetFromMap(new IdentityHashMap<>());
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
@@ -165,13 +163,13 @@ public class MLModelCache {
         return this.deployToAllNodes != null && this.deployToAllNodes;
     }
 
-    protected void bindDeployAttempt(Object deployAttempt) {
+    protected void bindDeployAttempt(DeployAttempt deployAttempt) {
         if (deployAttempt != null) {
             deployAttempts.add(deployAttempt);
         }
     }
 
-    protected boolean isBoundTo(Object deployAttempt) {
+    protected boolean isBoundTo(DeployAttempt deployAttempt) {
         return deployAttempt != null && deployAttempts.contains(deployAttempt);
     }
 

@@ -54,6 +54,7 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
@@ -83,6 +84,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -206,8 +208,7 @@ public class MLModelManager {
     private final MLEngine mlEngine;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    // The in-flight automatic deploy of each model on this node, with the callers waiting on it. Only one automatic
-    // deploy of a model runs on this node at a time; see joinOrLeadAutoDeploy.
+    // The in-flight automatic deploy of each model on this node; see joinOrLeadAutoDeploy.
     private final Map<String, AutoDeployLeader> autoDeployLeaders = new ConcurrentHashMap<>();
 
     private volatile Integer maxModelPerNode;
@@ -1116,7 +1117,17 @@ public class MLModelManager {
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
-        return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, false);
+        return threadedActionListener(threadPoolName, listener, false);
+    }
+
+    // forceExecution: a rejected, unforced failure callback is only logged, so a listener that must complete has to
+    // be forced.
+    private <T> ThreadedActionListener<T> threadedActionListener(
+        String threadPoolName,
+        ActionListener<T> listener,
+        boolean forceExecution
+    ) {
+        return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, forceExecution);
     }
 
     /**
@@ -1307,11 +1318,38 @@ public class MLModelManager {
         MLTask mlTask,
         ActionListener<String> listener
     ) {
-        // Identifies this deploy attempt. It may only write to, publish into or clean up the cache entry it created or
-        // joined, never a replacement found by model id.
+        runDeployAttempt(
+            modelId,
+            autoDeployModel,
+            listener,
+            (deployOwner, deployListener) -> doDeployModel(
+                modelId,
+                tenantId,
+                modelContentHash,
+                functionName,
+                deployToAllNodes,
+                autoDeployModel,
+                mlTask,
+                deployOwner,
+                deployListener
+            )
+        );
+    }
+
+    /**
+     * Runs one deploy attempt of a model on this node under its own {@link DeployAttempt} identity, which limits it to
+     * the cache entry it creates or joins. Automatic deploys of a model are coalesced into one attempt
+     * ({@link #joinOrLeadAutoDeploy}).
+     */
+    private void runDeployAttempt(
+        String modelId,
+        boolean autoDeployModel,
+        ActionListener<String> listener,
+        BiConsumer<DeployAttempt, ActionListener<String>> deploy
+    ) {
         DeployAttempt deployOwner = new DeployAttempt();
         if (!autoDeployModel) {
-            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, false, mlTask, deployOwner, listener);
+            deploy.accept(deployOwner, listener);
             return;
         }
         AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, deployOwner, listener);
@@ -1319,13 +1357,12 @@ public class MLModelManager {
             return;
         }
         try {
-            doDeployModel(modelId, tenantId, modelContentHash, functionName, deployToAllNodes, true, mlTask, deployOwner, deployListener);
+            deploy.accept(deployOwner, deployListener);
         } catch (Exception e) {
             if (deployListener.isCompleted()) {
                 throw e;
             }
-            // A synchronous failure before the attempt completed must still end it, or the callers waiting on it
-            // would never be released and no later automatic deploy of this model could start on this node.
+            // A synchronous failure must still end the attempt, or its waiters are never released.
             deployListener.onFailure(e);
         }
     }
@@ -1371,12 +1408,13 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
-                // Only this attempt's own entry: a replacement may be another automatic deploy that is still running.
+                // Only this attempt's own entry, never a replacement.
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setIsAutoDeploying(false));
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
+            // An automatic deploy must complete, or the callers coalesced on it wait forever: force its callback.
             this.getModel(modelId, tenantId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
@@ -1434,13 +1472,14 @@ public class MLModelManager {
                             if (published) {
                                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             } else {
-                                mlExecutable.close();
+                                // Not published: release, don't close (the model's files are shared).
+                                mlExecutable.release();
                             }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             if (!published) {
-                                mlExecutable.close();
+                                mlExecutable.release();
                             }
                             wrappedListener.onFailure(e);
                         }
@@ -1457,13 +1496,14 @@ public class MLModelManager {
                                     : modelContentSizeInBytes;
                                 modelCacheHelper.setMemSizeEstimation(modelId, deployOwner, mlModel.getModelFormat(), contentSize);
                             } else {
-                                predictable.close();
+                                // Not published: release, don't close (the model's files are shared).
+                                predictable.release();
                             }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             if (!published) {
-                                predictable.close();
+                                predictable.release();
                             }
                             wrappedListener.onFailure(e);
                         }
@@ -1475,7 +1515,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to deploy model {}", modelId, e);
                 handleDeployModelException(modelId, deployOwner, functionName, wrappedListener, e);
-            })));
+            }), autoDeployModel));
         } catch (Exception e) {
             handleDeployModelException(modelId, deployOwner, functionName, listener, e);
         } finally {
@@ -1505,27 +1545,21 @@ public class MLModelManager {
         MLTask mlTask,
         ActionListener<String> listener
     ) {
-        // Identifies this deploy attempt. It may only write to, publish into or clean up the cache entry it created or
-        // joined, never a replacement found by model id.
-        DeployAttempt deployOwner = new DeployAttempt();
-        if (!autoDeployModel) {
-            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, false, mlTask, deployOwner, listener);
-            return;
-        }
-        AutoDeployLeader deployListener = joinOrLeadAutoDeploy(modelId, deployOwner, listener);
-        if (deployListener == null) {
-            return;
-        }
-        try {
-            doDeployModel(modelId, modelContentHash, functionName, deployToAllNodes, true, mlTask, deployOwner, deployListener);
-        } catch (Exception e) {
-            if (deployListener.isCompleted()) {
-                throw e;
-            }
-            // A synchronous failure before the attempt completed must still end it, or the callers waiting on it
-            // would never be released and no later automatic deploy of this model could start on this node.
-            deployListener.onFailure(e);
-        }
+        runDeployAttempt(
+            modelId,
+            autoDeployModel,
+            listener,
+            (deployOwner, deployListener) -> doDeployModel(
+                modelId,
+                modelContentHash,
+                functionName,
+                deployToAllNodes,
+                autoDeployModel,
+                mlTask,
+                deployOwner,
+                deployListener
+            )
+        );
     }
 
     private void doDeployModel(
@@ -1568,12 +1602,13 @@ public class MLModelManager {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> {
                 context.restore();
                 modelCacheHelper.removeAutoDeployModel(modelId);
-                // Only this attempt's own entry: a replacement may be another automatic deploy that is still running.
+                // Only this attempt's own entry, never a replacement.
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> modelCache.setIsAutoDeploying(false));
             });
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
+            // An automatic deploy must complete, or the callers coalesced on it wait forever: force its callback.
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
@@ -1631,13 +1666,14 @@ public class MLModelManager {
                             if (published) {
                                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             } else {
-                                mlExecutable.close();
+                                // Not published: release, don't close (the model's files are shared).
+                                mlExecutable.release();
                             }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             if (!published) {
-                                mlExecutable.close();
+                                mlExecutable.release();
                             }
                             wrappedListener.onFailure(e);
                         }
@@ -1654,13 +1690,14 @@ public class MLModelManager {
                                     : modelContentSizeInBytes;
                                 modelCacheHelper.setMemSizeEstimation(modelId, deployOwner, mlModel.getModelFormat(), contentSize);
                             } else {
-                                predictable.close();
+                                // Not published: release, don't close (the model's files are shared).
+                                predictable.release();
                             }
                             wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             if (!published) {
-                                predictable.close();
+                                predictable.release();
                             }
                             wrappedListener.onFailure(e);
                         }
@@ -1672,7 +1709,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
                 handleDeployModelException(modelId, deployOwner, functionName, wrappedListener, e);
-            })));
+            }), autoDeployModel));
         } catch (Exception e) {
             handleDeployModelException(modelId, deployOwner, functionName, listener, e);
         } finally {
@@ -1695,9 +1732,7 @@ public class MLModelManager {
         setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
         ActionListener<String> initModelActionListener = ActionListener.wrap(wrappedListener::onResponse, e -> {
             log.error("Failed to deploy model, model id: {}", modelId, e);
-            // deployModel has already put this model into DEPLOYING in the node cache. If that entry is left behind,
-            // isModelRunningOnNode stays true and every later deploy on this node is refused with "Duplicate deploy
-            // model task", so the model is stuck PARTIALLY_DEPLOYED until it is undeployed by hand.
+            // Remove this attempt's DEPLOYING entry, or later deploys on this node are refused as duplicates.
             handleDeployModelException(modelId, deployOwner, mlModel.getAlgorithm(), wrappedListener, e);
         });
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
@@ -1747,10 +1782,7 @@ public class MLModelManager {
                 mlModel.getModelId(),
                 mlModel.getConnector().getProtocol()
             );
-        // This runs on a fresh deploy only: deployModel has already put this model into DEPLOYING, and leaving it
-        // there makes isModelRunningOnNode true, so the next deploy attempt is refused as a duplicate task and the
-        // operator never sees this message again - the same cleanup the model-content-hash rejection does. The
-        // cleanup is skipped if the entry now belongs to another deploy attempt.
+        // Remove this attempt's DEPLOYING entry, or later deploys on this node are refused as duplicates.
         removeModelIfOwner(mlModel.getModelId(), deployOwner);
         listener
             .onFailure(
@@ -1767,12 +1799,8 @@ public class MLModelManager {
     }
 
     /**
-     * Deploy path counterpart of {@link #setupParamsAndPredictable}. Another deploy attempt of the same model can be
-     * running on this node (a cluster-wide deploy and a predict-triggered local auto-deploy, for example), and the
-     * model can be undeployed or redeployed while this attempt runs. So the predictor is published only into the cache
-     * entry this attempt created or joined, and only if no other attempt's predictor is already there. Otherwise this
-     * attempt closes its own predictor and leaves the cache untouched: it reports success if the model is deployed on
-     * this node by another attempt, and fails if the model is not deployed here at all.
+     * Deploy path counterpart of {@link #setupParamsAndPredictable}: publishes the predictor only into this attempt's
+     * own cache entry ({@link MLModelCacheHelper#publishDeployedPredictor}), otherwise releases it.
      */
     private void deployPredictable(String modelId, MLModel mlModel, DeployAttempt deployOwner, ActionListener<String> listener) {
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
@@ -1782,7 +1810,7 @@ public class MLModelManager {
                 published = modelCacheHelper.publishDeployedPredictor(modelId, predictor, deployOwner);
             } catch (MLModelCacheHelper.StaleDeployAttemptException e) {
                 log.info("Discarding a stale deploy of model {}: {}", modelId, e.getMessage());
-                predictor.close();
+                predictor.release();
                 listener.onFailure(e);
                 return;
             }
@@ -1790,7 +1818,7 @@ public class MLModelManager {
                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             } else {
                 log.info("Model {} was already deployed on this node by another deploy, discarding this deploy's predictor", modelId);
-                predictor.close();
+                predictor.release();
             }
             listener.onResponse("successful");
         }, e -> {
@@ -1869,14 +1897,8 @@ public class MLModelManager {
     }
 
     /**
-     * Coalesces automatic deploys of one model on this node. Concurrent predict requests can each find the model
-     * unloaded and trigger a deploy; if each ran its own attempt, a late failure of one would clean up the cache entry
-     * and close the predictor that another had just deployed successfully. Instead, the first caller leads a single
-     * attempt and later callers wait for its result.
-     * <p>
-     * An attempt in flight whose cache entry has since been removed (undeployed) or replaced (by an explicit deploy)
-     * can only end in a discarded result, so a new caller never joins it: it leads a fresh attempt instead, and the
-     * old one still completes for the callers that had already joined it.
+     * Coalesces automatic deploys of one model on this node: the first caller leads one attempt and later callers wait
+     * for its result. A caller never joins an attempt whose cache entry was removed or replaced; it leads a fresh one.
      *
      * @return the listener the leader must deploy with, which also notifies every waiter; null if the caller joined
      *         an attempt already in flight and must not deploy
@@ -1889,9 +1911,19 @@ public class MLModelManager {
             if (inFlight == null || inFlight.isStale()) {
                 return leader;
             }
-            // Waiters are notified on the leader's thread, in the leader's restored thread context. Capture this
-            // caller's own context so its predict runs as its own user (user-level rate limiting reads it).
-            inFlight.waiters.add(ContextPreservingActionListener.wrapPreservingContext(listener, client.threadPool().getThreadContext()));
+            // Each waiter runs its predict in its own thread context (user-level rate limiting reads it), on the remote
+            // predict pool rather than serially on the leader's thread. Only remote models are auto-deployed. Forced,
+            // because a rejected failure callback is dropped and the waiter would never complete.
+            inFlight.waiters
+                .add(
+                    new ThreadedActionListener<>(
+                        log,
+                        threadPool,
+                        REMOTE_PREDICT_THREAD_POOL,
+                        ContextPreservingActionListener.wrapPreservingContext(listener, client.threadPool().getThreadContext()),
+                        true
+                    )
+                );
             return inFlight;
         });
         if (current != leader) {
@@ -1950,10 +1982,8 @@ public class MLModelManager {
             }
         }
 
-        // Ends the attempt before anyone is notified, so a request arriving from here on starts a fresh deploy (or
-        // finds the model deployed) instead of joining one that has finished. It unregisters only itself, never a
-        // newer attempt that replaced it, and returns its own waiters either way: callers that joined it before it was
-        // replaced are still waiting on it.
+        // Unregisters this attempt (never a newer one that replaced it) before anyone is notified, so later callers
+        // cannot join a finished attempt, and returns its waiters.
         private List<ActionListener<String>> finish() {
             List<ActionListener<String>> joined = new ArrayList<>();
             autoDeployLeaders.compute(modelId, (id, current) -> {

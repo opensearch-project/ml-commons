@@ -105,11 +105,8 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Initialize model state for an automatic deploy attempt. If another deploy already put the model into a running
-     * state on this node, the attempt joins that entry: it is bound to it (see {@link #publishDeployedPredictor}) but
-     * the entry stays owned by that deploy, not by {@code deployOwner}.
-     *
-     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, DeployAttempt)}
+     * Initialize model state for an automatic deploy attempt. If the model is already running on this node, the
+     * attempt joins that entry: it is bound to it, but the entry stays owned by the deploy that created it.
      */
     public synchronized void initModelStateAutoDeploy(
         String modelId,
@@ -542,41 +539,38 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Remove model.
+     * Remove model. The entry leaves the map under this helper's lock, so a deploy attempt cannot publish into it once
+     * removal has started; it is then cleared (closing its predictor or executor) outside the lock.
      * 
      * @param modelId model id
      */
     public void removeModel(String modelId) {
-        MLModelCache modelCache = modelCaches.get(modelId);
+        MLModelCache modelCache;
+        synchronized (this) {
+            modelCache = takeModel(modelId);
+        }
+        if (modelCache != null) {
+            modelCache.clear();
+        }
+    }
+
+    // Caller holds this helper's lock.
+    private MLModelCache takeModel(String modelId) {
+        autoDeployModels.remove(modelId);
+        MLModelCache modelCache = modelCaches.remove(modelId);
         if (modelCache != null) {
             log.debug("removing model {} from cache", modelId);
-            modelCache.clear();
-            modelCaches.remove(modelId);
         }
-        autoDeployModels.remove(modelId);
+        return modelCache;
     }
 
     /**
-     * Publish a freshly deployed predictor for a deploy attempt. The attempt may publish only into the cache entry it
-     * created or joined; the entry is never looked up and recreated by model id alone, so an attempt cannot write into
-     * a replacement entry or an empty one.
-     * <ul>
-     *   <li>Bound entry, nothing deployed yet: this attempt's predictor is stored, the model is marked DEPLOYED, its
-     *   last access time is refreshed and the attempt takes ownership of the entry, so a later failure of whichever
-     *   attempt created it can no longer evict it. Returns true.</li>
-     *   <li>Bound entry that is already deployed, or an entry this attempt is not bound to that is deployed (the
-     *   model was redeployed while this attempt ran): the model is deployed on this node by another attempt and
-     *   nothing is changed. Returns false; the caller must close its own predictor.</li>
-     *   <li>No entry, or an entry this attempt is not bound to that is not deployed: this attempt is stale and the
-     *   model is not deployed on this node. Nothing is changed; throws {@link StaleDeployAttemptException} and the
-     *   caller must close its own predictor.</li>
-     * </ul>
+     * Publish a deploy attempt's predictor, only into the cache entry the attempt created or joined and only if no
+     * predictor is there yet. On success the attempt takes ownership of the entry. When this does not publish, nothing
+     * is changed and the caller must release its own predictor.
      *
-     * @param modelId     model id
-     * @param predictor   the predictor this attempt deployed
-     * @param deployOwner identity of the deploy attempt
-     * @return true if this attempt's predictor was published; false if another attempt's deployment is serving
-     * @throws StaleDeployAttemptException if this attempt's entry is gone and the model is not deployed on this node
+     * @return true if published; false if another attempt's deployment is already serving on this node
+     * @throws StaleDeployAttemptException if the attempt's entry is gone and the model is not deployed on this node
      */
     public synchronized boolean publishDeployedPredictor(String modelId, Predictable predictor, DeployAttempt deployOwner) {
         return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setPredictor(predictor));
@@ -606,27 +600,23 @@ public class MLModelCacheHelper {
             return false;
         }
         throw new StaleDeployAttemptException(
-            "Model " + modelId + " was undeployed or redeployed on this node while this deploy was running"
+            "The cache entry of model "
+                + modelId
+                + " on this node was removed or replaced (undeploy, redeploy, or a failed concurrent deploy) while this deploy was running"
         );
     }
 
-    /**
-     * Whether the model's current cache entry is the one {@code deployOwner} created or joined. False once the model
-     * has been undeployed or its entry replaced by another deploy.
-     */
+    /** Whether the model's current cache entry is the one {@code deployOwner} created or joined. */
     public synchronized boolean isBoundTo(String modelId, DeployAttempt deployOwner) {
         MLModelCache modelCache = modelCaches.get(modelId);
         return modelCache != null && modelCache.isBoundTo(deployOwner);
     }
 
     /**
-     * Apply a write made while deploying the model, such as its metadata, rate limiters, guardrails or model
-     * interface, only if the model's cache entry is still the one {@code deployOwner} created or joined. A deploy
-     * attempt must not write by model id alone: if the model was undeployed (and possibly updated and redeployed)
-     * while the attempt ran, that would put its stale configuration into the replacement entry, or recreate an entry
-     * for a model that is no longer deployed.
+     * Apply a deploy-time write (metadata, rate limiters, guardrails, model interface) only if the model's cache entry
+     * is still the one {@code deployOwner} created or joined, never to a replacement or a recreated entry.
      *
-     * @return true if the write was applied; false if this attempt's entry is gone and nothing was changed
+     * @return true if the write was applied
      */
     public synchronized boolean updateIfBound(String modelId, DeployAttempt deployOwner, Consumer<MLModelCache> update) {
         MLModelCache modelCache = modelCaches.get(modelId);
@@ -679,21 +669,21 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Remove the model from the cache only if its entry is owned by {@code deployOwner}. A deploy attempt uses this to
-     * clean up after itself on failure. It owns the entry it created until another attempt publishes a predictor into
-     * it ({@link #publishDeployedPredictor}); if the entry has been replaced (by an explicit deploy, an undeploy and
-     * redeploy, or a retry), taken over that way, or was never created by this attempt, it is left alone.
+     * Failure cleanup for a deploy attempt: remove the model's entry only if {@code deployOwner} owns it. An attempt
+     * owns the entry it created until another attempt publishes into it.
      *
-     * @param modelId     model id
-     * @param deployOwner identity of the failing deploy attempt; null never owns an entry
      * @return true if the entry was removed
      */
-    public synchronized boolean removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
-        MLModelCache modelCache = modelCaches.get(modelId);
-        if (deployOwner == null || modelCache == null || modelCache.getDeployOwner() != deployOwner) {
-            return false;
+    public boolean removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
+        MLModelCache modelCache;
+        synchronized (this) {
+            modelCache = modelCaches.get(modelId);
+            if (deployOwner == null || modelCache == null || modelCache.getDeployOwner() != deployOwner) {
+                return false;
+            }
+            takeModel(modelId);
         }
-        removeModel(modelId);
+        modelCache.clear();
         return true;
     }
 
@@ -751,7 +741,7 @@ public class MLModelCacheHelper {
      * 
      * @param removedNodes removed nodes
      */
-    public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
+    public synchronized void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
         Set<String> modelIds = modelCaches.keySet();
         for (String modelId : modelIds) {
             MLModelCache modelCache = modelCaches.get(modelId);
@@ -776,7 +766,7 @@ public class MLModelCacheHelper {
      *                       with model index, also we need to change the target
      *                       worker nodes to exclude the removed worker nodes.
      */
-    public void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
+    public synchronized void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache != null) {
             log.debug("remove worker node {} of model {} from cache", nodeId, modelId);
@@ -822,7 +812,7 @@ public class MLModelCacheHelper {
     /**
      * Clear worker nodes for all models.
      */
-    public void clearWorkerNodes() {
+    public synchronized void clearWorkerNodes() {
         log.debug("clear all model worker nodes");
         modelCaches.entrySet().forEach(entry -> clearWorkerNodes(entry.getKey()));
     }
@@ -832,7 +822,7 @@ public class MLModelCacheHelper {
      * 
      * @param modelId model id
      */
-    public void clearWorkerNodes(String modelId) {
+    public synchronized void clearWorkerNodes(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache != null) {
             log.debug("clear worker nodes of model {}", modelId);
