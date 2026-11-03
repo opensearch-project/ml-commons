@@ -114,6 +114,7 @@ import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -1548,68 +1549,124 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     /**
-     * A failed automatic deploy is reported to the callers that joined it through a forced task on the remote predict
-     * pool: a rejected, unforced failure callback would be dropped and the caller would never complete.
+     * A caller that joined an automatic deploy runs its predict through the remote predict pool's bounded queue: when
+     * the queue is full it is rejected, instead of being forced onto the queue past its capacity.
      */
-    public void testAutoDeploy_Failure_notifiesJoinedCallerThroughForcedTask() {
+    public void testAutoDeploy_SuccessWithFullPredictPool_rejectsJoinedCaller() {
         MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
         MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
-        ExecutorService remotePredictPool = mock(ExecutorService.class);
-        List<Boolean> forced = new ArrayList<>();
-        doAnswer(invocation -> {
-            AbstractRunnable task = invocation.getArgument(0);
-            forced.add(task.isForceExecution());
-            task.run();
-            return null;
-        }).when(remotePredictPool).execute(any());
-        when(threadPool.executor(REMOTE_PREDICT_THREAD_POOL)).thenReturn(remotePredictPool);
+        List<Boolean> submitted = new ArrayList<>();
+        ExecutorService pool = fullPool(submitted);
+        when(threadPool.executor(REMOTE_PREDICT_THREAD_POOL)).thenReturn(pool);
         List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
         ActionListener<String> leader = mock(ActionListener.class);
         ActionListener<String> joined = mock(ActionListener.class);
 
         manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), leader);
         manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joined);
-        engineDeploys.get(0).onFailure(new RuntimeException("deploy failed"));
+        engineDeploys.get(0).onResponse(mock(Predictable.class));
 
-        verify(leader).onFailure(any(RuntimeException.class));
-        verify(joined).onFailure(any(RuntimeException.class));
-        assertEquals(List.of(true), forced);
+        verify(leader).onResponse("successful");
+        verify(joined).onFailure(any(OpenSearchRejectedExecutionException.class));
+        verify(joined, never()).onResponse(any());
+        assertEquals(List.of(false), submitted);
+    }
+
+    /** A failed automatic deploy still reaches the callers that joined it when the remote predict pool is full. */
+    public void testAutoDeploy_FailureWithFullPredictPool_stillNotifiesJoinedCaller() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<Boolean> submitted = new ArrayList<>();
+        ExecutorService pool = fullPool(submitted);
+        when(threadPool.executor(REMOTE_PREDICT_THREAD_POOL)).thenReturn(pool);
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        ActionListener<String> leader = mock(ActionListener.class);
+        ActionListener<String> joined = mock(ActionListener.class);
+        RuntimeException deployFailure = new RuntimeException("deploy failed");
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), leader);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joined);
+        engineDeploys.get(0).onFailure(deployFailure);
+
+        verify(leader).onFailure(deployFailure);
+        verify(joined).onFailure(deployFailure);
+        assertTrue(submitted.isEmpty());
     }
 
     /**
-     * An automatic deploy's getModel callback runs as a forced task on the deploy pool: a rejected, unforced failure
-     * callback would be dropped, leaving the coalesced attempt registered and every later caller waiting on it.
+     * When the deploy pool is full, an automatic deploy's getModel failure still ends the attempt: its callers fail
+     * and a later caller starts a fresh deploy instead of waiting on the dead one.
      */
-    public void testAutoDeploy_GetModelFailure_endsTheAttemptThroughForcedTask() {
+    public void testAutoDeploy_GetModelFailureWithFullDeployPool_endsTheAttempt() {
         MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
         MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
-        ExecutorService deployPool = mock(ExecutorService.class);
-        List<Boolean> forced = new ArrayList<>();
+        List<Boolean> submitted = new ArrayList<>();
+        ExecutorService pool = fullPool(submitted);
+        when(threadPool.executor(DEPLOY_THREAD_POOL)).thenReturn(pool);
+        List<ActionListener<MLModel>> getModels = captureGetModels(manager);
+        ActionListener<String> leader = mock(ActionListener.class);
+        ActionListener<String> joined = mock(ActionListener.class);
+        RuntimeException getModelFailure = new RuntimeException("get model failed");
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), leader);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joined);
+        getModels.get(0).onFailure(getModelFailure);
+
+        verify(leader).onFailure(getModelFailure);
+        verify(joined).onFailure(getModelFailure);
+        assertTrue(submitted.isEmpty());
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), mock(ActionListener.class));
+        assertEquals(2, getModels.size());
+    }
+
+    /**
+     * When the deploy pool is full, an automatic deploy's fetched model is not forced onto it: the deploy work is
+     * rejected, the attempt fails for all its callers, and a later caller starts a fresh deploy.
+     */
+    public void testAutoDeploy_GetModelSuccessWithFullDeployPool_failsTheAttempt() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<Boolean> submitted = new ArrayList<>();
+        ExecutorService pool = fullPool(submitted);
+        when(threadPool.executor(DEPLOY_THREAD_POOL)).thenReturn(pool);
+        List<ActionListener<MLModel>> getModels = captureGetModels(manager);
+        ActionListener<String> leader = mock(ActionListener.class);
+        ActionListener<String> joined = mock(ActionListener.class);
+
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), leader);
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joined);
+        getModels.get(0).onResponse(remoteModelWithConnector());
+
+        verify(leader).onFailure(any(OpenSearchRejectedExecutionException.class));
+        verify(joined).onFailure(any(OpenSearchRejectedExecutionException.class));
+        assertEquals(List.of(false), submitted);
+        assertFalse(cacheHelper.isModelRunningOnNode(modelId));
+        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), mock(ActionListener.class));
+        assertEquals(2, getModels.size());
+    }
+
+    /**
+     * An executor whose queue is full: like OpenSearch's thread pools it rejects every submitted task through the
+     * task's own onRejection, and records whether each task asked to be forced past the queue limit.
+     */
+    private static ExecutorService fullPool(List<Boolean> submitted) {
+        ExecutorService pool = mock(ExecutorService.class);
         doAnswer(invocation -> {
             AbstractRunnable task = invocation.getArgument(0);
-            forced.add(task.isForceExecution());
-            task.run();
+            submitted.add(task.isForceExecution());
+            task.onRejection(new OpenSearchRejectedExecutionException("queue full"));
             return null;
-        }).when(deployPool).execute(any());
-        when(threadPool.executor(DEPLOY_THREAD_POOL)).thenReturn(deployPool);
+        }).when(pool).execute(any());
+        return pool;
+    }
+
+    private static List<ActionListener<MLModel>> captureGetModels(MLModelManager manager) {
         List<ActionListener<MLModel>> getModels = new ArrayList<>();
         doAnswer(invocation -> {
             getModels.add(invocation.getArgument(2));
             return null;
         }).when(manager).getModel(any(), any(), any());
-        ActionListener<String> leader = mock(ActionListener.class);
-        ActionListener<String> joined = mock(ActionListener.class);
-        ActionListener<String> later = mock(ActionListener.class);
-
-        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), leader);
-        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), joined);
-        getModels.get(0).onFailure(new RuntimeException("get model failed"));
-
-        verify(leader).onFailure(any(RuntimeException.class));
-        verify(joined).onFailure(any(RuntimeException.class));
-        assertEquals(List.of(true), forced);
-        manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), later);
-        assertEquals(2, getModels.size());
+        return getModels;
     }
 
     /** A synchronous failure ends the automatic deploy attempt, so the next one starts a fresh deploy. */
@@ -1772,6 +1829,41 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }
 
         assertEquals(List.of("alice||"), leaderSaw);
+        assertEquals(List.of("bob||"), joinerSaw);
+    }
+
+    /** As above, for a failed deploy: the failure reaches the joined request inline, still in its own thread context. */
+    public void testAutoDeploy_JoinedRequestFailureKeepsItsOwnThreadContext() {
+        MLModelCacheHelper cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelManager manager = managerWithRealCache(cacheHelper, remoteModelWithConnector());
+        List<ActionListener<Predictable>> engineDeploys = captureEngineDeploys();
+        String userKey = ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT;
+        List<Object> joinerSaw = new ArrayList<>();
+
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "alice||");
+            manager.deployModel(modelId, null, null, FunctionName.REMOTE, false, true, localDeployTask(), mock(ActionListener.class));
+        }
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "bob||");
+            manager
+                .deployModel(
+                    modelId,
+                    null,
+                    null,
+                    FunctionName.REMOTE,
+                    false,
+                    true,
+                    localDeployTask(),
+                    ActionListener.wrap(r -> fail("expected a failure"), e -> joinerSaw.add(threadContext.getTransient(userKey)))
+                );
+        }
+
+        try (ThreadContext.StoredContext ignored = threadContext.stashContext()) {
+            threadContext.putTransient(userKey, "system||");
+            engineDeploys.get(0).onFailure(new RuntimeException("deploy failed"));
+        }
+
         assertEquals(List.of("bob||"), joinerSaw);
     }
 

@@ -1117,17 +1117,33 @@ public class MLModelManager {
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
-        return threadedActionListener(threadPoolName, listener, false);
+        return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, false);
     }
 
-    // forceExecution: a rejected, unforced failure callback is only logged, so a listener that must complete has to
-    // be forced.
-    private <T> ThreadedActionListener<T> threadedActionListener(
-        String threadPoolName,
-        ActionListener<T> listener,
-        boolean forceExecution
-    ) {
-        return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, forceExecution);
+    // An automatic deploy must always complete, or the callers coalesced on it wait forever.
+    private <T> ActionListener<T> deployModelListener(boolean autoDeployModel, ActionListener<T> listener) {
+        return autoDeployModel ? threadedOnResponse(DEPLOY_THREAD_POOL, listener) : threadedActionListener(DEPLOY_THREAD_POOL, listener);
+    }
+
+    /**
+     * Like {@link #threadedActionListener}, for a listener that must always complete. Its success callback still goes
+     * through the pool's bounded queue, so when the queue is full the listener fails with the rejection. Its failure
+     * callback runs inline, on the notifying thread (which can be a transport thread), so it must not block: a rejected
+     * failure callback is only logged, so the listener would never complete.
+     */
+    private <T> ActionListener<T> threadedOnResponse(String threadPoolName, ActionListener<T> listener) {
+        ThreadedActionListener<T> onPool = threadedActionListener(threadPoolName, listener);
+        return new ActionListener<>() {
+            @Override
+            public void onResponse(T response) {
+                onPool.onResponse(response);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        };
     }
 
     /**
@@ -1414,8 +1430,7 @@ public class MLModelManager {
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
-            // An automatic deploy must complete, or the callers coalesced on it wait forever: force its callback.
-            this.getModel(modelId, tenantId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
+            this.getModel(modelId, tenantId, deployModelListener(autoDeployModel, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
                     modelCache.setModelInfo(mlModel);
@@ -1515,7 +1530,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to deploy model {}", modelId, e);
                 handleDeployModelException(modelId, deployOwner, functionName, wrappedListener, e);
-            }), autoDeployModel));
+            })));
         } catch (Exception e) {
             handleDeployModelException(modelId, deployOwner, functionName, listener, e);
         } finally {
@@ -1608,8 +1623,7 @@ public class MLModelManager {
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
-            // An automatic deploy must complete, or the callers coalesced on it wait forever: force its callback.
-            this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
+            this.getModel(modelId, deployModelListener(autoDeployModel, ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
                     modelCache.setModelInfo(mlModel);
@@ -1709,7 +1723,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
                 handleDeployModelException(modelId, deployOwner, functionName, wrappedListener, e);
-            }), autoDeployModel));
+            })));
         } catch (Exception e) {
             handleDeployModelException(modelId, deployOwner, functionName, listener, e);
         } finally {
@@ -1912,16 +1926,13 @@ public class MLModelManager {
                 return leader;
             }
             // Each waiter runs its predict in its own thread context (user-level rate limiting reads it), on the remote
-            // predict pool rather than serially on the leader's thread. Only remote models are auto-deployed. Forced,
-            // because a rejected failure callback is dropped and the waiter would never complete.
+            // predict pool's bounded queue rather than serially on the leader's thread. Only remote models are
+            // auto-deployed.
             inFlight.waiters
                 .add(
-                    new ThreadedActionListener<>(
-                        log,
-                        threadPool,
+                    threadedOnResponse(
                         REMOTE_PREDICT_THREAD_POOL,
-                        ContextPreservingActionListener.wrapPreservingContext(listener, client.threadPool().getThreadContext()),
-                        true
+                        ContextPreservingActionListener.wrapPreservingContext(listener, client.threadPool().getThreadContext())
                     )
                 );
             return inFlight;
