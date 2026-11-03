@@ -8,12 +8,18 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
+import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
+import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
+import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
+import static org.opensearch.ml.common.connector.ConnectorAction.VERTEX_AI;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
@@ -22,10 +28,14 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -40,34 +50,42 @@ import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
+import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
+import okhttp3.MediaType;
+import okhttp3.Request;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.signer.Aws4Signer;
-import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.http.auth.aws.signer.AwsV4HttpSigner;
+import software.amazon.awssdk.http.auth.spi.signer.SignedRequest;
 
 @Log4j2
 public class ConnectorUtils {
 
-    private static final Aws4Signer signer;
+    private static final AwsV4HttpSigner signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
-
-    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
-        .of("sagemaker", "openai", "bedrock", "cohere");
+    public static final String BEDROCK_NOVA_MODEL = "amazon.nova-2-multimodal-embeddings-v1:0";
+    // Matches the Vertex AI API version segment, e.g. "/v1/" or "/v1beta1/", including the trailing slash.
+    private static final Pattern VERTEX_API_VERSION_PATTERN = Pattern.compile("/v1(beta\\d+)?/");
 
     static {
-        signer = Aws4Signer.create();
+        signer = AwsV4HttpSigner.create();
     }
 
     public static RemoteInferenceInputDataSet processInput(
@@ -162,7 +180,18 @@ public class ConnectorUtils {
     }
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        if (inputData.getParameters() == null) {
+            return;
+        }
         Map<String, String> newParameters = new HashMap<>();
+        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
+        Set<String> noEscapParamSet = new HashSet<>();
+        if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
+            String[] keys = noEscapeParams.split(",");
+            for (String key : keys) {
+                noEscapParamSet.add(key.trim());
+            }
+        }
         if (inputData.getParameters() != null) {
             inputData.getParameters().forEach((key, value) -> {
                 if (value == null) {
@@ -170,8 +199,10 @@ public class ConnectorUtils {
                 } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
-                } else {
+                } else if (!noEscapParamSet.contains(key)) {
                     newParameters.put(key, escapeJson(value));
+                } else {
+                    newParameters.put(key, value);
                 }
             });
             inputData.setParameters(newParameters);
@@ -221,11 +252,12 @@ public class ConnectorUtils {
         String responseFilter = parameters.get(RESPONSE_FILTER_FIELD);
         if (MLPostProcessFunction.contains(postProcessFunction)) {
             // in this case, we can use jsonpath to build a List<List<Float>> result from model response.
-            if (StringUtils.isBlank(responseFilter))
+            if (StringUtils.isBlank(responseFilter)) {
                 responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
-
+            }
             Object filteredOutput = JsonPath.read(modelResponse, responseFilter);
-            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput);
+            MLResultDataType dataType = parseMLResultDataTypeFromResponseFilter(responseFilter);
+            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput, dataType);
             return ModelTensors.builder().mlModelTensors(processedResponse).build();
         }
 
@@ -235,13 +267,44 @@ public class ConnectorUtils {
         boolean scriptReturnModelTensor = postProcessFunction != null
             && processedResponse.isPresent()
             && org.opensearch.ml.common.utils.StringUtils.isJson(response);
-        if (responseFilter == null) {
-            connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+
+        // Apply output processor chain if configured
+        Object processedOutput;
+        // Apply output processor chain if configured
+        List<Map<String, Object>> processorConfigs = ProcessorChain.extractProcessorConfigs(parameters);
+        if (!processorConfigs.isEmpty()) {
+            ProcessorChain processorChain = new ProcessorChain(processorConfigs);
+
+            if (responseFilter != null) {
+                // Apply filter first, then processor chain; fall back to full response on path miss
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                processedOutput = processorChain.process(filteredResponse != null ? filteredResponse : response);
+            } else {
+                // Apply processor chain to whole response
+                processedOutput = processorChain.process(response);
+            }
+
+            // Handle the processed output
+            connector.parseResponse(processedOutput, modelTensors, scriptReturnModelTensor);
         } else {
-            Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
-            connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+            // Original flow without processor chain
+            if (responseFilter == null) {
+                connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+            } else {
+                Object filteredResponse = tryReadResponseFilter(response, responseFilter);
+                connector.parseResponse(filteredResponse != null ? filteredResponse : response, modelTensors, scriptReturnModelTensor);
+            }
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
+    }
+
+    private static MLResultDataType parseMLResultDataTypeFromResponseFilter(String responseFilter) {
+        for (MLResultDataType type : MLResultDataType.values()) {
+            if (StringUtils.containsIgnoreCase(responseFilter, "." + type.name())) {
+                return type;
+            }
+        }
+        return null;
     }
 
     private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {
@@ -268,14 +331,16 @@ public class ConnectorUtils {
             ? AwsBasicCredentials.create(accessKey, secretKey)
             : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
 
-        Aws4SignerParams params = Aws4SignerParams
-            .builder()
-            .awsCredentials(credentials)
-            .signingName(signingName)
-            .signingRegion(Region.of(region))
-            .build();
-
-        return signer.sign(request, params);
+        SignedRequest signedRequest = signer
+            .sign(
+                r -> r
+                    .identity(credentials)
+                    .request(request)
+                    .payload(request.contentStreamProvider().orElse(null))
+                    .putProperty(AwsV4HttpSigner.SERVICE_SIGNING_NAME, signingName)
+                    .putProperty(AwsV4HttpSigner.REGION_NAME, region)
+            );
+        return (SdkHttpFullRequest) signedRequest.request();
     }
 
     public static SdkHttpFullRequest buildSdkRequest(
@@ -286,6 +351,7 @@ public class ConnectorUtils {
         SdkHttpMethod method
     ) {
         String charset = parameters.getOrDefault("charset", "UTF-8");
+        payload = cleanPayloadIfNeeded(payload, parameters);
         RequestBody requestBody;
         if (payload != null) {
             requestBody = RequestBody.fromString(payload, Charset.forName(charset));
@@ -299,12 +365,26 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
         String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
+        }
+
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)
-            .uri(URI.create(endpoint))
+            .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
@@ -317,6 +397,47 @@ public class ConnectorUtils {
             builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
         }
         return builder.build();
+    }
+
+    public static Request buildOKHttpStreamingRequest(String action, Connector connector, Map<String, String> parameters, String payload) {
+        okhttp3.RequestBody requestBody;
+        if (payload != null) {
+            requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
+        } else {
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
+        }
+
+        String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
+        }
+        Request.Builder requestBuilder = new Request.Builder();
+        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+        validateSubstitutedHeaders(headers);
+        if (headers != null) {
+            for (String key : headers.keySet()) {
+                requestBuilder.addHeader(key, headers.get(key));
+            }
+        }
+
+        // Add SSE-specific headers
+        requestBuilder.addHeader("Accept-Encoding", "");
+        requestBuilder.addHeader("Accept", "text/event-stream");
+        requestBuilder.addHeader("Cache-Control", "no-cache");
+        requestBuilder.url(endpoint);
+        requestBuilder.post(requestBody);
+        Request request = requestBuilder.build();
+
+        return request;
     }
 
     public static ConnectorAction createConnectorAction(Connector connector, ConnectorAction.ActionType actionType) {
@@ -339,22 +460,40 @@ public class ConnectorUtils {
         String requestBody = null;
         String url = "";
 
-        switch (getRemoteServerFromURL(predictEndpoint)) {
-            case "sagemaker":
+        switch (ConnectorAction.getRemoteServerFromURL(predictEndpoint)) {
+            case SAGEMAKER:
                 url = isCancelAction
                     ? predictEndpoint.replace("CreateTransformJob", "StopTransformJob")
                     : predictEndpoint.replace("CreateTransformJob", "DescribeTransformJob");
                 requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
                 break;
-            case "openai":
-            case "cohere":
+            case OPENAI:
+            case COHERE:
                 url = isCancelAction ? predictEndpoint + "/${parameters.id}/cancel" : predictEndpoint + "/${parameters.id}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
-            case "bedrock":
+            case BEDROCK:
                 url = isCancelAction
                     ? predictEndpoint + "/${parameters.processedJobArn}/stop"
                     : predictEndpoint + "/${parameters.processedJobArn}";
+                method = isCancelAction ? "POST" : "GET";
+                break;
+            case VERTEX_AI:
+                // Vertex batch responses carry a full resource name
+                // (projects/<num>/locations/<loc>/batchPredictionJobs/<id>). Status/cancel are
+                // addressed as {host}/<version>/{name}[:cancel], so build from the endpoint's base
+                // URL. Vertex publishes batchPredictionJobs under both /v1/ and /v1beta1/ (more
+                // generally /v1beta<N>/), so match either version segment.
+                Matcher vertexVersionMatcher = VERTEX_API_VERSION_PATTERN.matcher(predictEndpoint);
+                if (!vertexVersionMatcher.find()) {
+                    throw new IllegalArgumentException(
+                        "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment to "
+                            + "derive the status/cancel URL, got: "
+                            + predictEndpoint
+                    );
+                }
+                String vertexBaseUrl = predictEndpoint.substring(0, vertexVersionMatcher.end());
+                url = isCancelAction ? vertexBaseUrl + "${parameters.name}:cancel" : vertexBaseUrl + "${parameters.name}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
             default:
@@ -374,7 +513,90 @@ public class ConnectorUtils {
             .build();
     }
 
-    public static String getRemoteServerFromURL(String url) {
-        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
+    // Returns null when the path is absent so callers can fall back to the full response.
+    // Needed for tool-use responses (e.g. Bedrock Converse) where content[0].toolUse replaces content[0].text.
+    private static Object tryReadResponseFilter(String response, String responseFilter) {
+        try {
+            return JsonPath.parse(response).read(responseFilter);
+        } catch (PathNotFoundException e) {
+            log.debug("response_filter path '{}' not found in response, using full response", responseFilter);
+            return null;
+        }
+    }
+
+    private static String cleanPayloadIfNeeded(String payload, Map<String, String> parameters) {
+        String model = parameters.get("model");
+        if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
+            return cleanBedrockNovaRequest(payload);
+        }
+        return payload;
+    }
+
+    private static String cleanBedrockNovaRequest(String json) {
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject params = root.getAsJsonObject("singleEmbeddingParams");
+            if (params == null)
+                return json;
+
+            removeIfNull(params, "text");
+            removeIfNull(params, "image");
+            removeIfNull(params, "video");
+            removeIfNull(params, "audio");
+
+            return gson.toJson(root);
+        } catch (Exception e) {
+            log.warn("Failed to clean empty JSON sections: {}", e.getMessage());
+            return json;
+        }
+    }
+
+    private static void removeIfNull(JsonObject parent, String fieldName) {
+        JsonObject field = parent.getAsJsonObject(fieldName);
+        if (field == null)
+            return;
+
+        // Check text field's value or other fields' source.bytes
+        JsonElement element = "text".equals(fieldName)
+            ? field.get("value")
+            : (field.getAsJsonObject("source") != null ? field.getAsJsonObject("source").get("bytes") : null);
+
+        if (element != null && element.isJsonNull()) {
+            parent.remove(fieldName);
+        }
+    }
+
+    @VisibleForTesting
+    static void validateSubstitutedHeaders(Map<String, String> headers) {
+        if (headers == null)
+            return;
+
+        int totalSize = 0;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            String value = entry.getValue();
+            if (value == null)
+                continue;
+
+            // Check for header injection
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if ((c < 0x20 && c != '\t') || c == 0x7F) {
+                    throw new IllegalArgumentException("Header value contains invalid control character");
+                }
+            }
+
+            // Check per-header size (key + value)
+            int headerSize = entry.getKey().length() + value.length();
+            if (headerSize > 8192) {
+                throw new IllegalArgumentException("Header size (key + value) exceeds 8KB limit");
+            }
+
+            totalSize += headerSize;
+        }
+
+        // Check total size
+        if (totalSize > 65536) {
+            throw new IllegalArgumentException("Total headers size (key + value) exceeds 64KB limit");
+        }
     }
 }

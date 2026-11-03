@@ -33,7 +33,7 @@ import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
-import org.opensearch.ml.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
@@ -86,7 +86,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
         Map map = gson.fromJson(entityString, Map.class);
         assert (map.containsKey(RESPONSE_INTERACTION_LIST_FIELD));
         assert (!map.containsKey("next_token"));
-        assert (((ArrayList) map.get(RESPONSE_INTERACTION_LIST_FIELD)).size() == 0);
+        assert (((ArrayList) map.get(RESPONSE_INTERACTION_LIST_FIELD)).isEmpty());
     }
 
     public void testGetInteractions_LastPage() throws IOException {

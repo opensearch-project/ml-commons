@@ -10,5 +10,7 @@ public enum MLOutputType {
     PREDICTION,
     SAMPLE_ALGO,
     MODEL_TENSOR,
-    MCORR_TENSOR
+    MCORR_TENSOR,
+    ML_TASK_OUTPUT,
+    AGENT_V2
 }

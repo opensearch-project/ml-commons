@@ -20,7 +20,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -31,11 +30,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -65,15 +64,12 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    Settings settings;
-
     @Inject
     public GetModelTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -82,7 +78,6 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         super(MLModelGetAction.NAME, transportService, actionFilters, MLModelGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
-        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -113,7 +108,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent
@@ -141,27 +136,34 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                     }
                                 } else {
                                     modelAccessControlHelper
-                                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else {
-                                                log.debug("Completed Get Model Request, id:{}", modelId);
-                                                Connector connector = mlModel.getConnector();
-                                                if (connector != null) {
-                                                    connector.removeCredential();
+                                        .validateModelGroupAccess(
+                                            user,
+                                            mlModel.getModelGroupId(),
+                                            MLModelGetAction.NAME,
+                                            client,
+
+                                            ActionListener.wrap(access -> {
+                                                if (!access) {
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User doesn't have privilege to perform this operation on this model",
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                } else {
+                                                    log.debug("Completed Get Model Request, id:{}", modelId);
+                                                    Connector connector = mlModel.getConnector();
+                                                    if (connector != null) {
+                                                        connector.removeCredential();
+                                                    }
+                                                    wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                                                 }
-                                                wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
-                                            }
-                                        }, e -> {
-                                            log.error("Failed to validate Access for Model Id {}", modelId, e);
-                                            wrappedListener.onFailure(e);
-                                        }));
+                                            }, e -> {
+                                                log.error("Failed to validate Access for Model Id {}", modelId, e);
+                                                wrappedListener.onFailure(e);
+                                            })
+                                        );
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml model {}", r.id(), e);

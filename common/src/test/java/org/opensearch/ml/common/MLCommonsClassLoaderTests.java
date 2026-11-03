@@ -39,6 +39,7 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTen
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.search.SearchModule;
+import org.opensearch.tools.jackson.core.JsonParseException;
 
 public class MLCommonsClassLoaderTests {
 
@@ -183,12 +184,28 @@ public class MLCommonsClassLoaderTests {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testConnectorInitializationException() {
+    public void testConnectorInitializationException() throws JsonParseException {
         // Example initialization parameters for connectors
         String initParam1 = "parameter1";
 
         // Initialize the first connector type
         MLCommonsClassLoader.initConnector("Connector", new Object[] { initParam1 }, String.class);
+    }
+
+    @Test(expected = JsonParseException.class)
+    public void testInitMLInput_JsonParseException() throws IOException {
+        String invalidJsonStr = "invalid-json";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                invalidJsonStr
+            );
+        parser.nextToken();
+
+        MLCommonsClassLoader
+            .initMLInput(FunctionName.AGENT, new Object[] { parser, FunctionName.AGENT }, XContentParser.class, FunctionName.class);
     }
 
     public enum TestEnum {

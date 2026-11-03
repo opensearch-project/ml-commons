@@ -8,10 +8,11 @@ package org.opensearch.ml.action.register;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -19,10 +20,12 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -33,11 +36,17 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -52,16 +61,17 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -71,6 +81,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -162,15 +173,17 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomModelId(registerModelInput.getModelId());
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
-        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
+        if (registerModelInput.getUrl() != null && !isModelUrlAllowed && !isMetricsCorrelation(registerModelInput)) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
         }
-        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+        registerModelInput.setIsHidden(isSuperAdmin);
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager
                 .validateUniqueModelGroupName(
@@ -196,6 +209,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
+    private boolean isMetricsCorrelation(MLRegisterModelInput registerModelInput) {
+        return registerModelInput.getFunctionName() == FunctionName.METRICS_CORRELATION
+            && registerModelInput.getUrl().equals(MCORR_MODEL_URL);
+    }
+
     private void checkUserAccess(
         MLRegisterModelInput registerModelInput,
         ActionListener<MLRegisterModelResponse> listener,
@@ -208,6 +226,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 mlFeatureEnabledSetting,
                 registerModelInput.getTenantId(),
                 registerModelInput.getModelGroupId(),
+                MLRegisterModelAction.NAME,
                 client,
                 sdkClient,
                 ActionListener.wrap(access -> {
@@ -261,6 +280,28 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
+                // An inline connector is persisted alongside connector_id (MLModelManager.performIndexRemoteModel
+                // writes both), and it is the one deploy reads first, so it cannot be left unchecked just because a
+                // connector_id was also supplied - validateInternalConnector below never runs on this branch. This
+                // is request content, so no access check is owed before rejecting it.
+                Connector inlineConnector = registerModelInput.getConnector();
+                if (inlineConnector != null) {
+                    // Same order as validateInternalConnector uses on the other branch, so the same request content
+                    // does not report a different status depending on whether a connector_id happens to accompany it.
+                    ConnectorProtocolValidator.validateProtocolEnabled(inlineConnector.getProtocol(), mlFeatureEnabledSetting);
+                }
+                if (inlineConnector != null && ConnectorProtocols.isMcpProtocol(inlineConnector.getProtocol())) {
+                    log.error("Rejected model registration with an inline MCP connector, protocol {}", inlineConnector.getProtocol());
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Cannot create a model from an inline MCP connector: protocol ["
+                                    + inlineConnector.getProtocol()
+                                    + "] does not define a predict action."
+                            )
+                        );
+                    return;
+                }
                 connectorAccessControlHelper
                     .validateConnectorAccess(
                         sdkClient,
@@ -270,19 +311,49 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         mlFeatureEnabledSetting,
                         ActionListener.wrap(r -> {
                             if (Boolean.TRUE.equals(r)) {
-                                if (registerModelInput.getModelInterface() == null) {
-                                    mlModelManager
-                                        .getConnector(
-                                            registerModelInput.getConnectorId(),
-                                            registerModelInput.getTenantId(),
-                                            ActionListener.wrap(connector -> {
+                                // The connector is fetched even when the request carries its own interface, because
+                                // it is also what tells us whether the model can be backed by this connector at all.
+                                mlModelManager
+                                    .getConnector(
+                                        registerModelInput.getConnectorId(),
+                                        registerModelInput.getTenantId(),
+                                        ActionListener.wrap(connector -> {
+                                            // Checked by protocol rather than by type: mcp_streamable_http is a
+                                            // sibling of McpConnector, not a subclass, and an instanceof check
+                                            // lets it through to a preset model interface lookup that reads its
+                                            // actions and throws UnsupportedOperationException.
+                                            if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                                                // Wording kept exactly as it was before this check moved off
+                                                // instanceof, so callers matching on the message still work.
+                                                log
+                                                    .error(
+                                                        "Rejected model registration against MCP connector {}",
+                                                        registerModelInput.getConnectorId()
+                                                    );
+                                                listener
+                                                    .onFailure(
+                                                        new IllegalArgumentException(
+                                                            "Cannot Create a Model from MCP Connector: "
+                                                                + registerModelInput.getConnectorId()
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                            // An interface supplied on the request wins over the connector's preset.
+                                            if (registerModelInput.getModelInterface() == null) {
                                                 updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
-                                                createModelGroup(registerModelInput, listener);
-                                            }, listener::onFailure)
-                                        );
-                                } else {
-                                    createModelGroup(registerModelInput, listener);
-                                }
+                                            }
+                                            createModelGroup(registerModelInput, listener);
+                                        }, e -> {
+                                            log
+                                                .error(
+                                                    "Failed to load connector {} while registering a model",
+                                                    registerModelInput.getConnectorId(),
+                                                    e
+                                                );
+                                            listener.onFailure(e);
+                                        })
+                                    );
                             } else {
                                 listener
                                     .onFailure(
@@ -317,6 +388,27 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
+        } else if (registerModelInput.getConnector() != null || Strings.isNotBlank(registerModelInput.getConnectorId())) {
+            // uploadModel() routes any registration carrying a connector_id down the remote-model writer whatever
+            // the function name, so these fields are persisted rather than ignored - unvalidated, and without the
+            // connector-access check the REMOTE branch performs. A connector only means anything to a remote model,
+            // so refuse the combination instead of storing a document no API can repair. Model update already
+            // refuses connector edits for non-remote models, so the two paths now agree.
+            log
+                .error(
+                    "Rejected registration of a {} model carrying a connector, which only applies to remote models",
+                    registerModelInput.getFunctionName()
+                );
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "A connector or connector_id can only be used with function_name ["
+                            + FunctionName.REMOTE
+                            + "], but this request uses ["
+                            + registerModelInput.getFunctionName()
+                            + "]."
+                    )
+                );
         } else {
             createModelGroup(registerModelInput, listener);
         }
@@ -350,14 +442,42 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("You must provide connector content when creating a remote model without providing connector id!");
             throw new IllegalArgumentException("You must provide connector content when creating a remote model without connector id!");
         }
-        if (registerModelInput
-            .getConnector()
-            .getActionEndpoint(PREDICT.name(), registerModelInput.getConnector().getParameters()) == null) {
+        Connector connector = registerModelInput.getConnector();
+        // An inline connector establishes a protocol just as the connector API does, so it has to honour the
+        // same opt-in feature flags. Otherwise a gated protocol is reachable by attaching it to a model.
+        // Checked ahead of the validations below so a protocol left disabled reports as disabled rather
+        // than as whatever the next validation happens to find.
+        ConnectorProtocolValidator.validateProtocolEnabled(connector.getProtocol(), mlFeatureEnabledSetting);
+        // An MCP connector carries no actions, so every action accessor used below - and later by the preset
+        // model interface lookup - throws UnsupportedOperationException on one. Reject it before reading any
+        // of them, otherwise an unusable request escapes as a 500 "Not implemented." instead of a 4xx.
+        if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+            log.error("Rejected model registration with an inline MCP connector, protocol {}", connector.getProtocol());
+            throw new IllegalArgumentException(
+                "Cannot create a model from an inline MCP connector: protocol ["
+                    + connector.getProtocol()
+                    + "] does not define a predict action."
+            );
+        }
+        if (connector.getActionEndpoint(PREDICT.name(), connector.getParameters()) == null) {
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
+        ConnectorProtocolValidator.validateMutualTlsSupported(connector.getProtocol(), connector.getConnectorClientConfig());
+        ConnectorProtocolValidator.validateMutualTlsEnabled(connector.getConnectorClientConfig(), mlFeatureEnabledSetting);
+        ConnectorProtocolValidator
+            .validateMutualTlsScheme(connector.getActions(), connector.getParameters(), connector.getConnectorClientConfig());
         // check if the connector url is trusted
-        registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
+        // model, so no need to verify the connector endpoint as trusted or not
+        if (!registerModelInput.getIsHidden()) {
+            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+        }
+
+        for (ConnectorAction action : connector.getActions()) {
+            Map<String, String> headers = action.getHeaders();
+            AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
+        }
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
@@ -458,5 +578,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
             .tenantId(registerModelInput.getTenantId())
             .build();
+    }
+
+    // this method is only to stub static method.
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }

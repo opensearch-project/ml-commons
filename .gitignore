@@ -10,3 +10,5 @@ ml-algorithms/build/
 plugin/build/
 .DS_Store
 */bin/
+**/*.factorypath
+.kiro/

@@ -1,3 +1,4 @@
+
 /*
  * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
@@ -6,30 +7,46 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -61,15 +78,24 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    private SdkAsyncHttpClient httpClient;
+    @Setter
+    private volatile boolean connectorPrivateIpEnabled;
+    @Setter
+    private volatile List<Pattern> connectorTrustedPrivateEndpoints;
+    @Setter
+    private volatile List<Pattern> connectorRestrictedIpPatterns;
+
+    @Setter
+    @Getter
+    private volatile List<String> trustedConnectorEndpointsRegex;
+
+    @Setter
+    @Getter
+    private StreamTransportService streamTransportService;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @Override
@@ -88,6 +114,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
@@ -95,11 +124,23 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    break;
+                case "PUT":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    break;
+                case "DELETE":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
             }
+            ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // TODO: We should have an idea to identify the source of the request(predict/agent execution),
+            // but currently it's not easy, so reusing the predict thread pool won't harm anything.
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
@@ -107,7 +148,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        actionListener,
+                        ActionListener.runBefore(threadedListener, storedContext::restore), // Restore context before calling listener,
                         parameters,
                         connector,
                         scriptService,
@@ -116,13 +157,40 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
+            AccessController
+                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute {} in aws connector: {}", action, exception.getMessage(), exception);
             actionListener.onFailure(exception);
         } catch (Throwable e) {
             log.error("Failed to execute {} in aws connector", action, e);
             actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
+        }
+    }
+
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
+            String llmInterface = parameters.get(LLM_INTERFACE);
+            llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+            llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+            validateLLMInterface(llmInterface);
+
+            StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null, parameters);
+            handler.startStream(action, parameters, payload, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to execute streaming", e);
+            actionListener.onFailure(new MLException("Fail to execute streaming", e));
         }
     }
 
@@ -134,5 +202,51 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         String region = connector.getRegion();
 
         return ConnectorUtils.signRequest(request, accessKey, secretKey, sessionToken, signingName, region);
+    }
+
+    private void validateLLMInterface(String llmInterface) {
+        switch (llmInterface) {
+            case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
+                break;
+            default:
+                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+        }
+    }
+
+    @VisibleForTesting
+    protected SdkAsyncHttpClient getHttpClient() {
+        if (httpClientRef.get() == null) {
+            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            Boolean skipSslVerification = super.getConnectorClientConfig().getSkipSslVerification();
+            boolean skipSslVerificationValue = skipSslVerification != null ? skipSslVerification : false;
+            if (skipSslVerificationValue) {
+                log.warn("SSL certificate verification is DISABLED for connector {}", connector.getName());
+            }
+            log
+                .info(
+                    "AwsConnectorExecutor creating HTTP client for connector: {} - maxConnections: {}, connectionTimeout: {}s, readTimeout: {}s",
+                    connector.getName(),
+                    maxConnection,
+                    super.getConnectorClientConfig().getConnectionTimeout(),
+                    super.getConnectorClientConfig().getReadTimeout()
+                );
+            this.httpClientRef
+                .compareAndSet(
+                    null,
+                    MLHttpClientFactory
+                        .getAsyncHttpClient(
+                            connectionTimeout,
+                            readTimeout,
+                            maxConnection,
+                            connectorPrivateIpEnabled,
+                            connectorTrustedPrivateEndpoints,
+                            connectorRestrictedIpPatterns,
+                            skipSslVerificationValue
+                        )
+                );
+        }
+        return httpClientRef.get();
     }
 }

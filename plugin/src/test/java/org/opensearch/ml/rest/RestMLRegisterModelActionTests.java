@@ -12,7 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -27,6 +27,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -36,12 +37,12 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -139,8 +140,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
-        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterAsymmetricModelRequest() throws Exception {
@@ -152,12 +152,11 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals("query: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
-        assertEquals("passage: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
@@ -166,7 +165,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testRegisterModelRequestLocalInferenceDisabled() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);

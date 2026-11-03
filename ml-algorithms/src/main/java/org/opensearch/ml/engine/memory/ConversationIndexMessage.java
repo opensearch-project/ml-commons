@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Instant;
 
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 
 import lombok.Builder;
 import lombok.Data;
@@ -21,6 +22,7 @@ public class ConversationIndexMessage extends BaseMessage {
     private String response;
     private Boolean finalAnswer;
     private Instant createdTime;
+    private Instant updatedTime;
 
     @Builder(builderMethodName = "conversationIndexMessageBuilder")
     public ConversationIndexMessage(String type, String sessionId, String question, String response, boolean finalAnswer) {
@@ -30,6 +32,7 @@ public class ConversationIndexMessage extends BaseMessage {
         this.response = response;
         this.finalAnswer = finalAnswer;
         this.createdTime = Instant.now();
+        this.updatedTime = Instant.now();
     }
 
     @Override
@@ -53,6 +56,9 @@ public class ConversationIndexMessage extends BaseMessage {
             builder.field("final_answer", finalAnswer);
         }
         builder.field("created_time", createdTime);
+        if (updatedTime != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, updatedTime);
+        }
         builder.endObject();
         return builder;
     }

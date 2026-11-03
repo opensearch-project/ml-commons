@@ -1,6 +1,8 @@
 ### OpenAI connector blueprint example for chat:
 
 #### this blueprint is created from OpenAI doc: https://platform.openai.com/docs/api-reference/chat
+
+> **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -10,7 +12,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.openai.com",
-    "model": "gpt-3.5-turbo"
+    "model": "gpt-4o-mini"
   },
   "credential": {
     "openAI_key": "<PLEASE ADD YOUR OPENAI API KEY HERE>"
@@ -20,6 +22,7 @@ POST /_plugins/_ml/connectors/_create
       "action_type": "predict",
       "method": "POST",
       "url": "https://${parameters.endpoint}/v1/chat/completions",
+      "supports_structured_output": true,
       "headers": {
         "Authorization": "Bearer ${credential.openAI_key}"
       },
@@ -68,7 +71,7 @@ POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
             "id": "chatcmpl-7g0QJH6nuFW94l8tDkJzxm0ntaPNd",
             "object": "chat.completion",
             "created": 1690245759,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o-mini",
             "choices": [
               {
                 "index": 0,

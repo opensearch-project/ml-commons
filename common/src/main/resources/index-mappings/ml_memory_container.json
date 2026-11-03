@@ -1,0 +1,123 @@
+{
+  "_meta": {
+    "schema_version": 3
+  },
+  "properties": {
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "description": {
+      "type": "text"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "orphan_sweep_baseline_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "index_prefix": {
+          "type": "keyword"
+        },
+        "embedding_model_type": {
+          "type": "keyword"
+        },
+        "embedding_model_id": {
+          "type": "keyword"
+        },
+        "embedding_dimension": {
+          "type": "integer"
+        },
+        "llm_id": {
+          "type": "keyword"
+        },
+        "disable_history": {
+          "type": "boolean"
+        },
+        "disable_session": {
+          "type": "boolean"
+        },
+        "use_system_index": {
+          "type": "boolean"
+        },
+        "max_infer_size": {
+          "type": "integer"
+        },
+        "strategies": {
+          "type": "nested",
+          "properties": {
+            "id": {
+              "type": "keyword"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "keyword"
+            },
+            "namespace": {
+              "type": "keyword"
+            },
+            "configuration": {
+              "type": "flat_object"
+            }
+          }
+        },
+        "index_settings": {
+          "type": "flat_object"
+        },
+        "retention_policy": {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "long-term": {
+              "type": "object",
+              "properties": {
+                "retention_days": { "type": "integer" },
+                "max_count": { "type": "integer" }
+              }
+            },
+            "history": {
+              "type": "object",
+              "properties": {
+                "max_count": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "backend_roles": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    },
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

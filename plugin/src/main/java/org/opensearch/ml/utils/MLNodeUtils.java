@@ -10,6 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_ROLE_NAME;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -28,15 +29,16 @@ import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.SpecVersion.VersionFlag;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.Error;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 
 import lombok.experimental.UtilityClass;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @UtilityClass
 public class MLNodeUtils {
@@ -71,17 +73,17 @@ public class MLNodeUtils {
         ObjectMapper mapper = new ObjectMapper();
         // parse the schema JSON as string
         JsonNode schemaNode = mapper.readTree(schemaString);
-        JsonSchema schema = JsonSchemaFactory.getInstance(VersionFlag.V202012).getSchema(schemaNode);
+        Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12).getSchema(schemaNode);
 
         // JSON data to validate
         JsonNode jsonNode = mapper.readTree(instanceString);
 
         // Validate JSON node against the schema
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        List<Error> errors = schema.validate(jsonNode);
         if (!errors.isEmpty()) {
             throw new OpenSearchParseException(
                 "Validation failed: "
-                    + Arrays.toString(errors.toArray(new ValidationMessage[0]))
+                    + Arrays.toString(errors.toArray(new Error[0]))
                     + " for instance: "
                     + instanceString
                     + " with schema: "
@@ -91,36 +93,43 @@ public class MLNodeUtils {
     }
 
     /**
-     * This method processes the input JSON string and replaces the string values of the parameters with JSON objects if the string is a valid JSON.
+     * This method processes the input JSON string and replaces the string values of the parameters with JSON objects if the string is a valid JSON, unless the schema defines the value as a string.
      * @param inputJson The input JSON string
+     * @param schemaJson The schema matching the input JSON string
      * @return The processed JSON string
      */
-    public static String processRemoteInferenceInputDataSetParametersValue(String inputJson) throws IOException {
+    public static String processRemoteInferenceInputDataSetParametersValue(String inputJson, String schemaJson) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(inputJson);
+        JsonNode schemaNode = mapper.readTree(schemaJson);
+
+        // Get the schema properties for parameters if they exist
+        JsonNode parametersSchema = schemaNode.path("properties").path("parameters").path("properties");
 
         if (rootNode.has("parameters") && rootNode.get("parameters").isObject()) {
             ObjectNode parametersNode = (ObjectNode) rootNode.get("parameters");
 
-            parametersNode.fields().forEachRemaining(entry -> {
+            parametersNode.properties().spliterator().forEachRemaining(entry -> {
                 String key = entry.getKey();
                 JsonNode value = entry.getValue();
 
-                if (value.isTextual()) {
-                    String textValue = value.asText();
+                if (value.isTextual() && !isStringTypeInSchema(parametersSchema, key)) {
                     try {
-                        // Try to parse the string as JSON
-                        JsonNode parsedValue = mapper.readTree(textValue);
-                        // If successful, replace the string with the parsed JSON
+                        JsonNode parsedValue = mapper.readTree(value.asText());
                         parametersNode.set(key, parsedValue);
-                    } catch (IOException e) {
-                        // If parsing fails, it's not a valid JSON string, so keep it as is
+                    } catch (JacksonException e) {
+                        // If parsing fails, keep it as is
                         parametersNode.set(key, value);
                     }
                 }
             });
         }
         return mapper.writeValueAsString(rootNode);
+    }
+
+    private static boolean isStringTypeInSchema(JsonNode schema, String fieldName) {
+        JsonNode typeNode = schema.path(fieldName).path("type");
+        return typeNode.isTextual() && typeNode.asText().equals("string");
     }
 
     public static void checkOpenCircuitBreaker(MLCircuitBreakerService mlCircuitBreakerService, MLStats mlStats) {

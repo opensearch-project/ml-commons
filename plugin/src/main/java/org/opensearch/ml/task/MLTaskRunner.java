@@ -22,6 +22,7 @@ import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
@@ -87,7 +88,6 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     public void run(FunctionName functionName, Request request, TransportService transportService, ActionListener<Response> listener) {
         if (!request.isDispatchTask()) {
             log.debug("Run ML request {} locally", request.getRequestID());
-            checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
             checkCBAndExecute(functionName, request, listener);
             return;
         }
@@ -113,25 +113,47 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             if (clusterService.localNode().getId().equals(nodeId)) {
                 // Execute ML task locally
                 log.debug("Execute ML request {} locally on node {}", request.getRequestID(), nodeId);
-                checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
-                executeTask(request, listener);
+                checkCBAndExecute(functionName, request, listener);
             } else {
                 // Execute ML task remotely
                 log.debug("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
                 request.setDispatchTask(false);
-                transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                if (isStreamingRequest(request)) {
+                    log.debug("Using streaming transport for request {}", request.getRequestID());
+                    transportService
+                        .sendRequest(
+                            node,
+                            getTransportStreamActionName(),
+                            request,
+                            TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
+                            getResponseStreamHandler(request)
+                        );
+                } else {
+                    transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                }
             }
         }, listener::onFailure));
     }
 
     protected abstract String getTransportActionName();
 
+    protected abstract String getTransportStreamActionName();
+
     protected abstract TransportResponseHandler<Response> getResponseHandler(ActionListener<Response> listener);
+
+    protected TransportResponseHandler<Response> getResponseStreamHandler(Request request) {
+        throw new UnsupportedOperationException("Streaming is not supported.");
+    }
+
+    protected boolean isStreamingRequest(Request request) {
+        return false;
+    }
 
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 
     protected void checkCBAndExecute(FunctionName functionName, Request request, ActionListener<Response> listener) {
-        if (functionName != FunctionName.REMOTE) {
+        // for agent and remote model prediction we don't need to check circuit breaker
+        if (functionName != FunctionName.REMOTE && functionName != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         executeTask(request, listener);

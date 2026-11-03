@@ -26,9 +26,9 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.BaseModelConfig.FrameworkType;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
@@ -91,10 +91,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
@@ -160,10 +160,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
 
@@ -177,10 +177,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void test_ValidationFailedException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
 
@@ -210,10 +210,10 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_NoAccessWhenModelNameAlreadyExists() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
@@ -248,6 +248,29 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         assertEquals("Runtime exception", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
+    public void testDoExecute_usesCustomModelId() {
+        ArgumentCaptor<MLRegisterModelMetaInput> inputCaptor = ArgumentCaptor.forClass(MLRegisterModelMetaInput.class);
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            MLRegisterModelMetaInput input = invocation.getArgument(0);
+            assertEquals("custom-model-id", input.getModelId());
+            listener.onResponse("custom-model-id");
+            return null;
+        }).when(mlModelManager).registerModelMeta(inputCaptor.capture(), any());
+
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
+
+        MLRegisterModelMetaRequest actionRequest = prepareRequest("modelGroupID");
+        actionRequest.getMlRegisterModelMetaInput().setModelId("custom-model-id");
+        action.doExecute(task, actionRequest, actionListener);
+
+        ArgumentCaptor<MLRegisterModelMetaResponse> responseCaptor = ArgumentCaptor.forClass(MLRegisterModelMetaResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals("custom-model-id", responseCaptor.getValue().getModelId());
+        assertEquals("custom-model-id", inputCaptor.getValue().getModelId());
+    }
+
     private MLRegisterModelMetaRequest prepareRequest(String modelGroupID) {
         MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
@@ -264,6 +287,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
                     123,
                     FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512

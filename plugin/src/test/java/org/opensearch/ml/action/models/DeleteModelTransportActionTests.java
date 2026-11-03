@@ -20,7 +20,7 @@ import static org.opensearch.ml.action.models.DeleteModelTransportAction.OS_STAT
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.SEARCH_FAILURE_MSG;
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT_MSG;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -60,6 +60,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
@@ -75,12 +76,12 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
@@ -187,10 +188,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
         when(clusterService.getSettings()).thenReturn(settings);
@@ -417,10 +418,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
@@ -498,10 +499,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
@@ -1063,5 +1064,41 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
+    }
+
+    // Issue #4999: models stored before the space_type requirement (#3786) must still be deletable.
+    @Test
+    public void testDeleteLegacyRemoteModel_withoutSpaceType_Success() throws IOException, InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        String legacySource = "{"
+            + "\"name\":\"legacy_remote_text_embedding_model\","
+            + "\"algorithm\":\"REMOTE\","
+            + "\"model_state\":\"REGISTERED\","
+            + "\"connector_id\":\"test_connector_id\","
+            + "\"model_config\":{"
+            + "\"model_type\":\"TEXT_EMBEDDING\","
+            + "\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\""
+            + "}"
+            + "}";
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, new BytesArray(legacySource), null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(deleteResponse.getId(), captor.getValue().getId());
+        assertEquals(deleteResponse.getResult(), captor.getValue().getResult());
     }
 }

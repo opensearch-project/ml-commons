@@ -5,28 +5,39 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
+import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -39,10 +50,14 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -50,8 +65,8 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -130,7 +145,11 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(List.of("mock"));
+            return null;
+        }).when(mlEngine).encrypt(any(), any(), any());
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
@@ -141,11 +160,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
-            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+            ML_COMMONS_MCP_CONNECTOR_ENABLED
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(this.clusterService.getSettings()).thenReturn(settings);
 
         action = new TransportCreateConnectorAction(
             transportService,
@@ -190,6 +211,47 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .credential(credential)
             .build();
         when(request.getMlCreateConnectorInput()).thenReturn(input);
+    }
+
+    /** Create has no stored connector, so asking for mutual TLS is always newly relying on it. */
+    public void test_execute_rejectsMutualTlsWhileSettingOff() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).build());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    public void test_execute_acceptsMutualTlsWhileSettingOn() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
 
     public void test_execute_connectorAccessControl_notEnabled_success() throws InterruptedException {
@@ -324,7 +386,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_connectorAccessControlEnabled_adminSpecifyAllBackendRoles_exception() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(connectorAccessControlHelper.isAdmin(any(User.class))).thenReturn(true);
+        ThreadContext threadContext1 = new ThreadContext(settings);
+        threadContext1.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
+        when(threadPool.getThreadContext()).thenReturn(threadContext1);
         input.setAddAllBackendRoles(true);
         input.setBackendRoles(null);
 
@@ -541,10 +605,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Connector URL is not matching the trusted connector endpoint regex, URL is: https://api.openai1.com/v1/completions",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", argumentCaptor.getValue().getMessage());
     }
 
     public void test_connector_creation_success_deepseek() {
@@ -594,6 +655,195 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void test_mcp_connector_creation_fail_default() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .credential(credential)
+            .url("test")
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<OpenSearchException> argCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
+    }
+
+    private static MLCreateConnectorInput mcpMutualTlsInput(String protocol, String url) {
+        return MLCreateConnectorInput
+            .builder()
+            .name("mcp_mtls")
+            .version("1")
+            .protocol(protocol)
+            .url(url)
+            .credential(Map.of("client_cert_pem", "cert", "client_key_pem", "key"))
+            .connectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build())
+            .build();
+    }
+
+    /**
+     * The whole create path, not only the validator: an MCP connector requesting mutual TLS must be accepted,
+     * since its executor applies the client certificate. Guards against a protocol check rejecting it up front.
+     */
+    public void test_execute_mcpConnectorWithMutualTls_isCreated() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        for (String protocol : new String[] { ConnectorProtocols.MCP_SSE, ConnectorProtocols.MCP_STREAMABLE_HTTP }) {
+            ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+            action.doExecute(task, new MLCreateConnectorRequest(mcpMutualTlsInput(protocol, "https://api.openai.com/mcp")), listener);
+
+            verify(listener, never()).onFailure(any());
+            verify(listener).onResponse(any(MLCreateConnectorResponse.class));
+        }
+    }
+
+    /** Over http:// no TLS handshake happens, so the client certificate would never be presented. */
+    public void test_execute_mcpConnectorWithMutualTlsOnCleartextUrl_isRejected() {
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+
+        action.doExecute(task, new MLCreateConnectorRequest(mcpMutualTlsInput(ConnectorProtocols.MCP_SSE, "http://api.openai.com/mcp")), actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage(), captor.getValue().getMessage().contains("cleartext endpoint"));
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
+    }
+
+    public void test_vertexai_connector_creation_fail_when_disabled() {
+        // Vertex AI connector is opt-in; flag defaults to false, so creation must be rejected.
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        Map<String, String> credential = ImmutableMap.of("private_key", "mockKey", "client_email", "mock@example.com");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .url("test")
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        Exception exception = argCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) exception).status());
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, exception.getMessage());
+        assertTrue(exception.getMessage().contains("Vertex AI"));
+    }
+
+    public void test_vertexai_connector_creation_proceeds_when_enabled() {
+        // With the flag enabled, creation proceeds past the gate and indexes the connector.
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/v1/completions")
+                    .build()
+            );
+        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com", "auth_mode", "adc");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters)
+            .actions(actions)
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLCreateConnectorResponse> captor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(CONNECTOR_ID, captor.getValue().getConnectorId());
     }
 
     public void test_connector_creation_success_rekognition() {
@@ -659,4 +909,281 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
+
+    public void testCreateConnector_DangerousIpBlocked() {
+        List<String> dangerousUrls = Arrays.asList("http://127.0.0.1:9200", "http://169.254.169.254:9200", "http://[::1]:9200");
+
+        for (String url : dangerousUrls) {
+            MLCreateConnectorInput input = createConnectorInputWithUrl(url);
+            MLCreateConnectorRequest request = new MLCreateConnectorRequest(input);
+
+            ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+            action.doExecute(null, request, listener);
+
+            ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+            verify(listener).onFailure(captor.capture());
+
+            String errorMsg = captor.getValue().getMessage().toLowerCase();
+            assertTrue(
+                "Expected security validation error for URL: " + url + ", but got: " + errorMsg,
+                errorMsg.contains("not matching the trusted connector")
+                    || errorMsg.contains("restricted ip")
+                    || errorMsg.contains("private ip")
+            );
+        }
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_startsWithHyphen() {
+        assertInvalidConnectorId("-invalid", "connector id must not start with '-'");
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_containsSpecialCharacters() {
+        assertInvalidConnectorId(
+            "invalid@connector",
+            "connector id must contain only letters, digits, underscores, and hyphens, and must start with a letter or digit"
+        );
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_blank() {
+        assertInvalidConnectorId("   ", "connector id is invalid");
+    }
+
+    public void testCreateConnector_invalidCustomConnectorId_tooLong() {
+        assertInvalidConnectorId(
+            "a".repeat(MAX_DOCUMENT_ID_LENGTH + 1),
+            "connector id is too long, max length is " + MAX_DOCUMENT_ID_LENGTH
+        );
+    }
+
+    private void assertInvalidConnectorId(String connectorId, String expectedMessage) {
+        input.setConnectorId(connectorId);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> action.doExecute(task, request, actionListener));
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    public void testCreateConnector_usesCustomConnectorId() throws InterruptedException {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportCreateConnectorAction actionWithMockSdk = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mockSdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorId("bedrock-connector");
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(
+            new ShardId(ML_CONNECTOR_INDEX, "_na_", 0),
+            "bedrock-connector",
+            1,
+            0,
+            2,
+            true
+        );
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(CompletableFuture.completedFuture(putResponse));
+
+        actionWithMockSdk.doExecute(task, request, actionListener);
+
+        verify(mockSdkClient).putDataObjectAsync(putRequestCaptor.capture());
+        assertEquals("bedrock-connector", putRequestCaptor.getValue().id());
+        ArgumentCaptor<MLCreateConnectorResponse> responseCaptor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals("bedrock-connector", responseCaptor.getValue().getConnectorId());
+    }
+
+    public void testCreateConnector_duplicateCustomConnectorId() throws InterruptedException {
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        TransportCreateConnectorAction actionWithMockSdk = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mockSdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorId("bedrock-connector");
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId(ML_CONNECTOR_INDEX, "_na_", 0),
+            "bedrock-connector",
+            "document already exists"
+        );
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        future.completeExceptionally(conflict);
+        when(mockSdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        actionWithMockSdk.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("connector id 'bedrock-connector' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    public void testCreateConnector_PrivateIpWithTrustedEndpoint() {
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(true);
+
+        MLCreateConnectorInput input = createConnectorInputWithUrl("http://10.0.0.1:9200");
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(input);
+
+        ActionListener<MLCreateConnectorResponse> listener = mock(ActionListener.class);
+        action.doExecute(null, request, listener);
+
+        verify(listener, never()).onFailure(argThat(e ->
+                e.getMessage().toLowerCase().contains("restricted ip")
+        ));
+    }
+
+    private MLCreateConnectorInput createConnectorInputWithUrl(String url) {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url(url)
+            .requestBody("{\"input\": \"test\"}")
+            .build();
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+
+        return MLCreateConnectorInput
+            .builder()
+            .name("test_connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(action))
+            .credential(credential)
+            .build();
+    }
+
+    public void test_execute_mutualTls_missingCertificates_failsAtCreateTime() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        // IllegalArgumentException, so a malformed request is a 400 rather than a 500.
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue("Should name the missing credential fields, got: " + failure.getMessage(), failure.getMessage().contains("client_cert_pem"));
+    }
+
+    public void test_execute_mutualTls_withSkipSslVerification_failsAtCreateTime() {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input
+            .setConnectorClientConfig(
+                ConnectorClientConfig.builder().mutualTlsEnabled(true).skipSslVerification(true).keystoreType("PEM").build()
+            );
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        Exception failure = argumentCaptor.getValue();
+        // IllegalArgumentException, so a malformed request is a 400 rather than a 500.
+        assertTrue("Expected IllegalArgumentException, got: " + failure.getClass(), failure instanceof IllegalArgumentException);
+        assertTrue(
+            "Should reject the unsafe combination, got: " + failure.getMessage(),
+            failure.getMessage().contains("skip_ssl_verification")
+        );
+    }
+
+    public void test_execute_mutualTls_validConfig_passesValidation() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        Map<String, String> mtlsCredential = new HashMap<>();
+        mtlsCredential.put("client_cert_pem", "cert");
+        mtlsCredential.put("client_key_pem", "key");
+        input.setCredential(mtlsCredential);
+        input.setConnectorClientConfig(ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        assertNoCertificateValidationFailure();
+    }
+
+    public void test_execute_noClientConfig_validationSkipped() throws InterruptedException {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setConnectorClientConfig(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        assertNoCertificateValidationFailure();
+    }
+
+    /**
+     * Certificate validation is the only failure these tests care about; anything else is noise from
+     * the mocked indexing path. Asserting on the message rather than the exception type keeps this
+     * from silently passing if the type ever changes.
+     */
+    private void assertNoCertificateValidationFailure() {
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        // Mockito.atLeast, qualified: LuceneTestCase inherits an atLeast(int) that would win here.
+        verify(actionListener, Mockito.atLeast(0)).onFailure(argumentCaptor.capture());
+        for (Exception failure : argumentCaptor.getAllValues()) {
+            String message = String.valueOf(failure.getMessage());
+            assertFalse(
+                "Certificate validation should have passed, but failed with: " + message,
+                message.contains("client_cert_pem") || message.contains("skip_ssl_verification") || message.contains("mutual TLS")
+            );
+        }
+    }
+
 }

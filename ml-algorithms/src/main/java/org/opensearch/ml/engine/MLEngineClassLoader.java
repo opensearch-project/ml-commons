@@ -21,6 +21,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.annotation.Ingester;
+import org.opensearch.ml.engine.annotation.Processor;
+import org.opensearch.ml.engine.processor.MLProcessorType;
 import org.reflections.Reflections;
 
 @SuppressWarnings("removal")
@@ -33,6 +35,7 @@ public class MLEngineClassLoader {
     private static Map<Enum<?>, Class<?>> mlAlgoClassMap = new HashMap<>();
     private static Map<String, Class<?>> connectorExecutorMap = new HashMap<>();
     private static Map<String, Class<?>> ingesterMap = new HashMap<>();
+    private static Map<MLProcessorType, Class<?>> mlProcessorMap = new HashMap<>();
 
     /**
      * This map contains pre-created thread-safe ML objects.
@@ -44,6 +47,7 @@ public class MLEngineClassLoader {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 loadClassMapping();
                 loadIngestClassMapping();
+                loadMLProcessorClassMapping();
                 return null;
             });
         } catch (PrivilegedActionException e) {
@@ -96,6 +100,20 @@ public class MLEngineClassLoader {
         }
     }
 
+    private static void loadMLProcessorClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.engine.processor");
+
+        Set<Class<?>> processorClasses = reflections.getTypesAnnotatedWith(Processor.class);
+        // Load processor class
+        for (Class<?> clazz : processorClasses) {
+            Processor processorExecutor = clazz.getAnnotation(Processor.class);
+            MLProcessorType processorType = processorExecutor.value();
+            if (processorType != null) {
+                mlProcessorMap.put(processorType, clazz);
+            }
+        }
+    }
+
     private static void loadIngestClassMapping() {
         Reflections reflections = new Reflections("org.opensearch.ml.engine.ingest");
         Set<Class<?>> ingesterClasses = reflections.getTypesAnnotatedWith(Ingester.class);
@@ -138,6 +156,9 @@ public class MLEngineClassLoader {
         }
         if (clazz == null) {
             clazz = ingesterMap.get(type);
+        }
+        if (clazz == null) {
+            clazz = mlProcessorMap.get(type);
         }
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);

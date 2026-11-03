@@ -42,7 +42,7 @@ GET /<index>/_search\?search_pipeline\=<search pipeline name>
   },
   "ext": {
       "generative_qa_parameters": {
-        "llm_model": <LLM model> (e.g. "gpt-3.5-turbo"),
+        "llm_model": <LLM model> (e.g. "gpt-4o-mini"),
         "llm_question": <question string>
       }
   }

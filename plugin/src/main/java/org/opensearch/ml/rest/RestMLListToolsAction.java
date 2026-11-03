@@ -76,6 +76,7 @@ public class RestMLListToolsAction extends BaseRestHandler {
                             .description(value.getDefaultDescription())
                             .type(value.getDefaultType())
                             .version(value.getDefaultVersion())
+                            .attributes(value.getDefaultAttributes())
                             .build()
                     )
             );

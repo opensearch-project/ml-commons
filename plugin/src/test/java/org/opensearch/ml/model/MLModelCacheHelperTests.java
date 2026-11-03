@@ -10,7 +10,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
@@ -296,6 +296,27 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.syncWorkerNodes(modelWorkerNodes);
         assertArrayEquals(new String[] { modelId }, cacheHelper.getAllModels());
         assertArrayEquals(new String[] { newNodeId }, cacheHelper.getWorkerNodes(modelId));
+    }
+
+    public void testGetTargetWorkerNodes() {
+        String[] workerNodes = cacheHelper.getTargetWorkerNodes(modelId);
+        assertNull(workerNodes);
+        String newNodeId = "new_node_id";
+        Map<String, Set<String>> modelPlannningWorkerNodes = new HashMap<>();
+        modelPlannningWorkerNodes.put(modelId, ImmutableSet.of(newNodeId));
+        cacheHelper.syncPlanningWorkerNodes(modelPlannningWorkerNodes);
+        workerNodes = cacheHelper.getTargetWorkerNodes(modelId);
+        assertArrayEquals(new String[] { "new_node_id" }, workerNodes);
+
+    }
+
+    public void testSyncPlanningWorkerNodes() {
+        String newNodeId = "new_node_id";
+        Map<String, Set<String>> modelPlannningWorkerNodes = new HashMap<>();
+        modelPlannningWorkerNodes.put(modelId, ImmutableSet.of(newNodeId));
+        cacheHelper.syncPlanningWorkerNodes(modelPlannningWorkerNodes);
+        assertArrayEquals(new String[] { modelId }, cacheHelper.getAllModels());
+        assertArrayEquals(new String[] { newNodeId }, cacheHelper.getTargetWorkerNodes(modelId));
     }
 
     public void testSyncWorkerNodes_ModelState() {

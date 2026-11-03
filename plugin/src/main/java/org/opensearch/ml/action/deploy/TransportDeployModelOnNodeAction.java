@@ -140,6 +140,8 @@ public class TransportDeployModelOnNodeAction extends
 
         String localNodeId = clusterService.localNode().getId();
 
+        log.debug("Starting model deployment for model: {} on node {}", modelId, localNodeId);
+
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
             .wrap(res -> { log.info("deploy model task done {}", taskId); }, ex -> {
                 logException("Deploy model task failed: " + taskId, ex, log);
@@ -155,6 +157,12 @@ public class TransportDeployModelOnNodeAction extends
             deployToAllNodes,
             mlTask,
             ActionListener.wrap(r -> {
+                log
+                    .debug(
+                        "Model deployed successfully on local node: {}. Sending DONE message to coordinating node: {}",
+                        localNodeId,
+                        coordinatingNodeId
+                    );
                 MLForwardInput mlForwardInput = MLForwardInput
                     .builder()
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
@@ -165,16 +173,15 @@ public class TransportDeployModelOnNodeAction extends
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    transportService
-                        .sendRequest(
-                            getNodeById(coordinatingNodeId),
-                            MLForwardAction.NAME,
-                            deployModelDoneMessage,
-                            new ActionListenerResponseHandler<>(taskDoneListener, MLForwardResponse::new)
-                        );
-                }
+                sendDeployModelDone(coordinatingNodeId, taskId, deployModelDoneMessage, taskDoneListener);
             }, e -> {
+                log
+                    .warn(
+                        "Model deployment failed on local node: {}. Sending FAILED message to coordinating node {} with error: {}",
+                        localNodeId,
+                        coordinatingNodeId,
+                        e.getMessage()
+                    );
                 MLForwardInput mlForwardInput = MLForwardInput
                     .builder()
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
@@ -186,19 +193,48 @@ public class TransportDeployModelOnNodeAction extends
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    transportService
-                        .sendRequest(
-                            getNodeById(coordinatingNodeId),
-                            MLForwardAction.NAME,
-                            deployModelDoneMessage,
-                            new ActionListenerResponseHandler<>(taskDoneListener, MLForwardResponse::new)
-                        );
-                }
+                sendDeployModelDone(coordinatingNodeId, taskId, deployModelDoneMessage, taskDoneListener);
             })
         );
 
         return new MLDeployModelNodeResponse(clusterService.localNode(), modelDeployStatus);
+    }
+
+    /**
+     * Reports this node's deploy result to the task's coordinating node. If the coordinating node has left the cluster
+     * there is nobody to report to; the sync up job picks up this node's deployed model from the routing table instead.
+     * This must never throw: it runs inside the model manager's deploy listener, and an exception there makes the
+     * model manager unload the model this node has just deployed.
+     */
+    private void sendDeployModelDone(
+        String coordinatingNodeId,
+        String taskId,
+        MLForwardRequest deployModelDoneMessage,
+        ActionListener<MLForwardResponse> taskDoneListener
+    ) {
+        try {
+            DiscoveryNode coordinatingNode = getNodeById(coordinatingNodeId);
+            if (coordinatingNode == null) {
+                log
+                    .warn(
+                        "Coordinating node {} of deploy model task {} is no longer in the cluster, not reporting the deploy result",
+                        coordinatingNodeId,
+                        taskId
+                    );
+                return;
+            }
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                transportService
+                    .sendRequest(
+                        coordinatingNode,
+                        MLForwardAction.NAME,
+                        deployModelDoneMessage,
+                        new ActionListenerResponseHandler<>(taskDoneListener, MLForwardResponse::new)
+                    );
+            }
+        } catch (Exception e) {
+            logException("Failed to report the result of deploy model task " + taskId, e, log);
+        }
     }
 
     private DiscoveryNode getNodeById(String nodeId) {

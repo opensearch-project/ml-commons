@@ -6,24 +6,32 @@
 package org.opensearch.ml.common.transport.upload_chunk;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 
 public class MLRegisterModelMetaInputTest {
 
@@ -34,20 +42,27 @@ public class MLRegisterModelMetaInputTest {
             throw new RuntimeException("Failed to parse MLRegisterModelMetaInput", e);
         }
     };
-    TextEmbeddingModelConfig config;
+    BaseModelConfig config;
     MLRegisterModelMetaInput mLRegisterModelMetaInput;
 
     @Before
     public void setup() {
-        config = new TextEmbeddingModelConfig(
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("test_key", "test_value");
+
+        config = new BaseModelConfig(
             "Model Type",
-            123,
-            FrameworkType.SENTENCE_TRANSFORMERS,
-            "All Config",
-            TextEmbeddingModelConfig.PoolingMode.MEAN,
-            true,
-            512
+            "\"test_key1\":\"test_value1\"",
+            additionalConfig,
+            768,
+            BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+            BaseModelConfig.PoolingMode.MEAN,
+            false,
+            null,
+            null,
+            null
         );
+
         mLRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
             FunctionName.BATCH_RCF,
@@ -68,6 +83,7 @@ public class MLRegisterModelMetaInputTest {
             false,
             false,
             false,
+            null,
             null
         );
     }
@@ -105,6 +121,19 @@ public class MLRegisterModelMetaInputTest {
         assertEquals(input.getAccessMode(), newInput.getAccessMode());
         assertEquals(input.getDoesVersionCreateModelGroup(), newInput.getDoesVersionCreateModelGroup());
         assertEquals(input.getIsHidden(), newInput.getIsHidden());
+
+        if (input.getModelConfig() instanceof RemoteModelConfig) {
+            RemoteModelConfig originalConfig = (RemoteModelConfig) input.getModelConfig();
+            RemoteModelConfig newConfig = (RemoteModelConfig) newInput.getModelConfig();
+
+            assertEquals(originalConfig.getModelType(), newConfig.getModelType());
+            assertEquals(originalConfig.getAllConfig(), newConfig.getAllConfig());
+            assertEquals(originalConfig.getAdditionalConfig(), newConfig.getAdditionalConfig());
+            assertEquals(originalConfig.getEmbeddingDimension(), newConfig.getEmbeddingDimension());
+            assertEquals(originalConfig.getFrameworkType(), newConfig.getFrameworkType());
+            assertEquals(originalConfig.getPoolingMode(), newConfig.getPoolingMode());
+            assertEquals(originalConfig.getModelMaxLength(), newConfig.getModelMaxLength());
+        }
     }
 
     @Test
@@ -116,10 +145,95 @@ public class MLRegisterModelMetaInputTest {
             + "\"model_group_id\",\"version\":\"1.0\",\"description\":\"Model Description\","
             + "\"model_format\":\"TORCH_SCRIPT\",\"model_state\":\"DEPLOYING\","
             + "\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
-            + "\"model_config\":{\"model_type\":\"Model Type\",\"embedding_dimension\":123,"
-            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"All Config\","
-            + "\"model_max_length\":512,\"pooling_mode\":\"MEAN\",\"normalize_result\":true},\"total_chunks\":2,"
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2,"
             + "\"add_all_backend_roles\":false,\"does_version_create_model_group\":false,\"is_hidden\":false}";
         assertEquals(expected, mlModelContent);
+    }
+
+    @Test
+    public void readInputStream_RemoteModelConfig() throws IOException {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+
+        RemoteModelConfig remoteConfig = RemoteModelConfig
+            .builder()
+            .modelType("text_embedding")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .additionalConfig(additionalConfig)
+            .embeddingDimension(768)
+            .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .poolingMode(RemoteModelConfig.PoolingMode.MEAN)
+            .modelMaxLength(512)
+            .build();
+
+        MLRegisterModelMetaInput remoteInput = new MLRegisterModelMetaInput(
+            "Remote Model",
+            FunctionName.REMOTE,
+            "remote_model_group",
+            "1.0",
+            "Remote Model Description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.DEPLOYING,
+            200L,
+            "123",
+            remoteConfig,
+            null,
+            2,
+            null,
+            null,
+            false,
+            false,
+            false,
+            null,
+            null
+        );
+        readInputStream(remoteInput);
+    }
+
+    @Test
+    public void builder_WithCustomModelId() {
+        MLRegisterModelMetaInput withModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        assertEquals("text_embedding_v1", withModelId.getModelId());
+    }
+
+    @Test
+    public void toXContent_WithCustomModelId() throws Exception {
+        MLRegisterModelMetaInput withModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        withModelId.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"model_id\":\"text_embedding_v1\""));
+    }
+
+    @Test
+    public void parse_WithCustomModelId() throws Exception {
+        String json = "{\"name\":\"Model Name\",\"function_name\":\"BATCH_RCF\",\"model_group_id\":\"model_group_id\","
+            + "\"version\":\"1.0\",\"description\":\"Model Description\",\"model_format\":\"TORCH_SCRIPT\","
+            + "\"model_state\":\"DEPLOYING\",\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2,"
+            + "\"model_id\":\"text_embedding_v1\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLRegisterModelMetaInput parsedInput = MLRegisterModelMetaInput.parse(parser);
+        assertEquals("text_embedding_v1", parsedInput.getModelId());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_WithCustomModelId() throws IOException {
+        MLRegisterModelMetaInput inputWithModelId = mLRegisterModelMetaInput.toBuilder().modelId("text_embedding_v1").build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_9_0);
+        inputWithModelId.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_9_0);
+        MLRegisterModelMetaInput deserialized = new MLRegisterModelMetaInput(streamInput);
+        assertEquals("text_embedding_v1", deserialized.getModelId());
     }
 }

@@ -78,7 +78,29 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
     /** {@inheritDoc} */
     @Override
     public float[] processOutput(TranslatorContext ctx, NDList list) {
-        NDArray embeddings = list.get("last_hidden_state");
+        NDArray embeddings;
+
+        // NONE pooling mode uses pre-pooled output directly — early return to skip unnecessary work
+        if ("none".equals(pooling)) {
+            // Try to get pre-pooled output (sentence_embedding, pooler_output, etc.)
+            embeddings = list.get("sentence_embedding");
+            if (embeddings == null) {
+                embeddings = list.get("pooler_output");
+            }
+            if (embeddings == null && list.size() > 1) {
+                embeddings = list.get(1);
+            }
+            if (embeddings == null) {
+                embeddings = list.get(0);
+            }
+            if (normalize) {
+                embeddings = embeddings.normalize(2, 0);
+            }
+            return embeddings.toFloatArray();
+        }
+
+        // For other pooling modes, use last_hidden_state or first output
+        embeddings = list.get("last_hidden_state");
         if (embeddings == null) {
             embeddings = list.get(0);
         }
@@ -101,6 +123,9 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 break;
             case "cls":
                 embeddings = embeddings.get(0);
+                break;
+            case "lasttoken":
+                embeddings = TextEmbeddingPoolingUtils.lastTokenPool(embeddings, inputAttentionMask);
                 break;
             default:
                 throw new AssertionError("Unexpected pooling model: " + pooling);
@@ -216,10 +241,11 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
                 && !"max".equals(poolingMode)
                 && !"cls".equals(poolingMode)
                 && !"mean_sqrt_len".equals(poolingMode)
-                && !"weightedmean".equals(poolingMode)) {
+                && !"weightedmean".equals(poolingMode)
+                && !"lasttoken".equals(poolingMode)
+                && !"none".equals(poolingMode)) {
                 throw new IllegalArgumentException(
-                    "Invalid pooling model, must be one of [mean_tokens, max_tokens,"
-                        + " cls_token, mean_sqrt_len_tokens, weightedmean_tokens]."
+                    "Invalid pooling model, must be one of [mean, max, cls, mean_sqrt_len, weightedmean, lasttoken, none]."
                 );
             }
             this.pooling = poolingMode;

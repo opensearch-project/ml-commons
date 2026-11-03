@@ -32,21 +32,21 @@ public class CohereRerankPostProcessFunctionTest {
     public void process_WrongInput_NotList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc");
+        function.apply("abc", null);
     }
 
     @Test
     public void process_WrongInput_NotCorrectList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a List of Map.");
-        function.apply(Arrays.asList("abc"));
+        function.apply(Arrays.asList("abc"), null);
     }
 
     @Test
     public void process_WrongInput_NotCorrectMap() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("The rerank result should contain index and relevance_score.");
-        function.apply(Arrays.asList(Map.of("test1", "value1")));
+        function.apply(Arrays.asList(Map.of("test1", "value1")), null);
     }
 
     @Test
@@ -57,7 +57,7 @@ public class CohereRerankPostProcessFunctionTest {
                 Map.of("index", 1, "relevance_score", 0.4),
                 Map.of("index", 0, "relevance_score", 0.3)
             );
-        List<ModelTensor> result = function.apply(rerankResults);
+        List<ModelTensor> result = function.apply(rerankResults, null);
         assertEquals(3, result.size());
         assertEquals(1, result.get(0).getData().length);
         assertEquals(0.3, result.get(0).getData()[0]);

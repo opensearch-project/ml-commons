@@ -1,0 +1,24 @@
+cluster_permissions:
+  - "indices:data/read*"
+  - "indices:data/write/index*"
+  - "cluster:admin/opensearch/ml/*"
+index_permissions:
+  - index_patterns:
+      - ".plugins-ml-agent"
+      - ".plugins-ml-config"
+      - ".plugins-ml-connector"
+      - ".plugins-ml-controller"
+      - ".plugins-ml-model-group"
+      - ".plugins-ml-model"
+      - ".plugins-ml-task"
+      - ".plugins-ml-memory-meta"
+      - ".plugins-ml-memory-message"
+      - ".plugins-ml-memory-container"
+      - ".plugins-ml-stop-words"
+      - ".plugins-ml-mcp-session-management"
+      - ".plugins-ml-mcp-tools"
+      - ".plugins-ml-jobs"
+    allowed_actions:
+      - "indices:data/write/index*"
+      - "indices:data/read*"
+      - "indices:admin/create"

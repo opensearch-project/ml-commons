@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.common.spi;
 
-import org.opensearch.ml.common.spi.tools.Tool;
-
 import java.util.List;
+
+import org.opensearch.ml.common.spi.tools.Tool;
 
 /**
  * ml-commons extension interface.

@@ -6,7 +6,6 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_TYPE_FIELD;
@@ -29,7 +28,10 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -42,17 +44,26 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
+import org.opensearch.jobscheduler.spi.schedule.Schedule;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.jobs.MLBatchTaskUpdateJobParameter;
+import org.opensearch.ml.jobs.MLJobParameter;
+import org.opensearch.ml.jobs.MLJobType;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
@@ -72,7 +83,7 @@ import lombok.extern.log4j.Log4j2;
  * MLTaskManager is responsible for managing MLTask.
  */
 @Log4j2
-public class MLTaskManager {
+public class MLTaskManager implements SettingsChangeListener {
     public static int TASK_SEMAPHORE_TIMEOUT = 5000; // 5 seconds
     private final Map<String, MLTaskCache> taskCaches;
     private final Client client;
@@ -80,6 +91,9 @@ public class MLTaskManager {
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
+    private boolean taskPollingJobStarted;
+    private boolean statsCollectorJobStarted;
+    private boolean memoryRetentionJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -126,8 +140,8 @@ public class MLTaskManager {
                 .must(
                     QueryBuilders
                         .boolQuery()
-                        .should(QueryBuilders.termQuery(STATE_FIELD, CREATED))
-                        .should(QueryBuilders.termQuery(STATE_FIELD, RUNNING))
+                        .should(QueryBuilders.termQuery(STATE_FIELD, CREATED.name()))
+                        .should(QueryBuilders.termQuery(STATE_FIELD, RUNNING.name()))
                 );
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(boolQuery);
@@ -304,7 +318,7 @@ public class MLTaskManager {
                             listener.onFailure(cause);
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
                                 listener.onResponse(indexResponse);
                             } catch (Exception e) {
@@ -450,18 +464,30 @@ public class MLTaskManager {
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
         try {
+            if (taskId == null || taskId.isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("Task ID is null or empty"));
+                return;
+            }
+
             if (updatedFields == null || updatedFields.isEmpty()) {
                 listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
                 return;
             }
+
+            if (updatedFields.containsKey(STATE_FIELD) && !(updatedFields.get(STATE_FIELD) instanceof MLTaskState)) {
+                listener.onFailure(new IllegalArgumentException("Invalid task state"));
+                return;
+            }
+
             UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
             Map<String, Object> updatedContent = new HashMap<>(updatedFields);
             updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
             updateRequest.doc(updatedContent);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains((MLTaskState) updatedFields.get(STATE_FIELD))) {
                 updateRequest.retryOnConflict(3);
             }
+
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
             } catch (Exception e) {
@@ -505,9 +531,8 @@ public class MLTaskManager {
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
-                updateListener.onResponse(updateResponse);
-            } catch (IOException e) {
+                updateListener.onResponse(r.updateResponse());
+            } catch (Exception e) {
                 updateListener.onFailure(e);
             }
         }
@@ -528,27 +553,222 @@ public class MLTaskManager {
         });
     }
 
-    public void startTaskPollingJob() throws IOException {
-        String id = "ml_batch_task_polling_job";
-        String jobName = "poll_batch_jobs";
-        String interval = "1";
-        Long lockDurationSeconds = 20L;
+    public void startTaskPollingJob() {
+        if (this.taskPollingJobStarted) {
+            return;
+        }
 
-        MLBatchTaskUpdateJobParameter jobParameter = new MLBatchTaskUpdateJobParameter(
-            jobName,
-            new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
-            lockDurationSeconds,
-            null
-        );
-        IndexRequest indexRequest = new IndexRequest()
-            .index(TASK_POLLING_JOB_INDEX)
-            .id(id)
-            .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.BATCH_TASK_UPDATE.name(),
+                new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
+                20L,
+                null,
+                MLJobType.BATCH_TASK_UPDATE,
+                true
+            );
 
-        client.index(indexRequest, ActionListener.wrap(r -> { log.info("Indexed ml task polling job successfully"); }, e -> {
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.BATCH_TASK_UPDATE.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
+        } catch (IOException e) {
             log.error("Failed to index task polling job", e);
-        }));
+        }
     }
 
+    public void indexMemoryRetentionJob(int intervalHours) {
+        if (this.memoryRetentionJobStarted) {
+            log.debug("Memory retention job already started");
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.MEMORY_RETENTION.name(),
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
+                120L,
+                null,
+                MLJobType.MEMORY_RETENTION,
+                true
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.MEMORY_RETENTION.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .opType(DocWriteRequest.OpType.CREATE)
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
+                this.memoryRetentionJobStarted = true;
+                log.debug("Memory retention job started successfully");
+            });
+        } catch (IOException e) {
+            log.error("Failed to index memory retention job", e);
+        }
+    }
+
+    /**
+     * Upsert the memory retention job document with a new interval.
+     *
+     * <p>Unlike {@link #indexMemoryRetentionJob(int)}, this method uses {@link DocWriteRequest.OpType#INDEX} (a
+     * version-bumping upsert) rather than {@code CREATE}, and is intentionally NOT guarded by the
+     * {@code memoryRetentionJobStarted} latch. Overwriting the existing document bumps its version, which the
+     * JobScheduler {@code JobSweeper.postIndex} hook observes and uses to deschedule the stale job and reschedule
+     * it from the fresh {@link IntervalSchedule} — with no cluster restart.
+     *
+     * <p>No {@code setIfSeqNo}/{@code setIfPrimaryTerm} guard is set on purpose: adding one would reintroduce
+     * version conflicts, defeating the point of the upsert. Callers MUST ensure only a single node (the elected
+     * cluster manager) invokes this to avoid multi-node reschedule churn, since the job document has a fixed id.
+     *
+     * @param intervalHours the new interval, in hours, for the retention job schedule
+     */
+    public void upsertMemoryRetentionJob(int intervalHours) {
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.MEMORY_RETENTION.name(),
+                new IntervalSchedule(Instant.now(), intervalHours, ChronoUnit.HOURS),
+                120L,
+                null,
+                MLJobType.MEMORY_RETENTION,
+                true
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.MEMORY_RETENTION.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .opType(DocWriteRequest.OpType.INDEX)
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.MEMORY_RETENTION, () -> {
+                this.memoryRetentionJobStarted = true;
+                log.info("Memory retention job upserted with interval {} hour(s)", intervalHours);
+            });
+        } catch (IOException e) {
+            log.error("Failed to upsert memory retention job", e);
+        }
+    }
+
+    /**
+     * Reconcile the persisted memory retention job schedule with the current interval setting, upserting only if
+     * they differ. Used on the startup path so a value supplied via {@code settings.yml} or a cluster restart is
+     * applied to the already-existing (write-once) job document.
+     *
+     * <p>Reconcile-<em>if-different</em> (rather than an unconditional upsert) matters: a fresh
+     * {@link IntervalSchedule} resets the next-run anchor to {@code now + interval}, so upserting on every startup
+     * could keep pushing the anchor forward and starve the job. If the document is absent, unparseable, or already
+     * carries the desired interval, this is a no-op. Callers MUST gate this on the elected cluster manager.
+     *
+     * @param intervalHours the desired interval, in hours, from the current setting value
+     */
+    public void reconcileMemoryRetentionJob(int intervalHours) {
+        GetRequest getRequest = new GetRequest(CommonValue.ML_JOBS_INDEX, MLJobType.MEMORY_RETENTION.name());
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(getResponse -> {
+                if (getResponse == null || !getResponse.isExists()) {
+                    // No persisted job yet; the CREATE path will seed it with the current interval.
+                    return;
+                }
+                try (
+                    XContentParser parser = MLNodeUtils
+                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, getResponse.getSourceAsBytesRef())
+                ) {
+                    MLJobParameter jobParameter = MLJobParameter.parse(parser);
+                    Schedule schedule = jobParameter.getSchedule();
+                    if (schedule instanceof IntervalSchedule) {
+                        IntervalSchedule intervalSchedule = (IntervalSchedule) schedule;
+                        if (intervalSchedule.getUnit() == ChronoUnit.HOURS && intervalSchedule.getInterval() == intervalHours) {
+                            log.debug("Memory retention job interval already {} hour(s); nothing to reconcile", intervalHours);
+                            return;
+                        }
+                    }
+                    log.info("Reconciling memory retention job interval to {} hour(s)", intervalHours);
+                    upsertMemoryRetentionJob(intervalHours);
+                } catch (Exception e) {
+                    log.error("Failed to parse persisted memory retention job during reconcile", e);
+                }
+            }, e -> {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                    // Jobs index not created yet; the CREATE path will seed it.
+                    log.debug("ML jobs index not found during memory retention reconcile");
+                } else {
+                    log.error("Failed to get memory retention job during reconcile", e);
+                }
+            }), context::restore));
+        }
+    }
+
+    @Override
+    public void onStaticMetricCollectionEnabledChanged(boolean isEnabled) {
+        log.info("Static metric collection setting changed to: {}", isEnabled);
+        indexStatsCollectorJob(isEnabled);
+    }
+
+    public void indexStatsCollectorJob(boolean enabled) {
+        if (this.statsCollectorJobStarted && enabled) {
+            log.debug("Stats collector job already in desired state: {}", enabled);
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.STATS_COLLECTOR.name(),
+                new IntervalSchedule(Instant.now(), 5, ChronoUnit.MINUTES),
+                60L,
+                null,
+                MLJobType.STATS_COLLECTOR,
+                enabled
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.STATS_COLLECTOR.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            indexJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> {
+                this.statsCollectorJobStarted = enabled;
+                log.debug("Stats collector job {} successfully", enabled ? "started" : "stopped");
+            });
+        } catch (IOException e) {
+            log.error("Failed to index stats collection job", e);
+        }
+    }
+
+    /**
+     * Start a job by indexing the job parameter to ML jobs index.
+     * 
+     * @param indexRequest the index request containing the job parameter
+     * @param jobType the type of job being started
+     * @param successCallback callback to execute on successful job indexing
+     */
+    private void indexJob(IndexRequest indexRequest, MLJobType jobType, Runnable successCallback) {
+        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
+            if (success) {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.index(indexRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+                        log.info("Indexed {} successfully", jobType.name());
+                        if (successCallback != null) {
+                            successCallback.run();
+                        }
+                    }, e -> {
+                        if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
+                            // The job document already exists (created by this or another node); treat as success
+                            log.debug("{} job already exists, skipping creation", jobType.name());
+                            if (successCallback != null) {
+                                successCallback.run();
+                            }
+                        } else {
+                            log.error("Failed to index {} job", jobType.name(), e);
+                        }
+                    }), context::restore));
+                }
+            }
+        }, e -> log.error("Failed to initialize ML jobs index", e)));
+    }
 }

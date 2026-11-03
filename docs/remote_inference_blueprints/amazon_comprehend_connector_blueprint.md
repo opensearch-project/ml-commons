@@ -4,7 +4,7 @@ Amazon Comprehend uses natural language processing (NLP) to extract insights abo
 
 ## Language detection with DetectDominantLanguage API
 
-This tutorial shows how to create an OpenSearch connector for an Amazon Comprehend model. The model examines the input text, detects the language using the Amazon Comrehend [DetectDominantLanguage API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectDominantLanguage.html), and sets a corresponding language code.
+This tutorial shows how to create an OpenSearch connector for an Amazon Comprehend model. The model examines the input text, detects the language using the Amazon Comprehend [DetectDominantLanguage API](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectDominantLanguage.html), and sets a corresponding language code.
 
 Note: This functionality is available in OpenSearch 2.14.0 or later.
 

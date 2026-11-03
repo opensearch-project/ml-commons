@@ -444,6 +444,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      */
     public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> listener) {
         UpdateRequest updateRequest = new UpdateRequest(ConversationalIndexConstants.INTERACTIONS_INDEX_NAME, interactionId);
+        updateContent.put(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, Instant.now());
 
         updateRequest.doc(updateContent);
         updateRequest.docAsUpsert(true);

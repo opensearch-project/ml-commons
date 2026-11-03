@@ -34,20 +34,20 @@ public class BedrockBatchJobArnPostProcessFunctionTest {
     public void process_WrongInput_NotMap() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a Map.");
-        function.apply("abc");
+        function.apply("abc", null);
     }
 
     @Test
     public void process_WrongInput_NotContainJobArn() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("job arn is missing.");
-        function.apply(Map.of("test", "value"));
+        function.apply(Map.of("test", "value"), null);
     }
 
     @Test
     public void process_CorrectInput() {
         String jobArn = "arn:aws:bedrock:us-east-1:12345678912:model-invocation-job/w1xtlm0ik3e1";
-        List<ModelTensor> result = function.apply(Map.of(JOB_ARN, jobArn));
+        List<ModelTensor> result = function.apply(Map.of(JOB_ARN, jobArn), null);
         assertEquals(1, result.size());
         assertEquals(jobArn, result.get(0).getDataAsMap().get(JOB_ARN));
         assertEquals(

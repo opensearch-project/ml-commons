@@ -11,6 +11,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -38,6 +40,8 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -62,8 +66,8 @@ public class MLUpdateModelInputTest {
         "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":"
             + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
             + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
-            + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
-            + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector\":"
+            + "{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\","
+            + "\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"},\"connector\":"
             + "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
             + "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
             + "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
@@ -77,13 +81,18 @@ public class MLUpdateModelInputTest {
         + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":"
         + "\"test-connector_id\"}";
 
+    private final String expectedOutputStrSpaceType =
+        "{\"model_id\":\"test-model-id\",\"name\":\"name\",\"description\":\"description\",\"model_group_id\":"
+            + "\"modelGroupId\",\"model_config\":"
+            + "{\"model_type\":\"sparse_encoding\",\"additional_config\":{\"space_type\":\"l2\"}}}";
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
-        MLModelConfig config = TextEmbeddingModelConfig
-            .builder()
+        MLModelConfig config = BaseModelConfig
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -215,6 +224,20 @@ public class MLUpdateModelInputTest {
     }
 
     @Test
+    public void parseWithSpaceType() throws Exception {
+        String expectedInputStrWithSpaceType = "{\"model_id\":\"test-model-id\",\"name\":\"name\",\"description\":\"description\","
+            + "\"model_group_id\":\"modelGroupId\",\"model_config\":{\"model_type\":\"sparse_encoding\","
+            + "\"additional_config\":{\"space_type\":\"l2\"}}}";
+        testParseFromJsonString(expectedInputStrWithSpaceType, parsedInput -> {
+            try {
+                assertEquals(expectedOutputStrSpaceType, serializationWithToXContent(parsedInput));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
     public void serializationWithTenantId_Success() throws IOException {
         MLUpdateModelInput input = updateModelInput.toBuilder().tenantId("tenant-1").build();
 
@@ -265,6 +288,71 @@ public class MLUpdateModelInputTest {
 
         // Validate that tenantId is present in the serialized JSON
         assertTrue(jsonOutput.contains("\"tenant_id\":\"tenant-1\""));
+    }
+
+    @Test
+    public void parseWithBatchInferenceConfig_Success() throws Exception {
+        String json = "{\"model_id\":\"test-model_id\",\"batch_inference_config\":{\"max_items_per_request\":96,"
+            + "\"dynamic_batching\":{\"enabled\":true,\"flush_timeout_ms\":25}}}";
+        testParseFromJsonString(json, parsedInput -> {
+            assertNotNull(parsedInput.getBatchInferenceConfig());
+            assertEquals(96, parsedInput.getBatchInferenceConfig().getMaxItemsPerRequest());
+            assertTrue(parsedInput.getBatchInferenceConfig().isDynamicBatchingEnabled());
+        });
+    }
+
+    @Test
+    public void parseRejectsUnknownFieldInBatchInferenceConfig() throws Exception {
+        String json = "{\"model_id\":\"test-model_id\",\"batch_inference_config\":{\"max_items\":2}}";
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported field [max_items]");
+        testParseFromJsonString(json, parsedInput -> {});
+    }
+
+    @Test
+    public void toXContentWithBatchInferenceConfig_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput
+            .toBuilder()
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build())
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"batch_inference_config\":{"));
+    }
+
+    @Test
+    public void serializationWithBatchInferenceConfig_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput
+            .toBuilder()
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build())
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_9_0);
+        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
+
+        assertNotNull(parsedInput.getBatchInferenceConfig());
+        assertEquals(96, parsedInput.getBatchInferenceConfig().getMaxItemsPerRequest());
+    }
+
+    @Test
+    public void serializationBeforeBatchInferenceConfigVersionDropsIt() throws IOException {
+        MLUpdateModelInput input = updateModelInput
+            .toBuilder()
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build())
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_8_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_8_0);
+        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
+
+        assertNull("an older node never receives the field on the wire", parsedInput.getBatchInferenceConfig());
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLUpdateModelInput> verify) throws Exception {

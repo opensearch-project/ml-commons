@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static org.opensearch.ml.engine.processor.ProcessorChain.INPUT_PROCESSORS;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -16,7 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -28,11 +31,14 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -42,17 +48,45 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
-public interface RemoteConnectorExecutor {
+import lombok.Builder;
+
+public interface RemoteConnectorExecutor extends AutoCloseable {
+
+    @Override
+    default void close() {}
+
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
+    String SKIP_SSL_VERIFICATION = "skip_ssl_verification";
 
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        executeAction(action, mlInput, actionListener, null);
+    }
+
+    default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
+        // Check for streaming
+        if (channel != null) {
+            ActionListener<Tuple<Integer, ModelTensors>> streamingListener = ActionListener.wrap(response -> {
+                ModelTensors tensors = response.v2();
+                MLTaskResponse mlResponse = new MLTaskResponse(new ModelTensorOutput(Arrays.asList(tensors)));
+                actionListener.onResponse(mlResponse);
+            }, actionListener::onFailure);
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), streamingListener, actionListener, channel);
+            return;
+        }
+
         ActionListener<Collection<Tuple<Integer, ModelTensors>>> tensorActionListener = ActionListener.wrap(r -> {
             // Only all sub-requests success will call logics here
             ModelTensors[] modelTensors = new ModelTensors[r.size()];
@@ -79,6 +113,7 @@ public interface RemoteConnectorExecutor {
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
+                            .parameters(mlInput.getParameters())
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
@@ -152,7 +187,11 @@ public interface RemoteConnectorExecutor {
 
     default void setClient(Client client) {}
 
-    default void setConnectorPrivateIpEnabled(AtomicBoolean connectorPrivateIpEnabled) {}
+    default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
+
+    default void setConnectorTrustedPrivateEndpoints(List<Pattern> connectorTrustedPrivateEndpoints) {}
+
+    default void setConnectorRestrictedIpPatterns(List<Pattern> connectorRestrictedIpPatterns) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
@@ -164,11 +203,24 @@ public interface RemoteConnectorExecutor {
 
     default void setMlGuard(MLGuard mlGuard) {}
 
+    default void setTrustedConnectorEndpointsRegex(List<String> trustedConnectorEndpointsRegex) {}
+
     default void preparePayloadAndInvoke(
         String action,
         MLInput mlInput,
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        preparePayloadAndInvoke(action, mlInput, executionContext, actionListener, null, null);
+    }
+
+    default void preparePayloadAndInvoke(
+        String action,
+        MLInput mlInput,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener,
+        ActionListener<MLTaskResponse> agentListener,
+        TransportChannel channel
     ) {
         Connector connector = getConnector();
 
@@ -183,6 +235,18 @@ public interface RemoteConnectorExecutor {
             inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
         parameters.putAll(inputParameters);
+
+        MLAlgoParams algoParams = mlInput.getParameters();
+        if (algoParams != null) {
+            try {
+                Map<String, String> parametersMap = getParams(mlInput);
+                parameters.putAll(parametersMap);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
+                return;
+            }
+        }
+
         RemoteInferenceInputDataSet inputData = processInput(action, mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
@@ -190,6 +254,13 @@ public interface RemoteConnectorExecutor {
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
         String payload = connector.createPayload(action, parameters);
+
+        List<Map<String, Object>> processorConfigs = ProcessorChain.extractProcessorConfigs(parameters, INPUT_PROCESSORS);
+        if (!processorConfigs.isEmpty()) {
+            ProcessorChain processorChain = new ProcessorChain(processorConfigs);
+            payload = StringUtils.toJson(processorChain.process(payload));
+        }
+
         if (!Boolean.parseBoolean(parameters.getOrDefault(SKIP_VALIDATE_MISSING_PARAMETERS, "false"))) {
             connector.validatePayload(payload);
         }
@@ -215,12 +286,40 @@ public interface RemoteConnectorExecutor {
                 getLogger().error("guardrails triggered for user input");
                 throw new IllegalArgumentException("guardrails triggered for user input");
             }
-            if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
+            // Check for streaming first as invokeRemoteServiceWithRetry does not stream
+            // TODO: support streaming with retry policy
+            if (parameters.containsKey("stream")) {
+                String memoryId = parameters.get("memory_id");
+                String parentInteractionId = parameters.get("parent_interaction_id");
+                boolean isAgentRequest = parameters.get("agent_type") != null;
+                getLogger()
+                    .info(
+                        "RemoteConnectorExecutor: Creating StreamPredictActionListener - isAgentRequest={}, agentListener={}",
+                        isAgentRequest,
+                        agentListener != null ? "present" : "null"
+                    );
+                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(
+                    channel,
+                    isAgentRequest ? agentListener : null,
+                    memoryId,
+                    parentInteractionId
+                );
+                invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
+            } else if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
         }
+    }
+
+    static Map<String, String> getParams(MLInput mlInput) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        mlInput.getParameters().toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.flush();
+        String json = builder.toString();
+        Map<String, Object> tempMap = StringUtils.MAPPER.readValue(json, Map.class);
+        return getParameterMap(tempMap);
     }
 
     default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {
@@ -253,38 +352,23 @@ public interface RemoteConnectorExecutor {
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
-        final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableAction<>(
+        final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableActionExtension(
             getLogger(),
             getClient().threadPool(),
             TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()),
             TimeValue.timeValueSeconds(getConnectorClientConfig().getRetryTimeoutSeconds()),
             actionListener,
             getRetryBackoffPolicy(getConnectorClientConfig()),
-            RETRY_EXECUTOR
-        ) {
-            int retryTimes = 0;
-
-            @Override
-            public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
-                // the listener here is RetryingListener
-                // If the request success, or can not retry, will call delegate listener
-                invokeRemoteService(action, mlInput, parameters, payload, executionContext, listener);
-            }
-
-            @Override
-            public boolean shouldRetry(Exception e) {
-                Throwable cause = ExceptionsHelper.unwrapCause(e);
-                Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
-                boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
-                if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
-                    shouldRetry = false;
-                }
-                if (shouldRetry) {
-                    getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
-                }
-                return shouldRetry;
-            }
-        };
+            RetryableActionExtensionArgs
+                .builder()
+                .connectionExecutor(this)
+                .mlInput(mlInput)
+                .action(action)
+                .parameters(parameters)
+                .executionContext(executionContext)
+                .payload(payload)
+                .build()
+        );
         invokeRemoteModelAction.run();
     };
 
@@ -296,4 +380,81 @@ public interface RemoteConnectorExecutor {
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     );
+
+    void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> streamListener
+    );
+
+    static class RetryableActionExtension extends RetryableAction<Tuple<Integer, ModelTensors>> {
+        private final RetryableActionExtensionArgs args;
+        int retryTimes = 0;
+
+        RetryableActionExtension(
+            Logger logger,
+            ThreadPool threadPool,
+            TimeValue initialDelay,
+            TimeValue timeoutValue,
+            ActionListener<Tuple<Integer, ModelTensors>> listener,
+            BackoffPolicy backoffPolicy,
+            RetryableActionExtensionArgs args
+        ) {
+            super(logger, threadPool, initialDelay, timeoutValue, listener, backoffPolicy, RETRY_EXECUTOR);
+            this.args = args;
+        }
+
+        @Override
+        public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
+            // the listener here is RetryingListener
+            // If the request success, or can not retry, will call delegate listener
+            args.connectionExecutor
+                .invokeRemoteService(args.action, args.mlInput, args.parameters, args.payload, args.executionContext, listener);
+        }
+
+        @Override
+        public boolean shouldRetry(Exception e) {
+            Throwable cause = ExceptionsHelper.unwrapCause(e);
+            Integer maxRetryTimes = args.connectionExecutor.getConnectorClientConfig().getMaxRetryTimes();
+            boolean shouldRetry = isRetryable(cause);
+            if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
+                shouldRetry = false;
+            }
+            if (shouldRetry) {
+                args.connectionExecutor
+                    .getLogger()
+                    .debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
+            }
+            return shouldRetry;
+        }
+
+        private static boolean isRetryable(Throwable cause) {
+            // AWS header-based throttling.
+            if (cause instanceof RemoteConnectorThrottlingException) {
+                return true;
+            }
+            // Transient HTTP failures from any remote service: 429 and 5xx.
+            if (cause instanceof OpenSearchStatusException) {
+                RestStatus status = ((OpenSearchStatusException) cause).status();
+                if (status == null) {
+                    return false;
+                }
+                return status == RestStatus.TOO_MANY_REQUESTS || status.getStatus() >= 500;
+            }
+            return false;
+        }
+    }
+
+    @Builder
+    class RetryableActionExtensionArgs {
+        private final RemoteConnectorExecutor connectionExecutor;
+        private final MLInput mlInput;
+        private final String action;
+        private final Map<String, String> parameters;
+        private final ExecutionContext executionContext;
+        private final String payload;
+    }
 }

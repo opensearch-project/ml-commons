@@ -9,7 +9,7 @@ import java.io.IOException;
 
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.spi.memory.Message;
+import org.opensearch.ml.common.memory.Message;
 
 import lombok.Builder;
 import lombok.Getter;

@@ -8,23 +8,37 @@ package org.opensearch.ml.engine;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -35,6 +49,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -43,6 +58,7 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -54,7 +70,10 @@ import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalcu
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchModule;
+
+import software.amazon.awssdk.utils.ImmutableMap;
 
 // TODO: refactor MLEngineClassLoader's static functions to avoid mockStatic
 public class MLEngineTest extends MLStaticMockBase {
@@ -62,6 +81,8 @@ public class MLEngineTest extends MLStaticMockBase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private MLEngine mlEngine;
+
+    private ActionListener<List<String>> endecryptListener = mock(ActionListener.class);
 
     @Before
     public void setUp() {
@@ -255,6 +276,17 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
+    public void trainAndPredictWithMetricsCorrelationThrowsException() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: METRICS_CORRELATION");
+        int dataSize = 100;
+        DataFrame dataFrame = constructTestDataFrame(dataSize);
+        MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
+        Input input = new MLInput(FunctionName.METRICS_CORRELATION, null, inputData);
+        mlEngine.trainAndPredict(input);
+    }
+
+    @Test
     public void trainAndPredictWithInvalidInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input should be MLInput");
@@ -269,7 +301,19 @@ public class MLEngineTest extends MLStaticMockBase {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(3.0, output.getResult(), 1e-5);
         }, e -> { fail("Test failed"); });
-        mlEngine.execute(input, listener);
+        mlEngine.execute(input, listener, null);
+    }
+
+    @Test
+    public void executeWithMetricsCorrelationThrowsException() throws Exception {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported executable function: METRICS_CORRELATION");
+        List<float[]> inputData = new ArrayList<>();
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        Input input = MetricsCorrelationInput.builder().inputData(inputData).build();
+        mlEngine.execute(input, null, null);
     }
 
     @Test
@@ -296,7 +340,7 @@ public class MLEngineTest extends MLStaticMockBase {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(3.0, output.getResult(), 1e-5);
         }, e -> { fail("Test failed"); });
-        mlEngine.execute(input, listener);
+        mlEngine.execute(input, listener, null);
     }
 
     private MLModel trainKMeansModel() {
@@ -355,15 +399,39 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
-    public void getDeployModelPath_ReturnsCorrectPath() {
+    public void getPathAPIs_ReturnsCorrectPath() {
         String modelId = "deployedModel";
 
         // Use the actual base path from the mlEngine instance
         Path basePath = mlEngine.getMlCachePath().getParent();
-        Path expectedPath = basePath.resolve("ml_cache").resolve("models_cache").resolve(MLEngine.DEPLOY_MODEL_FOLDER).resolve(modelId);
-        Path actualPath = mlEngine.getDeployModelPath(modelId);
+        Path modelsCachePath = basePath.resolve("ml_cache").resolve("models_cache");
+        Path expectedDeployModelRootPath = modelsCachePath.resolve(MLEngine.DEPLOY_MODEL_FOLDER);
+        assertEquals(expectedDeployModelRootPath.toString(), mlEngine.getDeployModelRootPath().toString());
+        Path expectedDeployModelPath = expectedDeployModelRootPath.resolve(modelId);
+        assertEquals(expectedDeployModelPath.toString(), mlEngine.getDeployModelPath(modelId).toString());
 
-        assertEquals(expectedPath.toString(), actualPath.toString());
+        String expectedDeployModelZipPath = expectedDeployModelRootPath.resolve(modelId).resolve("myModel") + ".zip";
+        assertEquals(expectedDeployModelZipPath, mlEngine.getDeployModelZipPath(modelId, "myModel"));
+        Path expectedDeployModelChunkPath = expectedDeployModelRootPath.resolve(modelId).resolve("chunks").resolve("1");
+        assertEquals(expectedDeployModelChunkPath.toString(), mlEngine.getDeployModelChunkPath(modelId, 1).toString());
+
+        assertEquals(
+            "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json",
+            mlEngine.getPrebuiltModelMetaListPath()
+        );
+
+        Path expectedRegisterRootPath = modelsCachePath.resolve(MLEngine.REGISTER_MODEL_FOLDER);
+        assertEquals(expectedRegisterRootPath.toString(), mlEngine.getRegisterModelRootPath().toString());
+        Path expectedRegisterModelPath = expectedRegisterRootPath.resolve(modelId);
+        assertEquals(expectedRegisterModelPath.toString(), mlEngine.getRegisterModelPath(modelId).toString());
+
+        Path expectedMdelCacheRootPath = modelsCachePath.resolve("models");
+        assertEquals(expectedMdelCacheRootPath.toString(), mlEngine.getModelCacheRootPath().toString());
+        Path expectedMdelCachePath = expectedMdelCacheRootPath.resolve(modelId);
+        assertEquals(expectedMdelCachePath.toString(), mlEngine.getModelCachePath(modelId).toString());
+
+        Path expectedAnalysisRootPath = modelsCachePath.resolve("analysis");
+        assertEquals(expectedAnalysisRootPath.toString(), mlEngine.getAnalysisRootPath().toString());
     }
 
     @Test
@@ -410,38 +478,165 @@ public class MLEngineTest extends MLStaticMockBase {
 
     @Test
     public void testEncryptMethod() {
-        String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString, null);
-        assertNotNull(encryptedString);
-        assertNotEquals(testString, encryptedString);
+        List<String> testStrings = List.of("testString");
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<String>> encryptedResults = new AtomicReference<>();
+        AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
+        ActionListener<List<String>> listener = ActionListener.wrap(r -> {
+            latch.countDown();
+            encryptedResults.set(r);
+        }, e -> {
+            latch.countDown();
+            exceptionAtomicReference.set((RuntimeException) e);
+        });
+        mlEngine.encrypt(testStrings, null, listener);
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            fail("Failed to encrypt credentials, " + e.getMessage());
+        }
+        if (exceptionAtomicReference.get() != null) {
+            throw exceptionAtomicReference.get();
+        }
+        assertNotNull(encryptedResults.get().getFirst());
+        assertNotEquals(testStrings.get(0), encryptedResults.get().getFirst());
     }
 
     @Test
     public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
-        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
-            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-            + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
-            + encryptedValue
-            + "\"},"
-            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
-            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            mlEngine.encrypt(List.of("test_key_value"), null, endecryptListener);
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
+                + r.getFirst()
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                test_connector_string
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
 
-        HttpConnector connector = new HttpConnector("http", parser);
-        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
-        assertNotNull(decryptedCredential);
-        assertEquals(decryptedCredential.get("key"), "test_key_value");
-        assertEquals(decryptedCredential.get("region"), "test region");
+            HttpConnector connector = new HttpConnector("http", parser);
+            ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
+                assertNotNull(credential);
+                assertEquals(credential.get("key"), "test_key_value");
+                assertEquals(credential.get("region"), "test region");
+            }, e -> { fail("Failed to get credential"); });
+            mlEngine.getConnectorCredential(connector, credentialListener);
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.encrypt(List.of("test_key_value"), null, resultListener);
+    }
+
+    @Test
+    public void testGetConnectorCredentialWithoutRegion() throws IOException {
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{},\"credential\":{\"key\":\""
+                + r.getFirst()
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
+
+            HttpConnector connector = new HttpConnector("http", parser);
+            ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
+                assertNotNull(credential);
+                assertEquals(credential.get("key"), "test_key_value");
+                assertEquals(credential.get("region"), null);
+            }, e -> { fail("Failed to get credential"); });
+            mlEngine.getConnectorCredential(connector, credentialListener);
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.encrypt(List.of("test_key_value"), null, resultListener);
+    }
+
+    @Test
+    public void testDeploy_withPredictableActionListener_successful() throws IOException {
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            String testConnector = String.format(Locale.ROOT, """
+                {
+                    "name": "sagemaker: t2ppl",
+                    "description": "t2ppl model",
+                    "version": 1,
+                    "protocol": "aws_sigv4",
+                    "credential": {
+                        "access_key": "%s",
+                        "secret_key": "%s"
+                    },
+                    "parameters": {
+                        "region": "us-east-1",
+                        "service_name": "sagemaker",
+                        "input_type": "search_document"
+                    },
+                    "actions": [
+                        {
+                            "action_type": "predict",
+                            "method": "POST",
+                            "headers": {
+                                "content-type": "application/json",
+                                "x-amz-content-sha256": "required"
+                            },
+                            "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
+                            "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
+                        }
+                    ]
+                }
+                """, r.get(0), r.get(1));
+
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    testConnector
+                );
+            parser.nextToken();
+
+            MLModel model = mock(MLModel.class);
+            AwsConnector connector = new AwsConnector("aws_sigv4", parser);
+            when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+            when(model.getConnector()).thenReturn(connector);
+            ActionListener<Predictable> actionListener = mock(ActionListener.class);
+            SdkClient sdkClient = mock(SdkClient.class);
+            when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+            Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+            mlEngine.deploy(model, params, actionListener);
+            verify(actionListener).onResponse(any(Predictable.class));
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.encrypt(List.of("access-key", "secret-key"), null, resultListener);
+    }
+
+    @Test
+    public void testDeploy_withPredictableActionListener_exceptional() {
+        MLModel model = mock(MLModel.class);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getConnector()).thenThrow(new RuntimeException("Runtime error"));
+        ActionListener<Predictable> actionListener = mock(ActionListener.class);
+        SdkClient sdkClient = mock(SdkClient.class);
+        when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+        Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+        mlEngine.deploy(model, params, actionListener);
+        ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Runtime error"));
     }
 }

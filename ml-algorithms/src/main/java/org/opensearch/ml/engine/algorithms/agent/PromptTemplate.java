@@ -1,5 +1,12 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.COMPLETED_STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD;
+
 public class PromptTemplate {
 
     public static final String PROMPT_TEMPLATE_PREFIX =
@@ -14,4 +21,182 @@ public class PromptTemplate {
         "Assistant:\n---------------------\n${parameters.llm_tool_selection_response}\n\nHuman: TOOL RESPONSE of ${parameters.tool_name}: \n---------------------\nTool input:\n${parameters.tool_input}\n\nTool output:\n${parameters.observation}\n\n";
     public static final String CHAT_HISTORY_PREFIX =
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
+
+    public static final String DEFAULT_PLANNER_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n"
+        + "Objective: ```${parameters."
+        + USER_PROMPT_FIELD
+        + "}``` \n\nRemember: Respond only in JSON format following the required schema.";
+
+    public static final String DEFAULT_REFLECT_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n\n"
+        + "Objective: ```${parameters."
+        + USER_PROMPT_FIELD
+        + "}```\n\n"
+        + "Previous plan:\n[${parameters."
+        + STEPS_FIELD
+        + "}] \n\n"
+        + "You have currently executed the following steps: \n[${parameters."
+        + COMPLETED_STEPS_FIELD
+        + "}] \n\n"
+        + "${parameters."
+        + REFLECT_PROMPT_FIELD
+        + "} \n\n.Remember: Respond only in JSON format following the required schema.";
+
+    public static final String DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n"
+        + "Objective: ```${parameters."
+        + USER_PROMPT_FIELD
+        + "}``` \n\n"
+        + "You have currently executed the following steps: \n[${parameters."
+        + COMPLETED_STEPS_FIELD
+        + "}] \n\nRemember: Respond only in JSON format following the required schema.";
+
+    public static final String DEFAULT_PLANNER_PROMPT =
+        "For the given objective, generate a step-by-step plan composed of simple, self-contained steps. The final step should directly yield the final answer. Avoid unnecessary steps.";
+
+    public static final String DEFAULT_REFLECT_PROMPT =
+        "Update your plan based on the latest step results. If the task is complete, return the final answer. Otherwise, include only the remaining steps. Do not repeat previously completed steps.";
+
+    public static final String FINAL_RESULT_RESPONSE_INSTRUCTIONS =
+        """
+                When you deliver your final result, include a comprehensive report. This report must:
+                1. List every analysis or step you performed.
+                2. Summarize the inputs, methods, tools, and data used at each step.
+                3. Include key findings from all intermediate steps — do NOT omit them.
+                4. Clearly explain how the steps led to your final conclusion. Only mention the completed steps.
+                5. Return the full analysis and conclusion in the 'result' field, even if some of this was mentioned earlier. Ensure that special characters are escaped in the 'result' field.
+                6. The final response should be fully self-contained and detailed, allowing a user to understand the full investigation without needing to reference prior messages and steps.
+            """;
+
+    public static String getPlanExecuteReflectResponseFormat(String resultExpandAndOverride, String importantRulesExpand) {
+        String resultExample = "Here are examples of valid responses following the required JSON schema:\n\n"
+            + "Example 1 - When you need to execute steps:\n"
+            + "{\n"
+            + "\t\"steps\": [\"This is an example step\", \"this is another example step\"],\n"
+            + "\t\"result\": \"\"\n"
+            + "}\n\n"
+            + "Example 2 - When you have the final result:\n"
+            + "{\n"
+            + "\t\"steps\": [],\n"
+            + "\t\"result\": \"This is an example result\\n with escaped special characters\"\n"
+            + "}\n";
+
+        return "# Response Format\n\n"
+            + "## JSON Response Requirements\n"
+            + "Only respond in JSON format. Always follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON\n\n"
+            + "Always respond with a valid JSON object that strictly follows the below schema:\n"
+            + "```json\n"
+            + "{\n"
+            + "  \"steps\": array[string],\n"
+            + "  \"result\": string\n"
+            + "}\n"
+            + "```\n"
+            + "\n"
+            + "- Use \"steps\" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string\n"
+            + "- Use \"result\" to return the final response when you have enough information, leave it empty if you want to execute more steps. "
+            + (resultExpandAndOverride == null ? "" : resultExpandAndOverride)
+            + "\n"
+            + (resultExpandAndOverride == null ? resultExample : "")
+            + "## Critical Rules\n"
+            + "1. Do not use commas within individual steps\n"
+            + "2. Do not add any content before or after the JSON\n"
+            + "3. Only respond with a pure JSON object\n"
+            + (importantRulesExpand == null ? "" : importantRulesExpand)
+            + "\n";
+    }
+
+    public static String getPlanExecuteReflectResponseFormat() {
+        return getPlanExecuteReflectResponseFormat(null, null);
+    }
+
+    public static final String DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX =
+        "# Investigation Planner Agent\n\nYou are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.\n\n";
+
+    public static String getCorePlanningInstructions() {
+        return """
+            # Instructions
+
+            ## Core Planning Rules
+            - Break the objective into an ordered list of atomic, self-contained Steps that, if executed, will lead to the final result or complete the objective
+            - Each Step must state what to do, where, and which tool/parameters would be used. You do not execute tools, only reference them for planning
+            - Use only the provided tools; do not invent or assume tools. If no suitable tool applies, use reasoning or observations instead
+            - Base your plan only on the data and information explicitly provided; do not rely on unstated knowledge or external facts
+            - If there is insufficient information to create a complete plan, summarize what is known so far and clearly state what additional information is required to proceed
+            - Stop and summarize if the task is complete or further progress is unlikely
+            - Avoid vague instructions; be specific about data sources, indexes, or parameters
+            - Never make assumptions or rely on implicit knowledge
+            - Respond only in JSON format
+            """
+            + """
+                ## Step Examples
+                **Good example:** "Use Tool to sample documents from index: 'my-index'"
+
+                **Bad example:** "Use Tool to sample documents from each index"
+
+                **Bad example:** "Use Tool to sample documents from all indices"
+
+                """;
+    }
+
+    public static final String EXECUTOR_RESPONSIBILITY =
+        """
+            You are a precise and reliable executor agent in a plan-execute-reflect framework. Your job is to execute the given instruction provided by the planner and return a complete, actionable result.
+
+            Instructions:
+            - Fully execute the given Step using the most relevant tool or reasoning. If executing the Step requires multiple tool invocations, invoke at most one tool per response and perform remaining tool invocations in subsequent responses.
+            - Include all relevant raw tool outputs (e.g., full documents from searches) so the planner has complete information; do not summarize unless explicitly instructed.
+            - Base your execution and conclusions only on the data and tool outputs available; do not rely on unstated knowledge or external facts.
+            - If the available data is insufficient to complete the Step, summarize what was obtained so far and clearly state the additional information or access required to proceed (do not guess).
+            - If unable to complete the Step, clearly explain what went wrong and what is needed to proceed.
+            - Avoid making assumptions and relying on implicit knowledge.
+            - Before generating any PPL or DSL query, always retrieve the index mapping first to ensure correct field names. Do not guess field names.
+            - Your response must be self-contained and ready for the planner to use without modification. Never end with a question.
+            - Break complex searches into simpler queries when appropriate.
+            - Never invoke more than one tool in a single response. Returning multiple tool calls in one response is invalid.""";
+
+    public static final String MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT = "You are a concise and reliable Summary Agent.\n"
+        + "Your job is to read the user's message and return a clear, accurate, and compact summary of the content.\n"
+        + "\n"
+        + "Instructions:\n"
+        + "\n"
+        + "1. Produce a single coherent summary capturing the essential meaning of the input message.\n"
+        + "2. Do not omit important context or alter the original intent.\n"
+        + "3. Do not add new information or assumptions.\n"
+        + "4. Use neutral tone and simple phrasing.\n"
+        + "5. If the message contains multiple points, combine them into a unified summary.\n"
+        + "6. If the message is unclear or incomplete, summarize only what is present.\n"
+        + "7. Output only the summary text, with no explanations, no preambles, and no questions.\n"
+        + "\n"
+        + "Your only task is to summarize the message.";
+
+    public static final String MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT = "You are a Summary Agent.\n"
+        + "Your job is to read all provided steps, results, and traces from a completed process and produce one clear, accurate, and fully self-contained summary.\n"
+        + "\n"
+        + "Instructions\n"
+        + "1. Summarize the entire process\n"
+        + "2. Summarize the inputs, methods, tools, and data used at each step.\n"
+        + "3. Include all key findings and important intermediate results.\n"
+        + "4.Clearly explain how the steps led to the final conclusion.\n"
+        + "5. The summary must be complete enough to stand alone, without needing earlier messages.\n"
+        + "6. Use a neutral, factual tone and focus only on the information provided.\n"
+        + "7. Output only the summary text — no JSON or metadata.\n"
+        + "\n"
+        + "Rules\n"
+        + "1. Do not add assumptions or invent missing details.\n"
+        + "2. Do not omit meaningful steps or insights.\n"
+        + "3. Do not include long raw outputs — summarize them.\n"
+        + "4. Do not ask questions.\n";
 }

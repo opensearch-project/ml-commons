@@ -1,0 +1,392 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.settings;
+
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
+
+import com.google.common.annotations.VisibleForTesting;
+
+public class MLFeatureEnabledSetting {
+
+    private volatile Boolean isRemoteInferenceEnabled;
+    private volatile Boolean isAgentFrameworkEnabled;
+    private volatile Boolean isUnifiedAgentApiEnabled;
+    private volatile Boolean isAgenticSearchTemplateEnabled;
+
+    private volatile Boolean isLocalModelEnabled;
+    private volatile Boolean isConnectorPrivateIpEnabled;
+    private volatile List<String> trustedConnectorEndpointsRegex;
+
+    private volatile Boolean isControllerEnabled;
+    private volatile Boolean isBatchIngestionEnabled;
+    private volatile Boolean isBatchInferenceEnabled;
+
+    // This is to identify if this node is in multi-tenancy or not.
+    private volatile Boolean isMultiTenancyEnabled;
+
+    private volatile Boolean isMcpServerEnabled;
+
+    private volatile Boolean isRagSearchPipelineEnabled;
+
+    private volatile Boolean isMetricCollectionEnabled;
+    private volatile Boolean isStaticMetricCollectionEnabled;
+
+    private volatile Boolean isExecuteToolEnabled;
+
+    private volatile Boolean isMcpConnectorEnabled;
+
+    private volatile Boolean isAgenticMemoryEnabled;
+
+    private volatile Boolean isRemoteAgenticMemoryEnabled;
+
+    private volatile Boolean isMemoryRetentionEnabled;
+
+    private volatile Boolean isVertexAIConnectorEnabled;
+
+    private volatile Boolean isMutualTlsEnabled;
+
+    private volatile Boolean isIndexInsightEnabled;
+
+    private volatile Boolean isStreamEnabled;
+
+    private volatile Integer maxJsonSize;
+
+    private volatile Boolean isMcpHeaderPassthroughEnabled;
+
+    private volatile Boolean isAGUIEnabled;
+
+    private final List<SettingsChangeListener> listeners = new ArrayList<>();
+
+    public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
+        isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
+        isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
+        isUnifiedAgentApiEnabled = ML_COMMONS_UNIFIED_AGENT_API_ENABLED.get(settings);
+        isAgenticSearchTemplateEnabled = ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.get(settings);
+        isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
+        isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
+        isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
+        isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
+        isMultiTenancyEnabled = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
+        isMcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(settings);
+        isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
+        isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
+        isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
+        isExecuteToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(settings);
+        isMcpConnectorEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(settings);
+        isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
+        isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
+        isMemoryRetentionEnabled = ML_COMMONS_MEMORY_RETENTION_ENABLED.get(settings);
+        isVertexAIConnectorEnabled = ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.get(settings);
+        isMutualTlsEnabled = ML_COMMONS_MUTUAL_TLS_ENABLED.get(settings);
+        isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
+        isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
+        maxJsonSize = MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings);
+        isMcpHeaderPassthroughEnabled = ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.get(settings);
+        isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
+
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_INFERENCE_ENABLED, it -> isRemoteInferenceEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_UNIFIED_AGENT_API_ENABLED, it -> isUnifiedAgentApiEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED, it -> isAgenticSearchTemplateEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED, it -> isBatchIngestionEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED, it -> isBatchInferenceEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> isMcpServerEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> isExecuteToolEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> isMcpConnectorEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_ENABLED, it -> isAgenticMemoryEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED, it -> isRemoteAgenticMemoryEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_RETENTION_ENABLED, it -> isMemoryRetentionEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED, it -> isVertexAIConnectorEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MUTUAL_TLS_ENABLED, it -> isMutualTlsEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED, it -> isIndexInsightEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED, it -> isMcpHeaderPassthroughEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
+            isStaticMetricCollectionEnabled = it;
+            for (SettingsChangeListener listener : listeners) {
+                listener.onStaticMetricCollectionEnabledChanged(it);
+            }
+        });
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE, it -> maxJsonSize = it);
+    }
+
+    /**
+     * Whether the remote inference feature is enabled. If disabled, APIs in ml-commons will block remote inference.
+     * @return whether Remote Inference is enabled.
+     */
+    public boolean isRemoteInferenceEnabled() {
+        return isRemoteInferenceEnabled;
+    }
+
+    /**
+     * Whether the agent framework feature is enabled. If disabled, APIs in ml-commons will block agent framework.
+     * @return whether the agent framework is enabled.
+     */
+    public boolean isAgentFrameworkEnabled() {
+        return isAgentFrameworkEnabled;
+    }
+
+    /**
+     * Whether unified agent API is enabled. If disabled, APIs in ml-commons will block agent registration with model creation and unified execution interface.
+     * @return whether unified agent API is enabled.
+     */
+    public boolean isUnifiedAgentApiEnabled() {
+        return isUnifiedAgentApiEnabled;
+    }
+
+    /**
+     * Whether the agentic search template APIs and the template-fill tool are enabled. Disabled by default
+     * pending security review, and always disabled with multi-tenancy, since templates are not yet
+     * tenant-scoped.
+     * @return whether the agentic search template APIs are enabled.
+     */
+    public boolean isAgenticSearchTemplateEnabled() {
+        return isAgenticSearchTemplateEnabled && !isMultiTenancyEnabled;
+    }
+
+    /**
+     * Whether the local model feature is enabled. If disabled, APIs in ml-commons will block local model inference.
+     * @return whether the local inference is enabled.
+     */
+    public boolean isLocalModelEnabled() {
+        return isLocalModelEnabled;
+    }
+
+    public boolean isConnectorPrivateIpEnabled() {
+        return isConnectorPrivateIpEnabled;
+    }
+
+    public List<String> getTrustedConnectorEndpointsRegex() {
+        List<String> current = trustedConnectorEndpointsRegex;
+        return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
+    }
+
+    /**
+     * Whether the controller feature is enabled. If disabled, APIs in ml-commons will block controller.
+     * @return whether the controller is enabled.
+     */
+    public Boolean isControllerEnabled() {
+        return isControllerEnabled;
+    }
+
+    /**
+     * Whether the offline batch ingestion is enabled. If disabled, APIs in ml-commons will block offline batch ingestion.
+     * @return whether the feature is enabled.
+     */
+    public Boolean isOfflineBatchIngestionEnabled() {
+        return isBatchIngestionEnabled;
+    }
+
+    /**
+     * Whether the offline batch inference is enabled. If disabled, APIs in ml-commons will block offline batch inference.
+     * @return whether the feature is enabled.
+     */
+    public Boolean isOfflineBatchInferenceEnabled() {
+        return isBatchInferenceEnabled;
+    }
+
+    /**
+     * Whether the multi-tenancy feature is enabled. If disabled, tenant id will be null.
+     * @return whether the multi tenancy feature is enabled.
+     */
+    public boolean isMultiTenancyEnabled() {
+        return isMultiTenancyEnabled;
+    }
+
+    /**
+     * Whether the mcp server feature is enabled. If disabled, MCP server APIs in ml-commons will be blocked.
+     * @return where the MCP server feature is enabled.
+     */
+    public boolean isMcpServerEnabled() {
+        return isMcpServerEnabled;
+    }
+
+    public void addListener(SettingsChangeListener listener) {
+        listeners.add(listener);
+    }
+
+    /**
+     * Whether the rag search pipeline feature is enabled. If disabled, APIs in ml-commons will block rag search pipeline.
+     * @return whether the feature is enabled.
+     */
+    public boolean isRagSearchPipelineEnabled() {
+        return isRagSearchPipelineEnabled;
+    }
+
+    public boolean isMetricCollectionEnabled() {
+        return isMetricCollectionEnabled;
+    }
+
+    public boolean isStaticMetricCollectionEnabled() {
+        return isStaticMetricCollectionEnabled;
+    }
+
+    /**
+     * Whether the execute tool API is enabled. If disabled, execute tool API in ml-commons will be blocked
+     * @return whether the execute tool API is enabled.
+     */
+    public boolean isToolExecuteEnabled() {
+        return isExecuteToolEnabled;
+    }
+
+    /**
+     * Whether the Agentic memory APIs are enabled. If disabled, Agentic memory APIs in ml-commons will be blocked
+     * @return whether the agentic memory feature is enabled.
+     */
+    public boolean isAgenticMemoryEnabled() {
+        return isAgenticMemoryEnabled;
+    }
+
+    /**
+     * Whether the Remote Agentic Memory feature is enabled. If disabled, APIs in ml-commons will block remote agentic memory usage.
+     * @return whether the remote agentic memory feature is enabled.
+     */
+    public boolean isRemoteAgenticMemoryEnabled() {
+        return isRemoteAgenticMemoryEnabled;
+    }
+
+    /**
+     * Whether the memory retention feature is enabled. If disabled, the memory container APIs reject
+     * retention_policy and the memory retention job does not run.
+     * @return whether the memory retention feature is enabled.
+     */
+    public boolean isMemoryRetentionEnabled() {
+        return isMemoryRetentionEnabled;
+    }
+
+    /**
+     * Whether the Vertex AI (google_cloud) connector is enabled. Disabled by default (opt-in); when disabled,
+     * connector creation with the google_cloud protocol is rejected.
+     * @return whether the Vertex AI connector feature is enabled.
+     */
+    public boolean isVertexAIConnectorEnabled() {
+        return isVertexAIConnectorEnabled;
+    }
+
+    /**
+     * Whether connector mutual TLS is enabled. Disabled by default (opt-in); when disabled, a connector request
+     * that sets {@code mutual_tls_enabled} is rejected rather than silently storing a transport protection that
+     * is not consistently applied.
+     * @return whether connector mutual TLS is enabled.
+     */
+    public boolean isMutualTlsEnabled() {
+        return isMutualTlsEnabled;
+    }
+
+    @VisibleForTesting
+    public void notifyMultiTenancyListeners(boolean isEnabled) {
+        for (SettingsChangeListener listener : listeners) {
+            listener.onMultiTenancyEnabledChanged(isEnabled);
+        }
+    }
+
+    public boolean isMcpConnectorEnabled() {
+        return isMcpConnectorEnabled;
+    }
+
+    public boolean isIndexInsightEnabled() {
+        return isIndexInsightEnabled;
+    }
+
+    /** Whether the streaming feature is enabled. If disabled, APIs in ml-commons will block stream.
+     * @return whether the streaming is enabled.
+     */
+    public boolean isStreamEnabled() {
+        return isStreamEnabled;
+    }
+
+    /**
+     * Gets the maximum allowed JSON string size in bytes for parsing.
+     * @return the maximum size in bytes, or -1 for unlimited
+     */
+    public int getMaxJsonSize() {
+        return maxJsonSize;
+    }
+
+    /**
+     * Whether the MCP header passthrough feature is enabled. If disabled, MCP headers will not be passed through to MCP connectors.
+     * @return whether the MCP header passthrough feature is enabled.
+     */
+    public boolean isMcpHeaderPassthroughEnabled() {
+        return isMcpHeaderPassthroughEnabled;
+    }
+
+    /**
+     * Whether the AG-UI agent feature is enabled. If disabled, AG-UI agents will be blocked.
+     * @return whether the AG-UI agent feature is enabled.
+     */
+    public boolean isAGUIEnabled() {
+        return isAGUIEnabled;
+    }
+}

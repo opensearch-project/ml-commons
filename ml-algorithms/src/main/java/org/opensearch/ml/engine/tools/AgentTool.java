@@ -6,9 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -17,10 +15,13 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
@@ -37,6 +38,7 @@ public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
+    @Setter
     private String agentId;
     @Setter
     @Getter
@@ -48,31 +50,49 @@ public class AgentTool implements Tool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
 
+    @Getter
+    @Setter
+    private Map<String, Object> attributes;
+
+    @Setter
+    private Parser outputParser;
+
     public AgentTool(Client client, String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new IllegalArgumentException("Agent ID cannot be null or empty");
+        }
+
         this.client = client;
         this.agentId = agentId;
     }
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        Map<String, String> extractedParameters = extractInputParameters(parameters);
-        String tenantId = parameters.get(TENANT_ID_FIELD);
-        AgentMLInput agentMLInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId(agentId)
-            .tenantId(tenantId)
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
-            .build();
-        ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
-        client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
-            ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
-            listener.onResponse((T) output);
-        }, e -> {
-            log.error("Failed to run agent " + agentId, e);
+        try {
+            if (agentId == null || agentId.isBlank()) {
+                throw new IllegalArgumentException("Agent ID not registered in tool");
+            }
+            Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
+            String tenantId = parameters.get(TENANT_ID_FIELD);
+            AgentMLInput agentMLInput = AgentMLInput
+                .AgentMLInputBuilder()
+                .agentId(agentId)
+                .tenantId(tenantId)
+                .functionName(FunctionName.AGENT)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
+                .build();
+            ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
+            client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
+                ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
+                listener.onResponse((T) outputParser.parse(output));
+            }, e -> {
+                log.error("Failed to run agent " + agentId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to run AgentTool with agent: {}", agentId, e);
             listener.onFailure(e);
-        }));
-
+        }
     }
 
     @Override
@@ -123,8 +143,10 @@ public class AgentTool implements Tool {
         }
 
         @Override
-        public AgentTool create(Map<String, Object> map) {
-            return new AgentTool(client, (String) map.get("agent_id"));
+        public AgentTool create(Map<String, Object> params) {
+            AgentTool agentTool = new AgentTool(client, (String) params.get("agent_id"));
+            agentTool.setOutputParser(ToolParser.createFromToolParams(params));
+            return agentTool;
         }
 
         @Override
@@ -141,19 +163,5 @@ public class AgentTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
-    }
-
-    private Map<String, String> extractInputParameters(Map<String, String> parameters) {
-        Map<String, String> extractedParameters = new HashMap<>();
-        extractedParameters.putAll(parameters);
-        if (parameters.containsKey("input")) {
-            try {
-                Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
-                extractedParameters.putAll(chatParameters);
-            } catch (Exception exception) {
-                log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
-            }
-        }
-        return extractedParameters;
     }
 }

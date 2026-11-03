@@ -67,7 +67,8 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         IntStream
             .range(0, lastN)
             .forEach(
-                i -> interactions.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
+                i -> interactions
+                    .add(new Interaction(Integer.toString(i), Instant.now(), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
             );
         GetInteractionsResponse response = new GetInteractionsResponse(interactions, lastN, false);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);
@@ -92,13 +93,17 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         List<Interaction> firstPage = new ArrayList<>();
         IntStream
             .range(0, lastN)
-            .forEach(i -> firstPage.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null)));
+            .forEach(
+                i -> firstPage
+                    .add(new Interaction(Integer.toString(i), Instant.now(), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
+            );
         GetInteractionsResponse response1 = new GetInteractionsResponse(firstPage, lastN, true);
         List<Interaction> secondPage = new ArrayList<>();
         IntStream
             .range(0, lastN)
             .forEach(
-                i -> secondPage.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
+                i -> secondPage
+                    .add(new Interaction(Integer.toString(i), Instant.now(), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
             );
         GetInteractionsResponse response2 = new GetInteractionsResponse(secondPage, lastN, false);
         ActionFuture<GetInteractionsResponse> future1 = mock(ActionFuture.class);
@@ -130,7 +135,8 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         IntStream
             .range(0, found)
             .forEach(
-                i -> interactions.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
+                i -> interactions
+                    .add(new Interaction(Integer.toString(i), Instant.now(), Instant.now(), conversationId, "foo", "bar", "x", "y", null))
             );
         GetInteractionsResponse response = new GetInteractionsResponse(interactions, found, false);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);

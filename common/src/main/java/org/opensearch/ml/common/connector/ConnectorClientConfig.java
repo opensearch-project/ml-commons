@@ -18,13 +18,16 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
+@Setter
 public class ConnectorClientConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_CONNECTION_FIELD = "max_connection";
@@ -34,15 +37,23 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String RETRY_TIMEOUT_SECONDS_FIELD = "retry_timeout_seconds";
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
+    public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
+    public static final String MUTUAL_TLS_ENABLED_FIELD = "mutual_tls_enabled";
+    public static final String KEYSTORE_TYPE_FIELD = "keystore_type";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30);
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
+    public static final Boolean SKIP_SSL_VERIFICATION_DEFAULT_VALUE = Boolean.FALSE;
+    public static final Boolean MUTUAL_TLS_ENABLED_DEFAULT_VALUE = Boolean.FALSE;
+    // Note: No default value for keystoreType to prevent field pollution in connector configs
+    // CertificateProcessor.KeystoreType.from() falls back to PEM when the type is not set
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MTLS = CommonValue.VERSION_3_9_0;
     private Integer maxConnections;
     private Integer connectionTimeout;
     private Integer readTimeout;
@@ -50,6 +61,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
     private RetryBackoffPolicy retryBackoffPolicy;
+    private Boolean skipSslVerification;
+    private Boolean mutualTlsEnabled;
+    private String keystoreType;
 
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
@@ -59,7 +73,10 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryBackoffMillis,
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
-        RetryBackoffPolicy retryBackoffPolicy
+        RetryBackoffPolicy retryBackoffPolicy,
+        Boolean skipSslVerification,
+        Boolean mutualTlsEnabled,
+        String keystoreType
     ) {
         this.maxConnections = maxConnections;
         this.connectionTimeout = connectionTimeout;
@@ -68,6 +85,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.retryTimeoutSeconds = retryTimeoutSeconds;
         this.maxRetryTimes = maxRetryTimes;
         this.retryBackoffPolicy = retryBackoffPolicy;
+        this.skipSslVerification = skipSslVerification;
+        this.mutualTlsEnabled = mutualTlsEnabled;
+        this.keystoreType = keystoreType;
     }
 
     public ConnectorClientConfig(StreamInput input) throws IOException {
@@ -82,6 +102,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             if (input.readBoolean()) {
                 this.retryBackoffPolicy = RetryBackoffPolicy.from(input.readString());
             }
+            this.skipSslVerification = input.readOptionalBoolean();
+            if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
+                this.mutualTlsEnabled = input.readOptionalBoolean();
+                this.keystoreType = input.readOptionalString();
+            }
         }
     }
 
@@ -93,6 +118,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         this.maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         this.retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
+        this.skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        this.mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
+        this.keystoreType = null; // No default - prevents field pollution in serialized output
     }
 
     @Override
@@ -110,6 +138,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 out.writeString(retryBackoffPolicy.name());
             } else {
                 out.writeBoolean(false);
+            }
+            out.writeOptionalBoolean(skipSslVerification);
+            if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_MTLS)) {
+                out.writeOptionalBoolean(mutualTlsEnabled);
+                out.writeOptionalString(keystoreType);
             }
         }
     }
@@ -138,6 +171,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (retryBackoffPolicy != null) {
             builder.field(RETRY_BACKOFF_POLICY_FIELD, retryBackoffPolicy.name().toLowerCase(Locale.ROOT));
         }
+        if (skipSslVerification != null) {
+            builder.field(SKIP_SSL_VERIFICATION_FIELD, skipSslVerification);
+        }
+        if (mutualTlsEnabled != null) {
+            builder.field(MUTUAL_TLS_ENABLED_FIELD, mutualTlsEnabled);
+        }
+        if (keystoreType != null) {
+            builder.field(KEYSTORE_TYPE_FIELD, keystoreType);
+        }
         return builder.endObject();
     }
 
@@ -154,6 +196,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         Integer retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         Integer maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
         RetryBackoffPolicy retryBackoffPolicy = RETRY_BACKOFF_POLICY_DEFAULT_VALUE;
+        Boolean skipSslVerification = SKIP_SSL_VERIFICATION_DEFAULT_VALUE;
+        Boolean mutualTlsEnabled = MUTUAL_TLS_ENABLED_DEFAULT_VALUE;
+        String keystoreType = null; // No default - CertificateProcessor handles PEM fallback
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -182,6 +227,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                 case RETRY_BACKOFF_POLICY_FIELD:
                     retryBackoffPolicy = RetryBackoffPolicy.from(parser.text());
                     break;
+                case SKIP_SSL_VERIFICATION_FIELD:
+                    skipSslVerification = parser.booleanValue();
+                    break;
+                case MUTUAL_TLS_ENABLED_FIELD:
+                    mutualTlsEnabled = parser.booleanValue();
+                    break;
+                case KEYSTORE_TYPE_FIELD:
+                    keystoreType = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -196,6 +250,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
             .retryTimeoutSeconds(retryTimeoutSeconds)
             .maxRetryTimes(maxRetryTimes)
             .retryBackoffPolicy(retryBackoffPolicy)
+            .skipSslVerification(skipSslVerification)
+            .mutualTlsEnabled(mutualTlsEnabled)
+            .keystoreType(keystoreType)
             .build();
     }
 }

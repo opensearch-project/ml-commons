@@ -7,18 +7,25 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.AMAZON_TEXTRACT_DETECTDOCUMENTTEXT_API_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_AI21_LABS_JURASSIC2_MID_V1_RAW_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_ANTHROPIC_CLAUDE_V3_SONNET_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_RAW_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -27,7 +34,9 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Spy;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class ModelInterfaceUtilsTest {
@@ -39,6 +48,10 @@ public class ModelInterfaceUtilsTest {
 
     @Spy
     public HttpConnector connector;
+
+    public ConnectorAction connectorActionWithPostProcessFunction;
+
+    public ConnectorAction connectorActionWithoutPostProcessFunction;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -56,6 +69,23 @@ public class ModelInterfaceUtilsTest {
             .modelName("test-model-with-stand-alone-connector")
             .functionName(FunctionName.REMOTE)
             .build();
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction("test-post-process-function")
+            .build();
+
+        connectorActionWithoutPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
     }
 
     @Test
@@ -63,10 +93,29 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "ai21.j2-mid-v1");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
-
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE);
+    }
+
+    @Test
+    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_AI21_LABS_JURASSIC2_MID_V1_RAW_MODEL_INTERFACE() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", "ai21.j2-mid-v1");
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithoutPostProcessFunction))
+            .build();
+        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
+        assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_AI21_LABS_JURASSIC2_MID_V1_RAW_MODEL_INTERFACE);
     }
 
     @Test
@@ -74,7 +123,12 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "anthropic.claude-3-sonnet-20240229-v1:0");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_ANTHROPIC_CLAUDE_V3_SONNET_MODEL_INTERFACE);
@@ -85,7 +139,12 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "anthropic.claude-v2");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE);
@@ -96,10 +155,40 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "cohere.embed-english-v3");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.COHERE_EMBEDDING)
+            .build();
+
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE);
+    }
+
+    @Test
+    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", "cohere.embed-english-v3");
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithoutPostProcessFunction))
+            .build();
+        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
+        assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE);
     }
 
     @Test
@@ -107,10 +196,43 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "cohere.embed-multilingual-v3");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.COHERE_EMBEDDING)
+            .build();
+
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE);
+    }
+
+    @Test
+    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", "cohere.embed-multilingual-v3");
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithoutPostProcessFunction))
+            .build();
+        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
+        assertEquals(
+            registerModelInputWithStandaloneConnector.getModelInterface(),
+            BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE
+        );
     }
 
     @Test
@@ -118,10 +240,40 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "amazon.titan-embed-text-v1");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE);
+    }
+
+    @Test
+    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", "amazon.titan-embed-text-v1");
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithoutPostProcessFunction))
+            .build();
+        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
+        assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE);
     }
 
     @Test
@@ -129,10 +281,40 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "amazon.titan-embed-image-v1");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE);
+    }
+
+    @Test
+    public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBEDROCK_TITAN_EMBED_MULTI_MODAL_V1_RAW_MODEL_INTERFACE() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("service_name", "bedrock");
+        parameters.put("model", "amazon.titan-embed-image-v1");
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithoutPostProcessFunction))
+            .build();
+        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
+        assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_RAW_MODEL_INTERFACE);
     }
 
     @Test
@@ -140,7 +322,12 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "comprehend");
         parameters.put("api_name", "DetectDominantLanguage");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(
@@ -154,7 +341,12 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "textract");
         parameters.put("api_name", "DetectDocumentText");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertEquals(registerModelInputWithStandaloneConnector.getModelInterface(), AMAZON_TEXTRACT_DETECTDOCUMENTTEXT_API_INTERFACE);
@@ -163,7 +355,12 @@ public class ModelInterfaceUtilsTest {
     @Test
     public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorServiceNameNotFound() {
         Map<String, String> parameters = new HashMap<>();
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertNull(registerModelInputWithStandaloneConnector.getModelInterface());
@@ -173,7 +370,12 @@ public class ModelInterfaceUtilsTest {
     public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorBedrockModelNameNotFound() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertNull(registerModelInputWithStandaloneConnector.getModelInterface());
@@ -183,7 +385,12 @@ public class ModelInterfaceUtilsTest {
     public void testUpdateRegisterModelInputModelInterfaceFieldsByConnectorAmazonComprehendAPINameNotFound() {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "comprehend");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
 
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithStandaloneConnector, connector);
         assertNull(registerModelInputWithStandaloneConnector.getModelInterface());
@@ -204,7 +411,12 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "ai21.j2-mid-v1");
-        connector = HttpConnector.builder().protocol("http").parameters(parameters).build();
+        connector = HttpConnector
+            .builder()
+            .protocol("http")
+            .parameters(parameters)
+            .actions(List.of(connectorActionWithPostProcessFunction))
+            .build();
         registerModelInputWithInnerConnector.setConnector(connector);
         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInputWithInnerConnector);
         assertEquals(registerModelInputWithInnerConnector.getModelInterface(), BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE);

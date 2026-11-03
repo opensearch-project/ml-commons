@@ -6,12 +6,12 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -28,17 +28,23 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -52,6 +58,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportCreateConnectorAction extends HandledTransportAction<ActionRequest, MLCreateConnectorResponse> {
+    private static final CertificateProcessor CERTIFICATE_PROCESSOR = new CertificateProcessor();
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
@@ -95,9 +102,37 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
+        if (mlCreateConnectorInput.getActions() != null) {
+            for (ConnectorAction action : mlCreateConnectorInput.getActions()) {
+                Map<String, String> headers = action.getHeaders();
+                AbstractConnector.validateConnectorHeaders(headers, mlCreateConnectorInput.getProtocol());
+            }
+        }
+        try {
+            ConnectorProtocolValidator.validateProtocolEnabled(mlCreateConnectorInput.getProtocol(), mlFeatureEnabledSetting);
+            ConnectorProtocolValidator
+                .validateMutualTlsSupported(mlCreateConnectorInput.getProtocol(), mlCreateConnectorInput.getConnectorClientConfig());
+            ConnectorProtocolValidator.validateMutualTlsEnabled(mlCreateConnectorInput.getConnectorClientConfig(), mlFeatureEnabledSetting);
+            ConnectorProtocolValidator
+                .validateMutualTlsScheme(
+                    mlCreateConnectorInput.getActions(),
+                    mlCreateConnectorInput.getParameters(),
+                    mlCreateConnectorInput.getConnectorClientConfig()
+                );
+            ConnectorProtocolValidator
+                .validateMcpMutualTlsScheme(
+                    mlCreateConnectorInput.getProtocol(),
+                    mlCreateConnectorInput.getUrl(),
+                    mlCreateConnectorInput.getConnectorClientConfig()
+                );
+        } catch (Exception e) {
+            listener.onFailure(e);
+            return;
+        }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomDocumentId(mlCreateConnectorInput.getConnectorId(), "connector id");
         if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);
@@ -109,11 +144,15 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+            // Fail fast: otherwise an invalid mutual TLS configuration is only caught at execution
+            // time, and then on every single request the connector serves.
+            validateMutualTlsConfig(connector);
 
             User user = RestActionUtils.getUserContext(client);
+            String connectorId = mlCreateConnectorInput.getConnectorId();
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
-                indexConnector(connector, listener);
+                indexConnector(connector, connectorId, listener);
             } else {
                 validateRequest4AccessControl(mlCreateConnectorInput, user);
                 if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
@@ -122,7 +161,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
                 connector.setOwner(user);
                 connector.setAccess(mlCreateConnectorInput.getAccess());
-                indexConnector(connector, listener);
+                indexConnector(connector, connectorId, listener);
             }
         } catch (MetaDataException e) {
             log.error("The masterKey for credential encryption is missing in connector creation");
@@ -133,36 +172,35 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
-        connector.encrypt(mlEngine::encrypt, connector.getTenantId());
-        log.info("connector created, indexing into the connector system index");
-        mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
-            if (!indexCreated) {
-                listener.onFailure(new RuntimeException("No response to create ML Connector index"));
-                return;
-            }
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                Instant currentTime = Instant.now();
-                connector.setCreatedTime(currentTime);
-                connector.setLastUpdateTime(currentTime);
-                sdkClient
-                    .putDataObjectAsync(
-                        PutDataObjectRequest
-                            .builder()
-                            .tenantId(connector.getTenantId())
-                            .index(ML_CONNECTOR_INDEX)
-                            .dataObject(connector)
-                            .build()
-                    )
-                    .whenComplete((r, throwable) -> {
+    private void indexConnector(Connector connector, String connectorId, ActionListener<MLCreateConnectorResponse> listener) {
+        ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(res -> {
+            log.info("connector created, indexing into the connector system index");
+            mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
+                if (!indexCreated) {
+                    listener.onFailure(new RuntimeException("No response to create ML Connector index"));
+                    return;
+                }
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    Instant currentTime = Instant.now();
+                    connector.setCreatedTime(currentTime);
+                    connector.setLastUpdateTime(currentTime);
+                    PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                        .builder()
+                        .tenantId(connector.getTenantId())
+                        .index(ML_CONNECTOR_INDEX)
+                        .dataObject(connector);
+                    if (connectorId != null) {
+                        putRequestBuilder.id(connectorId).overwriteIfExists(false);
+                    }
+                    sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
                         context.restore();
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             log.error("Failed to create ML connector", cause);
-                            listener.onFailure(cause);
+                            listener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(connectorId, "connector id", cause));
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log
                                     .info(
                                         "Connector creation result: {}, connector id: {}",
@@ -170,19 +208,37 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                         indexResponse.getId()
                                     );
                                 listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
-                            } catch (IOException e) {
+                            } catch (Exception e) {
                                 listener.onFailure(e);
                             }
                         }
                     });
-            } catch (Exception e) {
-                log.error("Failed to save ML connector", e);
+                } catch (Exception e) {
+                    log.error("Failed to save ML connector", e);
+                    listener.onFailure(e);
+                }
+            }, e -> {
+                log.error("Failed to init ML connector index", e);
                 listener.onFailure(e);
-            }
+            }));
         }, e -> {
-            log.error("Failed to init ML connector index", e);
+            log.error("Failed to encrypt credentials in connector", e);
             listener.onFailure(e);
-        }));
+        });
+        connector.encrypt(mlEngine::encrypt, connector.getTenantId(), encryptSuccessfulListener);
+    }
+
+    /**
+     * Rejects an invalid mutual TLS configuration. MLValidationException carries no REST status, so
+     * it surfaces as 500; translating it keeps a malformed request a 400, consistent with the other
+     * validation in this action.
+     */
+    private static void validateMutualTlsConfig(Connector connector) {
+        try {
+            CERTIFICATE_PROCESSOR.validateCertificateConfig(connector.getConnectorClientConfig(), connector.getCredential());
+        } catch (MLValidationException e) {
+            throw new IllegalArgumentException(e.getMessage(), e);
+        }
     }
 
     private void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {

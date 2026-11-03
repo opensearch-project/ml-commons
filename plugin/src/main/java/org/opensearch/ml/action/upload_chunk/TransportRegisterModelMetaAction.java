@@ -20,6 +20,7 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
@@ -63,6 +64,8 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLRegisterModelMetaRequest registerModelMetaRequest = MLRegisterModelMetaRequest.fromActionRequest(request);
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
 
+        MLResourceIdUtils.validateCustomModelId(mlUploadInput.getModelId());
+
         if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
 
             // Local models are out of scope for multi-tenancy. Therefore, null is used as the default tenant for single tenancy.
@@ -92,30 +95,38 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     ) {
 
         User user = RestActionUtils.getUserContext(client);
-        modelAccessControlHelper.validateModelGroupAccess(user, mlUploadInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-            if (access) {
-                createModelGroup(mlUploadInput, listener);
-                return;
-            }
-            if (isModelNameAlreadyExisting) {
-                listener
-                    .onFailure(
-                        new IllegalArgumentException(
-                            "The name {"
-                                + mlUploadInput.getName()
-                                + "} you provided is unavailable because it is used by another model group with id {"
-                                + mlUploadInput.getModelGroupId()
-                                + "} to which you do not have access. Please provide a different name."
-                        )
-                    );
-            } else {
-                log.error("You don't have permissions to perform this operation on this model.");
-                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
-            }
-        }, e -> {
-            logException("Failed to validate model access", e, log);
-            listener.onFailure(e);
-        }));
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                mlUploadInput.getModelGroupId(),
+                MLRegisterModelMetaAction.NAME,
+                client,
+                ActionListener.wrap(access -> {
+                    if (access) {
+                        createModelGroup(mlUploadInput, listener);
+                        return;
+                    }
+                    if (isModelNameAlreadyExisting) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name {"
+                                        + mlUploadInput.getName()
+                                        + "} you provided is unavailable because it is used by another model group with id {"
+                                        + mlUploadInput.getModelGroupId()
+                                        + "} to which you do not have access. Please provide a different name."
+                                )
+                            );
+                    } else {
+                        log.error("You don't have permissions to perform this operation on this model.");
+                        listener
+                            .onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                    }
+                }, e -> {
+                    logException("Failed to validate model access", e, log);
+                    listener.onFailure(e);
+                })
+            );
     }
 
     private void createModelGroup(MLRegisterModelMetaInput mlUploadInput, ActionListener<MLRegisterModelMetaResponse> listener) {

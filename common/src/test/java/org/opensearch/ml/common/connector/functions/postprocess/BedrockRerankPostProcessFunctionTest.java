@@ -32,28 +32,28 @@ public class BedrockRerankPostProcessFunctionTest {
     public void process_WrongInput_NotList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc");
+        function.apply("abc", null);
     }
 
     @Test
     public void process_EmptyInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is empty.");
-        function.apply(Arrays.asList());
+        function.apply(Arrays.asList(), null);
     }
 
     @Test
     public void process_WrongInput_NotCorrectListOfMapsFormat() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Rerank result is not a Map.");
-        function.apply(Arrays.asList("abc"));
+        function.apply(Arrays.asList("abc"), null);
     }
 
     @Test
     public void process_EmptyMapInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Rerank result is empty.");
-        function.apply(Arrays.asList(Map.of()));
+        function.apply(Arrays.asList(Map.of()), null);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class BedrockRerankPostProcessFunctionTest {
                 Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
                 Map.of("test1", "value1")
             );
-        function.apply(rerankResults);
+        function.apply(rerankResults, null);
     }
 
     @Test
@@ -81,7 +81,7 @@ public class BedrockRerankPostProcessFunctionTest {
                 Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
                 Map.of("index", 3, "relevanceScore", "value1")
             );
-        function.apply(rerankResults);
+        function.apply(rerankResults, null);
     }
 
     @Test
@@ -93,7 +93,7 @@ public class BedrockRerankPostProcessFunctionTest {
                 Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
                 Map.of("index", 3, "relevanceScore", 6.339210358419223e-06)
             );
-        List<ModelTensor> result = function.apply(rerankResults);
+        List<ModelTensor> result = function.apply(rerankResults, null);
         assertEquals(4, result.size());
         assertEquals(1, result.get(0).getData().length);
         assertEquals(0.0025114635936915874, result.get(0).getData()[0]);

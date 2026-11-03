@@ -34,6 +34,7 @@ public class ToolMetadataTests {
             .description("Use this tool to calculate any math problem.")
             .type("MathTool")
             .version("test")
+            .attributes(null)
             .build();
 
         function = parser -> {
@@ -51,8 +52,8 @@ public class ToolMetadataTests {
         toolMetadata.toXContent(builder, EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            toolMetadataString,
-            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}"
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}",
+            toolMetadataString
         );
     }
 
@@ -92,5 +93,6 @@ public class ToolMetadataTests {
         assertEquals(toolMetadata.getDescription(), parsedToolMetadata.getDescription());
         assertEquals(toolMetadata.getType(), parsedToolMetadata.getType());
         assertEquals(toolMetadata.getVersion(), parsedToolMetadata.getVersion());
+        assertEquals(toolMetadata.getAttributes(), parsedToolMetadata.getAttributes());
     }
 }

@@ -1,8 +1,6 @@
 /*
- *
- *  * Copyright OpenSearch Contributors
- *  * SPDX-License-Identifier: Apache-2.0
- *
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.opensearch.ml.engine.algorithms.remote;
@@ -103,7 +101,17 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     @Override
     public void onError(Throwable error) {
         log.error("Received error from remote service: {}", error.getMessage(), error);
-        RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
+        RestStatus status;
+        if (statusCode == null) {
+            if (error.getMessage() != null
+                && error.getMessage().contains("Acquire operation took longer than the configured maximum time")) {
+                status = RestStatus.TOO_MANY_REQUESTS;
+            } else {
+                status = RestStatus.INTERNAL_SERVER_ERROR;
+            }
+        } else {
+            status = RestStatus.fromCode(statusCode);
+        }
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
     }
@@ -172,29 +180,35 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private void response() {
         String body = responseBody.toString();
-
+        log.debug("Received response from remote service: {}", body);
         if (exceptionHolder.get() != null) {
             log.error("Remote server returned exception with status code: {} and body: {}", statusCode, body);
             actionListener.onFailure(exceptionHolder.get());
             return;
         }
 
+        // Handle error status codes (4xx, 5xx)
+        if (statusCode == null || statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            RestStatus status = (statusCode != null) ? RestStatus.fromCode(statusCode) : RestStatus.INTERNAL_SERVER_ERROR;
+            String errorMsg = Strings.isBlank(body)
+                ? String.format("Remote service returned error status %d with empty body", statusCode)
+                : REMOTE_SERVICE_ERROR + body;
+
+            log.error("Remote service returned error: {} with status: {}", errorMsg, status);
+            actionListener.onFailure(new OpenSearchStatusException(errorMsg, status));
+            return;
+        }
+
+        // Handle successful status codes with empty body (invalid for most operations)
         if (Strings.isBlank(body) && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
-            log.error("Remote model response body is empty!");
-            actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
-            return;
-        }
-
-        if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-            log.error("Remote service returned error code: {} with body: {}", statusCode, body);
-            actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
-            return;
-        }
-
-        if (action.equals(CANCEL_BATCH_PREDICT.toString())) {
-            ModelTensors tensors = ModelTensors.builder().statusCode(statusCode).build();
-            tensors.setStatusCode(statusCode);
-            actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+            log.error("Remote model returned successful status {} but with empty response body", statusCode);
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Remote service returned empty response body",
+                        RestStatus.BAD_GATEWAY  // 502 - indicates upstream returned invalid response
+                    )
+                );
             return;
         }
 
@@ -202,8 +216,10 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             ModelTensors tensors = processOutput(action, body, connector, scriptService, parameters, mlGuard);
             tensors.setStatusCode(statusCode);
             actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+        } catch (IllegalArgumentException e) {
+            actionListener.onFailure(e);
         } catch (Exception e) {
-            log.error("Failed to process response body: {}", body, e);
+            log.error("Failed to process response body", e);
             actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }

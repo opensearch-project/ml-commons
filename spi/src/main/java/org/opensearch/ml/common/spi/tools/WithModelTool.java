@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.spi.tools;
 
-
 import java.util.List;
 
 /**

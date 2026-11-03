@@ -28,12 +28,12 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLController;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
 import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
@@ -96,34 +96,40 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                         mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                             Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                    if (hasPermission) {
-                                        wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    getErrorMessage(
-                                                        "User doesn't have privilege to perform this operation on this model controller.",
-                                                        modelId,
-                                                        isHidden
-                                                    ),
-                                                    RestStatus.FORBIDDEN
-                                                )
+                                .validateModelGroupAccess(
+                                    user,
+                                    mlModel.getModelGroupId(),
+                                    MLControllerGetAction.NAME,
+                                    client,
+                                    ActionListener.wrap(hasPermission -> {
+                                        if (hasPermission) {
+                                            wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        getErrorMessage(
+                                                            "User doesn't have privilege to perform this operation on this model controller.",
+                                                            modelId,
+                                                            isHidden
+                                                        ),
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
+                                    }, exception -> {
+                                        log
+                                            .error(
+                                                getErrorMessage(
+                                                    "Permission denied: Unable to create the model controller for the given model.",
+                                                    modelId,
+                                                    isHidden
+                                                ),
+                                                exception
                                             );
-                                    }
-                                }, exception -> {
-                                    log
-                                        .error(
-                                            getErrorMessage(
-                                                "Permission denied: Unable to create the model controller for the given model.",
-                                                modelId,
-                                                isHidden
-                                            ),
-                                            exception
-                                        );
-                                    wrappedListener.onFailure(exception);
-                                }));
+                                        wrappedListener.onFailure(exception);
+                                    })
+                                );
                         },
                             e -> wrappedListener
                                 .onFailure(

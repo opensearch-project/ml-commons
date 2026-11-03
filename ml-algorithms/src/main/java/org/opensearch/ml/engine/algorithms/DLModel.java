@@ -253,7 +253,7 @@ public abstract class DLModel implements Predictable {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
-                    System.setProperty("PYTORCH_VERSION", "1.13.1");
+                    System.setProperty("PYTORCH_VERSION", "2.5.1");
                     System.setProperty("DJL_CACHE_DIR", mlEngine.getMlCachePath().toAbsolutePath().toString());
                     // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
                     // access denied exception
@@ -267,6 +267,7 @@ public abstract class DLModel implements Predictable {
                         FileUtils.deleteDirectory(pathFile);
                     }
                     ZipUtils.unzip(modelZipFile, modelPath);
+                    ModelHelper.verifyModelDirSafety(modelPath);
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();

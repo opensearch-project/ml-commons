@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
+import static org.opensearch.ml.common.model.BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
 import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.engine.algorithms.TextEmbeddingModel;
@@ -30,9 +31,9 @@ public class TextEmbeddingDenseModel extends TextEmbeddingModel {
     @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
+        BaseModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
         String modelType = textEmbeddingModelConfig.getModelType();
-        TextEmbeddingModelConfig.PoolingMode poolingMode = textEmbeddingModelConfig.getPoolingMode();
+        BaseModelConfig.PoolingMode poolingMode = textEmbeddingModelConfig.getPoolingMode();
         boolean normalizeResult = textEmbeddingModelConfig.isNormalizeResult();
 
         if (ONNX_ENGINE.equals(engine)) { // ONNX

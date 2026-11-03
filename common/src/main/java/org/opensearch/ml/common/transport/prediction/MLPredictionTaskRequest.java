@@ -23,6 +23,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskRequest;
+import org.opensearch.transport.TransportChannel;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -35,6 +36,10 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
 public class MLPredictionTaskRequest extends MLTaskRequest {
+
+    @Getter
+    @Setter
+    private transient TransportChannel streamingChannel;
 
     String modelId;
     MLInput mlInput;

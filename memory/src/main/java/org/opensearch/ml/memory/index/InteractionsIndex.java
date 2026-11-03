@@ -165,6 +165,7 @@ public class InteractionsIndex {
                         Map<String, Object> sourceMap = new HashMap<>();
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, timestamp);
+                        sourceMap.put(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, timestamp);
                         sourceMap.put(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentId);
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, traceNumber);
 

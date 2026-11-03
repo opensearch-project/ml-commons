@@ -7,9 +7,7 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,10 +29,10 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
@@ -136,10 +134,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private SearchDataObjectRequest buildModelSearchRequest(String connectorId, String tenantId) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-            sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID_FIELD, tenantId));
-        }
+        // Exact match on the keyword subfield. An analysed match query on the `connector_id` text field splits on '-'
+        // and lowercases, so any model referencing a connector id that shares a single token would block this delete.
+        sourceBuilder.query(QueryBuilders.termQuery(MLModel.CONNECTOR_ID_KEYWORD_FIELD, connectorId));
 
         return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(sourceBuilder).build();
     }
@@ -158,7 +155,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would produce NPE on next line
             SearchHit[] searchHits = response.getHits().getHits();
 
             if (searchHits.length == 0) {
@@ -221,13 +219,17 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML connector: {}", connectorId, cause);
+            if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                return;
+            }
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Connector deletion result: {}, connector id: {}", deleteResponse.getResult(), response.id());
                 actionListener.onResponse(deleteResponse);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 actionListener.onFailure(e);
             }
         }

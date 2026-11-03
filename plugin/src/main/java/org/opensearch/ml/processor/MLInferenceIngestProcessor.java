@@ -395,7 +395,14 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             throw new RuntimeException("model inference output is null");
         }
 
-        Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+        // Check if transformation is needed
+        String baseFieldName = OutputTransformations.getBaseFieldName(modelOutputFieldName);
+        Object modelOutputValue = getModelOutputValue(mlOutput, baseFieldName, ignoreMissing, fullResponsePath);
+
+        // Apply transformation if specified
+        if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
+            modelOutputValue = OutputTransformations.applyTransformation(modelOutputFieldName, modelOutputValue);
+        }
 
         Map<String, Object> ingestDocumentSourceAndMetaData = new HashMap<>();
         ingestDocumentSourceAndMetaData.putAll(ingestDocument.getSourceAndMetadata());

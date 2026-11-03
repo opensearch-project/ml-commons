@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
@@ -33,7 +34,6 @@ public class MLModelGroup implements ToXContentObject {
     public static final String MODEL_GROUP_NAME_FIELD = "name"; // name of the model group
     public static final String DESCRIPTION_FIELD = "description"; // description of the model group
     public static final String LATEST_VERSION_FIELD = "latest_version"; // latest model version added to the model group
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // back_end roles as specified by the owner/admin
     public static final String OWNER = "owner"; // user who creates/owns the model group
 
     public static final String ACCESS = "access"; // assigned to public, private, or null when model group created

@@ -8,6 +8,8 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -27,11 +29,11 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -146,7 +148,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
         try {
-            GetResponse gr = getDataObjectResponse.parser() == null ? null : GetResponse.fromXContent(getDataObjectResponse.parser());
+            GetResponse gr = getDataObjectResponse.getResponse();
             if (gr != null && gr.isExists()) {
                 try (
                     XContentParser parser = jsonXContent
@@ -183,21 +185,35 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
-            if (!access) {
-                wrappedListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "User doesn't have privilege to perform this operation on this model group",
-                            RestStatus.FORBIDDEN
-                        )
-                    );
-            } else {
-                wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
-            }
-        }, e -> {
-            log.error("Failed to validate access for Model Group {}", modelGroupId, e);
-            wrappedListener.onFailure(e);
-        }));
+        // if resource sharing feature is enabled, security plugin will have automatically evaluated access to this model group, hence no
+        // need to validate again
+        if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
+            wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+            return;
+        }
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                modelGroupId,
+                MLModelGroupGetAction.NAME,
+                client,
+
+                ActionListener.wrap(access -> {
+                    if (!access) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model group",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                    } else {
+                        wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+                    }
+                }, e -> {
+                    log.error("Failed to validate access for Model Group {}", modelGroupId, e);
+                    wrappedListener.onFailure(e);
+                })
+            );
     }
 }

@@ -42,7 +42,8 @@ public class AwsConnector extends HttpConnector {
         AccessMode accessMode,
         User owner,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
+        String tenantId,
+        String provisionedBy
     ) {
         super(
             name,
@@ -56,7 +57,8 @@ public class AwsConnector extends HttpConnector {
             accessMode,
             owner,
             connectorClientConfig,
-            tenantId
+            tenantId,
+            provisionedBy
         );
         validate();
     }
@@ -69,6 +71,12 @@ public class AwsConnector extends HttpConnector {
     public AwsConnector(StreamInput input) throws IOException {
         super(input);
         validate();
+    }
+
+    public AwsConnector(String protocol, StreamInput input) throws IOException {
+        super(protocol, input);
+        // validate();
+        // Note: Validation skipped for StreamInput deserialization.
     }
 
     private void validate() {

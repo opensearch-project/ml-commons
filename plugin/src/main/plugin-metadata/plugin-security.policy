@@ -33,4 +33,8 @@ grant {
 
     // AWS credentials needed for clients
     permission java.io.FilePermission "${user.home}/.aws/-", "read";
+
+    // for accessing Unix domain socket on windows
+    permission java.net.NetPermission "accessUnixDomainSocket";
+
 };

@@ -6,8 +6,11 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
@@ -32,12 +35,15 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import lombok.Builder;
@@ -70,11 +76,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
     public static final String DOES_VERSION_CREATE_MODEL_GROUP = "does_version_create_model_group";
     public static final String GUARDRAILS_FIELD = "guardrails";
+    public static final String BATCH_INFERENCE_CONFIG_FIELD = "batch_inference_config";
 
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_DOES_VERSION_CREATE_MODEL_GROUP = CommonValue.VERSION_2_11_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_FRAMEWORK = CommonValue.VERSION_2_12_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_GUARDRAILS_AND_AUTO_DEPLOY = CommonValue.VERSION_2_13_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE = CommonValue.VERSION_2_14_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MODEL_ID = VERSION_3_9_0;
 
     private FunctionName functionName;
     private String modelName;
@@ -105,6 +113,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     private Map<String, String> modelInterface;
     private String tenantId;
+    private String provisionedBy;
+    private String modelId;
+    private BatchInferenceConfig batchInferenceConfig;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(
@@ -131,7 +142,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean isHidden,
         Guardrails guardrails,
         Map<String, String> modelInterface,
-        String tenantId
+        String tenantId,
+        String provisionedBy,
+        String modelId,
+        BatchInferenceConfig batchInferenceConfig
     ) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
@@ -174,6 +188,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
+        this.provisionedBy = provisionedBy;
+        this.modelId = modelId;
+        this.batchInferenceConfig = batchInferenceConfig;
     }
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
@@ -193,8 +210,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.modelConfig = new MetricsCorrelationModelConfig(in);
             } else if (this.functionName.equals(FunctionName.QUESTION_ANSWERING)) {
                 this.modelConfig = new QuestionAnsweringModelConfig(in);
-            } else {
+            } else if (this.functionName.equals(FunctionName.TEXT_EMBEDDING)) {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
+            } else if (this.functionName.equals(FunctionName.REMOTE)) {
+                this.modelConfig = new RemoteModelConfig(in);
+            } else {
+                this.modelConfig = new BaseModelConfig(in);
             }
         }
         this.deployModel = in.readBoolean();
@@ -234,6 +255,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+        this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? in.readOptionalString() : null;
+        this.modelId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MODEL_ID) ? in.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
+            this.batchInferenceConfig = new BatchInferenceConfig(in);
+        }
     }
 
     @Override
@@ -318,6 +344,20 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_MODEL_ID)) {
+            out.writeOptionalString(modelId);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchInferenceConfig != null) {
+                out.writeBoolean(true);
+                batchInferenceConfig.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -389,6 +429,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (provisionedBy != null) {
+            builder.field(PROVISIONED_BY_FIELD, provisionedBy);
+        }
+        if (modelId != null) {
+            builder.field(MLModel.MODEL_ID_FIELD, modelId);
+        }
+        if (batchInferenceConfig != null) {
+            builder.field(BATCH_INFERENCE_CONFIG_FIELD, batchInferenceConfig);
+        }
         builder.endObject();
         return builder;
     }
@@ -416,6 +465,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
         String tenantId = null;
+        String provisionedBy = null;
+        String modelId = null;
+        BatchInferenceConfig batchInferenceConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -424,6 +476,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MLModel.MODEL_ID_FIELD:
+                    modelId = parser.text();
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
@@ -449,8 +504,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
-                    } else {
+                    } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.equals(functionName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
+                    } else {
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:
@@ -495,6 +554,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case PROVISIONED_BY_FIELD:
+                    provisionedBy = parser.textOrNull();
+                    break;
+                case BATCH_INFERENCE_CONFIG_FIELD:
+                    // Strict: this is caller-supplied API input, so a typo is reported rather than ignored.
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -524,7 +590,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             isHidden,
             guardrails,
             modelInterface,
-            tenantId
+            tenantId,
+            provisionedBy,
+            modelId,
+            batchInferenceConfig
         );
     }
 
@@ -552,6 +621,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
         String tenantId = null;
+        String provisionedBy = null;
+        String modelId = null;
+        BatchInferenceConfig batchInferenceConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -561,6 +633,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MLModel.MODEL_ID_FIELD:
+                    modelId = parser.text();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
@@ -598,8 +673,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
-                    } else {
+                    } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.equals(functionName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
+                    } else {
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:
@@ -638,6 +717,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case PROVISIONED_BY_FIELD:
+                    provisionedBy = parser.textOrNull();
+                    break;
+                case BATCH_INFERENCE_CONFIG_FIELD:
+                    // Strict: this is caller-supplied API input, so a typo is reported rather than ignored.
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -667,7 +753,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             isHidden,
             guardrails,
             modelInterface,
-            tenantId
+            tenantId,
+            provisionedBy,
+            modelId,
+            batchInferenceConfig
         );
     }
 }

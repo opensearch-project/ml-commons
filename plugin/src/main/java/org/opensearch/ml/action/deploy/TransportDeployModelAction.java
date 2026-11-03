@@ -8,9 +8,9 @@ package org.opensearch.ml.action.deploy;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
@@ -45,6 +45,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelInput;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelNodesRequest;
@@ -55,7 +56,6 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -139,6 +139,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
         String tenantId = deployModelRequest.getTenantId();
+        log.debug("Received deploy request for modelId: {}", modelId);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
@@ -156,9 +157,9 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     return;
                 }
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-                    throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+                    throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
                 } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
                 }
                 if (!isUserInitiatedDeployRequest) {
                     deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
@@ -176,22 +177,29 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if (!access) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            } else {
-                                deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
-                            }
-                        }, e -> {
-                            log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
-                            wrappedListener.onFailure(e);
-                        }));
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            MLDeployModelAction.NAME,
+                            client,
+
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                } else {
+                                    deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
+                                }
+                            }, e -> {
+                                log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
+                                wrappedListener.onFailure(e);
+                            })
+                        );
                 }
 
             }, e -> {
@@ -215,6 +223,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     ) {
         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
         boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
+        log.info("Starting model deployment for model: {}", modelId);
         if (!allowCustomDeploymentPlan && !deployToAllNodes) {
             throw new IllegalArgumentException("Don't allow custom deployment plan");
         }
@@ -283,6 +292,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             .build();
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
+            log.debug("ML deploy task {} created for modelId: {}", taskId, modelId);
             mlTask.setTaskId(taskId);
             if (algorithm == FunctionName.REMOTE) {
                 mlTaskManager.add(mlTask, eligibleNodeIds);
@@ -396,6 +406,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             if (mlTaskManager.contains(taskId)) {
                 mlTaskManager.updateMLTask(taskId, tenantId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
+            log.debug("Model deployment successful for model: {}", modelId);
             listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.COMPLETED.name()));
         }, e -> {
             log.error("Failed to deploy model {}", modelId, e);
@@ -423,6 +434,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         List<DiscoveryNode> eligibleNodes,
         boolean deployToAllNodes
     ) {
+        log.debug("Triggering deploy on nodes for modelId: {}", modelId);
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             modelId,
             taskId,
@@ -438,6 +450,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             deployModelInput
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
+            log.debug("Successfully triggered model deployment on nodes for model: {}", modelId);
             if (mlTaskManager.contains(taskId)) {
                 mlTaskManager
                     .updateMLTask(taskId, mlModel.getTenantId(), Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
@@ -462,6 +475,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         });
 
         List<String> workerNodes = eligibleNodes.stream().map(DiscoveryNode::getId).toList();
+        log.debug("Updating model state to DEPLOYING for modelId: {}", modelId);
         mlModelManager
             .updateModel(
                 modelId,

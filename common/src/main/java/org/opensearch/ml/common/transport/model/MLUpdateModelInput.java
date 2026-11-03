@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.model;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -25,10 +26,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -73,6 +75,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
     private Guardrails guardrails;
     private String tenantId;
+    private BatchInferenceConfig batchInferenceConfig;
 
     private Map<String, String> modelInterface;
 
@@ -93,7 +96,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         Guardrails guardrails,
         Map<String, String> modelInterface,
-        String tenantId
+        String tenantId,
+        BatchInferenceConfig batchInferenceConfig
     ) {
         this.modelId = modelId;
         this.description = description;
@@ -111,6 +115,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
+        this.batchInferenceConfig = batchInferenceConfig;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -125,7 +130,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             rateLimiter = new MLRateLimiter(in);
         }
         if (in.readBoolean()) {
-            modelConfig = new TextEmbeddingModelConfig(in);
+            modelConfig = new BaseModelConfig(in);
         }
         if (in.readBoolean()) {
             updatedConnector = Connector.fromStream(in);
@@ -149,6 +154,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
+            this.batchInferenceConfig = new BatchInferenceConfig(in);
+        }
     }
 
     @Override
@@ -198,6 +206,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (batchInferenceConfig != null) {
+            builder.field(MLModel.BATCH_INFERENCE_CONFIG_FIELD, batchInferenceConfig);
         }
         builder.endObject();
         return builder;
@@ -263,6 +274,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchInferenceConfig != null) {
+                out.writeBoolean(true);
+                batchInferenceConfig.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -282,6 +301,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
         String tenantId = null;
+        BatchInferenceConfig batchInferenceConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -307,7 +327,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    modelConfig = BaseModelConfig.parse(parser);
                     break;
                 case DEPLOY_SETTING_FIELD:
                     deploySetting = MLDeploySetting.parse(parser);
@@ -326,6 +346,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
+                    break;
+                case MLModel.BATCH_INFERENCE_CONFIG_FIELD:
+                    batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
                 default:
                     parser.skipChildren();
@@ -350,7 +373,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             lastUpdateTime,
             guardrails,
             modelInterface,
-            tenantId
+            tenantId,
+            batchInferenceConfig
         );
     }
 }

@@ -15,12 +15,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -35,6 +37,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -55,13 +58,13 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
@@ -134,6 +137,9 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         doReturn(metaData).when(clusterState).metadata();
 
         doReturn(true).when(metaData).hasIndex(anyString());
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX)));
 
         cancelBatchJobTransportAction = spy(
             new CancelBatchJobTransportAction(
@@ -185,10 +191,10 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("testModelID"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -286,10 +292,10 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 

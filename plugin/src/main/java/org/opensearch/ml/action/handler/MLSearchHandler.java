@@ -7,10 +7,13 @@ package org.opensearch.ml.action.handler;
 
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -20,6 +23,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -36,9 +40,12 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -65,17 +72,20 @@ public class MLSearchHandler {
     private ModelAccessControlHelper modelAccessControlHelper;
 
     private ClusterService clusterService;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public MLSearchHandler(
         Client client,
         NamedXContentRegistry xContentRegistry,
         ModelAccessControlHelper modelAccessControlHelper,
-        ClusterService clusterService
+        ClusterService clusterService,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     /**
@@ -131,99 +141,133 @@ public class MLSearchHandler {
             request.source().fetchSource(rebuiltFetchSourceContext);
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
-            if (modelAccessControlHelper.skipModelAccessControl(user)
-                || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
 
+            boolean hasModelGroupIndex = MLIndicesHandler
+                .doesMultiTenantIndexExist(
+                    clusterService,
+                    mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                    CommonValue.ML_MODEL_GROUP_INDEX
+                );
+
+            if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)
+                && user != null
+                && modelAccessControlHelper.modelAccessControlEnabled()
+                && hasModelGroupIndex) {
+                // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
+                var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(ids -> {
+                    SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
+                    gated.query(rewriteQueryBuilderRSC(gated.query(), ids)); // ids may be empty → "missing only"
+                    request.source(gated);
+
+                    SearchDataObjectRequest finalSearch = SearchDataObjectRequest
+                        .builder()
+                        .indices(request.indices())
+                        .searchSourceBuilder(request.source())
+                        .tenantId(tenantId)
+                        .build();
+                    sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                }, e -> {
+                    log.error("RSC getAccessibleResourceIds failed", e);
+                    wrappedListener.onFailure(e);
+                }));
+                return;
+            }
+
+            if (modelAccessControlHelper.skipModelAccessControl(user) || !hasModelGroupIndex) {
+                // user is null / access control disabled / no model-group index → no gating
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
                     .indices(request.indices())
                     .searchSourceBuilder(request.source())
                     .tenantId(tenantId)
                     .build();
-                sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                            log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                            doubleWrapperListener.onResponse(searchResponse);
-                        } catch (Exception e) {
-                            doubleWrapperListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                        doubleWrapperListener.onFailure(e);
-                    }
-                });
-            } else {
-                SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
-                SearchRequest modelGroupSearchRequest = new SearchRequest();
-                sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
-                sourceBuilder.size(10000);
-                modelGroupSearchRequest.source(sourceBuilder);
-                modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
-                ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
-                    if (Optional
-                        .ofNullable(r)
-                        .map(SearchResponse::getHits)
-                        .map(SearchHits::getTotalHits)
-                        .map(TotalHits::value)
-                        .orElse(0L) > 0) {
-                        List<String> modelGroupIds = new ArrayList<>();
-                        Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                return;
+            }
 
-                        request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
-                    } else {
-                        log.debug("No model group found");
-                        request.source().query(rewriteQueryBuilder(request.source().query(), null));
-                    }
-                    SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                        .builder()
-                        .indices(request.indices())
-                        .searchSourceBuilder(request.source())
-                        .tenantId(tenantId)
-                        .build();
-                    sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, throwable) -> {
-                        if (throwable == null) {
-                            try {
-                                SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
-                                log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                                doubleWrapperListener.onResponse(searchResponse);
-                            } catch (Exception e) {
-                                doubleWrapperListener.onFailure(e);
-                            }
-                        } else {
-                            Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                            doubleWrapperListener.onFailure(e);
-                        }
-                    });
-                }, e -> {
-                    log.error("Fail to search model groups!", e);
-                    wrappedListener.onFailure(e);
-                });
+            // Legacy backend-roles: discover allowed model-group IDs, then gate models (IDs or missing)
+            SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
+            SearchRequest modelGroupSearchRequest = new SearchRequest();
+            sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
+            sourceBuilder.size(10000);
+            modelGroupSearchRequest.source(sourceBuilder);
+            modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
+            ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
+                if (Optional
+                    .ofNullable(r)
+                    .map(SearchResponse::getHits)
+                    .map(SearchHits::getTotalHits)
+                    .map(TotalHits::value)
+                    .orElse(0L) > 0) {
+                    List<String> modelGroupIds = new ArrayList<>();
+                    Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
+
+                    request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
+                } else {
+                    log.debug("No model group found");
+                    request.source().query(rewriteQueryBuilder(request.source().query(), null));
+                }
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
-                    .indices(modelGroupSearchRequest.indices())
-                    .searchSourceBuilder(modelGroupSearchRequest.source())
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
                     .tenantId(tenantId)
                     .build();
-                sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                            log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                            modelGroupSearchActionListener.onResponse(searchResponse);
-                        } catch (Exception e) {
-                            modelGroupSearchActionListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                        modelGroupSearchActionListener.onFailure(e);
-                    }
-                });
-            }
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+            }, e -> {
+                log.error("Fail to search model groups!", e);
+                wrappedListener.onFailure(e);
+            });
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(modelGroupSearchRequest.indices())
+                .searchSourceBuilder(modelGroupSearchRequest.source())
+                .tenantId(tenantId)
+                .build();
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest)
+                .whenComplete(SdkClientUtils.wrapSearchCompletion(modelGroupSearchActionListener));
+
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
+        }
+    }
+
+    /**
+     * Gate model search by model-groups; resource-sharing feature path
+     */
+    @VisibleForTesting
+    static QueryBuilder rewriteQueryBuilderRSC(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
+        // RSC: empty => DENY-ALL; non-empty => (ids OR missing)
+        final QueryBuilder gate;
+
+        if (modelGroupIds == null || modelGroupIds.isEmpty()) {
+            // RSC empty => DENY-ALL; Legacy empty => MISSING-ONLY
+            // DENY-ALL
+            gate = QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()); // MISSING-ONLY
+        } else {
+            // Non-empty IDs => allow (ids OR missing)
+            gate = QueryBuilders
+                .boolQuery()
+                .should(QueryBuilders.termsQuery(MLModel.MODEL_GROUP_ID_FIELD, modelGroupIds))
+                .should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.MODEL_GROUP_ID_FIELD)))
+                .minimumShouldMatch(1);
+        }
+
+        if (existing == null) {
+            // gate becomes the top-level query; ensure bool wrapper when not already
+            return (gate != null) ? gate : QueryBuilders.boolQuery().filter(null);
+        } else if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(gate);
+            return existing;
+        } else {
+            return QueryBuilders.boolQuery().must(existing).filter(gate);
         }
     }
 

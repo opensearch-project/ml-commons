@@ -5,34 +5,36 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
+import static org.opensearch.ml.common.utils.ToolUtils.buildToolParameters;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
@@ -41,27 +43,49 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.AgentTool;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
 
-public class MLFlowAgentRunnerTest {
+public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
@@ -75,6 +99,12 @@ public class MLFlowAgentRunnerTest {
     private Client client;
     @Mock
     MLIndicesHandler indicesHandler;
+    @Mock
+    private SdkClient sdkClient;
+    @Mock
+    private Encryptor encryptor;
+    @Mock
+    private ThreadPool threadPool;
 
     @Mock
     MLMemoryManager memoryManager;
@@ -128,8 +158,8 @@ public class MLFlowAgentRunnerTest {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
-        memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
-        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        memoryMap = ImmutableMap.of("CONVERSATION_INDEX", mockMemoryFactory);
+        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(anyMap())).thenReturn(secondTool);
         when(secondTool.getDescription()).thenReturn(SECOND_TOOL_DESC);
@@ -166,7 +196,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
@@ -179,7 +209,7 @@ public class MLFlowAgentRunnerTest {
             ActionListener<Object> listener = invocation.getArgument(1);
             listener.onResponse(memory);
             return null;
-        }).when(mockMemoryFactory).create(Mockito.anyString(), Mockito.any());
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any());
 
         final MLAgent mlAgent = MLAgent
             .builder()
@@ -206,7 +236,7 @@ public class MLFlowAgentRunnerTest {
     public void testRunWithNoToolSpec() {
         final Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).memory(mlMemorySpec).build();
         mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
@@ -221,7 +251,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
@@ -234,7 +264,7 @@ public class MLFlowAgentRunnerTest {
             ActionListener<Object> listener = invocation.getArgument(1);
             listener.onResponse(memory);
             return null;
-        }).when(mockMemoryFactory).create(Mockito.anyString(), Mockito.any());
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any());
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -263,7 +293,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(null).type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         final MLAgent mlAgent = MLAgent
             .builder()
             .name("TestAgent")
@@ -292,7 +322,7 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = buildToolParameters(params, toolSpec, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -311,7 +341,7 @@ public class MLFlowAgentRunnerTest {
         Map<String, String> params = Map
             .of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4", "toolName.tool_key", "dynamic value");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = buildToolParameters(params, toolSpec, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -342,7 +372,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = ToolUtils.extractInputParameters(buildToolParameters(params, toolSpec, null), null);
 
         // Assertions
         assertEquals("value1", result.get("param1"));
@@ -356,20 +386,10 @@ public class MLFlowAgentRunnerTest {
     }
 
     @Test
-    public void testCreateTool() {
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
-
-        assertNotNull(result);
-        assertEquals(FIRST_TOOL, result.getName());
-        assertEquals(FIRST_TOOL_DESC, result.getDescription());
-    }
-
-    @Test
     public void testParseResponse() throws IOException {
 
         String outputString = "testOutput";
-        assertEquals(outputString, mlFlowAgentRunner.parseResponse(outputString));
+        assertEquals(outputString, ToolUtils.parseResponse(outputString));
 
         ModelTensor modelTensor = ModelTensor.builder().name(FIRST_TOOL).dataAsMap(Map.of("index", "index response")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -377,11 +397,11 @@ public class MLFlowAgentRunnerTest {
 
         String expectedJson = "{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}"; // the JSON representation of the
                                                                                                        // model tensor
-        assertEquals(expectedJson, mlFlowAgentRunner.parseResponse(modelTensor));
+        assertEquals(expectedJson, ToolUtils.parseResponse(modelTensor));
 
         String expectedTensorOuput =
             "{\"inference_results\":[{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}]}";
-        assertEquals(expectedTensorOuput, mlFlowAgentRunner.parseResponse(mlModelTensorOutput));
+        assertEquals(expectedTensorOuput, ToolUtils.parseResponse(mlModelTensorOutput));
 
         // Test for List containing ModelTensors
         ModelTensors tensorsInList = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -389,12 +409,12 @@ public class MLFlowAgentRunnerTest {
         String expectedListJson = "{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}"; // Replace with
                                                                                                                           // the actual JSON
                                                                                                                           // representation
-        assertEquals(expectedListJson, mlFlowAgentRunner.parseResponse(tensorList));
+        assertEquals(expectedListJson, ToolUtils.parseResponse(tensorList));
 
         // Test for a non-string, non-model object
         Map<String, Object> nonModelObject = Map.of("key", "value");
         String expectedNonModelJson = "{\"key\":\"value\"}"; // Replace with the actual JSON representation from StringUtils.toJson
-        assertEquals(expectedNonModelJson, mlFlowAgentRunner.parseResponse(nonModelObject));
+        assertEquals(expectedNonModelJson, ToolUtils.parseResponse(nonModelObject));
     }
 
     @Test
@@ -432,39 +452,13 @@ public class MLFlowAgentRunnerTest {
     }
 
     @Test
-    public void testUpdateMemory() {
-        // Mocking MLMemorySpec
-        MLMemorySpec memorySpec = mock(MLMemorySpec.class);
-        when(memorySpec.getType()).thenReturn("memoryType");
-
-        // Mocking Memory Factory and Memory
-
-        ConversationIndexMemory.Factory memoryFactory = new ConversationIndexMemory.Factory();
-        memoryFactory.init(client, indicesHandler, memoryManager);
-        ActionListener<ConversationIndexMemory> listener = mock(ActionListener.class);
-        memoryFactory.create(Map.of(MEMORY_ID, "123", MEMORY_NAME, "name", APP_TYPE, "app"), listener);
-
-        verify(listener).onResponse(isA(ConversationIndexMemory.class));
-
-        Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
-        memoryFactoryMap.put("memoryType", memoryFactory);
-        mlFlowAgentRunner.setMemoryFactoryMap(memoryFactoryMap);
-
-        // Execute the method under test
-        mlFlowAgentRunner.updateMemory(new HashMap<>(), memorySpec, "memoryId", "interactionId");
-
-        // Asserting that the Memory Manager's updateInteraction method was called
-        verify(memoryManager).updateInteraction(anyString(), anyMap(), any(ActionListener.class));
-    }
-
-    @Test
     public void testRunWithUpdateFailure() {
         final Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "interaction_id");
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
-        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
+        MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("conversation_index").build();
         ConversationIndexMemory memory = mock(ConversationIndexMemory.class);
         Mockito.doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
@@ -476,7 +470,7 @@ public class MLFlowAgentRunnerTest {
             ActionListener<Object> listener = invocation.getArgument(1);
             listener.onResponse(memory);
             return null;
-        }).when(mockMemoryFactory).create(Mockito.anyString(), Mockito.any());
+        }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any());
 
         final MLAgent mlAgent = MLAgent
             .builder()
@@ -499,4 +493,312 @@ public class MLFlowAgentRunnerTest {
         assertNotNull(additionalInfo.get(SECOND_TOOL + ".output"));
     }
 
+    @Test
+    public void testRunWithReturnDataAsMap() {
+        final Map<String, String> params = new HashMap<>();
+        Map<String, Object> toolOutput = Map.of("key1", "value1", "key2", "value2");
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(true)
+            .parameters(Map.of("return_data_as_map", "true"))
+            .build();
+        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).tools(Arrays.asList(toolSpec)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(toolOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), any());
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object capturedValue = objectCaptor.getValue();
+
+        if (capturedValue instanceof List) {
+            List<ModelTensor> agentOutput = (List<ModelTensor>) capturedValue;
+            assertEquals(1, agentOutput.size());
+            assertEquals(FIRST_TOOL + ".output", agentOutput.get(0).getName());
+            assertEquals(toolOutput, agentOutput.get(0).getDataAsMap());
+        } else if (capturedValue instanceof Map) {
+            Map<String, Object> agentOutput = (Map<String, Object>) capturedValue;
+            assertEquals(toolOutput, agentOutput);
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFlowAgentWithAgentTool() {
+        AgentTool.Factory.getInstance().init(client);
+        Map<String, Tool.Factory> factories = new HashMap<>(toolFactories);
+        factories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        MLFlowAgentRunner runner = new MLFlowAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            factories,
+            memoryMap,
+            null,
+            null
+        );
+
+        final Map<String, String> params = new HashMap<>();
+        params.put("question", "What is the capital of France?");
+
+        MLToolSpec agentToolSpec = MLToolSpec.builder().type(AgentTool.TYPE).parameters(Map.of("agent_id", "sub-agent-id")).build();
+        MLAgent flowAgent = MLAgent
+            .builder()
+            .name("ParentFlowAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(agentToolSpec))
+            .build();
+
+        ModelTensor subAgentTensor = ModelTensor.builder().name("response").result("Paris").build();
+        ModelTensors subAgentTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(subAgentTensor)).build();
+        ModelTensorOutput subAgentOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(subAgentTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(subAgentOutput).build());
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+
+        runner.run(flowAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testToolOutputJsonIsEscapedForNextTool() {
+        // This test verifies that when a tool returns valid JSON, it is properly escaped
+        // before being stored in params, so it can be safely used in string substitution
+        // by subsequent tools (e.g., in connector request body templates).
+        final Map<String, String> params = new HashMap<>();
+
+        // First tool returns valid JSON
+        String jsonToolOutput = "{\"logs\":[{\"message\":\"error occurred\",\"level\":\"ERROR\"}]}";
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(jsonToolOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
+
+        // Capture the params passed to second tool to verify escaping
+        ArgumentCaptor<Map<String, String>> secondToolParamsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(SECOND_TOOL_RESPONSE);
+            return null;
+        }).when(secondTool).run(secondToolParamsCaptor.capture(), any());
+
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify the first tool's JSON output is escaped when passed to second tool
+        Map<String, String> secondToolParams = secondToolParamsCaptor.getValue();
+        String escapedOutput = secondToolParams.get(FIRST_TOOL + ".output");
+        assertNotNull("First tool output should be present in second tool params", escapedOutput);
+
+        // The JSON should be escaped (quotes become \", etc.)
+        String expectedEscaped = escapeJson(jsonToolOutput);
+        assertEquals("Tool output should be JSON-escaped", expectedEscaped, escapedOutput);
+
+        // Verify the escaped string contains escaped quotes
+        assertTrue("Escaped output should contain escaped quotes", escapedOutput.contains("\\\""));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testToolOutputPlainTextIsEscapedForNextTool() {
+        // This test verifies that plain text tool output is also properly escaped
+        final Map<String, String> params = new HashMap<>();
+
+        // First tool returns plain text with special characters
+        String plainTextOutput = "Line1\nLine2\tTabbed \"quoted\"";
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(plainTextOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
+
+        // Capture the params passed to second tool to verify escaping
+        ArgumentCaptor<Map<String, String>> secondToolParamsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(SECOND_TOOL_RESPONSE);
+            return null;
+        }).when(secondTool).run(secondToolParamsCaptor.capture(), any());
+
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify the first tool's output is escaped when passed to second tool
+        Map<String, String> secondToolParams = secondToolParamsCaptor.getValue();
+        String escapedOutput = secondToolParams.get(FIRST_TOOL + ".output");
+        assertNotNull("First tool output should be present in second tool params", escapedOutput);
+
+        // The plain text should be escaped (newlines become \n, tabs become \t, quotes become \")
+        String expectedEscaped = escapeJson(plainTextOutput);
+        assertEquals("Tool output should be JSON-escaped", expectedEscaped, escapedOutput);
+
+        // Verify the escaped string contains escaped special characters
+        assertTrue("Escaped output should contain escaped newline", escapedOutput.contains("\\n"));
+        assertTrue("Escaped output should contain escaped tab", escapedOutput.contains("\\t"));
+        assertTrue("Escaped output should contain escaped quotes", escapedOutput.contains("\\\""));
+    }
+
+    @Test
+    public void testRun_WithMcpStreamableHttp_Tools_Success() throws Exception {
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpStreamableHttpTool.TYPE, "mcp_streamable_http");
+    }
+
+    @Test
+    public void testRun_WithMcpSse_Tools_Success() throws Exception {
+        runMixedOpenSearchAndMcpToolsSuccessTest(McpSseTool.TYPE, "mcp_sse");
+    }
+
+    private void runMixedOpenSearchAndMcpToolsSuccessTest(String mcpToolType, String mcpProtocol) throws Exception {
+        final Map<String, String> params = new HashMap<>();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tenantId("tenant")
+            .parameters(Map.of("mcp_connectors", "[{\"mcp_connector_id\":\"connector_1\"}]"))
+            .build();
+        final MLToolSpec osTool1 = MLToolSpec.builder().name("os_tool_1").type(FIRST_TOOL).includeOutputInAgentResponse(true).build();
+        final MLToolSpec mcpTool1 = MLToolSpec.builder().name("mcp_tool_1").type(mcpToolType).includeOutputInAgentResponse(true).build();
+        final MLToolSpec osTool2 = MLToolSpec.builder().name("os_tool_2").type(SECOND_TOOL).includeOutputInAgentResponse(true).build();
+        final MLToolSpec mcpTool2 = MLToolSpec.builder().name("mcp_tool_2").type(mcpToolType).includeOutputInAgentResponse(true).build();
+
+        Map<String, Tool.Factory> extendedFactories = new HashMap<>(toolFactories);
+        extendedFactories.put(mcpToolType, firstToolFactory);
+        MLFlowAgentRunner runnerWithMcp = new MLFlowAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            extendedFactories,
+            memoryMap,
+            sdkClient,
+            encryptor
+        );
+
+        ThreadContext threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                try (XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json)) {
+                    GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+                    when(resp.parser()).thenReturn(parser);
+                    BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                    cb.accept(resp, null);
+                }
+                return stage;
+            });
+            return stage;
+        });
+
+        when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
+        when(firstTool.getDescription()).thenReturn(FIRST_TOOL_DESC);
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("tool-output");
+            return null;
+        }).when(firstTool).run(anyMap(), any(ActionListener.class));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            if ("mcp_sse".equals(mcpProtocol)) {
+                McpConnector mockConnector = mock(McpConnector.class);
+                when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+                doAnswer(invocation -> {
+                    ActionListener<Boolean> listener = invocation.getArgument(3);
+                    listener.onResponse(true);
+                    return null;
+                }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
+                connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+                McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs())
+                    .thenReturn(
+                        List
+                            .of(
+                                MLToolSpec.builder().name("mcp_tool_1").type(mcpToolType).runtimeResources(Map.of()).build(),
+                                MLToolSpec.builder().name("mcp_tool_2").type(mcpToolType).runtimeResources(Map.of()).build()
+                            )
+                    );
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+            } else {
+                McpStreamableHttpConnector mockConnector = mock(McpStreamableHttpConnector.class);
+                when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
+                doAnswer(invocation -> {
+                    ActionListener<Boolean> listener = invocation.getArgument(3);
+                    listener.onResponse(true);
+                    return null;
+                }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
+                connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+                McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs())
+                    .thenReturn(
+                        List
+                            .of(
+                                MLToolSpec.builder().name("mcp_tool_1").type(mcpToolType).runtimeResources(Map.of()).build(),
+                                MLToolSpec.builder().name("mcp_tool_2").type(mcpToolType).runtimeResources(Map.of()).build()
+                            )
+                    );
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+            }
+
+            MLAgent runnableAgent = mlAgent.toBuilder().tools(List.of(osTool1, mcpTool1, osTool2, mcpTool2)).build();
+            runnerWithMcp.run(runnableAgent, params, agentActionListener);
+
+            ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+            verify(agentActionListener).onResponse(responseCaptor.capture());
+            @SuppressWarnings("unchecked")
+            List<ModelTensor> output = (List<ModelTensor>) responseCaptor.getValue();
+            assertEquals(4, output.size());
+            assertEquals("os_tool_1", output.get(0).getName());
+            assertEquals("mcp_tool_1", output.get(1).getName());
+            assertEquals("os_tool_2", output.get(2).getName());
+            assertEquals("mcp_tool_2", output.get(3).getName());
+        }
+    }
+
+    @Test
+    public void testRun_WhenMcpToolConfiguredButNoMcpConnector_ShouldFail() {
+        MLToolSpec mcpTool = MLToolSpec.builder().name("missing_mcp_tool").type(McpStreamableHttpTool.TYPE).build();
+        MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).tools(List.of(mcpTool)).build();
+        mlFlowAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("missing_mcp_tool"));
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("not available"));
+    }
 }

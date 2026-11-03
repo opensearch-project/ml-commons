@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.cluster;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -35,6 +35,8 @@ public class DiscoveryNodeHelper {
     private volatile Set<String> excludedNodeNames;
     private volatile Set<String> remoteModelEligibleNodeRoles;
     private volatile Set<String> localModelEligibleNodeRoles;
+
+    private static final Set<FunctionName> NON_LOCAL_FUNCTIONS = Set.of(FunctionName.REMOTE, FunctionName.AGENT, FunctionName.TOOL);
 
     public DiscoveryNodeHelper(ClusterService clusterService, Settings settings) {
         this.clusterService = clusterService;
@@ -73,7 +75,7 @@ public class DiscoveryNodeHelper {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
             }
-            if (functionName == FunctionName.REMOTE || functionName == FunctionName.AGENT) {// non-local model (remote model, agent)
+            if (NON_LOCAL_FUNCTIONS.contains(functionName)) {
                 getEligibleNode(remoteModelEligibleNodeRoles, eligibleNodes, node);
             } else { // local model
                 if (onlyRunOnMLNode) {

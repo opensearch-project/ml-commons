@@ -1,0 +1,801 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.settings;
+
+import static org.opensearch.remote.metadata.common.CommonValue.AWS_DYNAMO_DB;
+import static org.opensearch.remote.metadata.common.CommonValue.AWS_OPENSEARCH_SERVICE;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_TENANT_ID_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_OPENSEARCH;
+
+import java.util.List;
+import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
+
+import com.google.common.collect.ImmutableList;
+
+public final class MLCommonsSettings {
+
+    private MLCommonsSettings() {}
+
+    public static final String ML_PLUGIN_SETTING_PREFIX = "plugins.ml_commons.";
+
+    public static final Setting<String> ML_COMMONS_TASK_DISPATCH_POLICY = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "task_dispatch_policy",
+            "round_robin",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MAX_MODELS_PER_NODE = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "max_model_on_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Integer> ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "max_register_model_tasks_per_node",
+            10,
+            0,
+            10,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INFERENCE_TASKS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "max_batch_inference_tasks",
+            100,
+            0,
+            10000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INGESTION_TASKS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "max_batch_ingestion_tasks",
+            100,
+            0,
+            10000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_BATCH_INGESTION_BULK_SIZE = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "batch_ingestion_bulk_size",
+            500,
+            100,
+            100000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<Integer> ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "max_deploy_model_tasks_per_node",
+            10,
+            0,
+            10,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<Integer> ML_COMMONS_MAX_ML_TASK_PER_NODE = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "max_ml_task_per_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_ONLY_RUN_ON_ML_NODE = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "only_run_on_ml_node", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "enable_inhouse_python_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Integer> ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "sync_up_job_interval_in_seconds",
+            10,
+            0,
+            86400,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "ml_task_timeout_in_seconds",
+            600,
+            1,
+            86400,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<Long> ML_COMMONS_MONITORING_REQUEST_COUNT = Setting
+        .longSetting(
+            ML_PLUGIN_SETTING_PREFIX + "monitoring_request_count",
+            100,
+            0,
+            10_000_000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_TRUSTED_URL_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_url_regex",
+            "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_NATIVE_MEM_THRESHOLD = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "native_memory_threshold", 90, 0, 100, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_JVM_HEAP_MEM_THRESHOLD = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "jvm_heap_memory_threshold",
+            85,
+            0,
+            100,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_DISK_FREE_SPACE_THRESHOLD = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "disk_free_space_threshold",
+            new ByteSizeValue(5L, ByteSizeUnit.GB),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Double> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION = Setting
+        .doubleSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.fraction",
+            0.01,
+            0.0,
+            0.1,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // The floor and the ceiling clamp the fraction of heap the dynamic batching queue may retain, so both are bounded below
+    // by 1 byte: a zero or negative bound would clamp the budget to nothing and reject every queued predict
+    // request for the life of the node, reported as a 429 that no amount of backoff could clear.
+    private static final ByteSizeValue MIN_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(1L, ByteSizeUnit.BYTES);
+    private static final ByteSizeValue MAX_DYNAMIC_BATCHING_MEMORY_BOUND = new ByteSizeValue(Long.MAX_VALUE, ByteSizeUnit.BYTES);
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MIN = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.min",
+            new ByteSizeValue(64L, ByteSizeUnit.MB),
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<ByteSizeValue> ML_COMMONS_DYNAMIC_BATCHING_MEMORY_MAX = Setting
+        .byteSizeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "dynamic_batching.memory.max",
+            new ByteSizeValue(512L, ByteSizeUnit.MB),
+            MIN_DYNAMIC_BATCHING_MEMORY_BOUND,
+            MAX_DYNAMIC_BATCHING_MEMORY_BOUND,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_EXCLUDE_NODE_NAMES = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "exclude_nodes._name", Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "allow_custom_deployment_plan",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "model_auto_deploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "model_auto_redeploy.enable", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "model_auto_redeploy.lifetime_retry_times",
+            3,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Float> ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO = Setting
+        .floatSetting(
+            ML_PLUGIN_SETTING_PREFIX + "model_auto_redeploy_success_ratio",
+            0.8f,
+            0f,
+            1f,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // This setting is to enable/disable model url in model register API.
+    public static final Setting<Boolean> ML_COMMONS_ALLOW_MODEL_URL = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "allow_registering_model_via_url",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "allow_registering_model_via_local_file",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // This setting is to enable/disable Create Connector API and Register/Deploy/Predict Model APIs for remote models
+    public static final Setting<Boolean> ML_COMMONS_REMOTE_INFERENCE_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "remote_inference.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_LOCAL_MODEL_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "local_model.enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "model_access_control_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector_access_control_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "offline_batch_ingestion_enabled",
+            true,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "offline_batch_inference_enabled",
+            true,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX = "^https://rekognition(-fips)?\\..*[a-z0-9-]\\.amazonaws\\.com$";
+
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_connector_endpoints_regex",
+            ImmutableList
+                .of(
+                    "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://api\\.openai\\.com/.*$",
+                    "^https://api\\.cohere\\.ai/.*$",
+                    "^https://api\\.deepseek\\.com/.*$",
+                    "^https://generativelanguage\\.googleapis\\.com/.*$",
+                    // Vertex AI joins the region to the host with a hyphen (us-central1-aiplatform.googleapis.com)
+                    // and also serves a global aiplatform.googleapis.com, so the region prefix is optional.
+                    // The prefix must start with an alphanumeric because a DNS label cannot begin with a
+                    // hyphen; "[a-z0-9-]+-" would have admitted "--aiplatform" and "-us-aiplatform".
+                    "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$",
+                    "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://textract\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    REKOGNITION_TRUST_ENDPOINT_REGEX
+                ),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_connector_private_endpoints_regex",
+            ImmutableList.of(),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    /**
+     * Per PM's suggestion, remote model should be able to run on data or ML node by default.
+     * But we should also keep local model run on ML node by default. So we still keep
+     * ML_PLUGIN_SETTING_PREFIX + "only_run_on_ml_node" as true, but only control local model.
+     * Add more setting to provide granular level control on remote and local model.
+     *
+     * 1. Add ML_PLUGIN_SETTING_PREFIX + "task_dispatcher.eligible_node_role.remote_model" which controls
+     * only remote model can run on which node. Default value is ["data", "ml"] which means the
+     * remote model can run on data node and ML node by default.
+     * 2. Add ML_PLUGIN_SETTING_PREFIX + "task_dispatcher.eligible_node_role.local_model" which controls
+     * only remote model can run on which node. But we have ML_PLUGIN_SETTING_PREFIX + "only_run_on_ml_node"
+     * which controls the model can only run on ML node or not.
+     * To provide BWC, for local model, 1/ if plugins.ml_commons.only_run_on_ml_node is true, we
+     * will always run it on ML node. 2/ if plugins.ml_commons.only_run_on_ml_node is false, will
+     * run model on nodes defined in plugins.ml_commons.task_dispatcher.eligible_node_role.local_model.
+     */
+    public static final Setting<List<String>> ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "task_dispatcher.eligible_node_role.remote_model",
+            ImmutableList.of("data", "ml"),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "task_dispatcher.eligible_node_role.local_model",
+            ImmutableList.of("data", "ml"),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    /** Feature Flag setting for index insight */
+    public static final Setting<Boolean> ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "index_insight_feature_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    /** Feature Flag setting for conversational memory */
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE =
+        "The MCP connector is not enabled. To enable, please update the setting " + ML_COMMONS_MCP_CONNECTOR_ENABLED.getKey();
+
+    public static final Setting<Boolean> ML_COMMONS_MCP_SERVER_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "mcp_server_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE =
+        "The MCP server is not enabled. To enable, please update the setting " + ML_COMMONS_MCP_SERVER_ENABLED.getKey();
+
+    // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
+    public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "rag_pipeline_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // This setting is to enable/disable agent related API register/execute/delete/get/search agent.
+    public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // This setting is to enable/disable unified agent API (agent registration with model creation and standardized execution interface)
+    public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list) and
+    // SearchTemplateFillTool. Disabled by default pending security review of the new APIs, and has no effect with
+    // multi-tenancy, since templates are not yet tenant-scoped.
+    public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "agentic_search_template_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE =
+        "The agentic search template APIs are not enabled. To enable, please update the setting "
+            + ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.getKey()
+            + ". They are not yet supported when multi-tenancy is enabled.";
+
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.private_ip_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.restricted_ip_patterns",
+            ImmutableList.of(),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Final
+        );
+
+    // Feature flag for execute tool API
+    public static final Setting<Boolean> ML_COMMONS_EXECUTE_TOOL_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "execute_tools_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE =
+        "The Execute Tool API is not enabled. To enable, please update the setting " + ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey();
+
+    public static final Setting<List<String>> ML_COMMONS_REMOTE_JOB_STATUS_FIELD = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_field",
+            ImmutableList
+                .of(
+                    "status", // openai, bedrock, cohere
+                    "Status",
+                    "TransformJobStatus" // sagemaker
+                ),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.completed",
+            "(complete|completed|partiallyCompleted)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.cancelled",
+            "(stopped|cancelled)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.cancelling",
+            "(stopping|cancelling)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.expired",
+            "(expired|timeout)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "remote_job.status_regex.failed",
+            "(failed)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // This flag is the determine whether we need to check downstream task before deleting a model.
+    public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "safe_delete_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    /**
+     * Indicates whether multi-tenancy is enabled in ML Commons.
+     *
+     * This is a static setting that must be configured before starting OpenSearch. It can be set in the following ways, in priority order:
+     *
+     * <ol>
+     *   <li>As a command-line argument using the <code>-E</code> flag (this overrides other options):
+     *       <pre>
+     *       ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
+     *       </pre>
+     *   </li>
+     *   <li>As a system property using <code>OPENSEARCH_JAVA_OPTS</code> (this overrides <code>opensearch.yml</code>):
+     *       <pre>
+     *       export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
+     *       ./bin/opensearch
+     *       </pre>
+     *       Or inline when starting OpenSearch:
+     *       <pre>
+     *       OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
+     *       </pre>
+     *   </li>
+     *   <li>In the <code>opensearch.yml</code> configuration file:
+     *       <pre>
+     *       plugins.ml_commons.multi_tenancy_enabled: true
+     *       </pre>
+     *   </li>
+     * </ol>
+     *
+     * After setting this option, a full cluster restart is required for the changes to take effect.
+     */
+    public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "multi_tenancy_enabled", false, Setting.Property.NodeScope);
+
+    /**
+     * TTL (Time To Live) for master key cache entries in minutes.
+     * 
+     * This setting controls how long encryption master keys are cached before being refreshed from the datastore.
+     * A shorter TTL provides better security by ensuring keys are refreshed more frequently, which is important
+     * in multi-tenant environments where domains may be recreated with new keys. A longer TTL reduces datastore
+     * access overhead but may result in using stale keys for a longer period.
+     * 
+     * Default: 5 minutes
+     * Range: 1 to 1440 minutes (1 day)
+     * 
+     * This is a static setting that must be configured in opensearch.yml and requires a cluster restart to take effect.
+     */
+    public static final Setting<Integer> ML_COMMONS_MASTER_KEY_CACHE_TTL_MINUTES = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "master_key_cache_ttl_minutes", 5, 1, 1440, Setting.Property.NodeScope);
+
+    /** This setting sets the remote metadata type */
+    public static final Setting<String> REMOTE_METADATA_TYPE = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata endpoint */
+    public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata region */
+    public static final Setting<String> REMOTE_METADATA_REGION = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata service name */
+    public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /**
+     * Whether cluster metadata (including the memory container registry) is stored in a REMOTE metadata store rather
+     * than the local cluster. Mirrors {@code SdkClientFactory}: any of {@code RemoteOpenSearch}, {@code AWSDynamoDB},
+     * or {@code AWSOpenSearchService} routes metadata to a remote store; empty/unrecognized falls back to the local
+     * cluster. Background jobs that scan local system indices with the native client (e.g. memory retention) find no
+     * metadata when the store is remote, so they must gate on this. See RFC #4859.
+     */
+    public static boolean isRemoteMetadataStore(Settings settings) {
+        String type = REMOTE_METADATA_TYPE.get(settings);
+        return REMOTE_OPENSEARCH.equals(type) || AWS_DYNAMO_DB.equals(type) || AWS_OPENSEARCH_SERVICE.equals(type);
+    }
+
+    // Feature flag for enabling telemetry metric collection via metrics framework
+    public static final Setting<Boolean> ML_COMMONS_METRIC_COLLECTION_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "metrics_collection_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
+
+    // Feature flag for enabling telemetry static metric collection job -- MLStatsJobProcessor
+    public static final Setting<Boolean> ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "metrics_static_collection_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // Feature flag for Agentic memory APIs
+    public static final Setting<Boolean> ML_COMMONS_AGENTIC_MEMORY_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_memory_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
+        "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
+
+    // Feature flag for Remote Agentic Memory
+    public static final Setting<Boolean> ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "remote_agentic_memory_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE =
+        "The remote agentic memory feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.getKey();
+
+    // Feature flag for memory retention. Gates acceptance of retention_policy on the memory container APIs
+    // and the memory retention job. Provides a cluster-level kill switch for the feature.
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_RETENTION_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory.retention_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MEMORY_RETENTION_DISABLED_MESSAGE =
+        "Cannot set retention_policy: the memory retention feature is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+    public static final String ML_COMMONS_MEMORY_PINNED_DISABLED_MESSAGE =
+        "Cannot set pinned: the memory retention feature is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_MEMORY_RETENTION_ENABLED.getKey();
+
+    // Feature flag for the Vertex AI (google_cloud) connector. Disabled by default (opt-in): gates connector
+    // creation keyed on the google_cloud protocol behind a cluster-level kill switch pending security review.
+    public static final Setting<Boolean> ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.vertexai_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE =
+        "The Vertex AI (google_cloud) connector is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey();
+
+    // Feature flag for connector mutual TLS. Disabled by default (opt-in).
+    //
+    // Support for mutual_tls_enabled is not complete: it is not applied on the streaming path, and some
+    // adjacent certificate and CA handling does not yet match what the field implies. Until that is finished,
+    // an operator needs a way to keep the field from being accepted rather than having it stored and reported
+    // back as configured. Gating it matches how the other new connector surfaces ship
+    // (connector.vertexai_enabled, stream_enabled) and is reversible in one setting.
+    public static final Setting<Boolean> ML_COMMONS_MUTUAL_TLS_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.mutual_tls_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE =
+        "Connector mutual TLS is not enabled. To enable it, please update the cluster setting " + ML_COMMONS_MUTUAL_TLS_ENABLED.getKey();
+
+    // Feature flag for global tenant id in multi-tenancy enabled cluster
+    public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    // Feature flag for global resource cache TTL in multi-tenancy enabled cluster
+    public static final Setting<String> REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY,
+            Setting.Property.NodeScope,
+            Setting.Property.Final
+        );
+
+    // Feature flag for streaming feature
+    public static final Setting<Boolean> ML_COMMONS_STREAM_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "stream_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Maximum allowed JSON string size in bytes for JSON parsing/validation (default: 100MB)
+    // Set to -1 to disable size limit (unlimited)
+    public static final Setting<Integer> ML_COMMONS_MAX_JSON_SIZE = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "max_json_size", 100_000_000, -1, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Feature flag for MCP header passthrough
+    public static final Setting<Boolean> ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "mcp_header_passthrough_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MCP_HEADER_PASSTHROUGH_DISABLED_MESSAGE =
+        "The MCP header passthrough feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.getKey();
+
+    // Feature flag for AG-UI agent support
+    public static final Setting<Boolean> ML_COMMONS_AG_UI_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
+        "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    // Memory retention job settings
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_INTERVAL_HOURS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_interval_hours",
+            24,
+            1,
+            168,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_RETENTION_JOB_THROTTLE_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.retention_job_throttle_seconds",
+            5,
+            1,
+            60,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_ORPHAN_TTL_DAYS = Setting
+        .intSetting(ML_PLUGIN_SETTING_PREFIX + "memory.orphan_ttl_days", 7, 1, 365, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // TTL for working memory in sessionless containers (disable_session=true). Defaults to -1 (off) so callers can
+    // keep session-less working memory indefinitely; an operator must set a value > 0 to age it out. -1 = unset/off.
+    public static final Setting<Integer> ML_COMMONS_MEMORY_WORKING_MEMORY_TTL_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.working_memory_ttl_days",
+            -1,
+            -1,
+            365,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_RETENTION_DAYS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_retention_days",
+            -1,
+            -1,
+            3650,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_SESSION_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_session_max_count",
+            -1,
+            -1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_LONG_TERM_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_long_term_max_count",
+            -1,
+            -1,
+            1000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Integer> ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory.default_history_max_count",
+            -1,
+            -1,
+            10000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    private static void validateRegexSafety(String regex) {
+        // Reject nested quantifiers or backreferences. The outer quantifier set intentionally includes '{':
+        // a counted repetition of a group that already contains a quantifier, such as "(a+){1,1000}", is the
+        // shape that actually backtracks exponentially. '?' is excluded because "(a+)?" matches at most once
+        // and cannot blow up, so rejecting it only produced false positives on patterns like "(:\d+)?".
+        //
+        // This is a deliberately shallow check: it only sees the character immediately before the closing
+        // paren, so a nested form such as "((a+)){1,1000}" still gets through. Tightening it structurally was
+        // tried and rejected - it also flags legitimate patterns like "([a-z0-9-]+\.){1,5}", and persisted
+        // cluster settings are re-validated on restart, so a new false positive would break upgrades. The
+        // setting is admin-only, so treat this as a guard against operator error rather than a security
+        // boundary; a match-time budget on Connector#validateResolvedEndpoint is the robust fix.
+        if (regex.matches(".*\\([^)]*[*+?]\\)[*+{].*") || regex.matches(".*\\\\[1-9].*")) {
+            throw new IllegalArgumentException(
+                "Regex pattern contains nested quantifiers or backreferences that may cause ReDoS: " + regex
+            );
+        }
+
+        // Limit pattern length
+        if (regex.length() > 256) {
+            throw new IllegalArgumentException("Regex pattern too long (max 256 chars): " + regex);
+        }
+
+        // Test compilation
+        try {
+            Pattern.compile(regex);
+        } catch (PatternSyntaxException e) {
+            throw new IllegalArgumentException("Invalid regex pattern: " + regex, e);
+        }
+    }
+}

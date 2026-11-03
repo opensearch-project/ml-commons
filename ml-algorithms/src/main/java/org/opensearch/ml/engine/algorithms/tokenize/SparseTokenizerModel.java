@@ -6,11 +6,8 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,21 +16,21 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
+import org.opensearch.ml.engine.analysis.DJLUtils;
 import org.opensearch.ml.engine.annotation.Function;
-
-import com.google.gson.reflect.TypeToken;
 
 import ai.djl.MalformedModelException;
 import ai.djl.huggingface.tokenizers.Encoding;
@@ -71,28 +68,41 @@ public class SparseTokenizerModel extends DLModel {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
+
+        // Get the embedding format from parameters
+        MLAlgoParams parameters = mlInput.getParameters();
+        SparseEmbeddingFormat sparseEmbeddingFormat = SparseEmbeddingFormat.WORD; // default
+
+        if (parameters instanceof AsymmetricTextEmbeddingParameters) {
+            AsymmetricTextEmbeddingParameters sparseParams = (AsymmetricTextEmbeddingParameters) parameters;
+            sparseEmbeddingFormat = sparseParams.getSparseEmbeddingFormat();
+        }
+
         for (String doc : textDocsInput.getDocs()) {
-            Output output = new Output(200, "OK");
             Encoding encodings = tokenizer.encode(doc);
             long[] indices = encodings.getIds();
-            List<ModelTensor> outputs = new ArrayList<>();
+            long[] uniqueIndices = Arrays.stream(indices).distinct().toArray();
             String[] tokens = Arrays
-                .stream(indices)
-                .distinct()
-                .mapToObj(value -> new long[] { value })
-                .map(value -> this.tokenizer.decode(value, true))
-                .filter(s -> !s.isEmpty())
+                .stream(uniqueIndices)
+                .mapToObj(value -> this.tokenizer.decode(new long[] { value }, true))
                 .toArray(String[]::new);
-            Map<String, Float> tokenWeights = Arrays
-                .stream(tokens)
-                .collect(Collectors.toMap(token -> token, token -> idf.getOrDefault(token, 1.0f)));
+
+            Map<String, Float> tokenWeights = new HashMap<>();
+            for (int i = 0; i < uniqueIndices.length; i++) {
+                String token = tokens[i];
+                if (token.isEmpty()) {
+                    continue;
+                }
+                if (sparseEmbeddingFormat == SparseEmbeddingFormat.TOKEN_ID) {
+                    tokenWeights.put(String.valueOf(uniqueIndices[i]), idf.getOrDefault(token, 1.0f));
+                } else {
+                    tokenWeights.put(token, idf.getOrDefault(token, 1.0f));
+                }
+            }
+
             Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeights));
             ModelTensor tensor = ModelTensor.builder().dataAsMap(wrappedMap).build();
-            outputs.add(tensor);
-            ModelTensors modelTensorOutput = new ModelTensors(outputs);
-            output.add(modelTensorOutput.toBytes());
-            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
+            tensorOutputs.add(new ModelTensors(List.of(tensor)));
         }
         return new ModelTensorOutput(tensorOutputs);
     }
@@ -110,9 +120,7 @@ public class SparseTokenizerModel extends DLModel {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
         idf = new HashMap<>();
         if (Files.exists(modelPath.resolve(IDF_FILE_NAME))) {
-            Type mapType = new TypeToken<Map<String, Float>>() {
-            }.getType();
-            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve(IDF_FILE_NAME))), mapType);
+            idf = DJLUtils.fetchTokenWeights(modelPath.resolve(IDF_FILE_NAME));
         }
         log.info("sparse tokenize Model {} is successfully deployed", modelId);
     }

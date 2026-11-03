@@ -53,7 +53,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"protocol\": \"http\",\n"
         + "    \"parameters\": {\n"
         + "        \"endpoint\": \"api.openai.com\",\n"
-        + "        \"model\": \"gpt-3.5-turbo\",\n"
+        + "        \"model\": \"gpt-4o-mini\",\n"
         + "        \"temperature\": 0\n"
         + "    },\n"
         + "    \"credential\": {\n"
@@ -107,19 +107,24 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
-    private static final String BEDROCK_ANTHROPIC_CLAUDE_3_SONNET = "anthropic.claude-3-sonnet-20240229-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5 = "us.anthropic.claude-sonnet-4-5-20250929-v1:0";
+    private static final String BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
-    private static final String BEDROCK_CONNECTOR_BLUEPRINT1 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude2\",\n"
-        + "  \"description\": \"The connector to bedrock claude2 model\",\n"
+    private static final String BEDROCK_CONNECTOR_BLUEPRINT_INVOKE = "{\n"
+        + "  \"name\": \"Bedrock Connector: claude sonnet 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude sonnet 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
         + "\",\n"
-        + "    \"service_name\": \"bedrock\"\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model\": \""
+        + "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        + "\",\n"
+        + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
+        + "\"response_filter\": \"$.content[0].text\""
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"access_key\": \""
@@ -134,64 +139,38 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  },\n"
         + "  \"actions\": [\n"
         + "        {\n"
-        + "            \"action_type\": \"predict\",\n"
+        + "            \"action_type\": \""
+        + "predict"
+        + "\",\n"
         + "            \"method\": \"POST\",\n"
         + "            \"headers\": {\n"
         + "                \"content-type\": \"application/json\"\n"
         + "            },\n"
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
-        + ".amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
-        + "            \"request_body\": \"{\\\"prompt\\\":\\\"\\\\n\\\\nHuman: ${parameters.inputs}\\\\n\\\\nAssistant:\\\",\\\"max_tokens_to_sample\\\":300,\\\"temperature\\\":0.5,\\\"top_k\\\":250,\\\"top_p\\\":1,\\\"stop_sequences\\\":[\\\"\\\\\\\\n\\\\\\\\nHuman:\\\"]}\"\n"
-        + "        }\n"
-        + "    ]\n"
-        + "}";
-    private static final String BEDROCK_CONNECTOR_BLUEPRINT2 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude2\",\n"
-        + "  \"description\": \"The connector to bedrock claude2 model\",\n"
-        + "  \"version\": 1,\n"
-        + "  \"protocol\": \"aws_sigv4\",\n"
-        + "  \"parameters\": {\n"
-        + "    \"region\": \""
-        + GITHUB_CI_AWS_REGION
-        + "\",\n"
-        + "    \"service_name\": \"bedrock\"\n"
-        + "  },\n"
-        + "  \"credential\": {\n"
-        + "    \"access_key\": \""
-        + AWS_ACCESS_KEY_ID
-        + "\",\n"
-        + "    \"secret_key\": \""
-        + AWS_SECRET_ACCESS_KEY
-        + "\"\n"
-        + "  },\n"
-        + "  \"actions\": [\n"
-        + "        {\n"
-        + "            \"action_type\": \"predict\",\n"
-        + "            \"method\": \"POST\",\n"
-        + "            \"headers\": {\n"
-        + "                \"content-type\": \"application/json\"\n"
-        + "            },\n"
-        + "            \"url\": \"https://bedrock-runtime."
-        + GITHUB_CI_AWS_REGION
-        + ".amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
-        + "            \"request_body\": \"{\\\"prompt\\\":\\\"\\\\n\\\\nHuman: ${parameters.inputs}\\\\n\\\\nAssistant:\\\",\\\"max_tokens_to_sample\\\":300,\\\"temperature\\\":0.5,\\\"top_k\\\":250,\\\"top_p\\\":1,\\\"stop_sequences\\\":[\\\"\\\\\\\\n\\\\\\\\nHuman:\\\"]}\"\n"
+        + ".amazonaws.com/model/"
+        + "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        + "/invoke\",\n"
+        + "           \"request_body\": \"{\\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.inputs}\\\"}]}], \\\"max_tokens\\\":300, \\\"temperature\\\":0.5,  \\\"anthropic_version\\\":\\\"bedrock-2023-05-31\\\" }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
 
-    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+    static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
+        + "  \"name\": \"Bedrock Connector: claude sonnet 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude sonnet 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\"\n"
         + "  },\n"
@@ -216,25 +195,28 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5
         + "/converse\",\n"
-        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
 
     private static final String BEDROCK_DOCUMENT_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
-        + "  \"name\": \"Bedrock Connector: claude 3\",\n"
-        + "  \"description\": \"The connector to bedrock claude 3 model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude haiku 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 200\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
         + "    \"model\": \""
-        + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
         + "\",\n"
         + "    \"system_prompt\": \"You are a helpful assistant.\"\n"
         + "  },\n"
@@ -259,20 +241,16 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "            \"url\": \"https://bedrock-runtime."
         + GITHUB_CI_AWS_REGION
         + ".amazonaws.com/model/"
-        + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET
+        + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5
         + "/converse\",\n"
-        + "            \"request_body\": \"{ \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"topP\\\": 0.9, \\\"maxTokens\\\": 1000} }\"\n"
+        + "            \"request_body\": \"{ \\\"messages\\\": ${parameters.messages} , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
         + "        }\n"
         + "    ]\n"
         + "}";
 
-    private static final String BEDROCK_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
-        ? BEDROCK_CONNECTOR_BLUEPRINT2
-        : BEDROCK_CONNECTOR_BLUEPRINT1;
+    private static final String BEDROCK_CONNECTOR_BLUEPRINT = BEDROCK_CONNECTOR_BLUEPRINT_INVOKE;
 
-    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
-        ? BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2
-        : BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
+    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
 
     private static final String COHERE_KEY = System.getenv("COHERE_KEY");
     private static final String COHERE_CONNECTOR_BLUEPRINT = "{\n"
@@ -280,13 +258,18 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"description\": \"The connector to Cohere's public chat API\",\n"
         + "    \"version\": \"1\",\n"
         + "    \"protocol\": \"http\",\n"
+        + "    \"client_config\": {\n"
+        + "        \"max_connection\": 30,\n"
+        + "        \"connection_timeout\": 120,\n"
+        + "        \"read_timeout\": 120\n"
+        + "    },\n"
         + "    \"credential\": {\n"
         + "        \"cohere_key\": \""
         + COHERE_KEY
         + "\"\n"
         + "    },\n"
         + "    \"parameters\": {\n"
-        + "        \"model\": \"command\"\n"
+        + "        \"model\": \"command-r-08-2024\"\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
@@ -424,6 +407,26 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  }\n"
         + "}";
 
+    private static final String BM25_SEARCH_REQUEST_WITH_CONVO_WITH_LLM_RESPONSE_TEMPLATE = "{\n"
+        + "  \"_source\": [\"%s\"],\n"
+        + "  \"query\" : {\n"
+        + "    \"match\": {\"%s\": \"%s\"}\n"
+        + "  },\n"
+        + "   \"ext\": {\n"
+        + "      \"generative_qa_parameters\": {\n"
+        + "        \"llm_model\": \"%s\",\n"
+        + "        \"llm_question\": \"%s\",\n"
+        + "        \"memory_id\": \"%s\",\n"
+        + "        \"system_prompt\": \"%s\",\n"
+        + "        \"user_instructions\": \"%s\",\n"
+        + "        \"context_size\": %d,\n"
+        + "        \"message_size\": %d,\n"
+        + "        \"timeout\": %d,\n"
+        + "        \"llm_response_field\": \"%s\"\n"
+        + "      }\n"
+        + "  }\n"
+        + "}";
+
     private static final String BM25_SEARCH_REQUEST_WITH_CONVO_AND_IMAGE_TEMPLATE = "{\n"
         + "  \"_source\": [\"%s\"],\n"
         + "  \"query\" : {\n"
@@ -461,11 +464,10 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  }\n"
         + "}";
 
-    private static final String OPENAI_MODEL = "gpt-3.5-turbo";
-    private static final String OPENAI_40_MODEL = "gpt-4o-mini";
+    private static final String OPENAI_MODEL = "gpt-4o-mini";
     private static final String BEDROCK_ANTHROPIC_CLAUDE = "bedrock/anthropic-claude";
-    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET;
-    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_3 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_3_SONNET;
+    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_SONNET_4_5 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5;
+    private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_HAIKU_4_5 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5;
     private static final String TEST_DOC_PATH = "org/opensearch/ml/rest/test_data/";
     private static Set<String> testDocs = Set.of("qa_doc1.json", "qa_doc2.json", "qa_doc3.json");
     private static final String DEFAULT_USER_AGENT = "Kibana";
@@ -474,15 +476,18 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     private static final String ML_RAG_REMOTE_MODEL_GROUP = "rag_remote_model_group";
 
+    private static boolean initialSleepDone = false;
+
     // "client" gets initialized by the test framework at the instance level
     // so we perform this per test case, not via @BeforeClass.
     @Before
     public void init() throws Exception {
 
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        // TODO Do we really need to wait this long? This adds 20s to every test case run.
-        // Can we instead check the cluster state and move on?
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
 
         Response response = TestHelper
             .makeRequest(
@@ -525,8 +530,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAI() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
@@ -579,8 +584,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithOpenAIWithImage() throws Exception {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
             return;
         }
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
@@ -615,7 +620,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "what is this image";
         requestParameters.systemPrompt = "You are great at answering questions";
         requestParameters.userInstructions = "Follow my instructions as best you can";
@@ -641,7 +646,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "what is this image";
         requestParameters.systemPrompt = "You are great at answering questions";
         requestParameters.userInstructions = "Follow my instructions as best you can";
@@ -650,8 +655,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.timeout = 60;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData =
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"; // imageContent;
+        requestParameters.imageData = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800";
         Response response3 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -703,6 +707,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
         requestParameters.timeout = 60;
+        requestParameters.llmResponseField = "response";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -754,7 +759,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE;
+        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_SONNET_4_5;
         requestParameters.llmQuestion = "who is lincoln";
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
@@ -814,7 +819,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE;
+        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_SONNET_4_5;
         requestParameters.llmQuestion = "describe the image and answer the question: would lincoln have liked this place";
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
@@ -876,7 +881,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_3;
+        requestParameters.llmModel = BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_HAIKU_4_5;
         requestParameters.llmQuestion = "use the information from the attached document to tell me something interesting about lincoln";
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
@@ -900,8 +905,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversation() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversation");
@@ -960,8 +965,9 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
 
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null");
+        if (OPENAI_KEY == null || !isServiceReachable("api.openai.com")) {
+            System.out
+                .println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null or api.openai.com is unreachable");
             return;
         }
         System.out.println("Running testBM25WithOpenAIWithConversationAndImage");
@@ -995,7 +1001,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "describe the image and answer the question: can you picture lincoln enjoying himself there";
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
@@ -1003,8 +1009,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.conversationId = conversationId;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData =
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
+        requestParameters.imageData = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1062,6 +1067,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.interactionSize = 5;
         requestParameters.timeout = 60;
         requestParameters.conversationId = conversationId;
+        requestParameters.llmResponseField = "response";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1080,8 +1086,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithCohere() throws Exception {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (COHERE_KEY == null || !isServiceReachable("api.cohere.ai")) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
@@ -1132,8 +1138,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     }
 
     public void testBM25WithCohereUsingLlmResponseField() throws Exception {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
+        // Skip test if key is null or service is unreachable
+        if (COHERE_KEY == null || !isServiceReachable("api.cohere.ai")) {
             return;
         }
         Response response = createConnector(COHERE_CONNECTOR_BLUEPRINT);
@@ -1234,7 +1240,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         throws Exception {
 
         // TODO build these templates dynamically
-        String httpEntity = requestParameters.llmResponseField != null
+        String httpEntity = requestParameters.llmResponseField != null && requestParameters.conversationId == null
             ? String
                 .format(
                     Locale.ROOT,
@@ -1345,10 +1351,27 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                         requestParameters.interactionSize,
                         requestParameters.timeout
                     )
+            : (requestParameters.llmResponseField == null)
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_WITH_CONVO_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.conversationId,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout
+                    )
             : String
                 .format(
                     Locale.ROOT,
-                    BM25_SEARCH_REQUEST_WITH_CONVO_TEMPLATE,
+                    BM25_SEARCH_REQUEST_WITH_CONVO_WITH_LLM_RESPONSE_TEMPLATE,
                     requestParameters.source,
                     requestParameters.source,
                     requestParameters.match,
@@ -1359,7 +1382,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                     requestParameters.userInstructions,
                     requestParameters.contextSize,
                     requestParameters.interactionSize,
-                    requestParameters.timeout
+                    requestParameters.timeout,
+                    requestParameters.llmResponseField
                 );
         return makeRequest(
             client(),

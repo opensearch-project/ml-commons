@@ -6,32 +6,45 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
-import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -64,17 +77,27 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
     @Setter
-    private volatile AtomicBoolean connectorPrivateIpEnabled;
+    private volatile boolean connectorPrivateIpEnabled;
+    @Setter
+    private volatile List<Pattern> connectorTrustedPrivateEndpoints;
+    @Setter
+    private volatile List<Pattern> connectorRestrictedIpPatterns;
 
-    private SdkAsyncHttpClient httpClient;
+    @Setter
+    @Getter
+    private volatile List<String> trustedConnectorEndpointsRegex;
+
+    private final CertificateProcessor certificateProcessor = new CertificateProcessor();
+    // Cache manager for client lifecycle management
+    private final MLHttpClientCacheManager cacheManager = new MLHttpClientCacheManager();
+
+    @Setter
+    @Getter
+    private StreamTransportService streamTransportService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
-        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @Override
@@ -93,20 +116,33 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    validateHttpClientParameters(action, parameters);
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    validateHttpClientParameters(action, parameters);
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    break;
+                case "PUT":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    break;
+                case "DELETE":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
             }
+            ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
+            // TODO: We should have an idea to identify the source of the request(predict/agent execution),
+            // but currently it's not easy, so reusing the predict thread pool won't harm anything.
+            ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
+
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(request)
@@ -114,7 +150,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        actionListener,
+                        ActionListener.runBefore(threadedListener, storedContext::restore),
                         parameters,
                         connector,
                         scriptService,
@@ -123,7 +159,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
+            AccessController
+                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
             actionListener.onFailure(e);
@@ -133,12 +170,81 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    private void validateHttpClientParameters(String action, Map<String, String> parameters) throws Exception {
-        String endpoint = connector.getActionEndpoint(action, parameters);
-        URL url = new URL(endpoint);
-        String protocol = url.getProtocol();
-        String host = url.getHost();
-        int port = url.getPort();
-        MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        try {
+            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist
+            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+
+            String llmInterface = parameters.get(LLM_INTERFACE);
+            llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+            llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+            validateLLMInterface(llmInterface);
+
+            StreamingHandler handler = StreamingHandlerFactory
+                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig(), parameters);
+            handler.startStream(action, parameters, payload, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to execute streaming", e);
+            actionListener.onFailure(new MLException("Fail to execute streaming", e));
+        }
+    }
+
+    private void validateLLMInterface(String llmInterface) {
+        switch (llmInterface) {
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                break;
+            default:
+                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+        }
+    }
+
+    @VisibleForTesting
+    protected SdkAsyncHttpClient getHttpClient() {
+        // Use cache manager for client lifecycle management
+        SdkAsyncHttpClient httpClient = cacheManager
+            .getOrCreateHttpClient(connector, super.getConnectorClientConfig(), client, this::createHttpClient);
+
+        // Store in inherited httpClientRef for compatibility with AbstractConnectorExecutor.close()
+        // This ensures proper resource cleanup when the executor is closed
+        super.httpClientRef.set(httpClient);
+
+        return httpClient;
+    }
+
+    /**
+     * Create a new HTTP client with current configuration.
+     */
+    private SdkAsyncHttpClient createHttpClient() {
+        return MLHttpClientCacheManager
+            .createHttpClient(
+                connector,
+                super.getConnectorClientConfig(),
+                certificateProcessor,
+                connectorPrivateIpEnabled,
+                connectorTrustedPrivateEndpoints,
+                connectorRestrictedIpPatterns
+            );
+    }
+
+    /**
+     * Override close() to properly clean up resources managed by the cache manager.
+     * This prevents resource leaks by ensuring both the cache manager and inherited
+     * httpClientRef are properly closed.
+     */
+    @Override
+    public void close() {
+        // Close the cache manager first to handle any deferred cleanup
+        cacheManager.close();
+
+        // Call parent close() to handle inherited httpClientRef
+        super.close();
     }
 }

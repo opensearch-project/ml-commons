@@ -1,0 +1,231 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.engine.algorithms.agent;
+
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.opensearch.action.ActionRequest;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.LLMSpec;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.MessagesSnapshotEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.ToolCallResultEvent;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.Message;
+import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.client.Client;
+
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
+public class StreamingWrapper {
+    private final TransportChannel channel;
+    private boolean isStreaming;
+    private Client client;
+    private final Map<String, String> parameters;
+
+    public StreamingWrapper(TransportChannel channel, Client client, Map<String, String> parameters) {
+        this.channel = channel;
+        this.client = client;
+        this.parameters = parameters;
+        this.isStreaming = (channel != null);
+    }
+
+    public boolean isStreaming() {
+        return isStreaming;
+    }
+
+    public void fixInteractionRole(List<String> interactions) {
+        if (isStreaming && !interactions.isEmpty()) {
+            try {
+                String lastInteraction = interactions.get(interactions.size() - 1);
+                Map<String, Object> messageMap = gson.fromJson(lastInteraction, Map.class);
+
+                if (!messageMap.containsKey("role") && messageMap.containsKey("tool_calls")) {
+                    messageMap.put("role", "assistant");
+                    interactions.set(interactions.size() - 1, StringUtils.toJson(messageMap));
+                }
+            } catch (Exception e) {
+                log.error("Failed to fix assistant message role after parseLLMOutput", e);
+            }
+        }
+    }
+
+    public ActionRequest createPredictionRequest(LLMSpec llm, Map<String, String> parameters, String tenantId) {
+        return new MLPredictionTaskRequest(
+            llm.getModelId(),
+            RemoteInferenceMLInput
+                .builder()
+                .algorithm(FunctionName.REMOTE)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
+                .build(),
+            // TODO: handle agent streaming in multi-node
+            !isStreaming, // set dispatchTask to false for streaming
+            null,
+            tenantId
+        );
+    }
+
+    public void executeRequest(ActionRequest request, ActionListener<MLTaskResponse> listener) {
+        if (isStreaming) {
+            ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
+            client.execute(MLPredictionStreamTaskAction.INSTANCE, request, listener);
+            return;
+        }
+        client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
+    }
+
+    public void sendCompletionChunk(String sessionId, String parentInteractionId) {
+        if (!isStreaming) {
+            return;
+        }
+        MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
+        try {
+            channel.sendResponseBatch(completionChunk);
+            channel.completeStream();
+        } catch (Exception e) {
+            log.warn("Failed to send completion chunk: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Send token usage as a streaming batch before the completion chunk.
+     * No-op if tokenTracker is null, has no usage, or not streaming.
+     */
+    public void sendTokenUsageBatch(String sessionId, String parentInteractionId, AgentTokenTracker tokenTracker, String tenantId) {
+        if (!isStreaming || tokenTracker == null || !tokenTracker.hasUsage()) {
+            return;
+        }
+        try {
+            Map<String, Object> tokenUsageMap = tokenTracker.toOutputMap();
+            List<ModelTensor> tokenTensors = new ArrayList<>();
+
+            if (sessionId != null) {
+                tokenTensors.add(ModelTensor.builder().name("memory_id").result(sessionId).build());
+            }
+            if (parentInteractionId != null) {
+                tokenTensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+            }
+
+            tokenTensors.add(ModelTensor.builder().name(AgentTokenTracker.TOKEN_USAGE).dataAsMap(tokenUsageMap).build());
+
+            ModelTensorOutput tokenOutput = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(tokenTensors).build()))
+                .build();
+
+            channel.sendResponseBatch(new MLTaskResponse(tokenOutput));
+
+        } catch (Exception e) {
+            log.error("Failed to send token usage in streaming response", e);
+        }
+    }
+
+    public void sendToolResponse(String toolOutput, String sessionId, String parentInteractionId) {
+        if (isStreaming) {
+            try {
+                MLTaskResponse toolChunk = createStreamChunk(toolOutput, sessionId, parentInteractionId, false);
+                channel.sendResponseBatch(toolChunk);
+            } catch (Exception e) {
+                log.error("Failed to send tool response chunk", e);
+            }
+        }
+    }
+
+    public void sendBackendToolResult(String toolCallId, String toolResult, String sessionId, String parentInteractionId) {
+        try {
+            BaseEvent toolCallResultEvent = new ToolCallResultEvent("msg_" + System.nanoTime(), toolCallId, toolResult);
+            MLTaskResponse toolChunk = createStreamChunk(toolCallResultEvent.toJsonString(), sessionId, parentInteractionId, false);
+            channel.sendResponseBatch(toolChunk);
+        } catch (Exception e) {
+            log.error("Failed to send backend tool AGUI events for toolCallId '{}': {}", toolCallId, e.getMessage());
+            sendToolResponse(toolResult, sessionId, parentInteractionId);
+        }
+    }
+
+    public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
+        try {
+            String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+            String runId = parameters.get(AGUI_PARAM_RUN_ID);
+
+            // Ensure non-null values to avoid NPE in RunFinishedEvent.writeTo()
+            if (threadId == null) {
+                log.warn("AG-UI threadId is null, using generated value. This may cause frontend errors.");
+                threadId = "thread_" + System.nanoTime();
+            }
+            if (runId == null) {
+                log.warn("AG-UI runId is null, using generated value. This may cause frontend errors.");
+                runId = "run_" + System.nanoTime();
+            }
+
+            BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+            sendAGUIEvent(runFinishedEvent, true);
+        } catch (Exception e) {
+            log.error("Failed to send run finished event and close stream", e);
+        }
+    }
+
+    public void sendMessagesSnapshot(List<Message> history, String memoryId, ActionListener<Object> listener) {
+        if (!isStreaming) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> aguiMessages = AGUIInputConverter.convertToAGUIFormat(history);
+            MessagesSnapshotEvent event = new MessagesSnapshotEvent(new ArrayList<>(aguiMessages));
+
+            sendAGUIEvent(event, false);
+            sendRunFinishedAndCloseStream(memoryId, null);
+            listener.onResponse("History load completed");
+        } catch (Exception e) {
+            log.error("Failed to send messages snapshot", e);
+            listener.onFailure(e);
+        }
+    }
+
+    private void sendAGUIEvent(BaseEvent event, boolean isLast) {
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        Map<String, Object> dataMap = Map.of("content", event.toJsonString(), "is_last", isLast);
+        modelTensors.add(ModelTensor.builder().name("response").dataAsMap(dataMap).build());
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(modelTensors).build()))
+            .build();
+        channel.sendResponseBatch(new MLTaskResponse(output));
+    }
+
+    private MLTaskResponse createStreamChunk(String toolOutput, String sessionId, String parentInteractionId, boolean isLast) {
+        List<ModelTensor> tensors = new ArrayList<>();
+        if (sessionId != null) {
+            tensors.add(ModelTensor.builder().name("memory_id").result(sessionId).build());
+        }
+        if (parentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+        }
+        tensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("content", toolOutput, "is_last", isLast)).build());
+
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(tensors).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+        return new MLTaskResponse(output);
+    }
+}

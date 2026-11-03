@@ -12,14 +12,15 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -76,6 +77,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, createModelGroupInput.getTenantId(), listener)) {
             return;
         }
+        MLResourceIdUtils.validateCustomDocumentId(createModelGroupInput.getModelGroupId(), "model group id");
         mlModelGroupManager.createModelGroup(createModelGroupInput, ActionListener.wrap(modelGroupId -> {
             listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name()));
         }, ex -> {

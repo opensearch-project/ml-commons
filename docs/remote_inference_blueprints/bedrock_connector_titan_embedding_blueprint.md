@@ -53,6 +53,29 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
+If you're using BedRock V2 API, you should supply `embeddingTypes` in request body:
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  ...
+  "parameters": {
+    ...
+    "model": "amazon.titan-embed-text-v2:0"
+  },
+  "actions": [
+    {
+      ...
+      "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"embeddingTypes\": [\"float\"] }",
+      "pre_process_function": "connector.pre_process.bedrock.embedding",
+      "post_process_function": "onnector.post_process.bedrock_v2.embedding.float"
+    }
+  ]
+}
+```
+For BedRock v2 embedding API, there are several build-in post_process_function that can extract the embedding result to a list of list of number format:
+1. v2 float: connector.post_process.bedrock_v2.embedding.float
+2. v2 binary: connector.post_process.bedrock_v2.embedding.binary
+
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html) 
 

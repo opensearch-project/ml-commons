@@ -6,8 +6,16 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.MLModel.CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -27,8 +35,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 
 import lombok.Builder;
 import lombok.Data;
@@ -51,7 +62,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
 
+    public static final String CONNECTOR_URL_FIELD = "url";
+    public static final String CONNECTOR_HEADER_FIELD = "headers";
+
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID = VERSION_3_9_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -71,6 +86,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private boolean updateConnector;
     private ConnectorClientConfig connectorClientConfig;
 
+    private String url;
+    private Map<String, String> headers;
+    private String provisionedBy;
+    private String connectorId;
+    private BatchJobStatusMapping batchJobStatus;
+
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
         String name,
@@ -86,10 +107,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         boolean dryRun,
         boolean updateConnector,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
-
+        String tenantId,
+        String url,
+        Map<String, String> headers,
+        String provisionedBy,
+        String connectorId,
+        BatchJobStatusMapping batchJobStatus
     ) {
         if (!dryRun && !updateConnector) {
+
             if (name == null) {
                 throw new IllegalArgumentException("Connector name is null");
             }
@@ -99,9 +125,27 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if (protocol == null) {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
-            if (credential == null || credential.isEmpty()) {
+            boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
+            // A google_cloud connector may omit credentials ONLY in ADC / Workload Identity mode
+            // (auth_mode=adc). A service-account-key google_cloud connector must still supply a
+            // credential — relaxing for all google_cloud would let an SA connector with a missing
+            // credential slip past here and fail later.
+            boolean isGoogleCloudAdc = protocol.equals(GOOGLE_CLOUD)
+                && parameters != null
+                && GoogleCloudConnector.AUTH_MODE_ADC.equalsIgnoreCase(parameters.get(GoogleCloudConnector.AUTH_MODE_FIELD));
+            boolean allowsEmptyCredential = isMcpConnector || isGoogleCloudAdc;
+            if ((credential == null || credential.isEmpty()) && !allowsEmptyCredential) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
+            if (actions != null) {
+                for (ConnectorAction action : actions) {
+                    action.validatePrePostProcessFunctions(parameters);
+                }
+            }
+            if ((url == null || url.isBlank()) && isMcpConnector) {
+                throw new IllegalArgumentException("MCP Connector url is null or blank");
+            }
+            ConnectorProtocols.validateProtocol(protocol);
         }
         this.name = name;
         this.description = description;
@@ -117,7 +161,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.updateConnector = updateConnector;
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
-
+        this.url = url;
+        this.headers = headers;
+        this.provisionedBy = provisionedBy;
+        this.connectorId = connectorId;
+        this.batchJobStatus = batchJobStatus;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -138,6 +186,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         boolean dryRun = false;
         ConnectorClientConfig connectorClientConfig = null;
         String tenantId = null;
+        String url = null;
+        Map<String, String> headers = null;
+        String provisionedBy = null;
+        String connectorId = null;
+        BatchJobStatusMapping batchJobStatus = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -145,6 +198,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
                 case CONNECTOR_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -186,11 +242,23 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case DRY_RUN_FIELD:
                     dryRun = parser.booleanValue();
                     break;
-                case AbstractConnector.CLIENT_CONFIG_FIELD:
+                case CommonValue.CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
+                    break;
+                case CONNECTOR_URL_FIELD:
+                    url = parser.textOrNull();
+                    break;
+                case CONNECTOR_HEADER_FIELD:
+                    headers = parser.mapStrings();
+                    break;
+                case PROVISIONED_BY_FIELD:
+                    provisionedBy = parser.textOrNull();
+                    break;
+                case AbstractConnector.BATCH_JOB_STATUS_FIELD:
+                    batchJobStatus = BatchJobStatusMapping.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -211,7 +279,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             dryRun,
             updateConnector,
             connectorClientConfig,
-            tenantId
+            tenantId,
+            url,
+            headers,
+            provisionedBy,
+            connectorId,
+            batchJobStatus
         );
     }
 
@@ -249,10 +322,25 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             builder.field(ACCESS_MODE_FIELD, access);
         }
         if (connectorClientConfig != null) {
-            builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
+            builder.field(CommonValue.CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (url != null) {
+            builder.field(CONNECTOR_URL_FIELD, url);
+        }
+        if (headers != null) {
+            builder.field(CONNECTOR_HEADER_FIELD, headers);
+        }
+        if (provisionedBy != null) {
+            builder.field(PROVISIONED_BY_FIELD, provisionedBy);
+        }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
+        if (batchJobStatus != null) {
+            builder.field(AbstractConnector.BATCH_JOB_STATUS_FIELD, batchJobStatus);
         }
         builder.endObject();
         return builder;
@@ -312,6 +400,31 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             output.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_0_0)) {
+            output.writeOptionalString(url);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_0_0)) {
+            if (headers != null) {
+                output.writeBoolean(true);
+                output.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+            } else {
+                output.writeBoolean(false);
+            }
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            output.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)) {
+            output.writeOptionalString(connectorId);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchJobStatus != null) {
+                output.writeBoolean(true);
+                batchJobStatus.writeTo(output);
+            } else {
+                output.writeBoolean(false);
+            }
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -348,5 +461,16 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.url = streamInputVersion.onOrAfter(VERSION_3_0_0) ? input.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_3_0_0)) {
+            if (input.readBoolean()) {
+                this.headers = input.readMap(s -> s.readString(), s -> s.readString());
+            }
+        }
+        this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        this.connectorId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_CONNECTOR_ID)
+            ? input.readOptionalString()
+            : null;
+        this.batchJobStatus = streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean() ? new BatchJobStatusMapping(input) : null;
     }
 }

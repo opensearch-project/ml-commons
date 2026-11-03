@@ -7,7 +7,9 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +20,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -26,10 +29,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -70,6 +75,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     private EncryptorImpl encryptor;
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    @Mock
     private HttpConnector connector;
     @Mock
     private Task task;
@@ -109,12 +116,17 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             scriptService,
             xContentRegistry,
             connectorAccessControlHelper,
-            encryptor
+            encryptor,
+            mlFeatureEnabledSetting
         );
     }
 
     public void testExecute_NoConnectorIndex() {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
@@ -124,6 +136,10 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecute_FailedToGetConnector() {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
         when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -138,8 +154,21 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testExecute_NullMLInput() {
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        // Test the early return when MLInput is null (line 77-80)
+        when(request.getMlInput()).thenReturn(null);
+
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(argCaptor.capture());
+        assertTrue(argCaptor.getValue().getMessage().contains("MLInput cannot be null"));
+    }
+
+    public void testExecute_AccessDenied() {
         when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
         when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
 
         doAnswer(invocation -> {
@@ -148,9 +177,197 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
 
+        // Connector access validation returns false
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+
         action.doExecute(task, request, actionListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, times(1)).onFailure(argCaptor.capture());
+
+        // Denial has to be reported. This previously asserted that neither callback fired, which is what left the
+        // request hanging until the client timed out.
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        verify(actionListener, times(0)).onResponse(any());
+        assertEquals(
+            "You don't have permission to execute this connector, connector id: test_connector_id",
+            captor.getValue().getMessage()
+        );
+        assertEquals(RestStatus.FORBIDDEN, ExceptionsHelper.status(captor.getValue()));
     }
 
+    /**
+     * An MCP connector has no executable action, so the executor chosen for its protocol cannot build a payload
+     * and the unimplemented accessors escape as a 500. MCP connectors are used through the agent and MCP tool
+     * APIs, not through connector execute.
+     */
+    public void testExecute_McpConnectorRejected() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        // A real MCP connector, not a mock claiming an MCP protocol: the point is that its accessors are
+        // unimplemented, which a mock cannot reproduce.
+        Connector mcpConnector = org.opensearch.ml.common.connector.McpConnector
+            .builder()
+            .name("mcp")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .url("https://api.openai.com/mcp")
+            .credential(Map.of("key", "value"))
+            .build();
+        // Authorization runs first: the protocol is only reported to a caller allowed to see the connector.
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(mcpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(
+            "Cannot execute an MCP connector: protocol [mcp_sse] defines no executable action.",
+            captor.getValue().getMessage()
+        );
+        assertEquals(org.opensearch.core.rest.RestStatus.BAD_REQUEST, org.opensearch.ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /**
+     * Pins the order the MCP rejection runs in: a caller who cannot see the connector must not be told its
+     * protocol. Without authorization running first this would report the MCP rejection instead.
+     */
+    public void testExecute_McpConnectorAccessDeniedReportsDenialNotProtocol() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        Connector mcpConnector = org.opensearch.ml.common.connector.McpConnector
+            .builder()
+            .name("mcp")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .url("https://api.openai.com/mcp")
+            .credential(Map.of("key", "value"))
+            .build();
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(mcpConnector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // On this branch a denied caller gets no response at all - that hang is a separate pre-existing bug, fixed
+        // in #5068 - so assert the guarantee that holds either way: the protocol is never reported to a caller who
+        // was refused access. This fails if the MCP rejection is ever moved back ahead of the access check.
+        verify(actionListener, never()).onResponse(any());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, atMost(1)).onFailure(captor.capture());
+        for (Exception reported : captor.getAllValues()) {
+            assertFalse(reported.getMessage().contains("MCP"));
+            assertFalse(reported.getMessage().contains("mcp_sse"));
+        }
+    }
+
+    public void testExecute_WithCustomConnectorAction() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        // Set custom connector action in parameters
+        Map<String, String> params = new java.util.HashMap<>();
+        params.put("connector_action", "CUSTOM_ACTION");
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(params, null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // Verify that getConnector was called
+        verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
+    }
+
+    public void testExecute_SuccessfulExecution() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onResponse(true);
+            return null;
+        }).when(connector).decrypt(anyString(), any(), any(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        // Verify connector access was validated
+        verify(connectorAccessControlHelper).validateConnectorAccess(eq(client), eq(connector));
+    }
+
+    public void testExecute_WithNullParameters() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        // Test with null parameters to cover the null check branch
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(null, null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
+    }
+
+    public void testExecute_DecryptFailure() {
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+                .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+                .build());
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.HTTP);
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onFailure(new RuntimeException("Failed to decrypt credentials"));
+            return null;
+        }).when(connector).decrypt(anyString(), any(), any(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue().getMessage().contains("Failed to decrypt credentials"));
+    }
 }

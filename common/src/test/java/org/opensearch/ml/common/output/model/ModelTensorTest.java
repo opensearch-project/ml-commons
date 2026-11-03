@@ -6,6 +6,9 @@
 package org.opensearch.ml.common.output.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -121,5 +124,24 @@ public class ModelTensorTest {
             .dataType(null)
             .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
             .build();
+    }
+
+    @Test
+    public void test_ToString() {
+        String result = modelTensor.toString();
+        String expected =
+            "{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"},\"result\":\"test result\",\"dataAsMap\":{\"key1\":\"test value1\",\"key2\":\"test value2\"}}";
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void test_ToString_ThrowsException() throws IOException {
+        ModelTensor spyTensor = spy(modelTensor);
+        doThrow(new IOException("Mock IOException")).when(spyTensor).toXContent(any(XContentBuilder.class), any());
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Can't convert ModelTensor to string");
+
+        spyTensor.toString();
     }
 }

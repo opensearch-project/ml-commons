@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "is_enable": {
+      "type": "boolean"
+    },
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

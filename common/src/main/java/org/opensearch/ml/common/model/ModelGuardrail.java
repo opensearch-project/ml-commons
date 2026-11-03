@@ -37,6 +37,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -52,12 +53,15 @@ public class ModelGuardrail extends Guardrail {
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
     public static final String RESPONSE_VALIDATION_REGEX_FIELD = "response_validation_regex";
+    public static final long ML_GUARDRAIL_TIMEOUT_IN_SECONDS = 60;
 
     private String modelId;
     private String responseFilter;
     private String responseAccept;
     private NamedXContentRegistry xContentRegistry;
     private Client client;
+    private SdkClient sdkClient;
+    private String tenantId;
     private Pattern regexAcceptPattern;
 
     @Builder(toBuilder = true)
@@ -100,17 +104,17 @@ public class ModelGuardrail extends Guardrail {
             return true;
         }
         log.info("Guardrail request: {}", input);
-        AtomicBoolean isAccepted = new AtomicBoolean(true);
+        AtomicBoolean isAccepted = new AtomicBoolean(false);
         ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             ModelTensorOutput output = (ModelTensorOutput) predictionResponse.getOutput();
             ModelTensor tensor = output.getMlModelOutputs().get(0).getMlModelTensors().get(0);
             String guardrailResponse = AccessController
                 .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensor.getDataAsMap().get("response")));
             log.info("Guardrail response: {}", guardrailResponse);
-            if (!validateAcceptRegex(guardrailResponse)) {
-                isAccepted.set(false);
+            if (validateAcceptRegex(guardrailResponse)) {
+                isAccepted.set(true);
             }
-        }, e -> { log.error("[ModelGuardrail] Failed to get prediction response.", e); });
+        }, e -> { log.error("[ModelGuardrail] Failed to get prediction response, rejecting input as a safety measure.", e); });
         ActionListener<MLTaskResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLTaskResponse predictionResponse = MLTaskResponse.fromActionResponse(res);
             return predictionResponse;
@@ -132,18 +136,28 @@ public class ModelGuardrail extends Guardrail {
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, new LatchedActionListener(actionListener, latch));
         try {
-            latch.await(5, SECONDS);
+            boolean completed = latch.await(ML_GUARDRAIL_TIMEOUT_IN_SECONDS, SECONDS);
+            if (!completed) {
+                log
+                    .error(
+                        "[ModelGuardrail] Validation timed out after {} seconds, rejecting input as a safety measure.",
+                        ML_GUARDRAIL_TIMEOUT_IN_SECONDS
+                    );
+            }
         } catch (InterruptedException e) {
-            log.error("[ModelGuardrail] Validation was timeout.", e);
+            log.error("[ModelGuardrail] Validation was interrupted, rejecting input as a safety measure.", e);
+            Thread.currentThread().interrupt();
         }
 
         return isAccepted.get();
     }
 
     @Override
-    public void init(NamedXContentRegistry xContentRegistry, Client client) {
+    public void init(NamedXContentRegistry xContentRegistry, Client client, SdkClient sdkClient, String tenantId) {
         this.xContentRegistry = xContentRegistry;
         this.client = client;
+        this.sdkClient = sdkClient;
+        this.tenantId = tenantId;
         regexAcceptPattern = Pattern.compile(responseAccept);
     }
 

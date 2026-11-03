@@ -8,15 +8,19 @@ package org.opensearch.ml.utils;
 import static org.apache.hc.core5.http.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.REMOTE_CLUSTER_CLIENT_ROLE;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.WARM_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -34,19 +38,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
 import org.opensearch.cluster.ClusterName;
@@ -59,9 +71,11 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
@@ -83,11 +97,20 @@ import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelat
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -105,7 +128,7 @@ public class TestHelper {
 
     public static SortedSet<DiscoveryNodeRole> ALL_ROLES = Collections
         .unmodifiableSortedSet(
-            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, SEARCH_ROLE, ML_ROLE))
+            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, WARM_ROLE, ML_ROLE))
         );
 
     public static XContentParser parser(String xc) throws IOException {
@@ -181,8 +204,69 @@ public class TestHelper {
         if (entity != null) {
             request.setEntity(entity);
         }
-        return client.performRequest(request);
+        return performRequestWithRemoteRetry(client, request);
     }
+
+    // Retries transient remote-service 5xx blips (Bedrock/OpenAI/Cohere) so a momentary outage
+    // doesn't fail CI. If the remote stays unavailable across every attempt, the error is re-thrown
+    // and the test fails normally, so a genuine regression is never masked.
+    private static Response performRequestWithRemoteRetry(RestClient client, Request request) throws IOException {
+        for (int attempt = 0; attempt <= MAX_REMOTE_RETRIES; attempt++) {
+            try {
+                return client.performRequest(request);
+            } catch (ResponseException e) {
+                if (!isTransientRemoteServiceError(e) || attempt == MAX_REMOTE_RETRIES) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(REMOTE_RETRY_BACKOFF_MS * (attempt + 1)); // linear backoff
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e; // interrupted: stop retrying, surface the remote error
+                }
+            }
+        }
+        throw new IllegalStateException("unreachable"); // loop always returns or throws
+    }
+
+    // True only for the two narrow remote-unavailability signatures (503 wrapper, 500 connectivity
+    // timeout/reset); everything else fails normally.
+    private static boolean isTransientRemoteServiceError(ResponseException e) {
+        int status = e.getResponse().getStatusLine().getStatusCode();
+        if (status != 503 && status != 500) {
+            return false;
+        }
+        String body;
+        try {
+            body = EntityUtils.toString(e.getResponse().getEntity());
+        } catch (Exception ignored) {
+            return false;
+        }
+        if (body == null) {
+            return false;
+        }
+        if (status == 503 && REMOTE_SERVICE_ERROR_PATTERN.matcher(body).find()) {
+            return true;
+        }
+        return status == 500 && REMOTE_TIMEOUT_ERROR_PATTERN.matcher(body).find();
+    }
+
+    private static final int MAX_REMOTE_RETRIES = 3;
+    private static final long REMOTE_RETRY_BACKOFF_MS = 3000;
+
+    // CommonValue.REMOTE_SERVICE_ERROR wrapper plus common upstream 503 phrasings.
+    private static final Pattern REMOTE_SERVICE_ERROR_PATTERN = Pattern
+        .compile(
+            "Error from remote service|Service Unavailable|ServiceUnavailable|model.{0,20}not ready",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
+
+    // MLSdkAsyncHttpResponseHandler connectivity wrapper — timeouts/resets only.
+    private static final Pattern REMOTE_TIMEOUT_ERROR_PATTERN = Pattern
+        .compile(
+            "Error communicating with remote model.{0,40}(Read timed out|timed out|Connection reset|Connection refused)",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
 
     public static HttpEntity toHttpEntity(ToXContentObject object) throws IOException {
         return new StringEntity(toJsonString(object), APPLICATION_JSON);
@@ -199,6 +283,17 @@ public class TestHelper {
     public static String httpEntityToString(HttpEntity entity) throws IOException {
         InputStream inputStream = entity.getContent();
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "iso-8859-1"));
+        StringBuilder sb = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line + "\n");
+        }
+        return sb.toString();
+    }
+
+    public static String httpEntityToString(HttpEntity entity, String charsetName) throws IOException {
+        InputStream inputStream = entity.getContent();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charsetName));
         StringBuilder sb = new StringBuilder();
         String line = null;
         while ((line = reader.readLine()) != null) {
@@ -264,7 +359,7 @@ public class TestHelper {
             + "        \"content_type\": \"application/json\",\n"
             + "        \"max_tokens\": 7,\n"
             + "        \"temperature\": 0,\n"
-            + "        \"model\": \"gpt-3.5-turbo-instruct\"\n"
+            + "        \"model\": \"gpt-4o-mini\"\n"
             + "    },\n"
             + "    \"credential\": {\n"
             + "        \"openAI_key\": \"xxxxxxxx\"\n"
@@ -273,11 +368,11 @@ public class TestHelper {
             + "        {\n"
             + "            \"action_type\": \"predict\",\n"
             + "            \"method\": \"POST\",\n"
-            + "            \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+            + "            \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
             + "            \"headers\": {\n"
             + "                \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
             + "            },\n"
-            + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\", \\\"max_tokens\\\": ${parameters.max_tokens}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
+            + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}], \\\"max_tokens\\\": ${parameters.max_tokens}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
             + "        }\n"
             + "    ],\n"
             + "    \"access_mode\": \"public\"\n"
@@ -385,7 +480,7 @@ public class TestHelper {
         params.put(PARAMETER_AGENT_ID, "test_agent_id");
         final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
             + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
-            + "\"tools\":[{\"type\":\"CatIndexTool\",\"name\":\"CatIndexTool\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
             + "\"description\":\"Use this tool to get OpenSearch index information: "
             + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
             + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
@@ -393,6 +488,33 @@ public class TestHelper {
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+    }
+
+    public static RestRequest getExecuteAgentStreamRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
+            + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
+            + "\"description\":\"Use this tool to get OpenSearch index information: "
+            + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
+            + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+            .build();
+    }
+
+    public static RestRequest getExecuteToolRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TOOL_NAME, "TestTool");
+        final String requestContent = "{\"parameters\":{\"question\":\"sample question\"}}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/tools/_execute/TestTool")
             .build();
     }
 
@@ -579,5 +701,88 @@ public class TestHelper {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
+    }
+
+    public static void mockClientStashContext(Client client, Settings settings) {
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ThreadContext threadContext = new ThreadContext(settings);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(client.threadPool()).thenReturn(threadPool);
+    }
+
+    public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
+        if (size == 0) {
+            return new SearchResponse(
+                new InternalSearchResponse(
+                    new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
+                    InternalAggregations.EMPTY,
+                    new Suggest(Collections.emptyList()),
+                    new SearchProfileShardResults(Collections.emptyMap()),
+                    false,
+                    false,
+                    1
+                ),
+                "",
+                1,
+                1,
+                0,
+                100,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+        }
+        XContentBuilder content = toXContent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        SearchHit[] hits = new SearchHit[size];
+        hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
+        return new SearchResponse(
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            1,
+            1,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
+    }
+
+    public static List<Map<String, Object>> createTestContent(String input) {
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "text");
+        message.put("text", input);
+        content.add(message);
+        return content;
+    }
+
+    public static String encryptCredentials(List<String> plainTexts, String tenantId, Encryptor encryptor) {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<List<String>> encryptedResults = new AtomicReference<>();
+        AtomicReference<RuntimeException> exceptionAtomicReference = new AtomicReference<>();
+        ActionListener<List<String>> listener = ActionListener.wrap(r -> {
+            latch.countDown();
+            encryptedResults.set(r);
+        }, e -> {
+            latch.countDown();
+            exceptionAtomicReference.set(e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e));
+        });
+        encryptor.encrypt(plainTexts, tenantId, listener);
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            fail("Failed to encrypt credentials in connector, " + e.getMessage());
+        }
+        if (exceptionAtomicReference.get() != null) {
+            throw exceptionAtomicReference.get();
+        }
+        return encryptedResults.get().getFirst();
     }
 }

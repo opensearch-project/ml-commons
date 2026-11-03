@@ -16,14 +16,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -46,6 +47,10 @@ public interface Connector extends ToXContentObject, Writeable {
     String getTenantId();
 
     void setTenantId(String tenantId);
+
+    String getProvisionedBy();
+
+    void setProvisionedBy(String provisionedBy);
 
     String getProtocol();
 
@@ -73,15 +78,26 @@ public interface Connector extends ToXContentObject, Writeable {
 
     ConnectorClientConfig getConnectorClientConfig();
 
+    BatchJobStatusMapping getBatchJobStatus();
+
     String getActionEndpoint(String action, Map<String, String> parameters);
 
     String getActionHttpMethod(String action);
 
     <T> T createPayload(String action, Map<String, String> parameters);
 
-    void decrypt(String action, BiFunction<String, String, String> function, String tenantId);
+    void decrypt(
+        String action,
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    );
 
-    void encrypt(BiFunction<String, String, String> function, String tenantId);
+    void encrypt(
+        TriConsumer<List<String>, String, ActionListener<List<String>>> function,
+        String tenantId,
+        ActionListener<Boolean> listener
+    );
 
     Connector cloneConnector();
 
@@ -91,7 +107,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     void writeTo(StreamOutput out) throws IOException;
 
-    void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function);
+    void update(MLCreateConnectorInput updateContent);
 
     <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException;
 
@@ -172,22 +188,37 @@ public interface Connector extends ToXContentObject, Writeable {
         for (ConnectorAction action : getActions()) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             String url = substitutor.replace(action.getUrl());
-            boolean hasMatchedUrl = false;
-            for (String urlRegex : urlRegexes) {
-                Pattern pattern = Pattern.compile(urlRegex);
-                Matcher matcher = pattern.matcher(url);
-                if (matcher.matches()) {
-                    hasMatchedUrl = true;
-                    break;
-                }
-            }
-            if (!hasMatchedUrl) {
-                throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex, URL is: " + url);
+            validateResolvedEndpoint(url, urlRegexes);
+        }
+    }
+
+    default void validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
+        if (urlRegexes == null || urlRegexes.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex."
+            );
+        }
+        if (resolvedUrl == null) {
+            throw new IllegalArgumentException("Resolved connector URL is null");
+        }
+        for (String urlRegex : urlRegexes) {
+            Pattern pattern = Pattern.compile(urlRegex);
+            Matcher matcher = pattern.matcher(resolvedUrl);
+            if (matcher.matches()) {
+                return;
             }
         }
+        throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
     }
 
     Map<String, String> getDecryptedHeaders();
 
     Map<String, String> getDecryptedCredential();
+
+    /** The raw credential map, which may still be encrypted. Needed to validate config before encryption. */
+    Map<String, String> getCredential();
+
+    default Map<String, String> getHeadersWithRuntimeParameters(Map<String, String> runtimeParameters) {
+        return getDecryptedHeaders();
+    }
 }

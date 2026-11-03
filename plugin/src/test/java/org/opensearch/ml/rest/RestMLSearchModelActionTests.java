@@ -34,9 +34,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -143,7 +143,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
@@ -163,7 +163,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-                "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+                "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
                 mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
@@ -209,7 +209,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();

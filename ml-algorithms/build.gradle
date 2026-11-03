@@ -4,16 +4,17 @@
  */
 
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.opensearch.gradle.info.FipsBuildParams
 
 plugins {
     id 'java'
     id 'java-library'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 repositories {
+    maven { url "https://ci.opensearch.org/maven2/" }
     mavenCentral()
 }
 
@@ -26,7 +27,7 @@ dependencies {
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}")
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
@@ -44,7 +45,19 @@ dependencies {
     implementation (group: 'com.google.guava', name: 'guava', version: '32.1.3-jre') {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
-    implementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
+    implementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
+    // GCP OAuth2 token minting/refresh for the google_cloud connector protocol
+    implementation ('com.google.auth:google-auth-library-oauth2-http:1.23.0') {
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.guava', module: 'guava'
+        // grpc-context's io.grpc.* classes collide (jar hell) with grpc-api on the classpath. io.grpc.Context
+        // IS required at runtime: the OAuth2 refresh path initializes google-http-client's OpenCensus
+        // instrumentation, which references it. It resolves from the transport-grpc module (grpc-api), which
+        // ml-commons declares optional in plugin/build.gradle but which OpenSearch bundles in every
+        // distribution, including the min distro, because modules are mandatory. Bundling grpc-context here
+        // instead would reintroduce the jar-hell clash on every normal install. See issue #5079.
+        exclude group: 'io.grpc', module: 'grpc-context'
+    }
     implementation platform("ai.djl:bom:0.31.1")
     implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
     implementation group: 'ai.djl', name: 'api'
@@ -54,6 +67,8 @@ dependencies {
     }
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+    implementation 'commons-beanutils:commons-beanutils:1.11.0'
+    implementation "org.opensearch:opensearch-remote-metadata-sdk-ddb-client:${opensearch_build}"
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
@@ -67,36 +82,50 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.29.12')
-    api 'software.amazon.awssdk:auth:2.29.12'
-    implementation 'software.amazon.awssdk:apache-client'
+    implementation platform(group: 'software.amazon.awssdk', name: 'bom', version:"${versions.aws}")
+    api 'software.amazon.awssdk:auth:${versions.aws}'
+    implementation group: 'software.amazon.awssdk', name:'apache-client', version: "${versions.aws}"
+    implementation (group: 'software.amazon.awssdk', name: 'bedrockruntime', version: "${versions.aws}") {
+        exclude group: 'io.netty'
+    }
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    // needed by aws-encryption-sdk-java
+    // When building with -Pcrypto.standard=FIPS-140-3, bcFips jars are provided by OpenSearch
+    if (FipsBuildParams.isInFipsMode()) {
+        compileOnly "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    } else {
+        implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
+    }
+    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
+    compileOnly group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
+    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
 
-    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
-    compileOnly group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
-    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
-
-    implementation 'com.jayway.jsonpath:json-path:2.9.0'
+    implementation ('com.jayway.jsonpath:json-path:2.9.0') {
+        exclude group: 'net.minidev', module: 'json-smart'
+    }
+    implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.29.12'
-    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
-    testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
-    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "${versions.aws}"
+    api('io.modelcontextprotocol.sdk:mcp:1.1.1')
+    api('io.modelcontextprotocol.sdk:mcp-json-jackson3:1.1.1')
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson_annotations}")
+    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '3.0.2'
+    api group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'
+    implementation group: 'com.squareup.okhttp3', name: 'okhttp-sse', version: '4.12.0'
+    compileOnly("tools.jackson.core:jackson-databind:${versions.jackson3_databind}")   
 }
 
 lombok {
-    version = "1.18.30"
+    version = "1.18.38"
 }
 
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
-    resolutionStrategy.force 'software.amazon.awssdk:bom:2.29.12'
+    resolutionStrategy.force group: 'software.amazon.awssdk', name:'bom', version:"${versions.aws}"
 }
-
 
 jacocoTestReport {
     reports {
@@ -132,12 +161,3 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 compileJava.dependsOn(':opensearch-ml-common:shadowJar')
-
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
-
-        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
-    }
-}

@@ -7,11 +7,14 @@ package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.engine.tools.IndexMappingTool.STRICT_FIELD;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,6 +55,7 @@ public class IndexMappingToolTests {
     private GetIndexResponse getIndexResponse;
 
     private Map<String, String> indexParams;
+    private Map<String, String> indexParamsWithRawIndexName;
     private Map<String, String> otherParams;
     private Map<String, String> emptyParams;
 
@@ -65,6 +69,7 @@ public class IndexMappingToolTests {
         IndexMappingTool.Factory.getInstance().init(client);
 
         indexParams = Map.of("index", "[\"foo\"]");
+        indexParamsWithRawIndexName = Map.of("index", "foo");
         otherParams = Map.of("other", "[\"bar\"]");
         emptyParams = Collections.emptyMap();
     }
@@ -174,6 +179,68 @@ public class IndexMappingToolTests {
     }
 
     @Test
+    public void testRunWithRawIndexNameInput() throws Exception {
+        String indexName = "foo";
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<GetIndexResponse>> actionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getIndex(any(), actionListenerCaptor.capture());
+
+        when(getIndexResponse.indices()).thenReturn(new String[] { indexName });
+        Settings settings = Settings.builder().put("test.boolean.setting", false).put("test.int.setting", 123).build();
+        when(getIndexResponse.settings()).thenReturn(Map.of(indexName, settings));
+        String source = """
+            {
+                "foo": {
+                    "mappings": {
+                        "year": {
+                            "full_name": "year",
+                            "mapping": {
+                                "year": {
+                                    "type": "text"
+                                }
+                            }
+                        },
+                        "age": {
+                            "full_name": "age",
+                            "mapping": {
+                                "age": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                }
+            }""";
+        MappingMetadata mapping = new MappingMetadata(indexName, XContentHelper.convertToMap(JsonXContent.jsonXContent, source, true));
+        when(getIndexResponse.mappings()).thenReturn(Map.of(indexName, mapping));
+
+        // Now make the call
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+
+        tool.run(indexParamsWithRawIndexName, listener);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        future.orTimeout(10, TimeUnit.SECONDS).join();
+        String response = future.get();
+        List<String> responseList = Arrays.asList(response.trim().split("\\n"));
+
+        assertTrue(responseList.contains("index: foo"));
+
+        assertTrue(responseList.contains("mappings:"));
+        assertTrue(
+            responseList
+                .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
+        );
+
+        assertTrue(responseList.contains("settings:"));
+        assertTrue(responseList.contains("test.boolean.setting=false"));
+        assertTrue(responseList.contains("test.int.setting=123"));
+    }
+
+    @Test
     public void testTool() {
         Factory instance = IndexMappingTool.Factory.getInstance();
         assertEquals(instance, IndexMappingTool.Factory.getInstance());
@@ -186,5 +253,30 @@ public class IndexMappingToolTests {
         assertTrue(tool.validate(indexParams));
         assertFalse(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
+        assertFalse(tool.validate(null));
+    }
+
+    @Test
+    public void test_getDefaultAttributes() {
+        Map<String, Object> attributes = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap()).getAttributes();
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\","
+                + "\"description\":\"OpenSearch index name list, separated by comma. "
+                + "for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"],"
+                + "\"additionalProperties\":false}",
+            attributes.get(TOOL_INPUT_SCHEMA_FIELD)
+        );
+        assertEquals(true, attributes.get(STRICT_FIELD));
+    }
+
+    @Test
+    public void testRunWithGeneralException() {
+        IndexMappingTool tool = new IndexMappingTool(null);
+        final CompletableFuture<Exception> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> {}, future::complete);
+
+        tool.run(indexParams, listener);
+
+        assertNotNull(future.join());
     }
 }

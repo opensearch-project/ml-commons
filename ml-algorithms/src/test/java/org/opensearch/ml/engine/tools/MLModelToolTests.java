@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -180,14 +181,14 @@ public class MLModelToolTests {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("key1", "value1", "key2", "value2")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-        Object result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        Object result = outputParser.parse(mlModelTensorOutput);
         assertEquals(expectedJson, result);
 
         // Create a mock ModelTensors with response string
         modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"key1\":\"value1\",\"key2\":\"value2\"}")).build();
         modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-        result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        result = outputParser.parse(mlModelTensorOutput);
         assertEquals(expectedJson, result);
     }
 
@@ -211,7 +212,7 @@ public class MLModelToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = MLModelTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = MLModelTool.Factory.getInstance().create(Map.of("model_id", "test_model_id"));
         assertEquals(MLModelTool.TYPE, tool.getName());
         assertEquals(MLModelTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -220,5 +221,33 @@ public class MLModelToolTests {
         assertFalse(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
         assertEquals(List.of(MODEL_ID_FIELD), MLModelTool.Factory.getInstance().getAllModelKeys());
+    }
+
+    @Test
+    public void testToolWithFailure() {
+        assertThrows(IllegalArgumentException.class, () -> MLModelTool.Factory.getInstance().create(Collections.emptyMap()));
+    }
+
+    @Test
+    public void testToolWithNullModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, null, "response"));
+    }
+
+    @Test
+    public void testToolWithBlankModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, "", "response"));
+    }
+
+    @Test
+    public void testFactoryCreateWithProcessorEnhancement() {
+        Map<String, Object> toolParams = Map
+            .of("model_id", "test_model_id", "response_field", "custom_response", "processor_configs", "[{\"type\":\"test_processor\"}]");
+
+        MLModelTool tool = MLModelTool.Factory.getInstance().create(toolParams);
+
+        assertEquals("test_model_id", tool.getModelId());
+        assertEquals("custom_response", tool.getResponseField());
+        // Verify that the output parser was enhanced (not null and different from basic parser)
+        assertTrue(tool.getOutputParser() != null);
     }
 }

@@ -37,9 +37,9 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -146,7 +146,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
@@ -192,7 +192,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();

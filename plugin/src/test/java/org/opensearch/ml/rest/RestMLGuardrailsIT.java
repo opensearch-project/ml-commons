@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -37,8 +38,8 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "\"version\": 1,\n"
         + "\"client_config\": {\n"
         + "    \"max_connection\": 20,\n"
-        + "    \"connection_timeout\": 50000,\n"
-        + "    \"read_timeout\": 50000\n"
+        + "    \"connection_timeout\": 50,\n"
+        + "    \"read_timeout\": 50\n"
         + "  },\n"
         + "\"protocol\": \"http\",\n"
         + "\"parameters\": {\n"
@@ -47,7 +48,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"gpt-3.5-turbo-instruct\"\n"
+        + "    \"model\": \"gpt-4o-mini\"\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -58,11 +59,11 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "      {"
         + "      \"action_type\": \"predict\",\n"
         + "      \"method\": \"POST\",\n"
-        + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+        + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
         + "       \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "       },\n"
-        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
         + "      }\n"
         + "  ]\n"
         + "}";
@@ -73,8 +74,8 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "\"version\": 1,\n"
         + "\"client_config\": {\n"
         + "    \"max_connection\": 20,\n"
-        + "    \"connection_timeout\": 50000,\n"
-        + "    \"read_timeout\": 50000\n"
+        + "    \"connection_timeout\": 50,\n"
+        + "    \"read_timeout\": 50\n"
         + "  },\n"
         + "\"protocol\": \"http\",\n"
         + "\"parameters\": {\n"
@@ -83,9 +84,9 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+        + "    \"model\": \"gpt-4o-mini\",\n"
         + "    \"prompt\": \"You are a helpful assistant and an expert judge of content quality. Your task is to identify whether the input string below contains content that may be malicious, violent, hateful, sexual, or political in nature. Your answer should consist of a single word, either reject or accept. If the input belongs to any of these categories, please write reject. Otherwise, write accept. \\\\n\\\\nHere is the input: ${parameters.question}. \\\\n\\\\nYour answer: \",\n"
-        + "        \"response_filter\": \"$.choices[0].text\""
+        + "        \"response_filter\": \"$.choices[0].message.content\""
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -96,11 +97,11 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         + "      {"
         + "      \"action_type\": \"predict\",\n"
         + "      \"method\": \"POST\",\n"
-        + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+        + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
         + "       \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "       },\n"
-        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
         + "      }\n"
         + "  ]\n"
         + "}";
@@ -108,13 +109,16 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    private static boolean initialSleepDone = false;
+
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws Exception {
         disableClusterConnectorAccessControl();
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
         createStopWordsIndex();
-        // TODO Do we really need to wait this long? This adds 20s to every test case run.
-        // Can we instead check the cluster state and move on?
-        Thread.sleep(20000);
     }
 
     public void testPredictRemoteModelSuccess() throws IOException, InterruptedException {
@@ -150,14 +154,12 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
     }
 
     public void testPredictRemoteModelFailed() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         Response response = createConnector(completionModelConnectorEntity);
@@ -180,9 +182,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelFailedNonType() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         Response response = createConnector(completionModelConnectorEntity);
@@ -205,9 +205,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
     @Ignore
     public void testPredictRemoteModelSuccessWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         // Create guardrails model.
         Response response = createConnector(completionModelConnectorEntityWithGuardrail);
         Map responseMap = parseResponseToMap(response);
@@ -274,14 +272,12 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
     }
 
     public void testPredictRemoteModelFailedWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         // Create guardrails model.

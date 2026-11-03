@@ -6,34 +6,49 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.utils.StringUtils.PLAIN_NUMBER_GSON;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.ParsingException;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
-import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -48,22 +63,51 @@ public class SearchIndexTool implements Tool {
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
     public static final String QUERY_FIELD = "query";
+    public static final String INPUT_SCHEMA_FIELD = "input_schema";
+    public static final String STRICT_FIELD = "strict";
 
     public static final String TYPE = "SearchIndexTool";
     private static final String DEFAULT_DESCRIPTION =
-        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
+        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available. "
+            + "Returns documents matching the query in the provided index.";
+
+    public static final String DEFAULT_INPUT_SCHEMA = """
+        {"type":"object",\
+        "properties":{\
+        "index":{"type":"string","description":"OpenSearch index name. Example: index1"},\
+        "query":{"type":"object","description":"OpenSearch Query DSL as a JSON object. \
+        You need to get index mapping to write correct search query. \
+        The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. \
+        Preferred format for reliable parsing. \
+        Example: {\\"query\\":{\\"match\\":{\\"field\\":\\"value\\"}},\\"size\\":10}. \
+        String format is also supported for backward compatibility, but object format is strongly recommended."}},\
+        "required":["index","query"],\
+        "additionalProperties":false}""";
+
+    private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
+    public static final String RETURN_RAW_RESPONSE = "return_raw_response";
 
     private String name = TYPE;
-
+    private Map<String, Object> attributes;
     private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
+    @Setter
+    @Getter
+    @VisibleForTesting
+    private Parser outputParser;
 
     private NamedXContentRegistry xContentRegistry;
 
     public SearchIndexTool(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+
+        this.attributes = new HashMap<>();
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, true);
     }
 
     @Override
@@ -78,13 +122,54 @@ public class SearchIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && !StringUtils.isEmpty(parameters.get(INPUT_FIELD));
+        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
+            && parameters.containsKey(QUERY_FIELD)
+            && !StringUtils.isEmpty(parameters.get(INDEX_FIELD))
+            && !StringUtils.isEmpty(parameters.get(QUERY_FIELD));
+        boolean validRequest = argumentsFromInput || argumentsFromParameters;
+        if (!validRequest) {
+            log.error("SearchIndexTool's two parameter: index and query are required!");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Normalizes a JsonElement query parameter to a proper JSON string.
+     * Framework-level validation now handles complex normalization, so this is simplified.
+     */
+    private String normalizeQueryParameter(JsonElement queryElement) {
+        if (queryElement == null || queryElement.isJsonNull()) {
+            return null;
+        }
+        if (queryElement.isJsonObject()) {
+            return PLAIN_NUMBER_GSON.toJson(queryElement);
+        } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
+            String queryString = queryElement.getAsString();
+            log.debug("Processing query as string (backward compatibility mode). Consider using object format for better reliability.");
+            // Framework validation handles complex normalization, just return the string
+            return queryString;
+        } else {
+            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
+            return PLAIN_NUMBER_GSON.toJson(queryObject);
+        }
     }
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
-        searchSourceBuilder.parseXContent(queryParser);
+        try {
+            XContentParser queryParser = XContentType.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
+            searchSourceBuilder.parseXContent(queryParser);
+        } catch (Exception e) {
+            // Create a ParsingException without a cause to prevent unwrapping to JsonParseException
+            throw new ParsingException(null, "ParsingException[Invalid query format]: " + e.getMessage());
+        }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
 
@@ -97,32 +182,163 @@ public class SearchIndexTool implements Tool {
         return docContent;
     }
 
+    /**
+     * Converts a SearchResponse to a Map representation for easier processing.
+     *
+     * @param searchResponse The search response to convert
+     * @return Map representation of the search response
+     * @throws IOException if conversion fails
+     */
+    public Map<String, Object> convertSearchResponseToMap(SearchResponse searchResponse) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
+
+        // Convert to bytes and then to map
+        BytesReference bytes = BytesReference.bytes(builder);
+        try (
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
+        ) {
+            return parser.map();
+        }
+    }
+
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
-            String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
-            String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
-            if (index == null || query == null) {
-                listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
+            String index = null;
+            String query = null;
+            boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
+
+            if (!StringUtils.isEmpty(input)) {
+                try {
+                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
+                    if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
+                        index = jsonObject.get(INDEX_FIELD).getAsString();
+                        JsonElement queryElement = jsonObject.get(QUERY_FIELD);
+
+                        if (queryElement != null) {
+                            query = normalizeQueryParameter(queryElement);
+                        }
+                    } else if (jsonObject != null) {
+                        log.debug("Input JSON is valid but missing required fields 'index' and/or 'query': {}", input);
+                    }
+                } catch (JsonSyntaxException e) {
+                    log
+                        .error(
+                            "Invalid input JSON format (length: {}): {}. Input: {}",
+                            input != null ? input.length() : 0,
+                            e.getMessage(),
+                            input != null && input.length() <= 200 ? input : (input != null ? input.substring(0, 200) + "..." : "null")
+                        );
+                    // For malformed JSON input, fail early with a clear error message
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Invalid JSON format in input parameter. Expected valid JSON with 'index' and 'query' fields. Error: "
+                                    + e.getMessage()
+                            )
+                        );
+                    return;
+                }
+            }
+
+            if (StringUtils.isEmpty(index)) {
+                index = parameters.get(INDEX_FIELD);
+            }
+
+            if (StringUtils.isEmpty(query)) {
+                String rawQuery = parameters.get(QUERY_FIELD);
+                if (!StringUtils.isEmpty(rawQuery)) {
+                    log
+                        .debug(
+                            "Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability."
+                        );
+                    // Framework validation handles normalization, just use the raw query
+                    query = rawQuery;
+                }
+            }
+
+            if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                String missingParams = "";
+                if (StringUtils.isEmpty(index) && StringUtils.isEmpty(query)) {
+                    missingParams = "both 'index' and 'query'";
+                } else if (StringUtils.isEmpty(index)) {
+                    missingParams = "'index'";
+                } else {
+                    missingParams = "'query'";
+                }
+
+                log
+                    .error(
+                        "SearchIndexTool validation failed: missing required parameter(s): {}. "
+                            + "Received parameters - index: '{}', query: '{}'",
+                        missingParams,
+                        index != null ? index : "null",
+                        query != null && query.length() <= 100 ? query : (query != null ? query.substring(0, 100) + "..." : "null")
+                    );
+
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "SearchIndexTool's two parameters: index and query are required and should be in valid format. Missing: "
+                                + missingParams
+                        )
+                    );
                 return;
             }
-            SearchRequest searchRequest = getSearchRequest(index, query);
+
+            SearchRequest searchRequest;
+            try {
+                searchRequest = getSearchRequest(index, query);
+            } catch (Exception e) {
+                log.error("Failed to parse search query. Index: {}", index, e);
+
+                if (e instanceof ParsingException) {
+                    listener.onFailure(e);
+                } else {
+                    listener
+                        .onFailure(
+                            new ParsingException(
+                                null,
+                                "Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage(),
+                                e
+                            )
+                        );
+                }
+                return;
+            }
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
-
+                if (returnFullResponse) {
+                    List<ModelTensors> outputs = new ArrayList<>();
+                    List<ModelTensor> tensors = new ArrayList<>();
+                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
+                    outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(output));
+                    } else {
+                        listener.onResponse((T) output);
+                    }
+                    return;
+                }
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
                     for (SearchHit hit : hits) {
-                        String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                            Map<String, Object> docContent = processResponse(hit);
-                            return StringUtils.gson.toJson(docContent);
-                        });
+                        Map<String, Object> docContent = processResponse(hit);
+                        String doc = GSON.toJson(docContent);
                         contextBuilder.append(doc).append("\n");
                     }
-                    listener.onResponse((T) contextBuilder.toString());
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                    } else {
+                        listener.onResponse((T) contextBuilder.toString());
+                    }
                 } else {
                     listener.onResponse((T) "");
                 }
@@ -143,7 +359,7 @@ public class SearchIndexTool implements Tool {
                 client.search(searchRequest, actionListener);
             }
         } catch (Exception e) {
-            log.error("Failed to search index", e);
+            log.error("Failed to run SearchIndexTool", e);
             listener.onFailure(e);
         }
     }
@@ -178,7 +394,10 @@ public class SearchIndexTool implements Tool {
 
         @Override
         public SearchIndexTool create(Map<String, Object> params) {
-            return new SearchIndexTool(client, xContentRegistry);
+            SearchIndexTool tool = new SearchIndexTool(client, xContentRegistry);
+            // Enhance the output parser with processors if configured
+            tool.setOutputParser(ToolParser.createFromToolParams(params));
+            return tool;
         }
 
         @Override
@@ -194,6 +413,11 @@ public class SearchIndexTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

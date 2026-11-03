@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -26,6 +27,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.transport.TransportChannel;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -38,6 +40,7 @@ public class MLEngine {
 
     public static final String REGISTER_MODEL_FOLDER = "register";
     public static final String DEPLOY_MODEL_FOLDER = "deploy";
+    public static final String ANALYSIS_FOLDER = "analysis";
     private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
     @Getter
@@ -114,6 +117,10 @@ public class MLEngine {
         return mlModelsCachePath.resolve("models");
     }
 
+    public Path getAnalysisRootPath() {
+        return mlModelsCachePath.resolve(ANALYSIS_FOLDER);
+    }
+
     public MLModel train(Input input) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
@@ -124,25 +131,30 @@ public class MLEngine {
         return trainable.train(mlInput);
     }
 
-    public Map<String, String> getConnectorCredential(Connector connector) {
-        connector
-            .decrypt(
-                PREDICT.name(),
-                (credential, tenantId) -> encryptor.decrypt(credential, connector.getTenantId()),
-                connector.getTenantId()
-            );
-        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
-        String region = connector.getParameters().get(REGION_FIELD);
-        if (region != null) {
-            decryptedCredential.putIfAbsent(REGION_FIELD, region);
-        }
-        return decryptedCredential;
+    public void getConnectorCredential(Connector connector, ActionListener<Map<String, String>> listener) {
+        ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+            Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+            String region = connector.getParameters().get(REGION_FIELD);
+            if (region != null) {
+                decryptedCredential.putIfAbsent(REGION_FIELD, region);
+            }
+            listener.onResponse(decryptedCredential);
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
+            listener.onFailure(e);
+        });
+        connector.decrypt(PREDICT.name(), encryptor::decrypt, connector.getTenantId(), decryptSuccessfulListener);
     }
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         predictable.initModel(mlModel, params, encryptor);
         return predictable;
+    }
+
+    public void deploy(MLModel mlModel, Map<String, Object> params, ActionListener<Predictable> listener) {
+        Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
+        predictable.initModelAsync(mlModel, params, encryptor, listener);
     }
 
     public MLExecutable deployExecute(MLModel mlModel, Map<String, Object> params) {
@@ -172,7 +184,7 @@ public class MLEngine {
         return trainAndPredictable.trainAndPredict(mlInput);
     }
 
-    public void execute(Input input, ActionListener<Output> listener) throws Exception {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) throws Exception {
         validateInput(input);
         if (input.getFunctionName() == FunctionName.METRICS_CORRELATION) {
             MLExecutable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
@@ -184,6 +196,10 @@ public class MLEngine {
             Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
+            }
+            if (channel != null) {
+                executable.execute(input, listener, channel);
+                return;
             }
             executable.execute(input, listener);
         }
@@ -216,8 +232,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential, String tenantId) {
-        return encryptor.encrypt(credential, tenantId);
+    public void encrypt(List<String> credential, String tenantId, ActionListener<List<String>> listener) {
+        encryptor.encrypt(credential, tenantId, listener);
     }
 
 }

@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 3
+    "schema_version": 5
   },
   "properties": {
     "name": {
@@ -36,6 +36,9 @@
     "tenant_id": {
       "type": "keyword"
     },
+    "provisioned_by": {
+      "type": "keyword"
+    },
     "created_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
@@ -43,6 +46,24 @@
     "last_updated_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
+    },
+    "context_management_name": {
+      "type": "keyword"
+    },
+    "context_management": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "keyword"
+        },
+        "description": {
+          "type": "text"
+        },
+        "hooks": {
+          "type": "object",
+          "enabled": false
+        }
+      }
     }
   }
 }

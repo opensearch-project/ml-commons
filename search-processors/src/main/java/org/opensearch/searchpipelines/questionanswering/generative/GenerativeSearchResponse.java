@@ -23,6 +23,7 @@ import java.util.Objects;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 /**
@@ -63,9 +64,8 @@ public class GenerativeSearchResponse extends SearchResponse {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        innerToXContent(builder, params);
+    public XContentBuilder innerToXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+        super.innerToXContent(builder, params);
         /* start of ext */ builder.startObject(EXT_SECTION_NAME);
         /*   start of our stuff */ builder.startObject(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE);
         if (answer == null) {
@@ -80,6 +80,13 @@ public class GenerativeSearchResponse extends SearchResponse {
         }
         /*   end of our stuff   */ builder.endObject();
         /* end of ext */ builder.endObject();
+        return builder;
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        innerToXContent(builder, params);
         builder.endObject();
         return builder;
     }

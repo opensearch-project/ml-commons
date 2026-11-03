@@ -40,6 +40,7 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
         Interaction interaction = new Interaction(
             "iid",
             Instant.now(),
+            Instant.now(),
             "cid",
             "inp",
             "pt",
@@ -62,6 +63,7 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
         Interaction interaction = new Interaction(
             "iid",
             Instant.now(),
+            Instant.now(),
             "cid",
             "inp",
             "pt",
@@ -75,6 +77,8 @@ public class GetInteractionResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"memory_id\":\"cid\",\"message_id\":\"iid\",\"create_time\":\""
             + interaction.getCreateTime()
+            + "\"update_time\":\""
+            + interaction.getUpdatedTime()
             + "\",\"input\":\"inp\",\"prompt_template\":\"pt\",\"response\":\"rsp\",\"origin\":\"ogn\",\"additional_info\":{\"metadata\":\"some meta\"}}";
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();

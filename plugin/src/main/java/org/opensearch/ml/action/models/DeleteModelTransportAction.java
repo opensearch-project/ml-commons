@@ -14,8 +14,8 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.util.ArrayDeque;
@@ -69,12 +69,12 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -110,8 +110,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
 
-    Settings settings;
-
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -137,7 +135,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.agentModelsSearcher = agentModelsSearcher;
-        this.settings = settings;
         isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
@@ -168,7 +165,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent
@@ -215,42 +212,56 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     }
                                 } else {
                                     modelAccessControlHelper
-                                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else if (isModelNotDeployed(mlModelState)) {
-                                                if (isSafeDelete) {
-                                                    // We only check downstream task when it's not hidden and cluster setting is true.
-                                                    checkDownstreamTaskBeforeDeleteModel(
-                                                        modelId,
-                                                        tenantId,
-                                                        mlModel.getAlgorithm().name(),
-                                                        isHidden,
-                                                        actionListener
-                                                    );
+                                        .validateModelGroupAccess(
+                                            user,
+                                            mlModel.getModelGroupId(),
+                                            MLModelDeleteAction.NAME,
+                                            client,
+
+                                            ActionListener.wrap(access -> {
+                                                if (!access) {
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User doesn't have privilege to perform this operation on this model",
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                } else if (isModelNotDeployed(mlModelState)) {
+                                                    if (isSafeDelete) {
+                                                        // We only check downstream task when it's not hidden and cluster setting is true.
+                                                        checkDownstreamTaskBeforeDeleteModel(
+                                                            modelId,
+                                                            tenantId,
+                                                            mlModel.getAlgorithm().name(),
+                                                            isHidden,
+                                                            actionListener
+                                                        );
+                                                    } else {
+                                                        deleteModel(
+                                                            modelId,
+                                                            tenantId,
+                                                            mlModel.getAlgorithm().name(),
+                                                            isHidden,
+                                                            actionListener
+                                                        );
+                                                    }
+                                                    // deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden,
+                                                    // actionListener);
                                                 } else {
-                                                    deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                                RestStatus.BAD_REQUEST
+                                                            )
+                                                        );
                                                 }
-                                                // deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
-                                            } else {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                            RestStatus.BAD_REQUEST
-                                                        )
-                                                    );
-                                            }
-                                        }, e -> {
-                                            log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
-                                            wrappedListener.onFailure(e);
-                                        }));
+                                            }, e -> {
+                                                log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
+                                                wrappedListener.onFailure(e);
+                                            })
+                                        );
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml model {}", r.id(), e);
@@ -332,7 +343,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         sdkClient.deleteDataObjectAsync(deleteDataObjectRequest).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {
-                    DeleteResponse deleteResponse = DeleteResponse.fromXContent(r.parser());
+                    DeleteResponse deleteResponse = r.deleteResponse();
                     deleteModelChunksAndController(actionListener, modelId, functionName, isHidden, deleteResponse);
                 } catch (Exception e) {
                     actionListener.onFailure(e);

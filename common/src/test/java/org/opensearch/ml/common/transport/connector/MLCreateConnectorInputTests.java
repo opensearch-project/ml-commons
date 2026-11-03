@@ -10,6 +10,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.supportedProtocols;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -34,6 +38,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.BatchJobStatusMapping;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -71,6 +76,7 @@ public class MLCreateConnectorInputTests {
     @Before
     public void setUp() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String name = null;
         String method = "POST";
         String url = "https://test.com";
         Map<String, String> headers = new HashMap<>();
@@ -80,6 +86,7 @@ public class MLCreateConnectorInputTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(
             actionType,
+            name,
             method,
             url,
             headers,
@@ -87,7 +94,17 @@ public class MLCreateConnectorInputTests {
             preProcessFunction,
             postProcessFunction
         );
-        ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(20, 10000, 10000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
+        ConnectorClientConfig connectorClientConfig = ConnectorClientConfig
+            .builder()
+            .maxConnections(20)
+            .connectionTimeout(10000)
+            .readTimeout(10000)
+            .retryBackoffMillis(10)
+            .retryTimeoutSeconds(10)
+            .maxRetryTimes(-1)
+            .retryBackoffPolicy(RetryBackoffPolicy.CONSTANT)
+            .skipSslVerification(null)
+            .build();
 
         mlCreateConnectorInput = MLCreateConnectorInput
             .builder()
@@ -168,6 +185,26 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
+    public void constructorMLCreateConnectorInput_InvalidProtocol() {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol("dummy")
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Unsupported connector protocol. Please use one of " + supportedProtocols(), exception.getMessage());
+    }
+
+    @Test
     public void constructorMLCreateConnectorInput_NullCredential() {
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
             MLCreateConnectorInput
@@ -205,6 +242,142 @@ public class MLCreateConnectorInputTests {
                 .build();
         });
         assertEquals("Connector credential is null or empty list", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithEmptyCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_GoogleCloudAdcWithEmptyCredential_ShouldNotThrow() {
+        // A google_cloud connector may omit credentials ONLY in ADC mode (auth_mode=adc).
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .parameters(Map.of("auth_mode", "adc"))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(GOOGLE_CLOUD, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_GoogleCloudNonAdcWithEmptyCredential_ShouldThrow() {
+        // Without auth_mode=adc, a google_cloud connector (service-account-key mode) must still
+        // supply a credential — the empty-credential relaxation is ADC-scoped, not blanket.
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(GOOGLE_CLOUD)
+                .parameters(Map.of("location", "us-central1"))
+                .credential(Map.of())
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithEmptyCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
     }
 
     @Test
@@ -375,6 +548,228 @@ public class MLCreateConnectorInputTests {
         assertNull(input.getName()); // Name is not set, but no exception due to dryRun
     }
 
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_SSE);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_STREAMABLE_HTTP);
+    }
+
+    private void testMcpUrlValidation(String protocol, String url) {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(protocol)
+                .credential(null) // MCP connectors allow null credential
+                .url(url)
+                .build();
+        });
+        assertEquals("MCP Connector url is null or blank", exception.getMessage());
+    }
+
+    private void testMcpValidUrl(String protocol) {
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(protocol)
+            .credential(null)
+            .url("https://test.com")
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(protocol, connector.getProtocol());
+        assertEquals("https://test.com", connector.getUrl());
+    }
+
+    // ---- provisioned_by tests ----
+
+    @Test
+    public void builder_WithProvisionedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        assertEquals("flow-framework", input.getProvisionedBy());
+    }
+
+    @Test
+    public void builder_WithoutProvisionedBy_DefaultsToNull() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .build();
+        assertNull(input.getProvisionedBy());
+    }
+
+    @Test
+    public void toXContent_WithProvisionedBy() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"provisioned_by\":\"flow-framework\""));
+    }
+
+    @Test
+    public void parse_WithProvisionedBy() throws Exception {
+        String json =
+            "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"key\":\"val\"},\"provisioned_by\":\"flow-framework\"}";
+        testParseFromJsonString(json, parsedInput -> assertEquals("flow-framework", parsedInput.getProvisionedBy()));
+    }
+
+    @Test
+    public void readInputStream_WithProvisionedBy() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertEquals("flow-framework", deserialized.getProvisionedBy());
+    }
+
+    @Test
+    public void readInputStream_ProvisionedBy_OldVersion_IsNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .provisionedBy("flow-framework")
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getProvisionedBy());
+    }
+
+    // ---- batch_job_status tests ----
+
+    @Test
+    public void testParse_withBatchJobStatus_preserved() throws Exception {
+        String json = "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"google_cloud\","
+            + "\"credential\":{\"key\":\"val\"},"
+            + "\"batch_job_status\":{\"field_name\":\"state\",\"mapping\":{\"JOB_STATE_SUCCEEDED\":\"COMPLETED\"}}}";
+        testParseFromJsonString(json, parsedInput -> {
+            assertNotNull(parsedInput.getBatchJobStatus());
+            assertEquals("state", parsedInput.getBatchJobStatus().getFieldName());
+            assertEquals("COMPLETED", parsedInput.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+        });
+    }
+
+    @Test
+    public void testToXContent_withBatchJobStatus_roundTrip() throws Exception {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = builder.toString();
+        assertTrue(json.contains("\"batch_job_status\""));
+
+        testParseFromJsonString(json, parsedInput -> {
+            assertNotNull(parsedInput.getBatchJobStatus());
+            assertEquals("state", parsedInput.getBatchJobStatus().getFieldName());
+            assertEquals("COMPLETED", parsedInput.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+        });
+    }
+
+    @Test
+    public void testStreamRoundTrip_withBatchJobStatus() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_9_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNotNull(deserialized.getBatchJobStatus());
+        assertEquals("state", deserialized.getBatchJobStatus().getFieldName());
+        assertEquals("COMPLETED", deserialized.getBatchJobStatus().getMapping().get("JOB_STATE_SUCCEEDED"));
+    }
+
+    @Test
+    public void testStreamRoundTrip_batchJobStatus_oldVersion_isNull() throws IOException {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(GOOGLE_CLOUD)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+            .batchJobStatus(new BatchJobStatusMapping("state", Map.of("JOB_STATE_SUCCEEDED", "COMPLETED")))
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_7_0); // pre-3.8 stream: field must not be written
+        input.writeTo(output);
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_7_0);
+        MLCreateConnectorInput deserialized = new MLCreateConnectorInput(streamInput);
+        assertNull(deserialized.getBatchJobStatus());
+    }
+
     // Helper method to create XContentParser from a JSON string
     private XContentParser createParser(String jsonString) throws IOException {
         XContentParser parser = XContentType.JSON
@@ -407,6 +802,32 @@ public class MLCreateConnectorInputTests {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLCreateConnectorInput parsedInput = new MLCreateConnectorInput(streamInput);
         verify.accept(parsedInput);
+    }
+
+    @Test
+    public void parse_withCustomConnectorId() throws Exception {
+        String json = "{\"name\":\"conn\",\"version\":\"1\",\"protocol\":\"http\",\"credential\":{\"k\":\"v\"},"
+            + "\"connector_id\":\"bedrock-connector\"}";
+        testParseFromJsonString(json, parsed -> assertEquals("bedrock-connector", parsed.getConnectorId()));
+    }
+
+    @Test
+    public void toXContent_WithCustomConnectorId() throws Exception {
+        MLCreateConnectorInput input = mlCreateConnectorInput.toBuilder().connectorId("bedrock-connector").build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"connector_id\":\"bedrock-connector\""));
+    }
+
+    @Test
+    public void writeToAndReadFrom_withCustomConnectorId() throws IOException {
+        MLCreateConnectorInput input = mlCreateConnectorInput.toBuilder().connectorId("bedrock-connector").build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_9_0);
+        assertEquals("bedrock-connector", new MLCreateConnectorInput(in).getConnectorId());
     }
 
 }

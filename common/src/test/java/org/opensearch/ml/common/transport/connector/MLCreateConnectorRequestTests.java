@@ -6,9 +6,12 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -36,6 +39,7 @@ public class MLCreateConnectorRequestTests {
     @Before
     public void setUp() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String name = null;
         String method = "POST";
         String url = "https://test.com";
         Map<String, String> headers = new HashMap<>();
@@ -45,6 +49,7 @@ public class MLCreateConnectorRequestTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(
             actionType,
+            name,
             method,
             url,
             headers,
@@ -146,5 +151,196 @@ public class MLCreateConnectorRequestTests {
             }
         };
         MLCreateConnectorRequest.fromActionRequest(actionRequest);
+    }
+
+    @Test
+    public void validateWithUnsafeModelConnectorName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("<script>bad</script>")  // Unsafe name
+            .description("safe description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validateWithUnsafeModelConnectorDescription() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // Unsafe description
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validateWithEmptyAndInvalidModelConnectorNameAndDescription() {
+        // Test empty name (should fail validation)
+        MLCreateConnectorInput emptyNameInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name
+            .description("valid description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest emptyNameRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(emptyNameInput).build();
+        ActionRequestValidationException emptyNameException = emptyNameRequest.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector name is required and cannot be null or blank;",
+            emptyNameException.getMessage()
+        );
+
+        // Test empty description (should pass validation)
+        MLCreateConnectorInput emptyDescriptionInput = MLCreateConnectorInput
+            .builder()
+            .name("valid name")
+            .description("")  // Empty description
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest emptyDescriptionRequest = MLCreateConnectorRequest
+            .builder()
+            .mlCreateConnectorInput(emptyDescriptionInput)
+            .build();
+        ActionRequestValidationException emptyDescriptionException = emptyDescriptionRequest.validate();
+        assertNull("Empty description should pass validation", emptyDescriptionException);
+
+        // Test invalid characters in name and description
+        MLCreateConnectorInput invalidInput = MLCreateConnectorInput
+            .builder()
+            .name("invalid<name>")
+            .description("invalid<description>")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest invalidRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(invalidInput).build();
+        ActionRequestValidationException invalidException = invalidRequest.validate();
+        String exceptionMessage = invalidException.getMessage();
+        assertTrue(
+            "Error message should contain name validation failure",
+            exceptionMessage.contains("Model connector name " + SAFE_INPUT_DESCRIPTION + ";")
+        );
+
+        assertTrue(
+            "Error message should contain description validation failure",
+            exceptionMessage.contains("Model connector description " + SAFE_INPUT_DESCRIPTION + ";")
+        );
+    }
+
+    @Test
+    public void validateWithDryRun() {
+        // Test with dry run set to true
+        MLCreateConnectorInput dryRunInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name, which would normally fail validation
+            .description("Test description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .dryRun(true)  // Set dry run to true
+            .build();
+
+        MLCreateConnectorRequest dryRunRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(dryRunInput).build();
+        ActionRequestValidationException dryRunException = dryRunRequest.validate();
+        assertNull("Validation should pass when dry run is true, even with empty name", dryRunException);
+
+        // Test with dry run set to false (default behavior)
+        MLCreateConnectorInput nonDryRunInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name, which should fail validation
+            .description("Test description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .dryRun(false)  // Set dry run to false
+            .build();
+
+        MLCreateConnectorRequest nonDryRunRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(nonDryRunInput).build();
+        ActionRequestValidationException nonDryRunException = nonDryRunRequest.validate();
+        assertNotNull("Validation should fail when dry run is false and name is empty", nonDryRunException);
+        assertTrue(nonDryRunException.getMessage().contains("Model connector name is required"));
+    }
+
+    @Test
+    public void validateWithValidProvisionedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("key", "value"))
+            .provisionedBy("flow-framework")
+            .build();
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(input).build();
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validateWithInvalidProvisionedBy() {
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("key", "value"))
+            .provisionedBy("<script>bad</script>")
+            .build();
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(input).build();
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("Model connector provisioned_by field " + SAFE_INPUT_DESCRIPTION));
     }
 }

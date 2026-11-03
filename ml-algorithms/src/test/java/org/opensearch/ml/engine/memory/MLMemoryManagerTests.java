@@ -333,6 +333,7 @@ public class MLMemoryManagerTests {
                 new Interaction(
                     "id0",
                     Instant.now(),
+                    Instant.now(),
                     "cid",
                     "input",
                     "pt",

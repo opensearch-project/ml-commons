@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine.tools;
 
-import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -15,12 +15,13 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
+import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -42,6 +43,9 @@ public class ConnectorTool implements Tool {
     private String name = ConnectorTool.TYPE;
     @Getter
     @Setter
+    private Map<String, Object> attributes;
+    @Getter
+    @Setter
     private String description = Factory.DEFAULT_DESCRIPTION;
     @Getter
     private String version;
@@ -54,39 +58,36 @@ public class ConnectorTool implements Tool {
     private String connectorId;
 
     public ConnectorTool(Client client, String connectorId) {
-        this.client = client;
-        if (connectorId == null) {
-            throw new IllegalArgumentException("connector_id can't be null");
+        if (StringUtils.isBlank(connectorId)) {
+            throw new IllegalArgumentException("Connector ID can't be null or empty");
         }
-        this.connectorId = connectorId;
 
-        outputParser = new Parser() {
-            @Override
-            public Object parse(Object o) {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
+        this.client = client;
+        this.connectorId = connectorId;
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        MLInput mlInput = RemoteInferenceMLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
-        ActionRequest request = new MLExecuteConnectorRequest(connectorId, mlInput);
-
-        client.execute(MLExecuteConnectorAction.INSTANCE, request, ActionListener.wrap(r -> {
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
-            modelTensorOutput.getMlModelOutputs();
-            if (outputParser == null) {
-                listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
-            } else {
-                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        try {
+            if (connectorId.isBlank()) {
+                throw new IllegalArgumentException("Connector is not registered in tool");
             }
-        }, e -> {
-            log.error("Failed to run model " + connectorId, e);
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+            MLInput mlInput = RemoteInferenceMLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
+            ActionRequest request = new MLExecuteConnectorRequest(connectorId, mlInput);
+
+            client.execute(MLExecuteConnectorAction.INSTANCE, request, ActionListener.wrap(r -> {
+                ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
+                listener.onResponse((T) outputParser.parse(modelTensorOutput));
+            }, e -> {
+                log.error("Failed to run model " + connectorId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to run ConnectorTool with connector: {}", connectorId, e);
             listener.onFailure(e);
-        }));
+        }
     }
 
     @Override
@@ -96,15 +97,12 @@ public class ConnectorTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
-            return false;
-        }
-        return true;
+        return parameters != null && !parameters.isEmpty();
     }
 
     public static class Factory implements Tool.Factory<ConnectorTool> {
         public static final String TYPE = "ConnectorTool";
-        public static final String DEFAULT_DESCRIPTION = "This tool will invoke external service.";
+        public static final String DEFAULT_DESCRIPTION = "Invokes external service. Required: 'connector_id'. Returns: service response.";
         private Client client;
         private static Factory INSTANCE;
 
@@ -126,8 +124,10 @@ public class ConnectorTool implements Tool {
         }
 
         @Override
-        public ConnectorTool create(Map<String, Object> map) {
-            return new ConnectorTool(client, (String) map.get(CONNECTOR_ID));
+        public ConnectorTool create(Map<String, Object> params) {
+            ConnectorTool connectorTool = new ConnectorTool(client, (String) params.get(CONNECTOR_ID));
+            connectorTool.setOutputParser(ToolParser.createFromToolParams(params));
+            return connectorTool;
         }
 
         @Override

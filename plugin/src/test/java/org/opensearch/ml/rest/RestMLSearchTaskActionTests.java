@@ -11,7 +11,7 @@ import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.opensearch.core.common.Strings;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;

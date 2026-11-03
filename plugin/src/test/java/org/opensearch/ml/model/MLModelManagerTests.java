@@ -12,8 +12,10 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,26 +23,30 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext_Exception;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_NotExist;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_NullResponse;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index_failure;
@@ -51,6 +57,8 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.copyFile;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -62,10 +70,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -75,12 +84,17 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.Version;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -90,30 +104,40 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -123,7 +147,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -131,6 +154,8 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
@@ -214,6 +239,11 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MAX_BATCH_INFERENCE_TASKS.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_BATCH_INGESTION_TASKS.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_BATCH_INGESTION_BULK_SIZE.getKey(), 100).build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX.getKey(), Collections.emptyList())
+            .build();
+        settings = Settings.builder().putList(ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS.getKey(), Collections.emptyList()).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
@@ -222,7 +252,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
             ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
-            ML_COMMONS_BATCH_INGESTION_BULK_SIZE
+            ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
+            ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX,
+            ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         xContentRegistry = NamedXContentRegistry.EMPTY;
@@ -280,7 +312,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(false);
 
         modelManager = spy(
             new MLModelManager(
@@ -352,6 +384,18 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testRegisterMLModel_CircuitBreakerOpen() {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
+        expectedEx.expect(CircuitBreakingException.class);
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
+        modelManager.registerMLModel(registerModelInput, mlTask);
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testRegisterMLModel_CircuitBreakerNotOpenForAgent() {
+        registerModelInput.setFunctionName(FunctionName.AGENT);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
@@ -601,6 +645,300 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     }
 
+    @Test
+    public void testRegisterModelMeta_UsesCustomModelId() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            "test-model",
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "custom-model-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onResponse(new IndexResponse(new ShardId("test", "test", 1), "custom-model-id", 1L, 1L, 1L, true));
+            return null;
+        }).when(client).index(indexRequestCaptor.capture(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        verify(actionListener).onResponse("custom-model-id");
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertEquals("custom-model-id", indexRequest.id());
+        assertEquals(DocWriteRequest.OpType.CREATE, indexRequest.opType());
+    }
+
+    @Test
+    public void testRegisterModelMeta_DuplicateCustomModelId() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            "test-model",
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "custom-model-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId("test", "test", 1),
+            "custom-model-id",
+            "document already exists"
+        );
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onFailure(conflict);
+            return null;
+        }).when(client).index(any(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model id 'custom-model-id' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    @Test
+    public void testRegisterModelMeta_HiddenModelUsesModelNameWithoutCreateOpType() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            null
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onResponse(new IndexResponse(new ShardId("test", "test", 1), modelName, 1L, 1L, 1L, true));
+            return null;
+        }).when(client).index(indexRequestCaptor.capture(), any());
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertEquals(modelName, indexRequest.id());
+        assertEquals(DocWriteRequest.OpType.INDEX, indexRequest.opType());
+    }
+
+    @Test
+    public void testRegisterModelMeta_rejectsCustomModelIdForHiddenModel() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.TEXT_EMBEDDING,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            TextEmbeddingModelConfig
+                .builder()
+                .modelType("bert")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(384)
+                .build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            true,
+            null,
+            "different-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Cannot specify custom model id for hidden models", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testRegisterModelMeta_rejectsCustomModelIdForMetricsCorrelationModel() throws IOException {
+        MLRegisterModelMetaInput metaInput = new MLRegisterModelMetaInput(
+            modelName,
+            FunctionName.METRICS_CORRELATION,
+            "model_group_id",
+            "1.0",
+            "description",
+            null,
+            null,
+            MLModelFormat.TORCH_SCRIPT,
+            MLModelState.REGISTERING,
+            200L,
+            "hash",
+            MetricsCorrelationModelConfig.builder().modelType("testModelType").build(),
+            null,
+            2,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            "different-id"
+        );
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        modelManager.registerModelMeta(metaInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Cannot specify custom model id for metrics correlation models", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testIndexRemoteModel_UsesCustomModelId() throws Exception {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(false).toBuilder().modelId("custom-remote-model").build();
+        MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(new ShardId("test", "test", 1), "custom-remote-model", 1L, 1L, 1L, true);
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        when(mockSdkClient.putDataObjectAsync(putRequestCaptor.capture())).thenReturn(CompletableFuture.completedFuture(putResponse));
+
+        java.lang.reflect.Field sdkClientField = MLModelManager.class.getDeclaredField("sdkClient");
+        sdkClientField.setAccessible(true);
+        SdkClient originalSdkClient = (SdkClient) sdkClientField.get(modelManager);
+        sdkClientField.set(modelManager, mockSdkClient);
+        try {
+            modelManager.indexRemoteModel(inputWithCustomId, remoteTask, "1.0.0");
+        } finally {
+            sdkClientField.set(modelManager, originalSdkClient);
+        }
+
+        assertEquals("custom-remote-model", putRequestCaptor.getValue().id());
+        assertEquals("custom-remote-model", remoteTask.getModelId());
+    }
+
+    @Test
+    public void testRegisterMLRemoteModel_DuplicateCustomModelId() throws Exception {
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        MLRegisterModelInput inputWithCustomId = mockRemoteModelInput(false).toBuilder().modelId("custom-remote-model").build();
+        MLTask remoteTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        mock_client_update(client);
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId("test", "test", 1),
+            "custom-remote-model",
+            "document already exists"
+        );
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexListener = invocation.getArgument(1);
+            indexListener.onFailure(conflict);
+            return null;
+        }).when(client).index(any(), any());
+
+        modelManager.registerMLRemoteModel(sdkClient, inputWithCustomId, remoteTask, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model id 'custom-remote-model' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
     @Ignore
     public void testRegisterMLModel_DownloadModelFile() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
@@ -717,47 +1055,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Failed to get data object from index .plugins-ml-model", exception.getValue().getMessage());
-        verify(mlStats)
-            .createCounterStatIfAbsent(
-                eq(FunctionName.TEXT_EMBEDDING),
-                eq(ActionName.DEPLOY),
-                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-            );
-    }
-
-    public void testDeployModel_NullGetModelResponse() {
-        MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
-            .modelType("bert")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
-            .build();
-        String[] nodes = new String[] { "node1", "node2" };
-        mlTask.setWorkerNodes(List.of(nodes));
-        ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
-        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
-        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
-        mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
-        assertFalse(modelManager.isModelRunningOnNode(modelId));
-        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exception.capture());
-        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
@@ -902,6 +1199,198 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
+    /**
+     * Registration and update now refuse to attach an MCP connector to a model, but documents written before those
+     * checks existed are still out there. Deploying one used to succeed and then fail as an unclassified 500 on the
+     * first predict; the deploy itself should report it.
+     */
+    public void testDeployModel_McpBackedRemoteModelRejected() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(ConnectorProtocols.MCP_SSE)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(exception.getValue()));
+        // Without this the model stays DEPLOYING in the node cache and the next deploy is refused as a duplicate.
+        verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /** Same rejection when the connector is fetched by id rather than carried inline on the model. */
+    public void testDeployModel_McpBackedRemoteModelRejected_connectorFetchedById() {
+        MLModel mcpBackedModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYING)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connectorId("mcpConnectorId")
+            .build();
+        ActionListener<String> listener = mock(ActionListener.class);
+        mlTask.setWorkerNodes(List.of("node1", "node2"));
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        mock_threadpool(threadPool, taskExecutorService);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mcpBackedModel);
+            return null;
+        }).when(modelManager).getModel(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> connectorListener = invocation.getArgument(2);
+            connectorListener
+                .onResponse(
+                    McpConnector
+                        .builder()
+                        .name("mcp")
+                        .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+                        .url("https://api.openai.com/mcp")
+                        .credential(Map.of("key", "value"))
+                        .build()
+                );
+            return null;
+        }).when(modelManager).getConnector(eq("mcpConnectorId"), any(), any());
+
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.REMOTE, true, false, mlTask, listener);
+
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exception.capture());
+        assertTrue(exception.getValue().getMessage().contains("is backed by an MCP connector"));
+        verify(modelCacheHelper).removeModel(modelId);
+    }
+
+    /**
+     * The rejection belongs to deploy only. A cache refresh answers 200 unconditionally before the async connector
+     * lookup returns, so rejecting here would evict a model the caller was just told is fine - leaving the document
+     * reading DEPLOYED with no cache entry and the node's deployed-model count permanently off.
+     */
+    public void testUpdateModelCache_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        doReturn(new String[] { "node1" }).when(modelManager).getWorkerNodes(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_SSE));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.updateModelCache(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    /**
+     * Controller deletion goes through undeployController, and DeleteControllerTransportAction treats any node
+     * failure as an overall failure - so rejecting here would make a teardown that works today permanently fail.
+     */
+    public void testUndeployController_McpBackedRemoteModelNotRejected() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mcpBackedModel(ConnectorProtocols.MCP_STREAMABLE_HTTP));
+            return null;
+        }).when(modelManager).getModel(any(), any(ActionListener.class));
+
+        modelManager.undeployController(modelId, listener);
+
+        assertNoMcpRejection(listener);
+    }
+
+    private MLModel mcpBackedModel(String protocol) {
+        return MLModel
+            .builder()
+            .modelId(modelId)
+            .modelState(MLModelState.DEPLOYED)
+            .algorithm(FunctionName.REMOTE)
+            .name(modelName)
+            .version(version)
+            .connector(
+                McpConnector
+                    .builder()
+                    .name("mcp")
+                    .protocol(protocol)
+                    .url("https://api.openai.com/mcp")
+                    .credential(Map.of("key", "value"))
+                    .build()
+            )
+            .build();
+    }
+
+    /**
+     * The non-deploy paths may still fail for unrelated reasons (there is no predictor for an MCP protocol), but
+     * they must not raise the deploy-time rejection and must not evict the cache entry.
+     */
+    private void assertNoMcpRejection(ActionListener<String> listener) {
+        verify(modelCacheHelper, never()).removeModel(modelId);
+        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, atMost(1)).onFailure(exception.capture());
+        for (Exception e : exception.getAllValues()) {
+            assertFalse(String.valueOf(e.getMessage()).contains("is backed by an MCP connector"));
+        }
+    }
+
+    /**
+     * createConnector rethrows IllegalArgumentException deliberately - an unsupported or missing protocol is a bad
+     * request. Wrapping every exception from the read would turn that 400 into a 500.
+     */
+    public void testGetConnector_illegalArgumentStaysBadRequest() throws IOException {
+        GetResponse getResponse = prepareConnectorWithoutProtocol();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        mock_client_ThreadContext(client, threadPool, threadContext);
+        ActionListener<Connector> listener = mock(ActionListener.class);
+
+        modelManager.getConnector("connectorId", null, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(captor.getValue()));
+    }
+
+    /** A stored connector document with no protocol, which makes createConnector raise IllegalArgumentException. */
+    private GetResponse prepareConnectorWithoutProtocol() {
+        BytesReference bytesReference = new BytesArray("{\"name\":\"no-protocol\"}");
+        GetResult getResult = new GetResult(CommonValue.ML_CONNECTOR_INDEX, "connectorId", 1L, 1L, 1L, true, bytesReference, null, null);
+        return new GetResponse(getResult);
+    }
+
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
@@ -1016,6 +1505,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelCacheHelper).syncWorkerNodes(eq(modelWorkerNodes));
     }
 
+    public void testSyncModelPlanningWorkerNodes() {
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo1",
+            "node1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of(modelId, ImmutableSet.of("node1"));
+        when(modelCacheHelper.getFunctionName(modelId)).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getDeployToAllNodes(modelId)).thenReturn(true);
+        DiscoveryNode[] planningWorkerNodes = new DiscoveryNode[] { localNode };
+        when(nodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING)).thenReturn(planningWorkerNodes);
+        modelManager.syncModelPlanningWorkerNodes(modelWorkerNodes);
+        verify(modelCacheHelper)
+            .syncPlanningWorkerNodes(
+                Map.of(modelId, Arrays.stream(planningWorkerNodes).map(DiscoveryNode::getId).collect(Collectors.toSet()))
+            );
+    }
+
     public void testClearRoutingTable() {
         modelManager.clearRoutingTable();
         verify(modelCacheHelper).clearWorkerNodes();
@@ -1048,6 +1559,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(nodeHelper.filterEligibleNodes(any(), any())).thenReturn(eligibleNodes);
         String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
         assertArrayEquals(eligibleNodes, workerNodes);
+    }
+
+    @Test
+    public void updateModelCacheRefreshesCachedModelInfo() {
+        MLModel model = MLModel
+            .builder()
+            .modelId(modelId)
+            .name("test_model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelState(MLModelState.DEPLOYED)
+            .batchInferenceConfig(BatchInferenceConfig.builder().maxItemsPerRequest(96).build())
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(model);
+            return null;
+        }).when(modelManager).getModel(eq(modelId), any());
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(new String[] {});
+
+        modelManager.updateModelCache(modelId, mock(ActionListener.class));
+
+        verify(modelCacheHelper).setModelInfo(eq(modelId), eq(model));
     }
 
     public void testGetWorkerNodes_FilterEligibleNodes_Null() {
@@ -1300,6 +1833,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assert durationCaptor.getValue() > 0;
     }
 
+    @Test
+    public void testSetUpParameterMap_includesSecurityPatterns() throws Exception {
+        String modelId = "test-model-id";
+        String tenantId = "test-tenant";
+
+        Method method = MLModelManager.class.getDeclaredMethod("setUpParameterMap", String.class, String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) method.invoke(modelManager, modelId, tenantId);
+
+        assertNotNull(params);
+        assertTrue(params.containsKey(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS));
+        assertTrue(params.containsKey(CONNECTOR_RESTRICTED_IP_PATTERNS));
+    }
+
     private void setupForModelMeta() {
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
@@ -1336,6 +1885,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512

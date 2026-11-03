@@ -59,6 +59,29 @@ POST /_plugins/_ml/connectors/_create
   ]
 }
 ```
+If you're using cohere V2 embedding API, you should pass `embedding_types` in the request body 
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  ...
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://api.cohere.ai/v2/embed",
+      "request_body": "{ \"texts\": ${parameters.texts}, \"truncate\": \"END\", \"model\": \"${parameters.model_name}\", \"embedding_types\": [\"float\"], \"input_type\": \"${parameters.input_type}\"}",
+      "pre_process_function": "connector.pre_process.cohere.embedding",
+      "post_process_function": "connector.post_process.cohere_v2.embedding.float"
+    }
+  ]
+}
+```
+For cohere v2 embedding API, there are several build-in post_process_function that can extract the embedding result to a list of list of number format:
+1. v2 float: connector.post_process.cohere_v2.embedding.float
+2. v2 int8: connector.post_process.cohere_v2.embedding.int8
+3. v2 uint8: connector.post_process.cohere_v2.embedding.uint8
+4. v2 binary: connector.post_process.cohere_v2.embedding.binary
+5. v2 ubinary: connector.post_process.cohere_v2.embedding.ubinary
 
 This request response will return the `connector_id`, note it down.
 

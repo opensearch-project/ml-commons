@@ -1,0 +1,564 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.engine.algorithms.remote.streaming;
+
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
+
+import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.TextMessageContentEvent;
+import org.opensearch.ml.common.agui.TextMessageEndEvent;
+import org.opensearch.ml.common.agui.TextMessageStartEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
+import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
+
+import com.jayway.jsonpath.JsonPath;
+
+import lombok.extern.log4j.Log4j2;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.internal.http2.StreamResetException;
+import okhttp3.sse.EventSource;
+import okhttp3.sse.EventSourceListener;
+import okhttp3.sse.EventSources;
+
+@Log4j2
+public class HttpStreamingHandler extends BaseStreamingHandler {
+
+    private final Connector connector;
+    private OkHttpClient okHttpClient;
+    private String llmInterface;
+    private Map<String, String> parameters;
+
+    public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
+        this(llmInterface, connector, connectorClientConfig, null);
+    }
+
+    public HttpStreamingHandler(
+        String llmInterface,
+        Connector connector,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
+    ) {
+        this.connector = connector;
+        this.llmInterface = llmInterface;
+        this.parameters = parameters;
+
+        Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
+        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
+
+        // The client built below carries no mutual-TLS material, so a connector that asked for
+        // mutual_tls_enabled would stream without presenting its client certificate.
+        // ConnectorProtocolValidator rejects that combination on the protocols whose executors never apply
+        // mutual TLS, but http is not one of them: the non-streaming http executor does apply it, so the field
+        // is legitimately accepted for the protocol and only this path cannot honour it. Fail the stream
+        // instead of proceeding without it.
+        if (Boolean.TRUE.equals(connectorClientConfig.getMutualTlsEnabled())) {
+            throw new IllegalArgumentException(
+                "Mutual TLS is not supported on the streaming path. "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + " is applied only by the non-streaming http executor, so streaming this connector would "
+                    + "connect without a client certificate. Either do not stream this connector, or remove "
+                    + ConnectorClientConfig.MUTUAL_TLS_ENABLED_FIELD
+                    + "."
+            );
+        }
+
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                this.okHttpClient = new OkHttpClient.Builder()
+                    .connectTimeout(connectionTimeout)
+                    .readTimeout(readTimeout)
+                    .retryOnConnectionFailure(true)
+                    .build();
+                return null;
+            });
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build OkHttpClient", e);
+        }
+    }
+
+    @Override
+    public void startStream(
+        String action,
+        Map<String, String> parameters,
+        String payload,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        try {
+            log.info("Creating SSE connection for streaming request");
+            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
+            Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
+
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                EventSources.createFactory(okHttpClient).newEventSource(request, listener);
+                return null;
+            });
+
+        } catch (Exception e) {
+            log.error("Failed to start HTTP streaming", e);
+            handleError(e, actionListener);
+        }
+    }
+
+    @Override
+    public void handleError(Throwable error, StreamPredictActionListener<MLTaskResponse, ?> listener) {
+        log.error("HTTP streaming error", error);
+        listener.onFailure(new MLException("Fail to execute streaming", error));
+    }
+
+    public final class HTTPEventSourceListener extends EventSourceListener {
+        private StreamPredictActionListener<MLTaskResponse, ?> streamActionListener;
+        private final String llmInterface;
+        private final boolean isAGUIAgent;
+        private final Map<String, String> parameters;
+        private AtomicBoolean isStreamClosed;
+        private boolean functionCallInProgress = false;
+        private boolean agentExecutionInProgress = false;
+        private String accumulatedToolCallId = null;
+        private String accumulatedToolName = null;
+        private String accumulatedArguments = "";
+        private StringBuilder accumulatedContent = new StringBuilder();
+        private final long streamStartTime;
+        private final AtomicBoolean firstTokenReceived;
+
+        public HTTPEventSourceListener(
+            StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
+            String llmInterface,
+            Map<String, String> parameters
+        ) {
+            this.streamActionListener = streamActionListener;
+            this.llmInterface = llmInterface;
+            this.parameters = parameters;
+            this.isStreamClosed = new AtomicBoolean(false);
+            this.streamStartTime = System.currentTimeMillis();
+            this.firstTokenReceived = new AtomicBoolean(false);
+
+            this.isAGUIAgent = AgentUtils.isAGUIAgent(parameters);
+
+            if (isAGUIAgent) {
+                log.debug("HttpStreamingHandler: Detected AG-UI agent");
+            }
+        }
+
+        /***
+         * Callback when the SSE endpoint connection is made.
+         * @param eventSource the event source
+         * @param response the response
+         */
+        @Override
+        public void onOpen(EventSource eventSource, Response response) {
+            log.debug("Connected to SSE Endpoint.");
+        }
+
+        /***
+         * For each event received from the SSE endpoint
+         * @param eventSource The event source
+         * @param id The id of the event
+         * @param type The type of the event which is used to filter
+         * @param data The event data
+         */
+        @Override
+        public void onEvent(EventSource eventSource, String id, String type, String data) {
+            log.debug("The data is: {}", data);
+            switch (llmInterface) {
+                case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                    onOpenAIEvent(data);
+                    break;
+                case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
+                    onGeminiEvent(data);
+                    break;
+                default:
+                    throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+            }
+        }
+
+        /***
+         * When the connection is closed we receive this even which is currently only logged.
+         * @param eventSource The event source
+         */
+        @Override
+        public void onClosed(EventSource eventSource) {
+            log.debug("SSE CLOSED.");
+        }
+
+        /***
+         * If there is any failure we log the error and the stack trace
+         * During stream resets with no errors we set the connected flag to false to allow the main thread to attempt a re-connect
+         * @param eventSource The event source
+         * @param t The error object
+         * @param response The response
+         */
+        @Override
+        public void onFailure(EventSource eventSource, Throwable t, Response response) {
+            if (t != null) {
+                // Network/connection error
+                log.error("Error: " + t.getMessage(), t);
+                if (t instanceof StreamResetException && t.getMessage().contains("NO_ERROR")) {
+                    // TODO: reconnect
+                } else {
+                    streamActionListener.onFailure(new MLException("SSE failure with network error", t));
+                }
+            } else if (response != null) {
+                // HTTP error (e.g., 400 Bad Request)
+                try {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    int statusCode = response.code();
+                    RestStatus restStatus = RestStatus.fromCode(statusCode);
+                    if (restStatus == null) {
+                        restStatus = RestStatus.INTERNAL_SERVER_ERROR;
+                    }
+                    streamActionListener.onFailure(new OpenSearchStatusException("Error from remote service: " + errorBody, restStatus));
+                } catch (IOException e) {
+                    streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
+                }
+            } else {
+                // Unknown failure
+                streamActionListener.onFailure(new MLException("SSE failure"));
+            }
+        }
+
+        private void onOpenAIEvent(String data) {
+            if ("[DONE]".equals(data)) {
+                handleDoneEvent();
+                return;
+            }
+
+            // Process stream chunk
+            try {
+                Map<String, Object> dataMap = gson.fromJson(data, Map.class);
+                processStreamChunk(dataMap);
+            } catch (Exception e) {
+                log.debug("Skipping malformed chunk: {}", data);
+            }
+        }
+
+        private void onGeminiEvent(String data) {
+            // Vertex AI streamGenerateContent emits JSON chunks shaped like:
+            // {"candidates":[{"content":{"parts":[{"text":"..."}]},"finishReason":"STOP"}]}
+            try {
+                Map<String, Object> dataMap = gson.fromJson(data, Map.class);
+
+                // A prompt rejected by Vertex safety filters carries a promptFeedback.blockReason
+                // with no candidates and no finishReason. Without terminating here the completion
+                // sentinel below never fires and the client hangs waiting on the stream.
+                String blockReason = extractPath(dataMap, "$.promptFeedback.blockReason");
+                if (blockReason != null) {
+                    log.warn("Vertex blocked the prompt before generation. blockReason={}", blockReason);
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                    return;
+                }
+
+                String content = extractPath(dataMap, "$.candidates[0].content.parts[0].text");
+                if (content != null && !content.isEmpty()) {
+                    if (!firstTokenReceived.get()) {
+                        long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
+                        String modelId = parameters != null ? parameters.get("model") : null;
+                        String tenantId = connector != null ? connector.getTenantId() : null;
+                        log
+                            .info(
+                                "First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}",
+                                modelId,
+                                tenantId,
+                                timeToFirstToken
+                            );
+                        AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
+                        firstTokenReceived.set(true);
+                    }
+                    sendContentResponse(content, false, streamActionListener);
+                }
+
+                String finishReason = extractPath(dataMap, "$.candidates[0].finishReason");
+                if (finishReason != null) {
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                }
+            } catch (Exception e) {
+                log.debug("Skipping malformed chunk: {}", data);
+            }
+        }
+
+        private void handleDoneEvent() {
+            if (!agentExecutionInProgress) {
+                if (isAGUIAgent && !isStreamClosed.get()) {
+                    String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+                    boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                        && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
+                    if (textMessageStarted) {
+                        // End any remaining text message
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} at stream end", messageId);
+                    }
+
+                    // Send RUN_FINISHED event
+                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent RUN_FINISHED event at [DONE] - threadId={}, runId={}", threadId, runId);
+
+                    // Trigger agentListener callback to save assistant structured message
+                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+                }
+
+                sendCompletionResponse(isStreamClosed, streamActionListener);
+            }
+        }
+
+        private void processStreamChunk(Map<String, Object> dataMap) {
+            String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+            boolean textMessageStarted = (isAGUIAgent && parameters != null)
+                && "true".equalsIgnoreCase(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
+            String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
+            if ("stop".equals(finishReason)) {
+                agentExecutionInProgress = false;
+
+                if (isAGUIAgent) {
+                    if (textMessageStarted) {
+                        // End the current text message
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                    }
+
+                    // Send RUN_FINISHED event
+                    String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                    String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                    BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
+                    sendAGUIEvent(runFinishedEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent RUN_FINISHED event - threadId={}, runId={}", threadId, runId);
+
+                    // Trigger agentListener callback to save assistant structured message
+                    streamActionListener.onResponse(createFinalAnswerResponse(accumulatedContent.toString()));
+                }
+
+                sendCompletionResponse(isStreamClosed, streamActionListener);
+                return;
+            }
+
+            String content = extractPath(dataMap, "$.choices[0].delta.content");
+            if (content != null && !content.isEmpty()) {
+                // Log time to first token
+                if (!firstTokenReceived.get()) {
+                    long timeToFirstToken = System.currentTimeMillis() - streamStartTime;
+                    String modelId = parameters != null ? parameters.get("model") : null;
+                    String tenantId = connector != null ? connector.getTenantId() : null;
+                    log.info("First token received. modelId={}, tenantId={}, timeToFirstTokenMs={}", modelId, tenantId, timeToFirstToken);
+                    AgentUtils.logTimeToFirstToken(modelId, tenantId, timeToFirstToken);
+                    firstTokenReceived.set(true);
+                }
+
+                if (isAGUIAgent) {
+                    accumulatedContent.append(content);
+
+                    // Start text message if not already started
+                    if (!textMessageStarted) {
+                        messageId = "msg_" + System.nanoTime();
+                        parameters.put(AGUI_PARAM_MESSAGE_ID, messageId);
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "true");
+
+                        BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
+                        sendAGUIEvent(textMessageStartEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
+                    }
+
+                    // Send content event
+                    BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, content);
+                    sendAGUIEvent(textMessageContentEvent, false, streamActionListener);
+                    log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
+                } else {
+                    sendContentResponse(content, false, streamActionListener);
+                }
+            }
+
+            List<?> toolCalls = extractPath(dataMap, "$.choices[0].delta.tool_calls");
+            if (toolCalls != null) {
+                if (isAGUIAgent) {
+                    // End current text message before sending tool events
+                    if (textMessageStarted) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, streamActionListener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {} before tool call", messageId);
+                    }
+
+                    processAGUIToolCalls(toolCalls);
+                } else {
+                    accumulateFunctionCall(toolCalls);
+                    sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+                }
+            }
+
+            if ("tool_calls".equals(finishReason) && functionCallInProgress) {
+                completeToolCall();
+            }
+        }
+
+        private <T> T extractPath(Map<String, Object> dataMap, String path) {
+            try {
+                return JsonPath.read(dataMap, path);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private void completeToolCall() {
+            agentExecutionInProgress = true;
+
+            if (isAGUIAgent) {
+                // Send TOOL_CALL_END event (not marked as last - tool execution continues)
+                BaseEvent toolCallEndEvent = new ToolCallEndEvent(accumulatedToolCallId);
+                sendAGUIEvent(toolCallEndEvent, false, streamActionListener);
+                log.debug("AG-UI: Sent TOOL_CALL_END for toolCallId: {}", accumulatedToolCallId);
+
+                // Build and send the tool use response for agent execution
+                String completeFunctionCall = buildCompleteFunctionCallResponse();
+                Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                ModelTensorOutput output = createModelTensorOutput(response);
+                streamActionListener.onResponse(new MLTaskResponse(output));
+                log.debug("AG-UI: Sent tool execution response to agent");
+            } else {
+                String completeFunctionCall = buildCompleteFunctionCallResponse();
+                sendContentResponse(completeFunctionCall, false, streamActionListener);
+                Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                ModelTensorOutput output = createModelTensorOutput(response);
+                streamActionListener.onResponse(new MLTaskResponse(output));
+            }
+
+            // Reset state
+            accumulatedToolCallId = null;
+            accumulatedToolName = null;
+            accumulatedArguments = "";
+            accumulatedContent.setLength(0);
+            functionCallInProgress = false;
+        }
+
+        private String buildCompleteFunctionCallResponse() {
+            // Ensure arguments is valid JSON - default to empty object if empty
+            String arguments = (accumulatedArguments == null || accumulatedArguments.isEmpty()) ? "{}" : accumulatedArguments;
+
+            Map<String, Object> function = Map.of("name", accumulatedToolName, "arguments", arguments);
+            Map<String, Object> toolCall = Map.of("id", accumulatedToolCallId, "type", "function", "function", function);
+
+            // Include accumulated text content if the LLM sent text before the tool call
+            String content = accumulatedContent.toString();
+            Map<String, Object> message;
+            if (!content.isEmpty()) {
+                message = Map.of("content", content, "tool_calls", List.of(toolCall));
+            } else {
+                message = Map.of("tool_calls", List.of(toolCall));
+            }
+
+            Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
+            Map<String, Object> response = Map.of("choices", List.of(choice));
+
+            return StringUtils.toJson(response);
+        }
+
+        private MLTaskResponse createFinalAnswerResponse(String text) {
+            Map<String, Object> message = Map.of("content", text != null ? text : "");
+            Map<String, Object> choice = Map.of("message", message, "finish_reason", "stop");
+            Map<String, Object> response = Map.of("choices", List.of(choice));
+            ModelTensorOutput output = createModelTensorOutput(response);
+            return new MLTaskResponse(output);
+        }
+
+        private ModelTensorOutput createModelTensorOutput(Map<String, Object> responseData) {
+            ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseData).build();
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+            return ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        }
+
+        private void processAGUIToolCalls(List<?> toolCalls) {
+            functionCallInProgress = true;
+            String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+
+            for (Object toolCall : toolCalls) {
+                Map<String, Object> tcMap = (Map<String, Object>) toolCall;
+
+                if (tcMap.containsKey("id")) {
+                    String toolCallId = (String) tcMap.get("id");
+                    if (accumulatedToolCallId == null) {
+                        accumulatedToolCallId = toolCallId;
+                    }
+                }
+
+                if (tcMap.containsKey("function")) {
+                    Map<String, Object> func = (Map<String, Object>) tcMap.get("function");
+
+                    if (func.containsKey("name")) {
+                        String toolName = (String) func.get("name");
+                        if (accumulatedToolName == null) {
+                            accumulatedToolName = toolName;
+
+                            BaseEvent startEvent = new ToolCallStartEvent(accumulatedToolCallId, toolName, messageId);
+                            sendAGUIEvent(startEvent, false, streamActionListener);
+                        }
+                    }
+
+                    if (func.containsKey("arguments")) {
+                        String argsDelta = (String) func.get("arguments");
+                        accumulatedArguments += argsDelta;
+                        BaseEvent argsEvent = new ToolCallArgsEvent(accumulatedToolCallId, argsDelta);
+                        sendAGUIEvent(argsEvent, false, streamActionListener);
+                    }
+                }
+            }
+        }
+
+        private void accumulateFunctionCall(List<?> toolCalls) {
+            functionCallInProgress = true;
+            for (Object toolCall : toolCalls) {
+                Map<String, Object> tcMap = (Map<String, Object>) toolCall;
+
+                if (tcMap.containsKey("id")) {
+                    accumulatedToolCallId = (String) tcMap.get("id");
+                }
+                if (tcMap.containsKey("function")) {
+                    Map<String, Object> func = (Map<String, Object>) tcMap.get("function");
+                    if (func.containsKey("name")) {
+                        accumulatedToolName = (String) func.get("name");
+                    }
+                    if (func.containsKey("arguments")) {
+                        accumulatedArguments += (String) func.get("arguments");
+                    }
+                }
+            }
+        }
+    }
+}

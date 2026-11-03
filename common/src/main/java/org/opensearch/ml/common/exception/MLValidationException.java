@@ -25,4 +25,13 @@ public class MLValidationException extends MLException {
     public MLValidationException(Throwable cause) {
         super(cause);
     }
+
+    /**
+     * Constructor with error message and cause.
+     * @param message error message
+     * @param cause exception cause
+     */
+    public MLValidationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

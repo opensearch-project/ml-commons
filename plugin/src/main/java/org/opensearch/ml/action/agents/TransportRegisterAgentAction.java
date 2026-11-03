@@ -5,11 +5,19 @@
 
 package org.opensearch.ml.action.agents;
 
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -19,14 +27,30 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
+import org.opensearch.ml.action.agenticsearch.SearchTemplateFillToolValidator;
+import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
+import org.opensearch.ml.common.agent.AgentModelService;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.utils.MLResourceIdUtils;
+import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -44,6 +68,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLAgentRegistrationValidator agentRegistrationValidator;
 
     @Inject
     public TransportRegisterAgentAction(
@@ -53,7 +78,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler,
         ClusterService clusterService,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        ContextManagementTemplateService contextManagementTemplateService
     ) {
         super(MLRegisterAgentAction.NAME, transportService, actionFilters, MLRegisterAgentRequest::new);
         this.client = client;
@@ -61,6 +87,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.agentRegistrationValidator = new MLAgentRegistrationValidator(contextManagementTemplateService);
     }
 
     @Override
@@ -68,10 +95,122 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        MLResourceIdUtils.validateCustomDocumentId(mlAgent.getAgentId(), "agent id");
+
+        if (mlAgent.getMemory() != null
+            && MLMemoryType.REMOTE_AGENTIC_MEMORY.name().equalsIgnoreCase(mlAgent.getMemory().getType())
+            && !mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()) {
+            listener.onFailure(new OpenSearchStatusException(ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
+        // Check if this agent needs model creation
+        if (mlAgent.usesUnifiedInterface()) {
+            createModelAndRegisterAgent(mlAgent, listener);
+            return;
+        }
+
         registerAgent(mlAgent, listener);
     }
 
+    private void createModelAndRegisterAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+        try {
+            MLRegisterModelInput modelInput = AgentModelService.createModelFromSpec(mlAgent.getModel());
+            MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
+
+            client.execute(MLRegisterModelAction.INSTANCE, modelRequest, ActionListener.wrap(modelResponse -> {
+                String modelId = modelResponse.getModelId();
+
+                Map<String, String> parameters = new HashMap<>();
+                if (mlAgent.getParameters() != null) {
+                    parameters.putAll(mlAgent.getParameters());
+                }
+
+                String llmInterface = AgentModelService.inferLLMInterface(mlAgent.getModel().getModelProvider());
+                if (llmInterface != null) {
+                    parameters.put(LLM_INTERFACE, llmInterface);
+                }
+
+                LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
+
+                // Create sanitized model spec without credentials and model parameters
+                // (stored in the model document and LLMSpec respectively)
+                MLAgentModelSpec sanitizedModelSpec = mlAgent.getModel().toBuilder().modelParameters(null).credential(null).build();
+                // ToDo: store model details within agent to prevent creating a new model document
+                MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(sanitizedModelSpec).parameters(parameters).build();
+                // The model is provisioned before the agent is validated and indexed, so any later failure
+                // would leave that model behind with no agent referencing it - and it holds the caller's
+                // credentials. Roll it back so a failed registration leaves nothing provisioned.
+                //
+                // Deliberately an explicit listener rather than ActionListener.wrap: wrap routes a throw from
+                // its onResponse consumer into onFailure, which would run the rollback after the agent was
+                // already indexed and delete the model that agent now references.
+                registerAgent(agent, new ActionListener<>() {
+                    @Override
+                    public void onResponse(MLRegisterAgentResponse response) {
+                        listener.onResponse(response);
+                    }
+
+                    @Override
+                    public void onFailure(Exception parentFailure) {
+                        deleteOrphanedModel(modelId, agent.getTenantId(), parentFailure, listener);
+                    }
+                });
+            }, listener::onFailure));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+        validateAgent(agent, ActionListener.wrap(validatedAgent -> {
+            // All validations passed, proceed with registration
+            proceedWithAgentRegistration(validatedAgent, listener);
+        }, listener::onFailure));
+    }
+
+    private void validateAgent(MLAgent agent, ActionListener<MLAgent> listener) {
+        // Use the comprehensive validator that includes V2 memory validation
+        agentRegistrationValidator.validateAgentForRegistration(agent, ActionListener.wrap(isValid -> {
+            if (Boolean.TRUE.equals(isValid)) {
+                listener.onResponse(agent);
+            } else {
+                listener.onFailure(new IllegalArgumentException("Agent validation failed"));
+            }
+        }, listener::onFailure));
+    }
+
+    private void proceedWithAgentRegistration(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+        String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
+            // MCP connector provided as tools but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+            return;
+        }
+
+        try {
+            SearchTemplateFillToolValidator.validate(agent.getTools(), mlFeatureEnabledSetting);
+        } catch (Exception e) {
+            listener.onFailure(e);
+            return;
+        }
+
+        String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
+        if (llmInterface != null) {
+            if (llmInterface.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("_llm_interface cannot be blank or empty"));
+                return;
+            }
+
+            try {
+                FunctionCallingFactory.create(llmInterface);
+            } catch (Exception e) {
+                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface"));
+                return;
+            }
+        }
+
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
@@ -79,31 +218,148 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
+
+        // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have an executor agent id, create an executor (reAct) agent
+        if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
+            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD)) {
+            createConversationAgent(mlAgent, tenantId, ActionListener.wrap(conversationAgentId -> {
+                Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
+                parameters.put(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD, conversationAgentId);
+                MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
+                registerAgentToIndex(
+                    updatedAgent,
+                    tenantId,
+                    ActionListener
+                        .wrap(
+                            listener::onResponse,
+                            parentFailure -> deleteOrphanedConversationAgent(conversationAgentId, tenantId, parentFailure, listener)
+                        )
+                );
+            }, listener::onFailure));
+        } else {
+            registerAgentToIndex(mlAgent, tenantId, listener);
+        }
+    }
+
+    private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {
+        Instant now = Instant.now();
+        boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
+
+        // Create CONVERSATION agent with same configuration but different type and name
+        MLAgent conversationAgent = planExecuteReflectAgent
+            .toBuilder()
+            .name(planExecuteReflectAgent.getName() + " (ReAct)")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Execution Agent for Plan Execute Reflect - " + planExecuteReflectAgent.getName())
+            .createdTime(now)
+            .lastUpdateTime(now)
+            .isHidden(isHiddenAgent)
+            .agentId(null)
+            .build();
+
+        registerAgentToIndex(
+            conversationAgent,
+            tenantId,
+            ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
+        );
+    }
+
+    /**
+     * Removes a model that was auto-provisioned for a unified-interface agent whose registration then failed.
+     * The model document carries the caller's credentials and, for an inline connector, the connector
+     * definition too, so leaving it behind both strands a resource and keeps those credentials stored with
+     * nothing referencing them. The original failure is always what reaches the caller; a failed cleanup is
+     * logged rather than masking it.
+     */
+    private void deleteOrphanedModel(
+        String modelId,
+        String tenantId,
+        Exception parentFailure,
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        log.warn("Agent registration failed after auto-creating model {}; attempting cleanup", modelId, parentFailure);
+        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+        ActionListener<MLRegisterAgentResponse> failureListener = ActionListener.runBefore(listener, context::restore);
+        try {
+            sdkClient
+                .deleteDataObjectAsync(DeleteDataObjectRequest.builder().index(ML_MODEL_INDEX).id(modelId).tenantId(tenantId).build())
+                .whenComplete((response, deleteThrowable) -> {
+                    if (deleteThrowable != null) {
+                        log.error("Failed to delete orphaned model {}", modelId, deleteThrowable);
+                    } else {
+                        log.info("Deleted orphaned model {} after agent registration failure", modelId);
+                    }
+                    failureListener.onFailure(parentFailure);
+                });
+        } catch (Exception e) {
+            log.error("Failed to delete orphaned model {}", modelId, e);
+            failureListener.onFailure(parentFailure);
+        }
+    }
+
+    private void deleteOrphanedConversationAgent(
+        String conversationAgentId,
+        String tenantId,
+        Exception parentFailure,
+        ActionListener<MLRegisterAgentResponse> listener
+    ) {
+        log
+            .warn(
+                "Plan-execute-and-reflect agent registration failed after creating conversation agent {}; attempting cleanup",
+                conversationAgentId,
+                parentFailure
+            );
+        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+        ActionListener<MLRegisterAgentResponse> failureListener = ActionListener.runBefore(listener, context::restore);
+        try {
+            sdkClient
+                .deleteDataObjectAsync(
+                    DeleteDataObjectRequest.builder().index(ML_AGENT_INDEX).id(conversationAgentId).tenantId(tenantId).build()
+                )
+                .whenComplete((response, deleteThrowable) -> {
+                    if (deleteThrowable != null) {
+                        log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, deleteThrowable);
+                    } else {
+                        log.info("Deleted orphaned conversation agent {} after parent registration failure", conversationAgentId);
+                    }
+                    failureListener.onFailure(parentFailure);
+                });
+        } catch (Exception e) {
+            log.error("Failed to delete orphaned conversation agent {}", conversationAgentId, e);
+            failureListener.onFailure(parentFailure);
+        }
+    }
+
+    private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {
+        String agentId = mlAgent.getAgentId();
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-
-                    sdkClient
-                        .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            context.restore();
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to index ML agent", cause);
-                                listener.onFailure(cause);
-                            } else {
-                                try {
-                                    IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
-                                    log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
-                                    MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
-                                    listener.onResponse(response);
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
+                    PutDataObjectRequest.Builder putRequestBuilder = PutDataObjectRequest
+                        .builder()
+                        .index(ML_AGENT_INDEX)
+                        .tenantId(tenantId)
+                        .dataObject(mlAgent);
+                    if (agentId != null) {
+                        putRequestBuilder.id(agentId).overwriteIfExists(false);
+                    }
+                    sdkClient.putDataObjectAsync(putRequestBuilder.build()).whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to index ML agent", cause);
+                            listener.onFailure(MLResourceIdUtils.toDocumentAlreadyExistsException(agentId, "agent id", cause));
+                        } else {
+                            try {
+                                IndexResponse indexResponse = r.indexResponse();
+                                log.info("Agent creation result: {}, Agent id: {}", indexResponse.getResult(), indexResponse.getId());
+                                MLRegisterAgentResponse response = new MLRegisterAgentResponse(r.id());
+                                listener.onResponse(response);
+                            } catch (Exception e) {
+                                listener.onFailure(e);
                             }
-                        });
+                        }
+                    });
                 } catch (Exception e) {
                     log.error("Failed to index ML agent", e);
                     listener.onFailure(e);

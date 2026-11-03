@@ -11,7 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import java.util.Arrays;
@@ -41,6 +41,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -48,12 +49,12 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -167,10 +168,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -190,14 +191,15 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
-        IllegalStateException e = assertThrows(
-                IllegalStateException.class,
+        OpenSearchStatusException e = assertThrows(
+                OpenSearchStatusException.class,
                 () -> transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener)
         );
         assertEquals(
                 e.getMessage(),
                 LOCAL_MODEL_DISABLED_ERR_MSG
         );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
     }
 
     @Test
@@ -206,10 +208,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -229,10 +231,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -252,10 +254,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -267,6 +269,79 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(CircuitBreakingException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Memory Circuit Breaker is open, please check your resources!", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_capturesCallerAlgorithmOnlyOnce() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        // Coordinator pass: caller algorithm captured, algorithm normalized to REMOTE.
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+        assertEquals(FunctionName.TEXT_EMBEDDING, callerInput.getCallerAlgorithm());
+        assertEquals(FunctionName.REMOTE, callerInput.getAlgorithm());
+
+        // Worker pass after re-dispatch (algorithm already REMOTE): caller algorithm must be preserved, not overwritten.
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+        assertEquals(FunctionName.TEXT_EMBEDDING, callerInput.getCallerAlgorithm());
+    }
+
+    @Test
+    public void testDoExecute_doesNotInferCallerAlgorithmFromRedispatchedRemoteInput() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .dispatchTask(false)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+
+        assertNull(callerInput.getCallerAlgorithm());
+    }
+
+    @Test
+    public void testDoExecute_capturesRemoteCallerAlgorithmOnCoordinator() {
+        MLInput callerInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Map.of("k", "v")).build())
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_id")
+            .mlInput(callerInput)
+            .dispatchTask(true)
+            .user(User.parse("admin|role-1|all_access"))
+            .build();
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getIsHidden()).thenReturn(false);
+
+        transportPredictionTaskAction.doExecute(null, request, actionListener);
+
+        assertEquals(FunctionName.REMOTE, callerInput.getCallerAlgorithm());
     }
 
     @Test
@@ -306,6 +381,56 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                             + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
                     )
             )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testValidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testInvalidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
             .build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
         Map<String, String> modelInterface = Map

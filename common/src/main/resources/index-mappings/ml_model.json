@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 12
+    "schema_version": 14
   },
   "properties": {
     "algorithm": {
@@ -66,6 +66,9 @@
     "tenant_id": {
       "type": "keyword"
     },
+    "provisioned_by": {
+      "type": "keyword"
+    },
     "model_config": {
       "properties": {
         "model_type": {
@@ -88,6 +91,9 @@
         },
         "all_config": {
           "type": "text"
+        },
+        "additional_config": {
+          "type": "flat_object"
         }
       }
     },

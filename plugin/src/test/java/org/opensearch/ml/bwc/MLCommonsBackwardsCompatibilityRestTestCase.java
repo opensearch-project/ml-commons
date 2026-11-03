@@ -763,7 +763,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
                 throw new RuntimeException(e);
             }
             return taskDone.get();
-        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
+        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.MILLISECONDS);
         assertThat(getTaskState(taskId), equalTo(targetState.name()));
         assertTrue(taskDone.get());
     }

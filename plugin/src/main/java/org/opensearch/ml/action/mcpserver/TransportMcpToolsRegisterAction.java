@@ -1,0 +1,217 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.action.mcpserver;
+
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
+
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import org.opensearch.OpenSearchException;
+import org.opensearch.action.ActionRequest;
+import org.opensearch.action.DocWriteRequest;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLIndex;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.tasks.Task;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
+
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
+public class TransportMcpToolsRegisterAction extends HandledTransportAction<ActionRequest, MLMcpToolsRegisterNodesResponse> {
+
+    TransportService transportService;
+    ClusterService clusterService;
+    ThreadPool threadPool;
+    Client client;
+
+    NamedXContentRegistry xContentRegistry;
+    DiscoveryNodeHelper nodeFilter;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLIndicesHandler mlIndicesHandler;
+    private final McpToolsHelper mcpToolsHelper;
+
+    @Inject
+    public TransportMcpToolsRegisterAction(
+        TransportService transportService,
+        ActionFilters actionFilters,
+        ClusterService clusterService,
+        ThreadPool threadPool,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        DiscoveryNodeHelper nodeFilter,
+        MLIndicesHandler mlIndicesHandler,
+        McpToolsHelper mcpToolsHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+    ) {
+        super(MLMcpToolsRegisterAction.NAME, transportService, actionFilters, MLMcpToolsRegisterNodesRequest::new);
+        this.transportService = transportService;
+        this.clusterService = clusterService;
+        this.threadPool = threadPool;
+        this.client = client;
+        this.xContentRegistry = xContentRegistry;
+        this.nodeFilter = nodeFilter;
+        this.mlIndicesHandler = mlIndicesHandler;
+        this.mcpToolsHelper = mcpToolsHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
+
+    @Override
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpToolsRegisterNodesResponse> listener) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
+            return;
+        }
+        MLMcpToolsRegisterNodesRequest registerNodesRequest = (MLMcpToolsRegisterNodesRequest) request;
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<Boolean> initIndexListener = ActionListener.wrap(created -> {
+                ActionListener<List<McpToolRegisterInput>> searchResultListener = ActionListener.wrap(searchResult -> {
+                    if (!searchResult.isEmpty()) {
+                        Set<String> registerToolNames = registerNodesRequest
+                            .getMcpTools()
+                            .stream()
+                            .map(McpToolRegisterInput::getName)
+                            .collect(Collectors.toSet());
+                        List<String> existingTools = searchResult
+                            .stream()
+                            .map(McpToolRegisterInput::getName)
+                            .filter(registerToolNames::contains)
+                            .toList();
+                        String exceptionMessage = "Unable to register tool: a tool with the same name already exists.";
+                        log.warn(exceptionMessage);
+                        restoreListener.onFailure(new IllegalArgumentException(exceptionMessage));
+                    } else {
+                        indexMcpTools(registerNodesRequest, restoreListener);
+                    }
+                }, e -> {
+                    log.error("Failed to search mcp tools index", e);
+                    restoreListener.onFailure(e);
+                });
+                mcpToolsHelper
+                    .searchToolsWithVersion(
+                        registerNodesRequest.getMcpTools().stream().map(McpToolRegisterInput::getName).toList(),
+                        searchResultListener
+                    );
+            }, e -> {
+                log.error("Failed to create .plugins-ml-mcp-tools index", e);
+                restoreListener.onFailure(e);
+            });
+            mlIndicesHandler.initMLMcpToolsIndex(initIndexListener);
+        } catch (Exception e) {
+            log.error("Failed to register mcp tools", e);
+            listener.onFailure(e);
+        }
+    }
+
+    private void indexMcpTools(
+        MLMcpToolsRegisterNodesRequest registerNodesRequest,
+        ActionListener<MLMcpToolsRegisterNodesResponse> listener
+    ) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<BulkResponse> indexResultListener = ActionListener.wrap(bulkResponse -> {
+                if (!bulkResponse.hasFailures()) {
+                    restoreListener
+                        .onResponse(
+                            new MLMcpToolsRegisterNodesResponse(
+                                clusterService.getClusterName(),
+                                List.of(new MLMcpToolsRegisterNodeResponse(clusterService.localNode(), true)),
+                                List.of()
+                            )
+                        );
+                } else {
+                    AtomicReference<Set<String>> indexSucceedTools = new AtomicReference<>();
+                    indexSucceedTools.set(new HashSet<>());
+                    AtomicReference<Map<String, String>> indexFailedTools = new AtomicReference<>();
+                    indexFailedTools.set(new HashMap<>());
+                    Arrays.stream(bulkResponse.getItems()).forEach(y -> {
+                        if (y.isFailed()) {
+                            indexFailedTools.get().put(y.getId(), y.getFailure().getMessage());
+                            registerNodesRequest.getMcpTools().removeIf(x -> x.getName().equals(y.getId()));
+                        } else {
+                            indexSucceedTools.get().add(y.getId());
+                        }
+                    });
+                    StringBuilder errMsgBuilder = new StringBuilder();
+                    for (Map.Entry<String, String> indexFailedTool : indexFailedTools.get().entrySet()) {
+                        errMsgBuilder
+                            .append(
+                                String
+                                    .format(
+                                        Locale.ROOT,
+                                        "Failed to persist mcp tool: %s into system index with error: %s",
+                                        indexFailedTool.getKey(),
+                                        indexFailedTool.getValue()
+                                    )
+                            );
+                        errMsgBuilder.append("\n");
+                    }
+                    log.error(errMsgBuilder.toString());
+                    StringBuilder respErrMsgBuilder = new StringBuilder(
+                        String.format(Locale.ROOT, "Failed to persist %s mcp tool(s) into system index", indexFailedTools.get().size())
+                    );
+                    restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
+                }
+            }, e -> {
+                log.error("Failed to persist mcp tools into system index because exception: {}", e.getMessage());
+                restoreListener.onFailure(e);
+            });
+
+            BulkRequest bulkRequest = new BulkRequest();
+            bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
+                IndexRequest indexRequest = new IndexRequest(MLIndex.MCP_TOOLS.getIndexName());
+                // Set opType to create to avoid race condition when creating tools with same name.
+                indexRequest.opType(DocWriteRequest.OpType.CREATE);
+                indexRequest.id(mcpTool.getName());
+                Map<String, Object> source = new HashMap<>();
+                source.put(McpToolBaseInput.NAME_FIELD, mcpTool.getName());
+                source.put(McpToolBaseInput.TYPE_FIELD, mcpTool.getType());
+                source.put(McpToolBaseInput.PARAMS_FIELD, mcpTool.getParameters());
+                source.put(McpToolBaseInput.ATTRIBUTES_FIELD, mcpTool.getAttributes());
+                source.put(McpToolBaseInput.DESCRIPTION_FIELD, mcpTool.getDescription());
+                source.put(CommonValue.CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+                indexRequest.source(source);
+                bulkRequest.add(indexRequest);
+            }
+            client.bulk(bulkRequest, indexResultListener);
+        } catch (Exception e) {
+            log.error("Failed to register mcp tools", e);
+            listener.onFailure(e);
+        }
+    }
+}

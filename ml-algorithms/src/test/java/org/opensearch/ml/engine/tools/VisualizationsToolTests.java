@@ -90,6 +90,8 @@ public class VisualizationsToolTests {
         Assert.assertFalse(tool.validate(Collections.emptyMap()));
         Assert.assertFalse(tool.validate(Map.of("input", "")));
         Assert.assertTrue(tool.validate(Map.of("input", "question")));
+        Assert.assertFalse(tool.validate(null));
+        Assert.assertFalse(tool.validate(Map.of("random", "random")));
     }
 
     @Test
@@ -157,5 +159,17 @@ public class VisualizationsToolTests {
 
         future.join();
         assertEquals("No Visualization found", future.get());
+    }
+
+    @Test
+    public void testRunToolWithGeneralException() {
+        VisualizationsTool tool = VisualizationsTool.builder().client(null).index(".kibana").size(3).build();
+        final CompletableFuture<Exception> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> {}, future::complete);
+
+        Map<String, String> params = Map.of("input", "Sales by gender");
+        tool.run(params, listener);
+
+        Assert.assertNotNull(future.join());
     }
 }

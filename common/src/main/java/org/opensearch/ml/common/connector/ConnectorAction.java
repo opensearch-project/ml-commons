@@ -6,13 +6,21 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringSubstitutor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -29,30 +37,70 @@ import lombok.Getter;
 public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static final String ACTION_TYPE_FIELD = "action_type";
+    public static final String NAME_FIELD = "name";
     public static final String METHOD_FIELD = "method";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
     public static final String REQUEST_BODY_FIELD = "request_body";
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
+    public static final String SUPPORTS_STRUCTURED_OUTPUT_FIELD = "supports_structured_output";
+    public static final String OPENAI = "openai";
+    public static final String COHERE = "cohere";
+    public static final String BEDROCK = "bedrock";
+    public static final String SAGEMAKER = "sagemaker";
+    // Matches the Vertex AI host (e.g. us-central1-aiplatform.googleapis.com) for batch job status/cancel.
+    public static final String VERTEX_AI = "aiplatform";
+    public static final String SAGEMAKER_PRE_POST_FUNC_TEXT = "default";
+    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
+        .of(SAGEMAKER, OPENAI, BEDROCK, COHERE, VERTEX_AI);
+
+    private static final String INBUILT_FUNC_PREFIX = "connector.";
+    private static final String PRE_PROCESS_FUNC = "PreProcessFunction";
+    private static final String POST_PROCESS_FUNC = "PostProcessFunction";
+    private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
+
+    // Name validation constants
+    public static final int MAX_NAME_LENGTH = 64;
+    public static final String NAME_INVALID_CHARACTERS_ERROR =
+        "Action name contains invalid characters. Only alphanumeric characters, hyphens, and underscores are allowed";
+    public static final String NAME_INVALID_LENGTH_ERROR = "Action name exceeds maximum length of " + MAX_NAME_LENGTH + " characters";
+    public static final String NAME_CONTROL_CHARACTERS_ERROR = "Action name must not contain control characters";
 
     private ActionType actionType;
+    private String name;
     private String method;
     private String url;
     private Map<String, String> headers;
     private String requestBody;
     private String preProcessFunction;
     private String postProcessFunction;
+    private boolean supportsStructuredOutput;
 
-    @Builder(toBuilder = true)
     public ConnectorAction(
         ActionType actionType,
+        String name,
         String method,
         String url,
         Map<String, String> headers,
         String requestBody,
         String preProcessFunction,
         String postProcessFunction
+    ) {
+        this(actionType, name, method, url, headers, requestBody, preProcessFunction, postProcessFunction, false);
+    }
+
+    @Builder(toBuilder = true)
+    public ConnectorAction(
+        ActionType actionType,
+        String name,
+        String method,
+        String url,
+        Map<String, String> headers,
+        String requestBody,
+        String preProcessFunction,
+        String postProcessFunction,
+        boolean supportsStructuredOutput
     ) {
         if (actionType == null) {
             throw new IllegalArgumentException("action type can't be null");
@@ -63,13 +111,17 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
+        // Validate name (optional identifier for this specific action within a connector)
+        validateName(name);
         this.actionType = actionType;
+        this.name = name;
         this.method = method;
         this.url = url;
         this.headers = headers;
         this.requestBody = requestBody;
         this.preProcessFunction = preProcessFunction;
         this.postProcessFunction = postProcessFunction;
+        this.supportsStructuredOutput = supportsStructuredOutput;
     }
 
     public ConnectorAction(StreamInput input) throws IOException {
@@ -82,6 +134,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = input.readOptionalString();
         this.preProcessFunction = input.readOptionalString();
         this.postProcessFunction = input.readOptionalString();
+        if (input.getVersion().onOrAfter(VERSION_3_5_0)) {
+            this.name = input.readOptionalString();
+        }
+        if (input.getVersion().onOrAfter(VERSION_3_7_0)) {
+            this.supportsStructuredOutput = input.readBoolean();
+        }
     }
 
     @Override
@@ -98,6 +156,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
+        if (out.getVersion().onOrAfter(VERSION_3_5_0)) {
+            out.writeOptionalString(name);
+        }
+        if (out.getVersion().onOrAfter(VERSION_3_7_0)) {
+            out.writeBoolean(supportsStructuredOutput);
+        }
     }
 
     @Override
@@ -124,6 +188,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (postProcessFunction != null) {
             builder.field(ACTION_POST_PROCESS_FUNCTION, postProcessFunction);
         }
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
+        if (supportsStructuredOutput) {
+            builder.field(SUPPORTS_STRUCTURED_OUTPUT_FIELD, true);
+        }
         return builder.endObject();
     }
 
@@ -134,12 +204,14 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static ConnectorAction parse(XContentParser parser) throws IOException {
         ActionType actionType = null;
+        String name = null;
         String method = null;
         String url = null;
         Map<String, String> headers = null;
         String requestBody = null;
         String preProcessFunction = null;
         String postProcessFunction = null;
+        boolean supportsStructuredOutput = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -149,6 +221,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case ACTION_TYPE_FIELD:
                     actionType = ActionType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
                 case METHOD_FIELD:
                     method = parser.text();
@@ -168,6 +243,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                 case ACTION_POST_PROCESS_FUNCTION:
                     postProcessFunction = parser.text();
                     break;
+                case SUPPORTS_STRUCTURED_OUTPUT_FIELD:
+                    supportsStructuredOutput = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -176,13 +254,128 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return ConnectorAction
             .builder()
             .actionType(actionType)
+            .name(name)
             .method(method)
             .url(url)
             .headers(headers)
             .requestBody(requestBody)
             .preProcessFunction(preProcessFunction)
             .postProcessFunction(postProcessFunction)
+            .supportsStructuredOutput(supportsStructuredOutput)
             .build();
+    }
+
+    /**
+     * Validates the action name according to security constraints.
+     * Name must:
+     * - Be at most 64 characters long
+     * - Contain only alphanumeric characters, hyphens (-), and underscores (_)
+     * - Not contain control characters (CR, LF, etc.)
+     * - Not be an ActionType value
+     *
+     * @param name The action name to validate (null is allowed)
+     * @throws IllegalArgumentException if name violates constraints
+     */
+    private static void validateName(String name) {
+        if (name == null) {
+            return; // null is allowed (name is optional)
+        }
+
+        // Check for control characters
+        if (name.indexOf('\r') >= 0 || name.indexOf('\n') >= 0 || name.chars().anyMatch(ch -> ch < 32)) {
+            throw new IllegalArgumentException(NAME_CONTROL_CHARACTERS_ERROR);
+        }
+
+        // Check length
+        if (name.length() > MAX_NAME_LENGTH) {
+            throw new IllegalArgumentException(NAME_INVALID_LENGTH_ERROR);
+        }
+
+        // Check allowed characters: alphanumeric, hyphen, underscore
+        Pattern validPattern = Pattern.compile("^[a-zA-Z0-9_-]+$");
+        if (!validPattern.matcher(name).matches()) {
+            throw new IllegalArgumentException(NAME_INVALID_CHARACTERS_ERROR);
+        }
+
+        // Check not an action type
+        if (ActionType.isValidAction(name)) {
+            throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
+        }
+    }
+
+    /**
+     * Checks the compatibility of pre and post-process functions with the selected LLM service.
+     * Each LLM service (eg: Bedrock, OpenAI, SageMaker) has recommended pre and post-process functions
+     * designed for optimal performance. While it's possible to use functions from other services,
+     * it's strongly advised to use the corresponding functions for the best results.
+     * This method logs a warning if non-corresponding functions are detected, but allows the
+     * configuration to proceed. Users should be aware that using mismatched functions may lead
+     * to unexpected behavior or reduced performance, though it won't necessarily cause failures.
+     *
+     * @param parameters - connector parameters
+     */
+    public void validatePrePostProcessFunctions(Map<String, String> parameters) {
+        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+        String endPoint = substitutor.replace(url);
+        String remoteServer = getRemoteServerFromURL(endPoint);
+        if (!remoteServer.isEmpty()) {
+            validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
+            validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
+        }
+    }
+
+    /**
+     * To get the remote server name from url
+     *
+     * @param url - remote server url
+     * @return - returns the corresponding remote server name for url, if server is not in the pre-defined list,
+     * it returns null
+     */
+    public static String getRemoteServerFromURL(String url) {
+        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
+    }
+
+    private void validateProcessFunctions(String remoteServer, String processFunction, String funcNameForWarnText) {
+        if (isInBuiltProcessFunction(processFunction)) {
+            switch (remoteServer) {
+                case OPENAI:
+                    if (!processFunction.contains(OPENAI)) {
+                        logWarningForInvalidProcessFunc(OPENAI, funcNameForWarnText);
+                    }
+                    break;
+                case COHERE:
+                    if (!processFunction.contains(COHERE)) {
+                        logWarningForInvalidProcessFunc(COHERE, funcNameForWarnText);
+                    }
+                    break;
+                case BEDROCK:
+                    if (!processFunction.contains(BEDROCK)) {
+                        logWarningForInvalidProcessFunc(BEDROCK, funcNameForWarnText);
+                    }
+                    break;
+                case SAGEMAKER:
+                    if (!processFunction.contains(SAGEMAKER_PRE_POST_FUNC_TEXT)) {
+                        logWarningForInvalidProcessFunc(SAGEMAKER, funcNameForWarnText);
+                    }
+            }
+        }
+    }
+
+    private boolean isInBuiltProcessFunction(String processFunction) {
+        return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
+    }
+
+    private void logWarningForInvalidProcessFunc(String remoteServer, String funcNameForWarnText) {
+        logger
+            .warn(
+                "LLM service is "
+                    + remoteServer
+                    + ", so "
+                    + funcNameForWarnText
+                    + " should be corresponding to "
+                    + remoteServer
+                    + " for better results."
+            );
     }
 
     public enum ActionType {

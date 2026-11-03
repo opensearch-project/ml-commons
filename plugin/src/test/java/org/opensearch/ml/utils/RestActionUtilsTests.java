@@ -8,8 +8,14 @@ package org.opensearch.ml.utils;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_REGION;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SERVICE_NAME;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_SESSION_TOKEN;
+import static org.opensearch.ml.common.CommonValue.MCP_HEADER_OPENSEARCH_URL;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.OPENSEARCH_DASHBOARDS_USER_AGENT;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ASYNC;
@@ -17,6 +23,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.UI_METADATA_EXCLUDE;
 
 import java.net.InetAddress;
+import java.security.Principal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,6 +36,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.Version;
 import org.opensearch.action.search.SearchResponse;
@@ -303,7 +311,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
 
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "CN=kirk,OU=client,O=client,L=test,C=de"));
+        threadContext
+            .putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, new SelfReferentialUser("CN=kirk,OU=client,O=client,L=test,C=de"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertTrue(isAdmin);
@@ -321,10 +330,117 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
         when(client.threadPool()).thenReturn(mock(ThreadPool.class));
         when(client.threadPool().getThreadContext()).thenReturn(threadContext);
-        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("name", "nonAdmin"));
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, new SelfReferentialUser("nonAdmin"));
 
         boolean isAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         Assert.assertFalse(isAdmin);
+    }
+
+    // On security < 3.9 the User transient is not a Principal but a plain bean exposing getName().
+    // isSuperAdminUser must fall back to the JSON read and still resolve admin / non-admin correctly,
+    // so a backport stays version-safe. LegacyUser stands in for that bean.
+    @Test
+    public void testIsSuperAdminUser_withNonPrincipalBean_usesJsonFallback() {
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.getSettings())
+            .thenReturn(
+                Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "CN=kirk,OU=client,O=client,L=test, C=de").build()
+            );
+
+        Assert.assertTrue(isSuperAdminUserFor(clusterService, new LegacyUser("CN=kirk,OU=client,O=client,L=test,C=de")));
+        Assert.assertFalse(isSuperAdminUserFor(clusterService, new LegacyUser("nonAdmin")));
+    }
+
+    /** Runs isSuperAdminUser with the given object in a fresh OPENDISTRO_SECURITY_USER transient
+     * (transients are write-once, so each call needs its own ThreadContext). */
+    private boolean isSuperAdminUserFor(ClusterService clusterService, Object userObject) {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, userObject);
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
+    }
+
+    // A transient that is neither a Principal nor a bean with a name is malformed. isSuperAdminUser must
+    // fail loud rather than silently deciding this is not an admin on a security-relevant path.
+    @Test
+    public void testIsSuperAdminUser_withNamelessTransient_throws() {
+        ClusterService clusterService = mock(ClusterService.class);
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+
+        when(clusterService.getSettings())
+            .thenReturn(Settings.builder().putList(RestActionUtils.SECURITY_AUTHCZ_ADMIN_DN, "cn=admin").build());
+        when(client.threadPool()).thenReturn(mock(ThreadPool.class));
+        when(client.threadPool().getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(RestActionUtils.OPENDISTRO_SECURITY_USER, Map.of("foo", "bar"));
+
+        Assert.assertThrows(IllegalStateException.class, () -> RestActionUtils.isSuperAdminUser(clusterService, client));
+    }
+
+    /**
+     * A minimal stand-in for security < 3.9's {@code org.opensearch.security.user.User}: a plain bean that
+     * exposes {@code getName()} and is not a {@link Principal} (there is no {@code getPrincipal()} before
+     * 3.9). This is the shape {@code isSuperAdminUser} reads through the JSON fallback. See ml-commons #4990.
+     */
+    private static class LegacyUser {
+        private final String name;
+
+        private LegacyUser(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+    }
+
+    /**
+     * A minimal stand-in for the security plugin's {@code org.opensearch.security.user.User},
+     * which implements {@link Principal} and returns {@code this} from {@link #getPrincipal()}
+     * (a direct self-reference). This is the shape that the real {@code User} object has in the
+     * {@code _opendistro_security_user} thread-context transient on a security-enabled cluster,
+     * and is what {@code isSuperAdminUser} reads the name from directly. See ml-commons issue #4990.
+     */
+    private static class SelfReferentialUser implements Principal {
+        private final String name;
+
+        private SelfReferentialUser(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        // Mirrors org.opensearch.security.user.User#getPrincipal(), which returns `this`.
+        public Principal getPrincipal() {
+            return this;
+        }
+    }
+
+    @Test
+    public void testGetActionTypeFromRestRequest_Predict() {
+        FakeRestRequest request = createRestRequest(
+            Collections.emptyMap(),
+            "/_plugins/_ml/models/test-model/_predict",
+            RestRequest.Method.POST
+        );
+        String actionType = RestActionUtils.getActionTypeFromRestRequest(request);
+        assertEquals("predict", actionType);
+    }
+
+    @Test
+    public void testGetActionTypeFromRestRequest_PredictStream() {
+        FakeRestRequest request = createRestRequest(
+            Collections.emptyMap(),
+            "/_plugins/_ml/models/test-model/_predict/stream",
+            RestRequest.Method.POST
+        );
+        String actionType = RestActionUtils.getActionTypeFromRestRequest(request);
+        assertEquals("predict", actionType);
     }
 
     public void testDoubleWrapper_handleIndexNotFound() {
@@ -372,5 +488,236 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         public synchronized Throwable getCause() {
             return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         }
+    }
+
+    @Test
+    public void testHasMcpHeaders_NoHeaders() {
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .build();
+        assertFalse(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testHasMcpHeaders_WithOpensearchUrl() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_OPENSEARCH_URL, Arrays.asList("https://localhost:9200"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        assertTrue(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testHasMcpHeaders_WithMultipleHeaders() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_SECRET_ACCESS_KEY, Arrays.asList("test-secret-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        assertTrue(RestActionUtils.hasMcpHeaders(request));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_NullClient() {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+        // Should not throw exception when client is null
+        RestActionUtils.putMcpRequestHeaders(request, null);
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_AllHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_SECRET_ACCESS_KEY, Arrays.asList("test-secret-key"));
+        headers.put(MCP_HEADER_AWS_SESSION_TOKEN, Arrays.asList("test-session-token"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+        headers.put(MCP_HEADER_AWS_SERVICE_NAME, Arrays.asList("bedrock"));
+        headers.put(MCP_HEADER_OPENSEARCH_URL, Arrays.asList("https://localhost:9200"));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertEquals("test-access-key", threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("test-secret-key", threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertEquals("test-session-token", threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+        assertEquals("us-west-2", threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertEquals("bedrock", threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
+        assertEquals("https://localhost:9200", threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_PartialHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList("test-access-key"));
+        headers.put(MCP_HEADER_AWS_REGION, Arrays.asList("us-west-2"));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertEquals("test-access-key", threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertEquals("us-west-2", threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_EmptyHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(MCP_HEADER_AWS_ACCESS_KEY_ID, Arrays.asList(""));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .withHeaders(headers)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        // Empty headers should not be put into ThreadContext
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+    }
+
+    @Test
+    public void testPutMcpRequestHeaders_NoMcpHeaders() {
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .build();
+
+        RestActionUtils.putMcpRequestHeaders(request, client);
+
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_ACCESS_KEY_ID));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SECRET_ACCESS_KEY));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SESSION_TOKEN));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_REGION));
+        assertNull(threadContext.getHeader(MCP_HEADER_AWS_SERVICE_NAME));
+        assertNull(threadContext.getHeader(MCP_HEADER_OPENSEARCH_URL));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesOpenSearchStatusException() {
+        // A status-carrying exception (e.g. a 404) must be forwarded unchanged so the client sees its real status.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "container not found",
+            RestStatus.NOT_FOUND
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesIllegalArgumentAsBadRequest() {
+        // IllegalArgumentException maps to 400 in the REST layer, so it is forwarded rather than masked as 500.
+        IllegalArgumentException original = new IllegalArgumentException("bad input");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.BAD_REQUEST, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_MasksUnexpectedExceptionAsSanitized500() {
+        // A genuinely unexpected exception must be replaced with a sanitized 500 that leaks no internal detail.
+        Exception original = new RuntimeException("connection reset by peer at 10.0.0.5:9300");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertTrue(wrapped instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+        assertFalse(wrapped.getMessage().contains("10.0.0.5"));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesIndexNotFoundAsNotFound() {
+        // IndexNotFoundException is an OpenSearchException carrying a 404 and must be preserved.
+        IndexNotFoundException original = new IndexNotFoundException("missing-index");
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.NOT_FOUND, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_PreservesConflictAsClientError() {
+        // A 4xx OpenSearchException other than 404 (e.g. 409 conflict) is a client error and must be preserved.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "index prefix already in use",
+            RestStatus.CONFLICT
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertSame(original, wrapped);
+        assertEquals(RestStatus.CONFLICT, ExceptionsHelper.status(wrapped));
+    }
+
+    @Test
+    public void testWrapAsStatusException_SanitizesServerSideOpenSearchException() {
+        // A 5xx OpenSearchException is a server-side failure whose message may embed internal infrastructure
+        // detail (node addresses, shard routing). It must be sanitized to a generic 500, not forwarded, so the
+        // helper does not widen the information-disclosure surface beyond the package's 4xx-only forwarding norm.
+        org.opensearch.OpenSearchStatusException original = new org.opensearch.OpenSearchStatusException(
+            "all shards failed on node [abc123] at [10.0.0.5:9300]",
+            RestStatus.INTERNAL_SERVER_ERROR
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusException(original);
+        assertNotSame(original, wrapped);
+        assertTrue(wrapped instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+        assertFalse(wrapped.getMessage().contains("10.0.0.5"));
+        assertFalse(wrapped.getMessage().contains("abc123"));
     }
 }

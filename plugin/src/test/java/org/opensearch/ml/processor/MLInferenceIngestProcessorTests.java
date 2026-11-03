@@ -45,11 +45,12 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
@@ -771,7 +772,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
     }
 
-    public void testExecute_IOExceptionWithIgnoreMissingFalse() throws JsonProcessingException {
+    public void testExecute_IOExceptionWithIgnoreMissingFalse() {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
         String documentFieldPath = "text";
@@ -785,7 +786,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         model_config.put("position_embedding_type", "absolute");
 
         ObjectMapper mapper = mock(ObjectMapper.class);
-        when(mapper.readValue(Mockito.anyString(), eq(Object.class))).thenThrow(JsonProcessingException.class);
+        when(mapper.readValue(Mockito.anyString(), eq(Object.class))).thenThrow(JacksonException.class);
 
         MLInferenceIngestProcessor processor = createMLInferenceProcessor(
             "model1",
@@ -2082,6 +2083,67 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         output.put(documentFieldName, modelOutputPath);
         outputMap.add(output);
         return outputMap;
+    }
+
+    public void testExecute_MeanPoolingTransformation() {
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("multi_vectors", "image_embeddings[0]");
+        output.put("knn_vector", "image_embeddings[0].meanPooling()");
+        outputMap.add(output);
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            false,
+            "REMOTE",
+            false,
+            false,
+            false,
+            null
+        );
+
+        Map<String, Object> sourceAndMetadata = new HashMap<>();
+        sourceAndMetadata.put("key1", "value1");
+        IngestDocument ingestDocument = new IngestDocument(sourceAndMetadata, new HashMap<>());
+
+        // Mock nested array structure for image embeddings
+        List<List<Double>> imageEmbeddings = Arrays
+            .asList(Arrays.asList(1.0, 2.0, 3.0), Arrays.asList(4.0, 5.0, 6.0), Arrays.asList(7.0, 8.0, 9.0));
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("image_embeddings", Arrays.asList(imageEmbeddings));
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(dataAsMap).build();
+
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+
+        ModelTensorOutput mlOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        MLTaskResponse response = MLTaskResponse.builder().output(mlOutput).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        BiConsumer<IngestDocument, Exception> handler = mock(BiConsumer.class);
+        processor.execute(ingestDocument, handler);
+
+        verify(handler).accept(eq(ingestDocument), isNull());
+
+        // Verify multi_vectors contains the original nested array
+        assertEquals(imageEmbeddings, ingestDocument.getFieldValue("multi_vectors", Object.class));
+
+        // Verify knn_vector contains the mean pooled result
+        List<Float> meanPooled = (List<Float>) ingestDocument.getFieldValue("knn_vector", Object.class);
+        assertEquals(3, meanPooled.size());
+        assertEquals(4.0, meanPooled.get(0), 0.001); // (1+4+7)/3
+        assertEquals(5.0, meanPooled.get(1), 0.001); // (2+5+8)/3
+        assertEquals(6.0, meanPooled.get(2), 0.001); // (3+6+9)/3
     }
 
     private static List<Map<String, String>> getInputMapsForNestedObjectChunks(String documentFieldPath) {

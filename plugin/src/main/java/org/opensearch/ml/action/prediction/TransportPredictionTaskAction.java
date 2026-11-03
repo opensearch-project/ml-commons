@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import org.opensearch.OpenSearchStatusException;
@@ -25,15 +25,17 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -127,87 +129,19 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
                     if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                        throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
+                    }
+                    if (mlPredictionTaskRequest.getMlInput().getCallerAlgorithm() == null
+                        && (mlPredictionTaskRequest.getMlInput().getAlgorithm() != FunctionName.REMOTE
+                            || mlPredictionTaskRequest.isDispatchTask())) {
+                        mlPredictionTaskRequest.getMlInput().setCallerAlgorithm(mlPredictionTaskRequest.getMlInput().getAlgorithm());
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
-                    modelAccessControlHelper
-                        .validateModelGroupAccess(
-                            userInfo,
-                            mlFeatureEnabledSetting,
-                            tenantId,
-                            mlModel.getModelGroupId(),
-                            client,
-                            sdkClient,
-                            ActionListener.wrap(access -> {
-                                if (!access) {
-                                    wrappedListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "User Doesn't have privilege to perform this operation on this model",
-                                                RestStatus.FORBIDDEN
-                                            )
-                                        );
-                                } else {
-                                    if (modelCacheHelper.getIsModelEnabled(modelId) != null
-                                        && !modelCacheHelper.getIsModelEnabled(modelId)) {
-                                        wrappedListener
-                                            .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
-                                    } else {
-                                        if (FunctionName.isDLModel(functionName)) {
-                                            if (modelCacheHelper.getRateLimiter(modelId) != null
-                                                && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "Request is throttled at model level.",
-                                                            RestStatus.TOO_MANY_REQUESTS
-                                                        )
-                                                    );
-                                            } else if (userInfo != null
-                                                && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
-                                                && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
-                                                            RestStatus.TOO_MANY_REQUESTS
-                                                        )
-                                                    );
-                                            } else {
-                                                validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
-                                            }
-                                        } else {
-                                            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
-                                        }
-                                    }
-                                }
-                            }, e -> {
-                                log.error("Failed to Validate Access for ModelId {}", modelId, e);
-                                if (e instanceof OpenSearchStatusException) {
-                                    wrappedListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                e.getMessage(),
-                                                RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
-                                            )
-                                        );
-                                } else if (e instanceof MLResourceNotFoundException) {
-                                    wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
-                                } else if (e instanceof CircuitBreakingException) {
-                                    wrappedListener.onFailure(e);
-                                } else {
-                                    wrappedListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "Failed to Validate Access for ModelId " + modelId,
-                                                RestStatus.FORBIDDEN
-                                            )
-                                        );
-                                }
-                            })
-                        );
+                    if (mlModel.getIsHidden()) {
+                        handleModelAccessForHiddenModel(modelId, mlPredictionTaskRequest, userInfo, wrappedListener, functionName);
+                    } else {
+                        handleModelAccessForVisibleModel(mlModel, mlPredictionTaskRequest, wrappedListener, functionName, userInfo);
+                    }
                 }
 
                 @Override
@@ -220,9 +154,109 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             if (cachedMlModel != null) {
                 modelActionListener.onResponse(cachedMlModel);
             } else {
-                // For multi-node cluster, the function name is null in cache, so should always get model first.
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
+        }
+    }
+
+    private void handleModelAccessForHiddenModel(
+        String modelId,
+        MLPredictionTaskRequest mlPredictionTaskRequest,
+        User userInfo,
+        ActionListener<MLTaskResponse> wrappedListener,
+        FunctionName functionName
+    ) {
+        if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
+            wrappedListener.onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
+        } else {
+            if (FunctionName.isDLModel(functionName)) {
+                if (!checkRateLimiting(modelId, userInfo, wrappedListener))
+                    return;
+            }
+            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
+            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+        }
+    }
+
+    private void handleModelAccessForVisibleModel(
+        MLModel mlModel,
+        MLPredictionTaskRequest mlPredictionTaskRequest,
+        ActionListener<MLTaskResponse> wrappedListener,
+        FunctionName functionName,
+        User userInfo
+    ) {
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                userInfo,
+                mlFeatureEnabledSetting,
+                mlPredictionTaskRequest.getTenantId(),
+                mlModel.getModelGroupId(),
+                MLPredictionTaskAction.NAME,
+                client,
+                sdkClient,
+                ActionListener.wrap(access -> {
+                    if (!access) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                    } else {
+                        String modelId = mlModel.getModelId();
+                        if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
+                            wrappedListener.onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
+                        } else {
+                            if (FunctionName.isDLModel(functionName)) {
+                                if (!checkRateLimiting(modelId, userInfo, wrappedListener))
+                                    return;
+                            }
+                            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
+                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                        }
+                    }
+                }, e -> {
+                    // Prefer the id from the request (always present), fall back to model/getModelId
+                    String safeId = mlPredictionTaskRequest.getModelId();
+                    if (safeId == null)
+                        safeId = mlModel.getModelId();
+                    handleError(e, safeId, wrappedListener);
+                })
+            );
+    }
+
+    private boolean checkRateLimiting(String modelId, User userInfo, ActionListener<MLTaskResponse> wrappedListener) {
+        if (modelCacheHelper.getRateLimiter(modelId) != null && !modelCacheHelper.getRateLimiter(modelId).request()) {
+            wrappedListener.onFailure(new OpenSearchStatusException("Request is throttled at model level.", RestStatus.TOO_MANY_REQUESTS));
+            return false;
+        } else if (userInfo != null
+            && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+            && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
+            wrappedListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                        RestStatus.TOO_MANY_REQUESTS
+                    )
+                );
+            return false;
+        }
+        return true;
+    }
+
+    private void handleError(Exception e, String modelId, ActionListener<MLTaskResponse> wrappedListener) {
+        log.error("Failed to Validate Access for ModelId {}", modelId, e);
+        switch (e) {
+            case OpenSearchStatusException openSearchStatusException -> wrappedListener
+                .onFailure(
+                    new OpenSearchStatusException(e.getMessage(), RestStatus.fromCode(openSearchStatusException.status().getStatus()))
+                );
+            case MLResourceNotFoundException mlResourceNotFoundException -> wrappedListener
+                .onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+            case CircuitBreakingException circuitBreakingException -> wrappedListener.onFailure(e);
+            case null, default -> wrappedListener
+                .onFailure(new OpenSearchStatusException("Failed to Validate Access for ModelId " + modelId, RestStatus.FORBIDDEN));
         }
     }
 
@@ -257,15 +291,28 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     }
 
     public void validateInputSchema(String modelId, MLInput mlInput) {
+        ActionType actionType = null;
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+        }
+        actionType = actionType == null ? ActionType.PREDICT : actionType;
+        if (actionType == ActionType.BATCH_PREDICT) {
+            return;
+        }
+
         if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
             String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
             try {
                 String InputString = mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString();
                 // Process the parameters field in the input dataset to convert it back to its original datatype, instead of a string
-                String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString);
+                String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString, inputSchemaString);
                 MLNodeUtils.validateSchema(inputSchemaString, processedInputString);
             } catch (Exception e) {
-                throw new OpenSearchStatusException("Error validating input schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+                throw new OpenSearchStatusException(
+                    "Error validating input schema, if you think this is expected, please update your 'input' field in the 'interface' field for this model: "
+                        + e.getMessage(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }
     }

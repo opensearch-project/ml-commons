@@ -7,9 +7,13 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
 
@@ -35,13 +39,13 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -130,7 +134,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent
@@ -145,12 +149,23 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                                    } else {
-                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                    // NOTE all sharing and revoking must happen through share API exposed by security plugin
+                                    // client == null -> feature is disabled, follow old route
+                                    if (!shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
+                                        // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                        // be stored in model-group index)
+                                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                        } else {
+                                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        }
+
                                     }
+                                    // For backwards compatibility we still allow storing backend_roles
+                                    // data in ml_model_group
+                                    // index
                                     updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml connector {}", r.id(), e);
@@ -183,21 +198,22 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         ActionListener<MLUpdateModelGroupResponse> listener,
         User user
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
             if (AccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
-                source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
+                source.put(BACKEND_ROLES_FIELD, ImmutableList.of());
             }
         } else if (updateModelGroupInput.getBackendRoles() != null
             || Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
             source.put(MLModelGroup.ACCESS, AccessMode.RESTRICTED.getValue());
         }
         if (updateModelGroupInput.getBackendRoles() != null) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
+            source.put(BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
         }
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
+            source.put(BACKEND_ROLES_FIELD, user.getBackendRoles());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
@@ -242,6 +258,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         Map<String, Object> source,
         ActionListener<MLUpdateModelGroupResponse> listener
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
             .builder()
             .index(ML_MODEL_GROUP_INDEX)

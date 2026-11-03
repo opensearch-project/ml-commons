@@ -9,10 +9,10 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.BUILT_IN_ROLES;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
 import static org.opensearch.ml.utils.TestHelper.ALL_ROLES;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -184,6 +184,19 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
 
     public void testGetEligibleNodes_MLNode_Agent() {
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.AGENT);
+        assertEquals(5, eligibleNodes.length);
+        Set<String> nodeIds = new HashSet<>();
+        nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
+        assertTrue(nodeIds.contains(mlNode1.getId()));
+        assertTrue(nodeIds.contains(mlNode2.getId()));
+        assertTrue(nodeIds.contains(dataNode1.getId()));
+        assertTrue(nodeIds.contains(dataNode2.getId()));
+        assertTrue(nodeIds.contains(allRoleNode.getId()));
+        assertFalse(nodeIds.contains(warmDataNode1.getId()));
+    }
+
+    public void testGetEligibleNodes_MLNode_Tool() {
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TOOL);
         assertEquals(5, eligibleNodes.length);
         Set<String> nodeIds = new HashSet<>();
         nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));

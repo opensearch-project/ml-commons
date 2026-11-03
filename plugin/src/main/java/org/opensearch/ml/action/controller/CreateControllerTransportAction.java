@@ -41,6 +41,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerAction;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerRequest;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerResponse;
@@ -51,7 +52,6 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -112,35 +112,41 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                if (mlModel.getModelState() != MLModelState.DEPLOYING) {
-                                    indexAndCreateController(mlModel, controller, wrappedListener);
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            MLCreateControllerAction.NAME,
+                            client,
+                            ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    if (mlModel.getModelState() != MLModelState.DEPLOYING) {
+                                        indexAndCreateController(mlModel, controller, wrappedListener);
+                                    } else {
+                                        String errorMessage =
+                                            "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                        errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
+                                        log.error(errorMessage);
+                                        wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    }
                                 } else {
-                                    String errorMessage =
-                                        "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                    String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
                                     errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
                                     log.error(errorMessage);
-                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
                                 }
-                            } else {
-                                String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
-                                errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
-                                log.error(errorMessage);
-                                wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
-                            }
-                        }, exception -> {
-                            log
-                                .error(
-                                    getErrorMessage(
-                                        "Permission denied: Unable to create the model controller. Details: {}",
-                                        modelId,
-                                        isHidden
-                                    ),
-                                    exception
-                                );
-                            wrappedListener.onFailure(exception);
-                        }));
+                            }, exception -> {
+                                log
+                                    .error(
+                                        getErrorMessage(
+                                            "Permission denied: Unable to create the model controller. Details: {}",
+                                            modelId,
+                                            isHidden
+                                        ),
+                                        exception
+                                    );
+                                wrappedListener.onFailure(exception);
+                            })
+                        );
                 } else {
                     wrappedListener
                         .onFailure(

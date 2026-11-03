@@ -2,6 +2,7 @@ package org.opensearch.ml.common.transport.model_group;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_18_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
@@ -11,10 +12,13 @@ import java.util.Arrays;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 
@@ -133,6 +137,37 @@ public class MLRegisterModelGroupInputTest {
 
         assertEquals("name", parsedInput.getName());
         assertNull(parsedInput.getTenantId()); // tenantId is not provided in the JSON
+    }
+
+    @Test
+    public void parse_withCustomModelGroupId() throws IOException {
+        String json = "{\"name\":\"name\",\"model_group_id\":\"my-model-group\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, json);
+        parser.nextToken();
+        MLRegisterModelGroupInput parsedInput = MLRegisterModelGroupInput.parse(parser);
+        assertEquals("my-model-group", parsedInput.getModelGroupId());
+    }
+
+    @Test
+    public void toXContent_WithCustomModelGroupId() throws Exception {
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput.builder().name("name").modelGroupId("my-model-group").build();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertTrue(builder.toString().contains("\"model_group_id\":\"my-model-group\""));
+    }
+
+    @Test
+    public void writeToAndReadFrom_withCustomModelGroupId() throws IOException {
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput.builder().name("name").modelGroupId("my-model-group").build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(org.opensearch.ml.common.CommonValue.VERSION_3_9_0);
+        MLRegisterModelGroupInput parsed = new MLRegisterModelGroupInput(in);
+        assertEquals("my-model-group", parsed.getModelGroupId());
     }
 
 }

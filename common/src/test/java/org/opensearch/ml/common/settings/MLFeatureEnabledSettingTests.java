@@ -1,0 +1,420 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.settings;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Set;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
+
+public class MLFeatureEnabledSettingTests {
+
+    private ClusterService mockClusterService;
+    private ClusterSettings mockClusterSettings;
+
+    @Before
+    public void setUp() {
+        mockClusterService = mock(ClusterService.class);
+        // Create a real ClusterSettings instance with an empty set of registered settings
+        mockClusterSettings = new ClusterSettings(
+            Settings.EMPTY,
+            Set
+                .of(
+                    MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MEMORY_RETENTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
+                    MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                )
+        );
+        when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
+    }
+
+    @Test
+    public void testDefaults_allFeaturesEnabled() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.remote_inference.enabled", true)
+            .put("plugins.ml_commons.agent_framework_enabled", true)
+            .put("plugins.ml_commons.local_model.enabled", true)
+            .put("plugins.ml_commons.connector.private_ip_enabled", true)
+            .put("plugins.ml_commons.controller_enabled", true)
+            .put("plugins.ml_commons.offline_batch_ingestion_enabled", true)
+            .put("plugins.ml_commons.offline_batch_inference_enabled", true)
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .put("plugins.ml_commons.mcp_server_enabled", true)
+            .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
+            .put("plugins.ml_commons.metrics_collection_enabled", true)
+            .put("plugins.ml_commons.metrics_static_collection_enabled", true)
+            .put("plugins.ml_commons.mcp_connector_enabled", true)
+            .put("plugins.ml_commons.agentic_search_enabled", true)
+            .put("plugins.ml_commons.agentic_memory_enabled", true)
+            .put("plugins.ml_commons.remote_agentic_memory_enabled", true)
+            .put("plugins.ml_commons.stream_enabled", true)
+            .put("plugins.ml_commons.unified_agent_api_enabled", true)
+            .build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isRemoteInferenceEnabled());
+        assertTrue(setting.isAgentFrameworkEnabled());
+        assertTrue(setting.isLocalModelEnabled());
+        assertTrue(setting.isConnectorPrivateIpEnabled());
+        assertTrue(setting.isControllerEnabled());
+        assertTrue(setting.isOfflineBatchIngestionEnabled());
+        assertTrue(setting.isOfflineBatchInferenceEnabled());
+        assertTrue(setting.isMultiTenancyEnabled());
+        assertTrue(setting.isMcpServerEnabled());
+        assertTrue(setting.isRagSearchPipelineEnabled());
+        assertTrue(setting.isMetricCollectionEnabled());
+        assertTrue(setting.isStaticMetricCollectionEnabled());
+        assertTrue(setting.isMcpConnectorEnabled());
+        assertTrue(setting.isAgenticMemoryEnabled());
+        assertTrue(setting.isRemoteAgenticMemoryEnabled());
+        assertTrue(setting.isStreamEnabled());
+        assertTrue(setting.isUnifiedAgentApiEnabled());
+    }
+
+    @Test
+    public void testDefaults_someFeaturesDisabled() {
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.remote_inference.enabled", false)
+            .put("plugins.ml_commons.agent_framework_enabled", false)
+            .put("plugins.ml_commons.local_model.enabled", false)
+            .put("plugins.ml_commons.connector.private_ip_enabled", false)
+            .put("plugins.ml_commons.controller_enabled", false)
+            .put("plugins.ml_commons.offline_batch_ingestion_enabled", false)
+            .put("plugins.ml_commons.offline_batch_inference_enabled", false)
+            .put("plugins.ml_commons.multi_tenancy_enabled", false)
+            .put("plugins.ml_commons.mcp_server_enabled", false)
+            .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
+            .put("plugins.ml_commons.metrics_collection_enabled", false)
+            .put("plugins.ml_commons.metrics_static_collection_enabled", false)
+            .put("plugins.ml_commons.mcp_connector_enabled", false)
+            .put("plugins.ml_commons.agentic_search_enabled", false)
+            .put("plugins.ml_commons.agentic_memory_enabled", false)
+            .put("plugins.ml_commons.remote_agentic_memory_enabled", false)
+            .put("plugins.ml_commons.stream_enabled", false)
+            .put("plugins.ml_commons.unified_agent_api_enabled", false)
+            .build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isRemoteInferenceEnabled());
+        assertFalse(setting.isAgentFrameworkEnabled());
+        assertFalse(setting.isLocalModelEnabled());
+        assertFalse(setting.isConnectorPrivateIpEnabled());
+        assertFalse(setting.isControllerEnabled());
+        assertFalse(setting.isOfflineBatchIngestionEnabled());
+        assertFalse(setting.isOfflineBatchInferenceEnabled());
+        assertFalse(setting.isMultiTenancyEnabled());
+        assertFalse(setting.isMcpServerEnabled());
+        assertFalse(setting.isRagSearchPipelineEnabled());
+        assertFalse(setting.isMetricCollectionEnabled());
+        assertFalse(setting.isStaticMetricCollectionEnabled());
+        assertFalse(setting.isMcpConnectorEnabled());
+        assertFalse(setting.isAgenticMemoryEnabled());
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
+        assertFalse(setting.isStreamEnabled());
+        assertFalse(setting.isUnifiedAgentApiEnabled());
+    }
+
+    @Test
+    public void testMultiTenancyChangeNotifiesListeners() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        SettingsChangeListener mockListener = mock(SettingsChangeListener.class);
+        setting.addListener(mockListener);
+
+        setting.notifyMultiTenancyListeners(true);
+        verify(mockListener).onMultiTenancyEnabledChanged(true);
+    }
+
+    @Test
+    public void testAgenticMemoryEnabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertTrue(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_agentic_memory_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isRemoteAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testRemoteAgenticMemoryCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.remote_agentic_memory_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isRemoteAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testAgenticMemoryCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_memory_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testAgenticMemoryCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_memory_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateDisabledByDefault() {
+        assertFalse(new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY).isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_search_template_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateDisabledWithMultiTenancy() {
+        // Templates are not yet tenant-scoped, so the feature stays off on a multi-tenant node even when enabled.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.agentic_search_template_enabled", true)
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateDynamicUpdate_staysDisabledWithMultiTenancy() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.agentic_search_template_enabled", true).build());
+
+        assertFalse(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Retention is opt-in: the kill switch defaults to false so nothing is deleted until an operator turns it on.
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.memory.retention_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testMemoryRetentionDynamicUpdate() {
+        // Default is false; construct disabled, then dynamically flip the kill switch on (a real change from the default).
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMemoryRetentionEnabled());
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.memory.retention_enabled", true).build());
+
+        assertTrue(setting.isMemoryRetentionEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // The Vertex AI (google_cloud) connector is opt-in: the flag defaults to false.
+        assertFalse(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testVertexAIConnectorDynamicUpdate() {
+        // Default is false; construct disabled, then dynamically flip the flag on.
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isVertexAIConnectorEnabled());
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build());
+
+        assertTrue(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testStaticMetricCollectionSettingChangeNotifiesListeners() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        SettingsChangeListener mockListener = mock(SettingsChangeListener.class);
+        setting.addListener(mockListener);
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", true).build());
+
+        verify(mockListener).onStaticMetricCollectionEnabledChanged(true);
+        assertTrue(setting.isStaticMetricCollectionEnabled());
+    }
+
+    @Test
+    public void testMaxJsonSizeDefaultValue() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Default value should be 100MB
+        assertEquals(100_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeCustomValue() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 50_000_000).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertEquals(50_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeUnlimited() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", -1).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // -1 means unlimited
+        assertEquals(-1, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMaxJsonSizeDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.max_json_size", 100_000_000).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertEquals(100_000_000, setting.getMaxJsonSize());
+
+        // Update the setting dynamically
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.max_json_size", 75_000_000).build());
+
+        assertEquals(75_000_000, setting.getMaxJsonSize());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDisabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testMcpHeaderPassthroughDynamicUpdate() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to enable
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", true).build());
+
+        assertTrue(setting.isMcpHeaderPassthroughEnabled());
+
+        // Update the setting dynamically to disable again
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
+
+        assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+}

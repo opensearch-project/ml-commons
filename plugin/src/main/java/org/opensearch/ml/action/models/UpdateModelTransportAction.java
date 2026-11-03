@@ -9,7 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -44,9 +44,15 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
@@ -58,7 +64,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.ConnectorProtocolValidator;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -79,7 +85,6 @@ import lombok.extern.log4j.Log4j2;
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     final Client client;
     private final SdkClient sdkClient;
-    final Settings settings;
     final ClusterService clusterService;
     final ModelAccessControlHelper modelAccessControlHelper;
     final ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -113,7 +118,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.mlModelGroupManager = mlModelGroupManager;
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
-        this.settings = settings;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
@@ -127,7 +131,18 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
         String tenantId = updateModelInput.getTenantId();
+        MLModelConfig modelConfig = updateModelInput.getModelConfig();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        // updatedConnector is written straight into the model's connector field, and it is wire-serialized, so a
+        // transport caller can set it even though the REST layer clears it. Checked here, before the inline-connector
+        // path sets it itself further down, so only a caller-supplied value is inspected.
+        if (updateModelInput.getUpdatedConnector() != null
+            && ConnectorProtocols.isMcpProtocol(updateModelInput.getUpdatedConnector().getProtocol())) {
+            log.error("Rejected update of model {} with an MCP connector", modelId);
+            actionListener
+                .onFailure(new OpenSearchStatusException("Cannot update this model to use an MCP connector.", RestStatus.BAD_REQUEST));
             return;
         }
         User user = RestActionUtils.getUserContext(client);
@@ -138,9 +153,28 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.wrap(mlModel -> {
+                if (mlModel == null) {
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to find model to update with the provided model id: " + modelId,
+                                RestStatus.NOT_FOUND
+                            )
+                        );
+                    return;
+                }
                 if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
                     if (!isModelDeploying(mlModel.getModelState())) {
                         FunctionName functionName = mlModel.getAlgorithm();
+                        BaseModelConfig existingModelConfig = (BaseModelConfig) mlModel.getModelConfig();
+                        if (modelConfig != null) {
+                            try {
+                                validateModelConfig(modelConfig, existingModelConfig, functionName);
+                            } catch (Exception e) {
+                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.BAD_REQUEST));
+                                return;
+                            }
+                        }
                         // TODO: Support update as well as model/user level throttling in all other DLModel categories
                         if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                             if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
@@ -162,6 +196,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         mlFeatureEnabledSetting,
                                         tenantId,
                                         mlModel.getModelGroupId(),
+                                        MLUpdateModelAction.NAME,
                                         client,
                                         sdkClient,
                                         ActionListener.wrap(hasPermission -> {
@@ -215,18 +250,45 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             );
                     }
                 }
-            },
-                e -> wrappedListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "Failed to find model to update with the provided model id: " + modelId,
-                            RestStatus.NOT_FOUND
-                        )
-                    )
-            ));
+            }, e -> wrappedListener.onFailure(e)));
         } catch (Exception e) {
             log.error("Failed to update ML model for {}", modelId, e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private void validateModelConfig(MLModelConfig modelConfig, BaseModelConfig existingModelConfig, FunctionName functionName) {
+        BaseModelConfig baseModelConfig = (BaseModelConfig) modelConfig;
+        String modelType = modelConfig.getModelType();
+
+        // Only validate for text embedding models
+        if (functionName != FunctionName.TEXT_EMBEDDING
+            && !(functionName == FunctionName.REMOTE && "text_embedding".equalsIgnoreCase(modelType))) {
+            return;
+        }
+
+        String suffix = functionName == FunctionName.REMOTE ? " must be provided for remote text embedding model" : " is null";
+
+        // Validate embedding dimension
+        if (baseModelConfig.getEmbeddingDimension() == null
+            && (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null)) {
+            throw new IllegalArgumentException("Embedding dimension" + suffix);
+        }
+
+        // Validate framework type
+        if (baseModelConfig.getFrameworkType() == null && (existingModelConfig == null || existingModelConfig.getFrameworkType() == null)) {
+            throw new IllegalArgumentException("Framework type" + suffix);
+        }
+
+        // Validate space_type for remote models
+        if (functionName == FunctionName.REMOTE) {
+            Map<String, Object> currentConfig = baseModelConfig.getAdditionalConfig();
+            Map<String, Object> existingConfig = existingModelConfig != null ? existingModelConfig.getAdditionalConfig() : null;
+
+            if ((currentConfig == null || !currentConfig.containsKey("space_type"))
+                && (existingConfig == null || !existingConfig.containsKey("space_type"))) {
+                throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
+            }
         }
     }
 
@@ -249,7 +311,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             || (newConnectorId != null)
             || !Objects.equals(updateModelInput.getIsEnabled(), mlModel.getIsEnabled())
             || (updateModelInput.getGuardrails() != null)
-            || (updateModelInput.getModelInterface() != null);
+            || (updateModelInput.getModelInterface() != null)
+            || (updateModelInput.getBatchInferenceConfig() != null);
         if (MLRateLimiter.updateValidityPreCheck(mlModel.getRateLimiter(), updateModelInput.getRateLimiter())) {
             MLRateLimiter updatedRateLimiterConfig = MLRateLimiter.update(mlModel.getRateLimiter(), updateModelInput.getRateLimiter());
             updateModelInput.setRateLimiter(updatedRateLimiterConfig);
@@ -283,20 +346,146 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             if (newConnectorId == null) {
                 if (updateModelInput.getConnector() != null) {
                     Connector connector = mlModel.getConnector();
-                    connector.update(updateModelInput.getConnector(), mlEngine::encrypt);
-                    connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                    updateModelInput.setUpdatedConnector(connector);
-                    updateModelInput.setConnector(null);
+                    if (connector == null) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot update connector settings for this model. The model was created with a connector_id and does not have an inline connector.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
+                    // The stored connector is already MCP, which means this model predates the checks that now
+                    // refuse to attach one. Patching it cannot produce a usable model - the document carries MCP
+                    // fields, so relabelling its protocol just moves the breakage - and supplying actions reads
+                    // getActions() on it below, which is unimplemented and escapes as a 500. Same invariant as the
+                    // connector API applies to a protocol crossing, stated from the other side.
+                    if (ConnectorProtocols.isMcpProtocol(connector.getProtocol())) {
+                        log.error("Rejected inline connector update for model {} backed by an MCP connector", modelId);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot update the inline connector of model "
+                                        + modelId
+                                        + ": it is an MCP connector [protocol "
+                                        + connector.getProtocol()
+                                        + "], which cannot back a model. Register the model against an inference connector instead.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
+                    // A model's inline connector can have its protocol changed here, so apply the same
+                    // supported-protocol and feature-flag checks the connector API applies, using the value
+                    // the connector will have once the update is applied.
+                    String updatedProtocol = updateModelInput.getConnector().getProtocol();
+                    // See the matching comment in UpdateConnectorTransportAction: reported through the
+                    // listener so the rejection is not logged as a permission denial.
+                    try {
+                        if (updatedProtocol != null) {
+                            ConnectorProtocols.validateProtocol(updatedProtocol);
+                            ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
+                            // Connector.update() overwrites the protocol in place, so this would persist a model
+                            // whose connector document says MCP while holding inference fields. Reading it back
+                            // resolves the concrete class from that protocol, producing an MCP connector whose
+                            // action accessors are unimplemented - the model becomes permanently unusable.
+                            if (ConnectorProtocols.isMcpProtocol(updatedProtocol)) {
+                                throw new OpenSearchStatusException(
+                                    "Cannot change this model's connector to MCP protocol [" + updatedProtocol + "].",
+                                    RestStatus.BAD_REQUEST
+                                );
+                            }
+                        }
+                        ConnectorProtocolValidator
+                            .validateMutualTlsSupportedAfterUpdate(
+                                connector.getProtocol(),
+                                connector.getConnectorClientConfig(),
+                                updatedProtocol,
+                                updateModelInput.getConnector().getConnectorClientConfig()
+                            );
+                        ConnectorProtocolValidator
+                            .validateMutualTlsEnabledAfterUpdate(
+                                connector.getConnectorClientConfig(),
+                                updateModelInput.getConnector().getConnectorClientConfig(),
+                                mlFeatureEnabledSetting
+                            );
+                        ConnectorProtocolValidator
+                            .validateMutualTlsSchemeAfterUpdate(
+                                connector.getActions(),
+                                connector.getParameters(),
+                                connector.getConnectorClientConfig(),
+                                updateModelInput.getConnector().getActions(),
+                                updateModelInput.getConnector().getParameters(),
+                                updateModelInput.getConnector().getConnectorClientConfig()
+                            );
+                    } catch (Exception e) {
+                        log.error("Rejected inline connector update for model {}", modelId, e);
+                        wrappedListener.onFailure(e);
+                        return;
+                    }
+
+                    // mlModel came from MLModelManager.parseAndReturnModel, which neither decrypts nor strips
+                    // the credential, so connector.credential currently holds the stored ciphertext.
+                    // Connector.update() keeps that value when the request supplies no credential of its own,
+                    // and encrypt() only skips an empty map - so encrypting unconditionally would persist
+                    // ciphertext-of-ciphertext and leave the credential unusable.
+                    //
+                    // So encrypt only what the request actually supplied. When it supplied nothing, the stored
+                    // value is written back exactly as it was read. Note the field must be written back rather
+                    // than omitted: whether an omitted field preserves the stored one depends on the metadata
+                    // backend - the local index client issues a partial-document update that OpenSearch merges
+                    // recursively, but the DynamoDB-backed client merges the stored source with a shallow
+                    // top-level Map.putAll, which replaces the whole connector object. Omitting the credential
+                    // there would drop it, and a REMOTE connector without one no longer parses, which makes the
+                    // model document unreadable and undeletable.
+                    Map<String, String> suppliedCredential = updateModelInput.getConnector().getCredential();
+                    boolean hasSuppliedCredential = suppliedCredential != null && !suppliedCredential.isEmpty();
+                    connector.update(updateModelInput.getConnector());
+
+                    // Only validate headers if connector actions were modified in this update
+                    if (updateModelInput.getConnector() != null
+                        && updateModelInput.getConnector().getActions() != null
+                        && connector.getActions() != null) {
+                        for (ConnectorAction action : connector.getActions()) {
+                            Map<String, String> headers = action.getHeaders();
+                            AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
+                        }
+                    }
+                    ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(r -> {
+                        connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                        updateModelInput.setUpdatedConnector(connector);
+                        updateModelInput.setConnector(null);
+
+                        updateModelWithRegisteringToAnotherModelGroup(
+                            modelId,
+                            newModelGroupId,
+                            tenantId,
+                            user,
+                            updateModelInput,
+                            wrappedListener,
+                            isUpdateModelCache
+                        );
+                    }, e -> {
+                        log.error("Failed to encrypt connector settings for model {}", modelId, e);
+                        wrappedListener.onFailure(e);
+                    });
+                    if (hasSuppliedCredential) {
+                        connector.encrypt(mlEngine::encrypt, tenantId, encryptSuccessfulListener);
+                    } else {
+                        encryptSuccessfulListener.onResponse(true);
+                    }
+                } else {
+                    updateModelWithRegisteringToAnotherModelGroup(
+                        modelId,
+                        newModelGroupId,
+                        tenantId,
+                        user,
+                        updateModelInput,
+                        wrappedListener,
+                        isPredictorUpdate
+                    );
                 }
-                updateModelWithRegisteringToAnotherModelGroup(
-                    modelId,
-                    newModelGroupId,
-                    tenantId,
-                    user,
-                    updateModelInput,
-                    wrappedListener,
-                    isUpdateModelCache
-                );
             } else {
                 updateModelWithNewStandAloneConnector(
                     modelId,
@@ -334,15 +523,35 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     mlFeatureEnabledSetting,
                     ActionListener.wrap(hasNewConnectorPermission -> {
                         if (hasNewConnectorPermission) {
-                            updateModelWithRegisteringToAnotherModelGroup(
-                                modelId,
-                                newModelGroupId,
-                                tenantId,
-                                user,
-                                updateModelInput,
-                                wrappedListener,
-                                isUpdateModelCache
-                            );
+                            // The new connector has to be one a model can predict with. Model register rejects MCP
+                            // connectors for that reason; without the same check here a model could be registered
+                            // against an http connector and then re-pointed at an MCP one, which only surfaces as
+                            // an UnsupportedOperationException at deploy or predict time.
+                            mlModelManager.getConnector(newConnectorId, tenantId, ActionListener.wrap(newConnector -> {
+                                if (ConnectorProtocols.isMcpProtocol(newConnector.getProtocol())) {
+                                    log.error("Rejected update of model {} onto MCP connector {}", modelId, newConnectorId);
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Cannot update this model to use MCP connector: " + newConnectorId,
+                                                RestStatus.BAD_REQUEST
+                                            )
+                                        );
+                                    return;
+                                }
+                                updateModelWithRegisteringToAnotherModelGroup(
+                                    modelId,
+                                    newModelGroupId,
+                                    tenantId,
+                                    user,
+                                    updateModelInput,
+                                    wrappedListener,
+                                    isUpdateModelCache
+                                );
+                            }, e -> {
+                                log.error("Failed to load new connector {} while updating model {}", newConnectorId, modelId, e);
+                                wrappedListener.onFailure(e);
+                            }));
                         } else {
                             wrappedListener
                                 .onFailure(
@@ -380,42 +589,49 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         if (newModelGroupId != null) {
             modelAccessControlHelper
-                .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
-                    if (hasNewModelGroupPermission) {
-                        mlModelGroupManager.getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
-                            buildUpdateRequest(
-                                modelId,
-                                newModelGroupId,
-                                updateRequest,
-                                updateModelInput,
-                                newModelGroupResponse,
-                                wrappedListener,
-                                isUpdateModelCache
-                            );
-                        },
-                            exception -> wrappedListener
+                .validateModelGroupAccess(
+                    user,
+                    newModelGroupId,
+                    MLUpdateModelAction.NAME,
+                    client,
+                    ActionListener.wrap(hasNewModelGroupPermission -> {
+                        if (hasNewModelGroupPermission) {
+                            mlModelGroupManager
+                                .getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
+                                    buildUpdateRequest(
+                                        modelId,
+                                        newModelGroupId,
+                                        updateRequest,
+                                        updateModelInput,
+                                        newModelGroupResponse,
+                                        wrappedListener,
+                                        isUpdateModelCache
+                                    );
+                                },
+                                    exception -> wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: "
+                                                    + newModelGroupId,
+                                                RestStatus.NOT_FOUND
+                                            )
+                                        )
+                                ));
+                        } else {
+                            wrappedListener
                                 .onFailure(
                                     new OpenSearchStatusException(
-                                        "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: "
+                                        "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
                                             + newModelGroupId,
-                                        RestStatus.NOT_FOUND
+                                        RestStatus.FORBIDDEN
                                     )
-                                )
-                        ));
-                    } else {
-                        wrappedListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
-                                        + newModelGroupId,
-                                    RestStatus.FORBIDDEN
-                                )
-                            );
-                    }
-                }, exception -> {
-                    log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                    wrappedListener.onFailure(exception);
-                }));
+                                );
+                        }
+                    }, exception -> {
+                        log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                        wrappedListener.onFailure(exception);
+                    })
+                );
         } else {
             buildUpdateRequest(modelId, tenantId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
         }
@@ -450,8 +666,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
             if (ut == null) {
                 try {
-                    UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                    updateListener.onResponse(updateResponse);
+                    updateListener.onResponse(ur.updateResponse());
                 } catch (Exception e) {
                     updateListener.onFailure(e);
                 }
@@ -503,8 +718,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
                     if (ut == null) {
                         try {
-                            UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                            updateListener.onResponse(updateResponse);
+                            updateListener.onResponse(ur.updateResponse());
                         } catch (Exception e) {
                             updateListener.onFailure(e);
                         }

@@ -4,7 +4,6 @@
  */
 package org.opensearch.ml.rest;
 
-import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
@@ -38,6 +37,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     private String bedrockEmbeddingModelId;
     private String localModelId;
     private String bedrockClaudeModelId;
+    private String bedrockMultiModalEmbeddingModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -67,6 +67,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
+
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
     private final String bedrockEmbeddingModelConnectorEntity = "{\n"
@@ -74,6 +75,12 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  \"description\": \"The connector to bedrock Titan embedding model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 50,\n"
+        + "    \"max_retry_times\": 3,\n"
+        + "    \"retry_backoff_millis\": 200,\n"
+        + "    \"retry_timeout_seconds\": 30\n"
+        + "  },\n"
         + "  \"parameters\": {\n"
         + "    \"region\": \""
         + GITHUB_CI_AWS_REGION
@@ -109,8 +116,60 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "}";
 
     private final String bedrockClaudeModelConnectorEntity = "{\n"
-        + "  \"name\": \"BedRock Claude instant-v1 Connector\",\n"
-        + "  \"description\": \"The connector to bedrock for claude model\",\n"
+        + "  \"name\": \"Bedrock Connector: claude haiku 4.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude haiku 4.5 model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"client_config\": {\n"
+        + "    \"max_connection\": 50,\n"
+        + "    \"max_retry_times\": 3,\n"
+        + "    \"retry_backoff_millis\": 200,\n"
+        + "    \"retry_timeout_seconds\": 30\n"
+        + "  },\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model\": \""
+        + "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        + "\",\n"
+        + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
+        + "\"response_filter\": \"$.output.message.content[0].text\""
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "        {\n"
+        + "            \"action_type\": \""
+        + "predict"
+        + "\",\n"
+        + "            \"method\": \"POST\",\n"
+        + "            \"headers\": {\n"
+        + "                \"content-type\": \"application/json\"\n"
+        + "            },\n"
+        + "            \"url\": \"https://bedrock-runtime."
+        + GITHUB_CI_AWS_REGION
+        + ".amazonaws.com/model/"
+        + "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        + "/converse\",\n"
+        + "            \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"you are a helpful assistant.\\\"}], \\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.prompt}\\\"}]}] , \\\"inferenceConfig\\\": {\\\"temperature\\\": 0.0, \\\"maxTokens\\\": 1000} }\"\n"
+        + "        }\n"
+        + "    ]\n"
+        + "}";
+
+    private final String bedrockMultiModalEmbeddingModelConnectorEntity = "{\n"
+        + "  \"name\": \"Amazon Bedrock Connector: bedrock Titan multi-modal embedding model\",\n"
+        + "  \"description\": \"Test connector for Amazon Bedrock Titan multi-modal embedding model\",\n"
         + "  \"version\": 1,\n"
         + "  \"protocol\": \"aws_sigv4\",\n"
         + "  \"parameters\": {\n"
@@ -118,11 +177,8 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + GITHUB_CI_AWS_REGION
         + "\",\n"
         + "    \"service_name\": \"bedrock\",\n"
-        + "    \"anthropic_version\": \"bedrock-2023-05-31\",\n"
-        + "    \"max_tokens_to_sample\": 8000,\n"
-        + "    \"temperature\": 0.0001,\n"
-        + "    \"response_filter\": \"$.completion\",\n"
-        + "    \"stop_sequences\": [\"\\n\\nHuman:\",\"\\nObservation:\",\"\\n\\tObservation:\",\"\\nObservation\",\"\\n\\tObservation\",\"\\n\\nQuestion\"]\n"
+        + "    \"model\": \"amazon.titan-embed-image-v1\",\n"
+        + "    \"input_docs_processed_step_size\": 2\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"access_key\": \""
@@ -139,12 +195,11 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "    {\n"
         + "      \"action_type\": \"predict\",\n"
         + "      \"method\": \"POST\",\n"
-        + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/anthropic.claude-instant-v1/invoke\",\n"
+        + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke\",\n"
         + "      \"headers\": {\n"
-        + "        \"content-type\": \"application/json\",\n"
-        + "        \"x-amz-content-sha256\": \"required\"\n"
+        + "        \"content-type\": \"application/json\"\n"
         + "      },\n"
-        + "      \"request_body\": \"{\\\"prompt\\\":\\\"${parameters.prompt}\\\", \\\"stop_sequences\\\": ${parameters.stop_sequences}, \\\"max_tokens_to_sample\\\":${parameters.max_tokens_to_sample}, \\\"temperature\\\":${parameters.temperature},  \\\"anthropic_version\\\":\\\"${parameters.anthropic_version}\\\" }\"\n"
+        + "      \"request_body\": \"{\\\"inputText\\\": \\\"${parameters.inputText:-null}\\\", \\\"inputImage\\\": \\\"${parameters.inputImage:-null}\\\"}\"\n"
         + "    }\n"
         + "  ]\n"
         + "}";
@@ -154,16 +209,28 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      *
      * @throws Exception if any error occurs during the setup
      */
+    private static boolean initialSleepDone = false;
+
     @Before
     public void setup() throws Exception {
         RestMLRemoteInferenceIT.disableClusterConnectorAccessControl();
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
         String openAIChatModelName = "openAI-GPT-3.5 chat model " + randomAlphaOfLength(5);
-        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, true);
+        this.openAIChatModelId = registerRemoteModel(completionModelConnectorEntity, openAIChatModelName, false);
         String bedrockEmbeddingModelName = "bedrock embedding model " + randomAlphaOfLength(5);
-        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
+        this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, false);
         String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
-        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, true);
+        this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, false);
+        String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
+        this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
+            bedrockMultiModalEmbeddingModelConnectorEntity,
+            bedrockMultiModalEmbeddingModelName,
+            false
+        );
+
         String index_name = "daily_index";
         String createIndexRequestBody = "{\n"
             + "  \"mappings\": {\n"
@@ -377,6 +444,59 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         Assert.assertEquals(embeddingList.size(), 1536);
         Assert.assertEquals((Double) embeddingList.get(0), 0.734375, 0.005);
         Assert.assertEquals((Double) embeddingList.get(1), 0.87109375, 0.005);
+    }
+
+    /**
+     * Tests the MLInferenceSearchResponseProcessor with a remote model and
+     * read the optional model input from string field from search hits
+     * It creates a search pipeline with the processor configured to use the remote model,
+     * runs one to one prediction by sending one document to one prediction
+     * performs a search using the pipeline, and verifies the inference results.
+     *
+     * @throws Exception if any error occurs during the test
+     */
+    public void testMLInferenceProcessorRemoteModelOptionalInputs() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
+        String createPipelineRequestBody = "{\n"
+            + "  \"response_processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"tag\": \"ml_inference\",\n"
+            + "        \"description\": \"This processor is to run knn query when query on both text and image\",\n"
+            + "        \"model_id\": \""
+            + this.bedrockMultiModalEmbeddingModelId
+            + "\",\n"
+            + "        \"optional_input_map\": [\n"
+            + "          {\n"
+            + "            \"inputText\": \"diary[0]\",\n"
+            + "            \"inputImage\": \"diary_image\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"multi_modal_embedding\": \"embedding\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"model_config\": {},\n"
+            + "        \"one_to_one\": true,\n"
+            + "        \"ignore_failure\": false\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        String index_name = "daily_index";
+
+        String pipelineName = "diary_multimodal_embedding_pipeline";
+        String query = "{\"query\":{\"term\":{\"diary\":{\"value\":\"happy\"}}}}";
+        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
+
+        assertEquals((int) JsonPath.parse(response).read("$.hits.hits.length()"), 1);
+        assertEquals((int) JsonPath.parse(response).read("$.hits.hits[0]._source.multi_modal_embedding.length()"), 1024);
     }
 
     /**

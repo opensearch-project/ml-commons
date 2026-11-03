@@ -18,6 +18,7 @@
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -279,7 +280,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        when(xc.createGenerator(any(), any(), any(), anyBoolean())).thenReturn(generator);
         XContentBuilder builder = new XContentBuilder(xc, os);
         assertNotNull(parameters.toXContent(builder, null));
     }
@@ -289,7 +290,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        when(xc.createGenerator(any(), any(), any(), anyBoolean())).thenReturn(generator);
         XContentBuilder builder = new XContentBuilder(xc, os);
         parameters.toXContent(builder, null);
         assertNotNull(parameters.toXContent(builder, null));
@@ -319,7 +320,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);
-        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        when(xc.createGenerator(any(), any(), any(), anyBoolean())).thenReturn(generator);
         XContentBuilder builder = new XContentBuilder(xc, os);
         assertNotNull(parameters.toXContent(builder, null));
     }

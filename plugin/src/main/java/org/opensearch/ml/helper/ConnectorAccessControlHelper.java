@@ -1,16 +1,15 @@
 /*
- *
- *  * Copyright OpenSearch Contributors
- *  * SPDX-License-Identifier: Apache-2.0
- *
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.opensearch.ml.helper;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
@@ -38,7 +37,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -148,6 +147,16 @@ public class ConnectorAccessControlHelper {
                 ) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     Connector connector = Connector.createConnector(parser);
+                    if (connector == null) {
+                        // createConnector swallows a parse failure and returns null. Consumers dereference the
+                        // result, so report it here rather than handing them a null to trip over.
+                        log.error("Failed to read connector {}: the stored document could not be parsed", connectorId);
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to read connector: " + connectorId, RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                        return;
+                    }
                     listener.onResponse(connector);
                 } catch (Exception e) {
                     log.error("Failed to parse connector:{}", connectorId);
@@ -194,7 +203,7 @@ public class ConnectorAccessControlHelper {
                 }
             } else {
                 try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    GetResponse gr = r.getResponse();
                     if (gr != null && gr.isExists()) {
                         try (
                             XContentParser parser = jsonXContent
@@ -202,6 +211,19 @@ public class ConnectorAccessControlHelper {
                         ) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             Connector mlConnector = Connector.createConnector(parser);
+                            if (mlConnector == null) {
+                                // Without this, removeCredential() below throws an NPE that the enclosing catch
+                                // reports as a parse or permission failure.
+                                log.error("Failed to read connector {}: the stored document could not be parsed", connectorId);
+                                listener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "Failed to read connector: " + connectorId,
+                                            RestStatus.INTERNAL_SERVER_ERROR
+                                        )
+                                    );
+                                return;
+                            }
                             mlConnector.removeCredential();
                             listener.onResponse(mlConnector);
                         } catch (Exception e) {
@@ -237,7 +259,7 @@ public class ConnectorAccessControlHelper {
         return user == null || !connectorAccessControlEnabled;
     }
 
-    public boolean isAdmin(User user) {
+    public static boolean isAdmin(User user) {
         if (user == null) {
             return false;
         }
@@ -281,7 +303,7 @@ public class ConnectorAccessControlHelper {
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termQuery(AbstractConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
-        boolQueryBuilder.should(QueryBuilders.termsQuery(AbstractConnector.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+        boolQueryBuilder.should(QueryBuilders.termsQuery(BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
         String ownerName = "owner.name.keyword";

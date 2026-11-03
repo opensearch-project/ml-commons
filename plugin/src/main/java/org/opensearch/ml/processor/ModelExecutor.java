@@ -381,4 +381,37 @@ public interface ModelExecutor {
         }
 
     }
+
+    /**
+     * Combines two lists of maps into a single list of maps.
+     *
+     * This method takes two lists of maps and combines them into a single list.
+     * For each index, it merges the maps from both lists (if available) into a new map.
+     * If one list is longer than the other, the remaining maps are added without merging.
+     * If either input list is null, it is treated as an empty list.
+     *
+     * @param mapList1 The first list of maps to be combined, can be null
+     * @param mapList2 The second list of maps to be combined, can be null
+     * @return A new list containing the combined maps
+     */
+    static List<Map<String, String>> combineMaps(List<Map<String, String>> mapList1, List<Map<String, String>> mapList2) {
+        List<Map<String, String>> combinedMaps = new ArrayList<>();
+
+        // Handle null inputs by treating them as empty lists
+        mapList1 = (mapList1 != null) ? mapList1 : new ArrayList<>();
+        mapList2 = (mapList2 != null) ? mapList2 : new ArrayList<>();
+
+        int maxSize = Math.max(mapList1.size(), mapList2.size());
+        for (int i = 0; i < maxSize; i++) {
+            Map<String, String> combinedMap = new HashMap<>();
+            if (i < mapList1.size()) {
+                combinedMap.putAll(mapList1.get(i));
+            }
+            if (i < mapList2.size()) {
+                combinedMap.putAll(mapList2.get(i));
+            }
+            combinedMaps.add(combinedMap);
+        }
+        return combinedMaps;
+    }
 }

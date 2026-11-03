@@ -6,12 +6,17 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.isJsonOrNdjson;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
@@ -19,12 +24,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiFunction;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -35,6 +43,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -51,6 +63,18 @@ public class HttpConnector extends AbstractConnector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
+    // TODO: move the AgentUtils class from algorithm module to common module
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+
+    // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
+    // Restricts injection to structured-output fields only; prevents callers from overriding
+    // provider control fields such as "model", "stream", or "max_tokens".
+    static final Set<String> STRUCTURED_OUTPUT_ALLOWED_FIELDS = Set
+        .of(
+            "response_format",  // OpenAI, Azure OpenAI, DeepSeek, Ollama, Cohere
+            "generationConfig", // Google Gemini
+            "toolConfig"        // Amazon Bedrock Converse
+        );
 
     // TODO: add RequestConfig like request time out,
 
@@ -67,9 +91,15 @@ public class HttpConnector extends AbstractConnector {
         AccessMode accessMode,
         User owner,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
+        String tenantId,
+        String provisionedBy
     ) {
         validateProtocol(protocol);
+        if (actions != null) {
+            for (ConnectorAction action : actions) {
+                action.validatePrePostProcessFunctions(parameters);
+            }
+        }
         this.name = name;
         this.description = description;
         this.version = version;
@@ -82,6 +112,7 @@ public class HttpConnector extends AbstractConnector {
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
+        this.provisionedBy = provisionedBy;
 
     }
 
@@ -146,6 +177,12 @@ public class HttpConnector extends AbstractConnector {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case PROVISIONED_BY_FIELD:
+                    provisionedBy = parser.textOrNull();
+                    break;
+                case BATCH_JOB_STATUS_FIELD:
+                    batchJobStatus = BatchJobStatusMapping.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -198,6 +235,12 @@ public class HttpConnector extends AbstractConnector {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (provisionedBy != null) {
+            builder.field(PROVISIONED_BY_FIELD, provisionedBy);
+        }
+        if (batchJobStatus != null) {
+            builder.field(BATCH_JOB_STATUS_FIELD, batchJobStatus);
+        }
         builder.endObject();
         return builder;
     }
@@ -243,6 +286,10 @@ public class HttpConnector extends AbstractConnector {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean()) {
+            this.batchJobStatus = new BatchJobStatusMapping(input);
+        }
     }
 
     @Override
@@ -297,10 +344,21 @@ public class HttpConnector extends AbstractConnector {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_7_0)) {
+            out.writeOptionalString(provisionedBy);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_9_0)) {
+            if (batchJobStatus != null) {
+                out.writeBoolean(true);
+                batchJobStatus.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -318,7 +376,6 @@ public class HttpConnector extends AbstractConnector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getActions() != null) {
             this.actions = updateContent.getActions();
@@ -332,6 +389,9 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getConnectorClientConfig() != null) {
             this.connectorClientConfig = updateContent.getConnectorClientConfig();
         }
+        if (updateContent.getBatchJobStatus() != null) {
+            this.batchJobStatus = updateContent.getBatchJobStatus();
+        }
     }
 
     @Override
@@ -344,12 +404,108 @@ public class HttpConnector extends AbstractConnector {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
-            if (!isJson(payload)) {
+            if (!isJsonOrNdjson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
+            } else if (neededStreamParameterInPayload(parameters)) {
+                if (isJson(payload)) {
+                    JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+                    jsonObject.addProperty("stream", true);
+                    payload = jsonObject.toString();
+                }
+            }
+            if (parameters != null && isJson(payload) && connectorAction.get().isSupportsStructuredOutput()) {
+                payload = injectStructuredOutputParams(parameters, payload);
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    // Convention: parameters named _<fieldname>_json inject/replace a top-level JSON object field;
+    // parameters named _<fieldname>_additions_json merge into an existing top-level JSON object field.
+    // Both conventions require: (a) the payload is a JSON object (array payloads are left untouched),
+    // (b) a non-empty, allowlisted field name, and (c) a valid JSON object value string.
+    // Replacements (_X_json) are applied before merges (_X_additions_json) so behaviour is
+    // deterministic when both are present for the same field.
+    // Note: matched parameters are read but not removed from the map.
+    private String injectStructuredOutputParams(Map<String, String> parameters, String payload) {
+        JsonElement parsed = JsonParser.parseString(payload);
+        if (!parsed.isJsonObject())
+            return payload;
+        JsonObject body = parsed.getAsJsonObject();
+        boolean modified = false;
+
+        // Pass 1: _<field>_json — inject or replace a top-level field
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            if (entry.getKey().endsWith("_additions_json"))
+                continue;
+            String fieldName = allowedFieldName(entry.getKey(), "_json");
+            JsonObject value = asJsonObject(entry.getValue());
+            if (fieldName == null || value == null)
+                continue;
+            body.add(fieldName, value);
+            modified = true;
+        }
+
+        // Pass 2: _<field>_additions_json — merge into an existing top-level object
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String fieldName = allowedFieldName(entry.getKey(), "_additions_json");
+            JsonObject additions = asJsonObject(entry.getValue());
+            if (fieldName == null || additions == null)
+                continue;
+            JsonObject target = body.has(fieldName) && body.get(fieldName).isJsonObject()
+                ? body.getAsJsonObject(fieldName)
+                : new JsonObject();
+            additions.entrySet().forEach(e -> target.add(e.getKey(), e.getValue()));
+            body.add(fieldName, target);
+            modified = true;
+        }
+
+        return modified ? body.toString() : payload;
+    }
+
+    /** Returns the allowlisted field name encoded in a _&lt;field&gt;_&lt;suffix&gt; key, or null if invalid. */
+    private static String allowedFieldName(String key, String suffix) {
+        if (!key.startsWith("_") || !key.endsWith(suffix))
+            return null;
+        int end = key.length() - suffix.length();
+        if (end <= 1)
+            return null;
+        String fieldName = key.substring(1, end);
+        return STRUCTURED_OUTPUT_ALLOWED_FIELDS.contains(fieldName) ? fieldName : null;
+    }
+
+    /** Parses a JSON string as an object, returning null if absent, invalid, or not an object. */
+    private static JsonObject asJsonObject(String json) {
+        if (json == null || !isJson(json))
+            return null;
+        JsonElement el = JsonParser.parseString(json);
+        return el.isJsonObject() ? el.getAsJsonObject() : null;
+    }
+
+    private boolean neededStreamParameterInPayload(Map<String, String> parameters) {
+        if (parameters == null) {
+            return false;
+        }
+
+        boolean isStream = parameters.containsKey("stream");
+        if (!isStream) {
+            return false;
+        }
+
+        String llmInterface = parameters.get("_llm_interface");
+        if (StringUtils.isBlank(llmInterface)) {
+            return false;
+        }
+
+        llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+        llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+        switch (llmInterface) {
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
@@ -377,18 +533,6 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
-        for (String key : credential.keySet()) {
-            decrypted.put(key, function.apply(credential.get(key), tenantId));
-        }
-        this.decryptedCredential = decrypted;
-        Optional<ConnectorAction> connectorAction = findAction(action);
-        Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
     public Connector cloneConnector() {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
@@ -400,16 +544,13 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key), tenantId);
-            credential.put(key, encrypted);
-        }
-    }
-
-    @Override
     public String getActionHttpMethod(String action) {
         return findAction(action).get().getMethod();
     }
 
+    @Override
+    protected Map<String, String> getAllHeaders(String action) {
+        Optional<ConnectorAction> connectorAction = findAction(action);
+        return connectorAction.map(ConnectorAction::getHeaders).orElse(null);
+    }
 }

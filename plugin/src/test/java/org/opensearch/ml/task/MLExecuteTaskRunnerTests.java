@@ -8,12 +8,13 @@ package org.opensearch.ml.task;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.nio.file.Path;
@@ -32,10 +33,13 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
+import org.opensearch.ml.action.contextmanagement.ContextManagerFactory;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
@@ -76,6 +80,10 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     DiscoveryNodeHelper nodeHelper;
     @Mock
     ClusterApplierService clusterApplierService;
+    @Mock
+    ContextManagementTemplateService contextManagementTemplateService;
+    @Mock
+    ContextManagerFactory contextManagerFactory;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -93,7 +101,7 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = spy(new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor));
         when(threadPool.executor(anyString())).thenReturn(executorService);
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
@@ -136,7 +144,9 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlCircuitBreakerService,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                contextManagementTemplateService,
+                contextManagerFactory
             )
         );
 
@@ -146,7 +156,14 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
         );
     }
 
-    public void testExecuteTask_Success() {
+    public void testExecuteTask_Success() throws Exception {
+        Output mockOutput = mock(Output.class);
+        doAnswer(invocation -> {
+            ActionListener<Output> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mockOutput);
+            return null;
+        }).when(mlEngine).execute(any(), any(), any());
+
         taskRunner.executeTask(mlExecuteTaskRequest, listener);
         verify(listener).onResponse(any(MLExecuteTaskResponse.class));
     }

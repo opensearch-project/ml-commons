@@ -7,18 +7,18 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
-import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
-import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
-import static org.opensearch.ml.common.utils.StringUtils.isValidJSONPath;
-import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
-import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -32,7 +32,16 @@ import org.apache.commons.text.StringSubstitutor;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
+import com.google.gson.JsonElement;
+import com.google.gson.TypeAdapter;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
 public class StringUtilsTest {
@@ -72,10 +81,99 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void isJsonOrNdjson_NullInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(null));
+    }
+
+    @Test
+    public void isJsonOrNdjson_BlankInput() {
+        assertFalse(StringUtils.isJsonOrNdjson(""));
+        assertFalse(StringUtils.isJsonOrNdjson("   "));
+        assertFalse(StringUtils.isJsonOrNdjson("\n"));
+        assertFalse(StringUtils.isJsonOrNdjson("\t"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidJson() {
+        // Valid JSON objects should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": 123}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]"));
+        assertTrue(StringUtils.isJsonOrNdjson("[\"a\", \"b\"]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value\", \"key2\": 123}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjson() {
+        // Valid NDJSON (newline-delimited JSON) should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {}}\n{\"field\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]\n[4, 5, 6]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2}\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjsonWithCarriageReturn() {
+        // NDJSON with \r\n line endings should return true
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\r\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\r\n{\"b\": 2}\r\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_NdjsonWithEmptyLines() {
+        // NDJSON with empty lines should return true (empty lines are ignored)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n\n{\"key2\": \"value2\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n  \n{\"b\": 2}"));
+        assertTrue(StringUtils.isJsonOrNdjson("\n{\"key\": \"value\"}\n"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}\n\n"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidJson() {
+        // Invalid JSON should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{"));
+        assertFalse(StringUtils.isJsonOrNdjson("["));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key\": \"value}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, \"a]"));
+        assertFalse(StringUtils.isJsonOrNdjson("not json"));
+        assertFalse(StringUtils.isJsonOrNdjson("123abc"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidNdjson() {
+        // NDJSON with at least one invalid line should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\ninvalid json"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key1\": \"value1\"}\n{\"key2\": \"value2}\n{\"key3\": \"value3\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("invalid\n{\"key\": \"value\"}"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2\n{\"c\": 3}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_MixedValidInvalidLines() {
+        // Mix of valid and invalid JSON lines should return false
+        assertFalse(StringUtils.isJsonOrNdjson("{\"valid\": true}\n{invalid}\n{\"also_valid\": true}"));
+        assertFalse(StringUtils.isJsonOrNdjson("[1, 2, 3]\nplain text\n[4, 5, 6]"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_OpenSearchBulkFormat() {
+        // OpenSearch bulk API format (action/metadata line followed by document)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {\"_index\": \"test\"}}\n{\"field\": \"value\"}"));
+        assertTrue(
+            StringUtils
+                .isJsonOrNdjson(
+                    "{\"index\": {\"_index\": \"test\", \"_id\": \"1\"}}\n{\"field1\": \"value1\"}\n{\"index\": {\"_index\": \"test\", \"_id\": \"2\"}}\n{\"field2\": \"value2\"}"
+                )
+        );
+    }
+
+    @Test
     public void toUTF8() {
         String rawString = "\uD83D\uDE00\uD83D\uDE0D\uD83D\uDE1C";
         String utf8 = StringUtils.toUTF8(rawString);
-        Assert.assertNotNull(utf8);
+        assertNotNull(utf8);
     }
 
     @Test
@@ -95,7 +193,7 @@ public class StringUtilsTest {
         assertEquals("nested_value", nestedMap.get("nested_key"));
         List list = (List) nestedMap.get("nested_array");
         assertEquals(2, list.size());
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -105,7 +203,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -115,10 +213,95 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
+        assertEquals(1, list.get(0));
+        assertEquals("a", list.get(1));
+        assertTrue(list.get(2) instanceof List);
+        assertTrue(list.get(3) instanceof Map);
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_SimpleMap() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{\"key\": \"value\"}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertEquals("value", wrappedMap.get("key"));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedMap() {
+        Map<String, Object> response = StringUtils
+            .fromJsonWithWrappingKey("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.get("key") instanceof Map);
+        Map nestedMap = (Map) wrappedMap.get("key");
+        assertEquals("nested_value", nestedMap.get("nested_key"));
+        List list = (List) nestedMap.get("nested_array");
+        assertEquals(2, list.size());
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_SimpleList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\"]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
         assertEquals(1.0, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
         assertTrue(list.get(3) instanceof Map);
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyObject() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyArray() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertTrue(list.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedType() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("\"simple string\"", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNumber() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("42", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedBoolean() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("true", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNull() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("null", "wrapper"); });
     }
 
     @Test
@@ -136,6 +319,18 @@ public class StringUtilsTest {
         assertEquals("2.1", parameterMap.get("key3"));
         assertEquals("[10,20]", parameterMap.get("key4"));
         assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+    }
+
+    @Test
+    public void getParameterMapWithNullInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(null);
+        Assert.assertTrue(parameterMap.isEmpty());
+    }
+
+    @Test
+    public void getParameterMapWithEmptyInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(Map.of());
+        Assert.assertTrue(parameterMap.isEmpty());
     }
 
     @Test
@@ -188,7 +383,7 @@ public class StringUtilsTest {
     public void addDefaultMethod_Escape() {
         String input = "return escape(\"abc\n123\");";
         String result = StringUtils.addDefaultMethod(input);
-        Assert.assertNotEquals(input, result);
+        assertNotEquals(input, result);
         assertTrue(result.startsWith(StringUtils.DEFAULT_ESCAPE_FUNCTION));
     }
 
@@ -242,6 +437,48 @@ public class StringUtilsTest {
      * in the values. Verifies that the method correctly extracts the prefixes of the toString()
      * method calls.
      */
+    @Test
+    public void testCollectToStringPrefixes() {
+        Map<String, String> map = new HashMap<>();
+        map.put("key1", "${parameters.tensor.toString()}");
+        map.put("key2", "${parameters.output.toString()}");
+        map.put("key3", "normal value");
+
+        List<String> prefixes = StringUtils.collectToStringPrefixes(map);
+
+        assertEquals(2, prefixes.size());
+        assertTrue(prefixes.contains("tensor"));
+        assertTrue(prefixes.contains("output"));
+    }
+
+    @Test
+    public void test_GsonTypeAdapters() {
+        // Test ModelTensor serialization
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name("test_tensor")
+            .data(new Number[] { 1, 2, 3 })
+            .dataType(MLResultDataType.INT32)
+            .build();
+
+        String tensorJson = StringUtils.gson.toJson(tensor);
+        assertEquals(tensor.toString(), tensorJson);
+
+        // Test ModelTensorOutput serialization
+        List<ModelTensors> outputs = new ArrayList<>();
+        outputs.add(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build());
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        String outputJson = StringUtils.gson.toJson(output);
+        assertEquals(output.toString(), outputJson);
+
+        // Test ModelTensors serialization
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+
+        String tensorsJson = StringUtils.gson.toJson(tensors);
+        assertEquals(tensors.toString(), tensorsJson);
+    }
+
     @Test
     public void testGetToStringPrefix() {
         Map<String, String> parameters = new HashMap<>();
@@ -748,5 +985,435 @@ public class StringUtilsTest {
 
         String json2 = "{\"key1\": \"foo\"}";
         assertThrows(OpenSearchParseException.class, () -> StringUtils.validateSchema(schema, json2));
+    }
+
+    @Test
+    public void testIsSafeText_ValidInputs() {
+        assertTrue(StringUtils.isSafeText("Model-Name_1.0"));
+        assertTrue(StringUtils.isSafeText("This is a description:"));
+        assertTrue(StringUtils.isSafeText("Name_with-dots.and:colons"));
+    }
+
+    @Test
+    public void testValidateFields_AllValid() {
+        Map<String, FieldDescriptor> fields = Map
+            .of("Field1", new FieldDescriptor("Valid Name 1", true), "Field2", new FieldDescriptor("Another_Valid-Field.Name:Here", true));
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldsValidWhenBlank() {
+        Map<String, FieldDescriptor> fields = Map
+            .of(
+                "OptionalField1",
+                new FieldDescriptor("", false),
+                "OptionalField2",
+                new FieldDescriptor("   ", false),
+                "OptionalField3",
+                new FieldDescriptor(null, false)
+            );
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldInvalidPattern() {
+        Map<String, FieldDescriptor> fields = Map.of("OptionalField1", new FieldDescriptor("Bad@Value$", false));
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("OptionalField1"));
+    }
+
+    @Test
+    public void testIsSafeText_AdvancedValidInputs() {
+        // Testing all allowed characters
+        assertTrue(StringUtils.isSafeText("Hello World"));  // spaces
+        assertTrue(StringUtils.isSafeText("Hello.World"));  // period
+        assertTrue(StringUtils.isSafeText("Hello,World"));  // comma
+        assertTrue(StringUtils.isSafeText("Hello!World"));  // exclamation
+        assertTrue(StringUtils.isSafeText("Hello?World"));  // question mark
+        assertTrue(StringUtils.isSafeText("Hello(World)")); // parentheses
+        assertTrue(StringUtils.isSafeText("Hello:World"));  // colon
+        assertTrue(StringUtils.isSafeText("Hello@World"));  // at sign
+        assertTrue(StringUtils.isSafeText("Hello-World"));  // hyphen
+        assertTrue(StringUtils.isSafeText("Hello_World"));  // underscore
+        assertTrue(StringUtils.isSafeText("Hello'World")); // single quote
+        assertTrue(StringUtils.isSafeText("Hello\"World")); // double quote
+    }
+
+    @Test
+    public void testIsSafeText_AdvancedInvalidInputs() {
+        // Testing specifically excluded characters
+        assertFalse(StringUtils.isSafeText("Hello<World"));  // less than
+        assertFalse(StringUtils.isSafeText("Hello>World"));  // greater than
+        assertTrue(StringUtils.isSafeText("Hello/World"));  // forward slash
+        assertFalse(StringUtils.isSafeText("Hello\\World")); // backslash
+        assertFalse(StringUtils.isSafeText("Hello&World"));  // ampersand
+        assertFalse(StringUtils.isSafeText("Hello+World"));  // plus
+        assertFalse(StringUtils.isSafeText("Hello=World"));  // equals
+        assertFalse(StringUtils.isSafeText("Hello;World"));  // semicolon
+        assertFalse(StringUtils.isSafeText("Hello|World"));  // pipe
+        assertFalse(StringUtils.isSafeText("Hello*World"));  // asterisk
+    }
+
+    @Test
+    public void testValidateFields_RequiredFields_MissingOrInvalid() {
+        Map<String, FieldDescriptor> fields = new HashMap<>();
+        fields.put("RequiredField1", new FieldDescriptor("", true));
+        fields.put("RequiredField2", new FieldDescriptor("   ", true));
+        fields.put("RequiredField3", new FieldDescriptor("Bad@#Char$", true));
+        fields.put("RequiredField4", new FieldDescriptor(null, true));
+
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        String message = exception.getMessage();
+        assertTrue(message.contains("RequiredField1"));
+        assertTrue(message.contains("RequiredField2"));
+        assertTrue(message.contains("RequiredField3"));
+        assertTrue(message.contains("RequiredField4"));
+    }
+
+    @Test
+    public void testValidateFields_EmptyMap() {
+        Map<String, FieldDescriptor> fields = new HashMap<>();
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_UnicodeLettersAndNumbers() {
+        Map<String, FieldDescriptor> fields = Map
+            .of("field1", new FieldDescriptor("Hello世界123", true), "field2", new FieldDescriptor("Café42", true));
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_InvalidCharacterSet() {
+        Map<String, FieldDescriptor> fields = Map.of("Field1", new FieldDescriptor("Bad#Value$With^Weird*Chars", true));
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("Field1"));
+    }
+
+    @Test
+    public void prepareJsonValue_returnsRawIfJson() {
+        String json = "{\"key\": 123}";
+        String result = StringUtils.prepareJsonValue(json);
+        assertSame(json, result);  // branch where isJson(input)==true
+    }
+
+    @Test
+    public void prepareJsonValue_escapesBadCharsOtherwise() {
+        String input = "Tom & Jerry \"<script>";
+        String escaped = StringUtils.prepareJsonValue(input);
+        assertNotEquals(input, escaped);
+        assertFalse(StringUtils.isJson(escaped));
+        assertEquals("Tom & Jerry \\\"<script>", escaped);
+    }
+
+    @Test
+    public void testParseStringArrayToList_validJsonArray() {
+        // Arrange
+        String jsonArray = "[\"apple\", \"banana\", \"cherry\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(Arrays.asList("apple", "banana", "cherry"), result);
+    }
+
+    @Test
+    public void testParseStringArrayToList_emptyArray() {
+        // Arrange
+        String jsonArray = "[]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testParseStringArrayToList_withSpecialCharacters() {
+        // Arrange
+        String jsonArray = "[\"hello\", \"world!\", \"special: @#$%^&*()\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(Arrays.asList("hello", "world!", "special: @#$%^&*()"), result);
+    }
+
+    @Test
+    public void testParseStringArrayToList_withNullElement() {
+        // Arrange
+        String jsonArray = "[\"first\", null, \"third\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(3, result.size());
+        assertEquals("first", result.get(0));
+        assertNull(result.get(1));
+        assertEquals("third", result.get(2));
+    }
+
+    @Test
+    public void testParseStringArrayToList_jsonWithTrailingComma() {
+        // Arrange
+        String jsonWithTrailingComma = "[\"apple\", \"banana\",]"; // Invalid trailing comma
+
+        List<String> result = parseStringArrayToList(jsonWithTrailingComma);
+
+        // Assert
+        assertEquals(Arrays.asList("apple", "banana", null), result);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    public void testParseStringArrayToList_nonArrayJson() {
+        // Arrange
+        String nonArrayJson = "{\"key\": \"value\"}";
+
+        // Act & Assert
+        List<String> array = parseStringArrayToList(nonArrayJson);
+        assertEquals(0, array.size());
+    }
+
+    @Test
+    public void testParseStringArrayToList_Null() {
+        List<String> array = parseStringArrayToList(null);
+        assertEquals(0, array.size());
+    }
+
+    // reflect method for PlainDoubleAdapter
+    private static TypeAdapter<Double> createPlainDoubleAdapter() {
+        try {
+            Class<?> clazz = Class.forName("org.opensearch.ml.common.utils.StringUtils$PlainDoubleAdapter");
+            Constructor<?> constructor = clazz.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            Object adapterInstance = constructor.newInstance();
+            return (TypeAdapter<Double>) adapterInstance;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create PlainDoubleAdapter via reflection", e);
+        }
+    }
+
+    @Test
+    public void testSerializeScientificNotation_RemovesExponent() {
+        Map<String, Object> data = Map.of("test1", 1e30, "test2", 1.2e3, "test3", 9.5e-3, "test4", 1.56e-30);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("1000000000000000000000000000000"));
+        assertTrue(json.contains("1200"));
+        assertTrue(json.contains("0.0095"));
+        assertTrue(json.contains("0.00000000000000000000000000000156"));
+
+    }
+
+    @Test
+    public void testSerializeInteger_RemovesDecimalPoint() {
+        Map<String, Object> data = Map.of("intLike", 42.0);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("42"));
+        assertFalse(json.contains("42.0"));
+    }
+
+    @Test
+    public void testSerializeNaNAndInfinity_BecomesNull() {
+        Map<String, Double> data = new HashMap<>();
+        data.put("nul", null);
+        data.put("nan", Double.NaN);
+        data.put("inf", Double.POSITIVE_INFINITY);
+        data.put("ninf", Double.NEGATIVE_INFINITY);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"nan\":null"));
+        assertTrue(json.contains("\"inf\":null"));
+        assertTrue(json.contains("\"ninf\":null"));
+        assertTrue(json.contains("\"nul\":null"));
+
+        assertFalse(json.contains("NaN"));
+        assertFalse(json.contains("Infinity"));
+    }
+
+    @Test
+    public void testDeserializeBackToDouble() {
+        String json = "{\"value\": 12345.6789}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        Object value = result.get("value");
+        assertTrue(value instanceof Double);
+        assertEquals(12345.6789, (Double) value, 1e-7);
+    }
+
+    @Test
+    public void testQuotedScientificNotation_RemainsString() {
+        String json = "{\"code\":\"1e-6\"}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        assertEquals("1e-6", result.get("code"));
+    }
+
+    @Test
+    public void testSerializeFloatScientificNotation_RemovesExponent_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", 1.23e-5f);
+        data.put("fPrim", 9.5e-3f);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":0.0000123"));
+
+        assertTrue(json.contains("\"fPrim\":0.0095") || json.contains("\"fPrim\":9.5E-3") || json.contains("\"fPrim\":9.5e-3"));
+    }
+
+    @Test
+    public void testSerializeFloatNaNAndInfinity_BecomesNull_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", Float.NaN);
+        data.put("fPrimBox", Float.POSITIVE_INFINITY);
+        data.put("fNull", null);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":null"));
+        assertTrue(json.contains("\"fNull\":null"));
+        assertTrue(json.contains("\"fPrimBox\":null") || !json.contains("\"fPrimBox\""));
+    }
+
+    @Test
+    public void testDeserializeScientificNotation_ToFloatAndPrimitive() {
+        String jsonObj = "{\"fObj\":1.23e-5}";
+        java.lang.reflect.Type mapType = new com.google.gson.reflect.TypeToken<java.util.Map<String, Float>>() {
+        }.getType();
+        java.util.Map<String, Float> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonObj, mapType);
+        assertEquals(1.23e-5f, m.get("fObj"), 1e-9f);
+
+        String jsonArr = "[4.56e1]";
+        float[] arr = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonArr, float[].class);
+        assertEquals(45.6f, arr[0], 1e-6f);
+    }
+
+    @Test
+    public void testDeserializeNullFloat_ToNull() {
+        String json = "{\"fObj\":null,\"fPrim\":1.0}";
+
+        java.lang.reflect.Type mapType = new TypeToken<java.util.Map<String, JsonElement>>() {
+        }.getType();
+        java.util.Map<String, JsonElement> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, mapType);
+
+        assertTrue(m.containsKey("fObj"));
+        assertTrue(m.get("fObj").isJsonNull());
+
+        assertTrue(m.get("fPrim").isJsonPrimitive());
+        assertEquals(1.0f, m.get("fPrim").getAsFloat(), 1e-9f);
+    }
+
+    @Test
+    public void testProcessTextDoc_ExceptionMessageEscaping() {
+        // Test the problematic exception message from the error
+        String problematicMessage = "Invalid payload: { \"system\": [{\"text\": \"You are a precise...\"}], \"messages\": [...] }\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(problematicMessage);
+
+        // Verify that problematic characters are escaped
+        assertFalse(
+            "Escaped message should not contain unescaped newlines",
+            escapedMessage.contains("\n") && !escapedMessage.contains("\\n")
+        );
+        assertFalse(
+            "Escaped message should not contain unescaped quotes",
+            escapedMessage.contains("\"") && !escapedMessage.contains("\\\"")
+        );
+    }
+
+    @Test
+    public void testProcessTextDoc_GsonParsingErrorMessageEscaping() {
+        // Test the specific Gson error message pattern
+        String gsonError = "Expected BEGIN_ARRAY but was STRING at line 1 column 1 path $\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(gsonError);
+
+        // The escaped message should be safe for JSON inclusion
+        assertTrue("Escaped message should be safe for JSON", !escapedMessage.contains("\n") || escapedMessage.contains("\\n"));
+    }
+
+    @Test
+    public void testProcessTextDoc_NormalMessagePassthrough() {
+        // Test that normal messages without special characters pass through unchanged
+        String normalMessage = "Tool execution failed with normal error";
+
+        String escapedMessage = StringUtils.processTextDoc(normalMessage);
+
+        // Normal messages should be handled properly
+        assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
+    }
+
+    @Test
+    public void testFromJson_NullInput() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> StringUtils.fromJson(null, "response"));
+        assertEquals("JSON string cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testFromJson_ExceedsMaxSize() {
+        // Create a mock MLFeatureEnabledSetting with a small limit for testing
+        MLFeatureEnabledSetting mockSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockSetting.getMaxJsonSize()).thenReturn(100);
+
+        StringUtils.setMLFeatureEnabledSetting(mockSetting);
+
+        try {
+            // Create a JSON string larger than the limit (100 bytes)
+            StringBuilder largeJson = new StringBuilder("{\"data\":\"");
+            for (int i = 0; i < 200; i++) {
+                largeJson.append("a");
+            }
+            largeJson.append("\"}");
+
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> StringUtils.fromJson(largeJson.toString(), "response")
+            );
+            assertTrue(exception.getMessage().contains("JSON string size exceeds maximum allowed size"));
+        } finally {
+            StringUtils.setMLFeatureEnabledSetting(null);
+        }
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeys() {
+        // JSON with duplicate keys should be rejected due to STRICT_DUPLICATE_DETECTION
+        String jsonWithDuplicateKeys = "{\"user\": \"test\", \"role\": \"admin\", \"user\": \"malicious\"}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithDuplicateKeys, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
+        assertTrue(exception.getCause() instanceof tools.jackson.core.exc.StreamReadException);
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeysNested() {
+        // Test duplicate keys in nested objects
+        String jsonWithNestedDuplicates = "{\"config\": {\"timeout\": 30, \"retries\": 3, \"timeout\": 60}}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithNestedDuplicates, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
     }
 }

@@ -8,14 +8,20 @@ package org.opensearch.ml.model;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -25,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
@@ -40,17 +47,21 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
@@ -107,14 +118,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
         sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
         threadContext = new ThreadContext(settings);
-        mlModelGroupManager = new MLModelGroupManager(
-            mlIndicesHandler,
-            client,
-            sdkClient,
-            clusterService,
-            modelAccessControlHelper,
-            mlFeatureEnabledSetting
-        );
+        mlModelGroupManager = new MLModelGroupManager(mlIndicesHandler, client, sdkClient, clusterService, modelAccessControlHelper);
         assertNotNull(mlModelGroupManager);
         indexResponse = new IndexResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "model_group_ID", 1, 0, 2, true);
         // when(indexResponse.getId()).thenReturn("modelGroupID");
@@ -140,6 +144,104 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+    }
+
+    public void test_createModelGroup_usesCustomModelGroupId() {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        IndexResponse customIndexResponse = new IndexResponse(
+            new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0),
+            "my-model-group",
+            1,
+            0,
+            2,
+            true
+        );
+        when(putResponse.indexResponse()).thenReturn(customIndexResponse);
+        when(putResponse.id()).thenReturn("my-model-group");
+
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        doReturn(CompletableFuture.completedFuture(putResponse)).when(sdkClient).putDataObjectAsync(putRequestCaptor.capture());
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("my-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
+
+        verify(actionListener).onResponse("my-model-group");
+        assertEquals("my-model-group", putRequestCaptor.getValue().id());
+    }
+
+    public void test_createModelGroup_duplicateCustomModelGroupId() {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+
+        VersionConflictEngineException conflict = new VersionConflictEngineException(
+            new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0),
+            "my-model-group",
+            "document already exists"
+        );
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        doReturn(CompletableFuture.failedFuture(conflict)).when(sdkClient).putDataObjectAsync(putRequestCaptor.capture());
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("my-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model group id 'my-model-group' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    public void test_createModelGroup_sameNameAndSameCustomIdReturnsConflict() throws IOException {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+        stubNameSearch(getNonEmptySearchResponse("my-model-group"));
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("my-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(input, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("model group id 'my-model-group' already exists", exceptionCaptor.getValue().getMessage());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+        verify(sdkClient, never()).putDataObjectAsync(any());
+    }
+
+    public void test_createModelGroup_sameNameAndDifferentCustomIdStaysBadRequest() throws IOException {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+        stubNameSearch(getNonEmptySearchResponse("model_group_ID"));
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .modelGroupId("other-model-group")
+            .build();
+        mlModelGroupManager.createModelGroup(input, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "The name you provided is already being used by a model group with ID: model_group_ID.",
+            exceptionCaptor.getValue().getMessage()
+        );
+        verify(sdkClient, never()).putDataObjectAsync(any());
     }
 
     public void test_SuccessAddAllBackendRolesTrue() {
@@ -398,9 +500,20 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     }
 
     public void test_NotFoundGetModelGroup() throws IOException {
+        GetResult getResult = new GetResult(
+            ML_MODEL_GROUP_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
@@ -437,14 +550,28 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         return searchResponse;
     }
 
+    private void stubNameSearch(SearchResponse searchResponse) {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+    }
+
     private SearchResponse getNonEmptySearchResponse() throws IOException {
+        return getNonEmptySearchResponse("model_group_ID");
+    }
+
+    private SearchResponse getNonEmptySearchResponse(String id) throws IOException {
         SearchHit[] hits = new SearchHit[1];
         String modelContent = "{\n"
             + "                    \"created_time\": 1684981986069,\n"
             + "                    \"access\": \"public\",\n"
             + "                    \"latest_version\": 0,\n"
             + "                    \"last_updated_time\": 1684981986069,\n"
-            + "                    \"_id\": \"model_group_ID\",\n"
+            + "                    \"_id\": \""
+            + id
+            + "\",\n"
             + "                    \"name\": \"model_group_IT\",\n"
             + "                    \"description\": \"This is an example description\"\n"
             + "                }";

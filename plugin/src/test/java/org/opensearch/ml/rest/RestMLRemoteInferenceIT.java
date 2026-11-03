@@ -6,7 +6,12 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -14,6 +19,7 @@ import java.util.function.Consumer;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -25,6 +31,8 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
+import com.google.gson.Gson;
+import com.sun.net.httpserver.HttpServer;
 
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
@@ -37,8 +45,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "\"version\": 1,\n"
         + "\"client_config\": {\n"
         + "    \"max_connection\": 20,\n"
-        + "    \"connection_timeout\": 50000,\n"
-        + "    \"read_timeout\": 50000\n"
+        + "    \"connection_timeout\": 50,\n"
+        + "    \"read_timeout\": 50\n"
         + "  },\n"
         + "\"protocol\": \"http\",\n"
         + "\"parameters\": {\n"
@@ -47,7 +55,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"gpt-3.5-turbo-instruct\"\n"
+        + "    \"model\": \"gpt-4o-mini\"\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -58,11 +66,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "      {"
         + "      \"action_type\": \"predict\",\n"
         + "      \"method\": \"POST\",\n"
-        + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+        + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
         + "       \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "       },\n"
-        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
         + "      }\n"
         + "  ]\n"
         + "}";
@@ -70,12 +78,15 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    private static boolean initialSleepDone = false;
+
     @Before
-    public void setup() throws IOException, InterruptedException {
+    public void setup() throws Exception {
         disableClusterConnectorAccessControl();
-        // TODO Do we really need to wait this long? This adds 20s to every test case run.
-        // Can we instead check the cluster state and move on?
-        Thread.sleep(20000);
+        if (!initialSleepDone) {
+            waitForClusterSettingPropagation("plugins.ml_commons.connector_access_control_enabled", "false", 10);
+            initialSleepDone = true;
+        }
     }
 
     public void testCreate_Get_DeleteConnector() throws IOException {
@@ -222,6 +233,17 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             System.out.println("OPENAI_KEY is null");
             return;
         }
+        Response updateCBSettingResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.jvm_heap_memory_threshold\":100}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, updateCBSettingResponse.getStatusLine().getStatusCode());
+
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -242,7 +264,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
 
         getModelProfile(modelId, verifyRemoteModelDeployed());
         TimeUnit.SECONDS.sleep(71);
@@ -271,13 +293,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
+            return;
         }
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public void testPredictRemoteModelWithCorrectInterface() throws IOException, InterruptedException {
@@ -293,7 +321,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 return;
             }
             responseMap = (Map) responseList.get(0);
-            assertFalse(((String) responseMap.get("text")).isEmpty());
+            assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
         }, null);
     }
 
@@ -338,13 +366,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a ${parameters.test}\"\n" + "  }\n" + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
+            return;
         }
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public void testPredictRemoteModelWithSkipValidatingMissingParameterMissing() throws IOException, InterruptedException {
@@ -366,7 +400,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 return;
             }
             responseMap = (Map) responseList.get(0);
-            assertFalse(((String) responseMap.get("text")).isEmpty());
+            assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
         }, null);
     }
 
@@ -387,8 +421,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"version\": 1,\n"
             + "\"client_config\": {\n"
             + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
+            + "    \"connection_timeout\": 50,\n"
+            + "    \"read_timeout\": 50\n"
             + "  },\n"
             + "  \"protocol\": \"http\",\n"
             + "  \"parameters\": {\n"
@@ -397,7 +431,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"content_type\": \"application/json\",\n"
             + "      \"max_tokens\": 7,\n"
             + "      \"temperature\": 0,\n"
-            + "      \"model\": \"gpt-3.5-turbo\"\n"
+            + "      \"model\": \"gpt-4o-mini\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -458,14 +492,14 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"protocol\": \"http\",\n"
             + "\"client_config\": {\n"
             + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
+            + "    \"connection_timeout\": 50,\n"
+            + "    \"read_timeout\": 50\n"
             + "  },\n"
             + "  \"parameters\": {\n"
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"gpt-4\"\n"
+            + "      \"model\": \"gpt-4o-mini\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -529,8 +563,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"version\": 1,\n"
             + "\"client_config\": {\n"
             + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
+            + "    \"connection_timeout\": 50,\n"
+            + "    \"read_timeout\": 50\n"
             + "  },\n"
             + "  \"protocol\": \"http\",\n"
             + "  \"parameters\": {\n"
@@ -613,8 +647,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  \"version\": 1,\n"
             + "\"client_config\": {\n"
             + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
+            + "    \"connection_timeout\": 50,\n"
+            + "    \"read_timeout\": 50\n"
             + "  },\n"
             + "  \"protocol\": \"http\",\n"
             + "  \"parameters\": {\n"
@@ -661,83 +695,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "\"\n"
             + "  }\n"
             + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
-        }
-    }
-
-    public void testCohereGenerateTextModel() throws IOException, InterruptedException {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
             return;
         }
-        String entity = "{\n"
-            + "  \"name\": \"Cohere generate text model Connector\",\n"
-            + "  \"description\": \"The connector to public Cohere generate text model service\",\n"
-            + "  \"version\": 1,\n"
-            + "\"client_config\": {\n"
-            + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
-            + "  },\n"
-            + "  \"protocol\": \"http\",\n"
-            + "  \"parameters\": {\n"
-            + "      \"endpoint\": \"api.cohere.ai\",\n"
-            + "      \"auth\": \"API_Key\",\n"
-            + "      \"content_type\": \"application/json\",\n"
-            + "      \"max_tokens\": \"20\"\n"
-            + "  },\n"
-            + "  \"credential\": {\n"
-            + "      \"cohere_key\": \""
-            + COHERE_KEY
-            + "\"\n"
-            + "  },\n"
-            + "  \"actions\": [\n"
-            + "      {\n"
-            + "      \"action_type\": \"predict\",\n"
-            + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://${parameters.endpoint}/v1/generate\",\n"
-            + "          \"headers\": { \n"
-            + "          \"Authorization\": \"Bearer ${credential.cohere_key}\"\n"
-            + "          },\n"
-            + "          \"request_body\": \"{ \\\"max_tokens\\\": ${parameters.max_tokens}, \\\"return_likelihoods\\\": \\\"NONE\\\", \\\"truncate\\\": \\\"END\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\" }\"\n"
-            + "      }\n"
-            + "  ]\n"
-            + "}";
-        Response response = createConnector(entity);
-        Map responseMap = parseResponseToMap(response);
-        String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("cohere generate text model", connectorId);
-        responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String modelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        String predictInput = "{\n"
-            + "  \"parameters\": {\n"
-            + "      \"prompt\": \"Once upon a time in a magical land called\",\n"
-            + "      \"max_tokens\": 40\n"
-            + "  }\n"
-            + "}";
-        response = predictRemoteModel(modelId, predictInput);
-        responseMap = parseResponseToMap(response);
-        List responseList = (List) responseMap.get("inference_results");
-        responseMap = (Map) responseList.get(0);
-        responseList = (List) responseMap.get("output");
-        responseMap = (Map) responseList.get(0);
-        responseMap = (Map) responseMap.get("dataAsMap");
-        responseList = (List) responseMap.get("generations");
-        responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public static Response createConnector(String input) throws IOException {
@@ -852,8 +822,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "\"version\": 1,\n"
                     + "\"client_config\": {\n"
                     + "    \"max_connection\": 20,\n"
-                    + "    \"connection_timeout\": 50000,\n"
-                    + "    \"read_timeout\": 50000\n"
+                    + "    \"connection_timeout\": 50,\n"
+                    + "    \"read_timeout\": 50\n"
                     + "  },\n"
                     + "\"protocol\": \"http\",\n"
                     + "\"parameters\": {\n"
@@ -862,7 +832,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "    \"content_type\": \"application/json\",\n"
                     + "    \"max_tokens\": 7,\n"
                     + "    \"temperature\": 0,\n"
-                    + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                    + "    \"model\": \"gpt-4o-mini\",\n"
                     + "    \"skip_validating_missing_parameters\": \"true\"\n"
                     + "  },\n"
                     + "  \"credential\": {\n"
@@ -874,11 +844,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "      {"
                     + "      \"action_type\": \"predict\",\n"
                     + "      \"method\": \"POST\",\n"
-                    + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                    + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
                     + "       \"headers\": {\n"
                     + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
                     + "       },\n"
-                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
                     + "      }\n"
                     + "  ]\n"
                     + "}";
@@ -889,8 +859,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "\"version\": 1,\n"
                     + "\"client_config\": {\n"
                     + "    \"max_connection\": 20,\n"
-                    + "    \"connection_timeout\": 50000,\n"
-                    + "    \"read_timeout\": 50000\n"
+                    + "    \"connection_timeout\": 50,\n"
+                    + "    \"read_timeout\": 50\n"
                     + "  },\n"
                     + "\"protocol\": \"http\",\n"
                     + "\"parameters\": {\n"
@@ -899,7 +869,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "    \"content_type\": \"application/json\",\n"
                     + "    \"max_tokens\": 7,\n"
                     + "    \"temperature\": 0,\n"
-                    + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                    + "    \"model\": \"gpt-4o-mini\",\n"
                     + "    \"skip_validating_missing_parameters\": \"false\"\n"
                     + "  },\n"
                     + "  \"credential\": {\n"
@@ -911,11 +881,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "      {"
                     + "      \"action_type\": \"predict\",\n"
                     + "      \"method\": \"POST\",\n"
-                    + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                    + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
                     + "       \"headers\": {\n"
                     + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
                     + "       },\n"
-                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
                     + "      }\n"
                     + "  ]\n"
                     + "}";
@@ -1165,5 +1135,125 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String taskId = (String) responseMap.get("task_id");
         logger.info("task ID created: {}", taskId);
         return taskId;
+    }
+
+    @Test
+    public void testRuntimeParameterSubstitutionInHeaders() throws IOException, InterruptedException {
+        Assume
+            .assumeFalse(
+                "Containerized node cannot reach the test-JVM loopback echo server",
+                "docker-cluster".equals(System.getProperty("tests.clustername"))
+            );
+
+        HttpServer echoServer = startHeaderEchoServer();
+        try {
+            String endpoint = "127.0.0.1:" + echoServer.getAddress().getPort();
+            updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^http://127\\.0\\.0\\.1:.*$"));
+            updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", true);
+
+            String connectorWithDynamicHeaders = "{\n"
+                + "\"name\": \"Test Connector with Dynamic Headers\",\n"
+                + "\"description\": \"Connector to test runtime parameter substitution\",\n"
+                + "\"version\": 1,\n"
+                + "\"protocol\": \"http\",\n"
+                + "\"parameters\": {\n"
+                + "    \"endpoint\": \""
+                + endpoint
+                + "\",\n"
+                + "    \"model\": \"test-model\"\n"
+                + "  },\n"
+                + "\"credential\": {"
+                + "    \"test_api_key\": \"test\"\n"
+                + "  },\n"
+                + "\"actions\": [\n"
+                + "    {\n"
+                + "      \"action_type\": \"predict\",\n"
+                + "      \"method\": \"POST\",\n"
+                + "      \"url\": \"http://${parameters.endpoint}/post\",\n"
+                + "      \"headers\": {\n"
+                + "        \"X-Custom-Request\": \"${parameters.request_id}\",\n"
+                + "        \"X-Model\": \"${parameters.model}\"\n"
+                + "      },\n"
+                + "      \"request_body\": \"{\\\"input\\\": \\\"${parameters.input}\\\"}\"\n"
+                + "    }\n"
+                + "  ]\n"
+                + "}";
+
+            Response response = createConnector(connectorWithDynamicHeaders);
+            Map responseMap = parseResponseToMap(response);
+            String connectorId = (String) responseMap.get("connector_id");
+            assertNotNull(connectorId);
+
+            response = registerRemoteModel("Test Model with Dynamic Headers", connectorId);
+            responseMap = parseResponseToMap(response);
+            String taskId = (String) responseMap.get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+
+            response = getTask(taskId);
+            responseMap = parseResponseToMap(response);
+            String modelId = (String) responseMap.get("model_id");
+
+            response = deployRemoteModel(modelId);
+            responseMap = parseResponseToMap(response);
+            taskId = (String) responseMap.get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+
+            String predictInput = "{\n"
+                + "  \"parameters\": {\n"
+                + "      \"request_id\": \"req-integration-test-12345\",\n"
+                + "      \"input\": \"test input\"\n"
+                + "  }\n"
+                + "}";
+
+            response = predictRemoteModel(modelId, predictInput);
+            responseMap = parseResponseToMap(response);
+
+            List inferenceResults = (List) responseMap.get("inference_results");
+            assertNotNull(inferenceResults);
+            assertFalse(inferenceResults.isEmpty());
+
+            Map result = (Map) inferenceResults.get(0);
+            List output = (List) result.get("output");
+            assertNotNull(output);
+
+            Map outputData = (Map) output.get(0);
+            Map dataAsMap = (Map) outputData.get("dataAsMap");
+            assertNotNull(dataAsMap);
+
+            Map headers = (Map) dataAsMap.get("headers");
+            assertNotNull("echo response should contain headers", headers);
+
+            String requestId = (String) headers.get("x-custom-request");
+            String model = (String) headers.get("x-model");
+
+            assertEquals("req-integration-test-12345", requestId);
+            assertEquals("test-model", model);
+        } finally {
+            echoServer.stop(0);
+            updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", null);
+            updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", null);
+        }
+    }
+
+    /**
+     * Loopback HTTP server that echoes request headers as JSON, replacing the flaky httpbin.org
+     * dependency. Responds to POST /post with {"headers": {"name": "value", ...}}.
+     */
+    private HttpServer startHeaderEchoServer() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        server.createContext("/post", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            Map<String, String> echoedHeaders = new HashMap<>();
+            for (String name : exchange.getRequestHeaders().keySet()) {
+                echoedHeaders.put(name.toLowerCase(Locale.ROOT), exchange.getRequestHeaders().getFirst(name));
+            }
+            byte[] body = new Gson().toJson(Map.of("headers", echoedHeaders)).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        return server;
     }
 }

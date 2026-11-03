@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
 import java.security.AccessController;
+import java.security.Principal;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -27,17 +28,21 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -47,11 +52,11 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.transport.client.Client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Log4j2
 public class RestActionUtils {
@@ -67,6 +72,7 @@ public class RestActionUtils {
     public static final String PARAMETER_AGENT_ID = "agent_id";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_CONNECTOR_ID = "connector_id";
+    public static final String PARAMETER_INDEX_ID = "index_id";
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
     public static final String PARAMETER_VERSION = "version";
     public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
@@ -75,6 +81,8 @@ public class RestActionUtils {
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
     public static final String PARAMETER_TOOL_NAME = "tool_name";
+    public static final String PARAMETER_TEMPLATE_NAME = "template_name";
+    public static final String PARAMETER_TEMPLATE_ID = "template_id";
 
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
 
@@ -246,11 +254,24 @@ public class RestActionUtils {
             return false;
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                String userContext = objectMapper.writeValueAsString(userObject);
-                final JsonNode node = objectMapper.readTree(userContext);
-                final String userName = node.get("name").asText();
-
-                return isAdminDN(userName);
+                // On security 3.9+ (security#6419) org.opensearch.security.user.User implements Principal,
+                // and its getPrincipal() returns `this` — a direct self-reference Jackson 3 rejects by
+                // default ("Direct self-reference leading to cycle"). Read the name straight off the
+                // Principal to avoid serializing that self-referential bean. See ml-commons issue #4990.
+                if (userObject instanceof Principal principal) {
+                    return isAdminDN(principal.getName());
+                }
+                // Backport safety, do not delete: on security < 3.9 (3.8, 2.19) User is not a Principal but a
+                // plain serializable bean, and ml-commons 3.8 already runs Jackson 3. Those versions have no
+                // User#getPrincipal(), so there is no self-reference to trip on and the bean serializes
+                // cleanly — read the name off the JSON.
+                final JsonNode node = objectMapper.readTree(objectMapper.writeValueAsString(userObject));
+                final JsonNode nameNode = node.get("name");
+                if (nameNode == null) {
+                    // Fail loud rather than silently deciding this is not an admin on a security-relevant path.
+                    throw new IllegalStateException("Security user transient has no name: " + userObject.getClass().getName());
+                }
+                return isAdminDN(nameNode.asText());
             });
         } catch (PrivilegedActionException e) {
             throw new RuntimeException(e);
@@ -322,6 +343,9 @@ public class RestActionUtils {
         String path = request.path();
         String[] segments = path.split("/");
         String methodName = segments[segments.length - 1];
+        if ("stream".equals(methodName)) {
+            methodName = segments[segments.length - 2];
+        }
         methodName = methodName.startsWith("_") ? methodName.substring(1) : methodName;
 
         // find the action type for "/_plugins/_ml/_predict/<algorithm>/<model_id>"
@@ -330,5 +354,83 @@ public class RestActionUtils {
             methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
         }
         return methodName;
+    }
+
+    /**
+     * Checks if the REST request contains any MCP (Model Context Protocol) headers.
+     *
+     * @param request RestRequest to check for MCP headers
+     * @return true if any MCP headers are present, false otherwise
+     */
+    public static boolean hasMcpHeaders(RestRequest request) {
+        return request.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_REGION) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME) != null
+            || request.header(CommonValue.MCP_HEADER_OPENSEARCH_URL) != null;
+    }
+
+    /**
+     * Extracts MCP (Model Context Protocol) request headers from the REST request and puts them in ThreadContext.
+     *
+     * @param request RestRequest containing the MCP headers
+     * @param client Client to access ThreadContext
+     */
+    public static void putMcpRequestHeaders(RestRequest request, Client client) {
+        if (client == null) {
+            return;
+        }
+
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+
+        String[] mcpHeaders = {
+            CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID,
+            CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY,
+            CommonValue.MCP_HEADER_AWS_SESSION_TOKEN,
+            CommonValue.MCP_HEADER_AWS_REGION,
+            CommonValue.MCP_HEADER_AWS_SERVICE_NAME,
+            CommonValue.MCP_HEADER_OPENSEARCH_URL };
+
+        for (String headerName : mcpHeaders) {
+            String headerValue = request.header(headerName);
+            if (headerValue != null && !headerValue.isEmpty()) {
+                threadContext.putHeader(headerName, headerValue);
+                log.debug("Put MCP header: {}", headerName);
+            }
+        }
+    }
+
+    /**
+     * Wraps an exception for an {@link ActionListener} failure so that the client receives a meaningful HTTP status
+     * instead of a blanket 500, while never leaking server-side error detail.
+     * <p>
+     * The REST layer derives the response status via {@link ExceptionsHelper#status(Throwable)}. This helper forwards
+     * only exceptions that represent a genuine <em>client</em> error, so their real status and message reach the caller:
+     * <ul>
+     *   <li>an {@link OpenSearchException} whose {@code status()} is in the 4xx range (e.g. 404 not-found, 403 access
+     *       denied, 409 conflict, 429 too-many-requests); and</li>
+     *   <li>an {@link IllegalArgumentException}, which the REST layer maps to {@code 400 BAD_REQUEST}.</li>
+     * </ul>
+     * Everything else — including {@code 5xx} {@link OpenSearchException}s whose messages may embed internal
+     * infrastructure detail (node addresses, shard routing, cluster-block reasons) and any other unexpected exception —
+     * is replaced with a generic {@code 500 Internal server error}. This matches the 4xx-only forwarding pattern used by
+     * the sibling failure handlers in the memory-container transport actions and keeps server internals out of client
+     * responses.
+     *
+     * @param e the exception received by the failure handler
+     * @return the exception to pass to {@link ActionListener#onFailure(Exception)}
+     */
+    public static Exception wrapAsStatusException(Exception e) {
+        if (e instanceof IllegalArgumentException) {
+            return e;
+        }
+        if (e instanceof OpenSearchException) {
+            int status = ((OpenSearchException) e).status().getStatus();
+            if (status >= 400 && status < 500) {
+                return e;
+            }
+        }
+        return new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
     }
 }

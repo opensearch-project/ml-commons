@@ -1,5 +1,7 @@
 # Bedrock connector blueprint example for Converse
 
+> **Note:** `supports_structured_output: true` enables tool-use constrained decoding for agentic memory fact extraction. When set, the memory pipeline injects a `toolConfig` into the Bedrock Converse request, forcing the model to call the `extract_facts` tool and return structured JSON. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
+
 ## 1. Add connector endpoint to trusted URLs:
 
 Note: no need to do this after 2.11.0
@@ -35,17 +37,18 @@ POST /_plugins/_ml/connectors/_create
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
         "response_filter": "$.output.message.content[0].text",
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0"
+        "model": "anthropic.claude-sonnet-4-5-20251101-v1:0"
     },
     "actions": [
         {
             "action_type": "predict",
             "method": "POST",
+            "supports_structured_output": true,
             "headers": {
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse",
-            "request_body": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.inputs}\"}]}]}"
+            "request_body": "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.user_prompt}\"}]}]}"
         }
     ]
 }
@@ -68,17 +71,18 @@ POST /_plugins/_ml/connectors/_create
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
         "response_filter": "$.output.message.content[0].text",
-        "model": "anthropic.claude-3-sonnet-20240229-v1:0"
+        "model": "anthropic.claude-sonnet-4-5-20251101-v1:0"
     },
     "actions": [
         {
             "action_type": "predict",
             "method": "POST",
+            "supports_structured_output": true,
             "headers": {
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse",
-            "request_body": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.inputs}\"}]}]}"
+            "request_body": "{\"system\":[{\"text\":\"${parameters.system_prompt}\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.user_prompt}\"}]}]}"
         }
     ]
 }
@@ -137,7 +141,8 @@ Sample response:
 POST /_plugins/_ml/models/rcormY8B8aiZvtEZIe89/_predict
 {
   "parameters": {
-    "inputs": "What is the meaning of life?"
+    "system_prompt": "You are a helpful assistant.",
+    "user_prompt": "What is the meaning of life?"
   }
 }
 ```
@@ -151,7 +156,7 @@ Sample response:
         {
           "name": "response",
           "dataAsMap": {
-            "response": "There is no single, universally accepted answer to the meaning of life. It's a question that has been pondered by philosophers, theologians, and thinkers across cultures for centuries. Here are some of the major perspectives on deriving meaning in life:\n\n- Religious/spiritual views - Many religions provide a framework for finding meaning through connection to the divine, fulfilling religious teachings/duties, and an afterlife.\n\n- Existentialist philosophy - Thinkers like Sartre and Camus emphasized that we each have the freedom and responsibility to create our own subjective meaning in an objectively meaningless universe.\n\n- Hedonism - The view that the pursuit of pleasure and avoiding suffering is the highest good and most meaningful way to live.\n\n- Virtue ethics - Finding meaning through living an ethical life based on virtues like courage, temperance, justice, and wisdom.\n\n- Humanistic psychology - Psychologists like Maslow and Frankl emphasized fulfillment from reaching one's full human potential and finding a sense of purpose.\n\n- Naturalism/Nihilism - Some believe life itself has no inherent meaning beyond the physical/natural world we empirically experience.\n\nUltimately, the \"meaning of life\" is an existential question that challenges each individual to decide what makes their own life feel meaningful, based on their own worldview, beliefs, and values. There is no objectively \"correct\" universal answer."
+            "response": "The meaning of life is a profound philosophical question..."
           }
         }
       ],

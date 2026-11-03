@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -14,6 +19,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,23 +34,37 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.TypeAdapter;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.Error;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 
 import lombok.extern.log4j.Log4j2;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.introspect.DefaultAccessorNamingStrategy;
+import tools.jackson.databind.json.JsonMapper;
 
 @Log4j2
 public class StringUtils {
@@ -60,14 +80,47 @@ public class StringUtils {
         + "      return input;"
         + "\n    }\n";
 
-    public static final Gson gson;
+    // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
+    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_/'\"]*$");
 
+    public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
+
+    private static volatile MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    /**
+     * Sets the MLFeatureEnabledSetting instance for accessing dynamic settings.
+     * @param setting the MLFeatureEnabledSetting instance
+     */
+    public static void setMLFeatureEnabledSetting(MLFeatureEnabledSetting setting) {
+        mlFeatureEnabledSetting = setting;
+    }
+
+    public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
+        .serializeNulls()
+        .registerTypeAdapter(Float.class, new PlainFloatAdapter())
+        .registerTypeAdapter(float.class, new PlainFloatAdapter())
+        .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
+        .registerTypeAdapter(double.class, new PlainDoubleAdapter())
+        .create();
+
+    public static final Gson gson;
     static {
-        gson = new Gson();
+        gson = new GsonBuilder()
+            .disableHtmlEscaping()
+            .registerTypeAdapter(ModelTensor.class, new ToStringTypeAdapter<>(ModelTensor.class))
+            .registerTypeAdapter(ModelTensorOutput.class, new ToStringTypeAdapter<>(ModelTensorOutput.class))
+            .registerTypeAdapter(ModelTensors.class, new ToStringTypeAdapter<>(ModelTensors.class))
+            .serializeNulls()
+            .create();
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final ObjectMapper MAPPER = JsonMapper
+        .builder()
+        .accessorNaming(new DefaultAccessorNamingStrategy.Provider().withFirstCharAcceptance(true, true))
+        .configure(StreamReadFeature.STRICT_DUPLICATE_DETECTION, true)
+        .configure(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY, true)
+        .build();
 
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {
@@ -103,6 +156,61 @@ public class StringUtils {
         }
     }
 
+    /**
+     * Checks if the given string is valid JSON or NDJSON (newline-delimited JSON).
+     * NDJSON is commonly used for bulk operations in OpenSearch where each line is a separate JSON object.
+     *
+     * @param json the string to validate
+     * @return true if the string is valid JSON or NDJSON, false otherwise
+     */
+    public static boolean isJsonOrNdjson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
+        // First check if it's regular JSON
+        if (isJson(json)) {
+            return true;
+        }
+
+        // Check if it's NDJSON (newline-delimited JSON)
+        String[] lines = json.split("\\r?\\n");
+
+        // Each non-empty line must be valid JSON
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            if (!trimmedLine.isEmpty() && !isJson(trimmedLine)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Ensures that a string is properly JSON escaped.
+     *
+     * <p>This method examines the input string and determines whether it already represents
+     * valid JSON content. If the input is valid JSON, it is returned unchanged. Otherwise,
+     * the input is treated as a plain string and escaped according to JSON string literal
+     * rules.</p>
+     *
+     * <p>Examples:</p>
+     * <pre>
+     *   prepareJsonValue("hello")        → "\"hello\""
+     *   prepareJsonValue("\"hello\"")        → "\\\"hello\\\""
+     *   prepareJsonValue("{\"key\":123}") → {\"key\":123} (valid JSON object, unchanged)
+     * </pre>
+     * @param input
+     * @return
+     */
+    public static String prepareJsonValue(String input) {
+        if (isJson(input)) {
+            return input;
+        }
+        return escapeJson(input);
+    }
+
     public static String toUTF8(String rawString) {
         ByteBuffer buffer = StandardCharsets.UTF_8.encode(rawString);
 
@@ -111,14 +219,87 @@ public class StringUtils {
     }
 
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
-        Map<String, Object> result;
+        if (jsonStr == null) {
+            throw new IllegalArgumentException("JSON string cannot be null");
+        }
+        // Check size limit if configured (maxJsonSize = -1 means unlimited)
+        if (mlFeatureEnabledSetting != null) {
+            int maxJsonSize = mlFeatureEnabledSetting.getMaxJsonSize();
+            if (maxJsonSize > 0 && jsonStr.getBytes(StandardCharsets.UTF_8).length > maxJsonSize) {
+                throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d bytes)", maxJsonSize));
+            }
+        }
+        try {
+            JsonNode jsonNode = MAPPER.readTree(jsonStr);
+            if (jsonNode.isObject()) {
+                return MAPPER.convertValue(jsonNode, Map.class);
+            } else if (jsonNode.isArray()) {
+                List<Object> list = MAPPER.convertValue(jsonNode, List.class);
+                Map<String, Object> result = new HashMap<>();
+                result.put(defaultKey, list);
+                return result;
+            } else {
+                throw new IllegalArgumentException("Unsupported response type");
+            }
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Parses a JSON string and wraps the parsed content under a specified key.
+     *
+     * <p>This method takes a JSON string containing either a JSON object or JSON array,
+     * parses it, and returns a new Map with the parsed content wrapped under the provided
+     * wrapping key. This is useful for standardizing response formats or adding a consistent
+     * wrapper structure around varying JSON content types.</p>
+     *
+     * <p>Supported JSON input types:</p>
+     * <ul>
+     *   <li><strong>JSON Object</strong>: Parsed as a Map and wrapped under the key</li>
+     *   <li><strong>JSON Array</strong>: Parsed as a List and wrapped under the key</li>
+     * </ul>
+     *
+     * <p>Examples:</p>
+     * <pre>
+     *   // JSON Object input
+     *   fromJsonWithWrappingKey("{\"name\": \"John\", \"age\": 30}", "user")
+     *   // Returns: {"user": {"name": "John", "age": 30}}
+     *
+     *   // JSON Array input
+     *   fromJsonWithWrappingKey("[\"apple\", \"banana\", \"cherry\"]", "fruits")
+     *   // Returns: {"fruits": ["apple", "banana", "cherry"]}
+     *
+     *   // Empty object
+     *   fromJsonWithWrappingKey("{}", "data")
+     *   // Returns: {"data": {}}
+     *
+     *   // Empty array
+     *   fromJsonWithWrappingKey("[]", "items")
+     *   // Returns: {"items": []}
+     * </pre>
+     *
+     * @param jsonStr the JSON string to parse. Must be a valid JSON object or array.
+     *                Cannot be null or contain primitive JSON values (string, number, boolean, null).
+     * @param wrappingKey the key under which to wrap the parsed JSON content.
+     *                    This becomes the single key in the returned Map.
+     * @return a new Map containing the parsed JSON content wrapped under the specified key.
+     *         The Map will always contain exactly one entry with the wrapping key.
+     * @throws IllegalArgumentException if the JSON string contains unsupported types
+     *                                  (primitive values like strings, numbers, booleans, or null)
+     * @throws com.google.gson.JsonSyntaxException if the input string is not valid JSON
+     *
+     * @see #fromJson(String, String) for parsing with a default key for arrays only
+     */
+    public static Map<String, Object> fromJsonWithWrappingKey(String jsonStr, String wrappingKey) {
+        Map<String, Object> result = new HashMap<>();
         JsonElement jsonElement = JsonParser.parseString(jsonStr);
         if (jsonElement.isJsonObject()) {
-            result = gson.fromJson(jsonElement, Map.class);
+            Map parsedMap = gson.fromJson(jsonElement, Map.class);
+            result.put(wrappingKey, parsedMap);
         } else if (jsonElement.isJsonArray()) {
             List<Object> list = gson.fromJson(jsonElement, List.class);
-            result = new HashMap<>();
-            result.put(defaultKey, list);
+            result.put(wrappingKey, list);
         } else {
             throw new IllegalArgumentException("Unsupported response type");
         }
@@ -150,6 +331,8 @@ public class StringUtils {
     @SuppressWarnings("removal")
     public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
         Map<String, String> parameters = new HashMap<>();
+        if (parameterObjs == null)
+            return parameters;
         for (String key : parameterObjs.keySet()) {
             Object value = parameterObjs.get(key);
             try {
@@ -175,7 +358,11 @@ public class StringUtils {
                 if (value instanceof String) {
                     return (String) value;
                 } else {
-                    return gson.toJson(value);
+                    try {
+                        return MAPPER.writeValueAsString(value);
+                    } catch (JacksonException e) {
+                        throw new RuntimeException("Failed to serialize to JSON", e);
+                    }
                 }
             });
         } catch (PrivilegedActionException e) {
@@ -460,21 +647,21 @@ public class StringUtils {
         try {
             // parse the schema JSON as string
             JsonNode schemaNode = MAPPER.readTree(schemaString);
-            JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+            Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12).getSchema(schemaNode);
 
             // JSON data to validate
             JsonNode jsonNode = MAPPER.readTree(instanceString);
 
             // Validate JSON node against the schema
-            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            List<Error> errors = schema.validate(jsonNode);
             if (!errors.isEmpty()) {
-                String errorMessage = errors.stream().map(ValidationMessage::getMessage).collect(Collectors.joining(", "));
+                String errorMessage = errors.stream().map(Error::getMessage).collect(Collectors.joining(", "));
 
                 throw new OpenSearchParseException(
                     "Validation failed: " + errorMessage + " for instance: " + instanceString + " with schema: " + schemaString
                 );
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
         } catch (Exception e) {
             throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);
@@ -497,4 +684,119 @@ public class StringUtils {
         }
     }
 
+    /**
+     * Validates a map of fields to ensure that their values only contain allowed characters.
+     * <p>
+     * Allowed characters are: letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:).
+     * If a value does not comply, a validation error is added.
+     *
+     * @param fields A map where the key is the field name (used for error messages) and the value is the text to validate.
+     * @return An {@link ActionRequestValidationException} containing all validation errors, or {@code null} if all fields are valid.
+     */
+    public static ActionRequestValidationException validateFields(Map<String, FieldDescriptor> fields) {
+        ActionRequestValidationException exception = null;
+
+        for (Map.Entry<String, FieldDescriptor> entry : fields.entrySet()) {
+            String key = entry.getKey();
+            FieldDescriptor descriptor = entry.getValue();
+            String value = descriptor.getValue();
+
+            if (descriptor.isRequired()) {
+                if (!isSafeText(value)) {
+                    String reason = (value == null || value.isBlank()) ? "is required and cannot be null or blank" : SAFE_INPUT_DESCRIPTION;
+                    exception = addValidationError(key + " " + reason, exception);
+                }
+            } else {
+                if (value != null && !value.isBlank() && !matchesSafePattern(value)) {
+                    exception = addValidationError(key + " " + SAFE_INPUT_DESCRIPTION, exception);
+                }
+            }
+        }
+
+        return exception;
+    }
+
+    /**
+     * Checks if the input is safe (non-null, non-blank, matches safe character set).
+     *
+     * @param value The input string to validate
+     * @return true if input is safe, false otherwise
+     */
+    public static boolean isSafeText(String value) {
+        return value != null && !value.isBlank() && matchesSafePattern(value);
+    }
+
+    // Just checks pattern
+    public static boolean matchesSafePattern(String value) {
+        return SAFE_INPUT_PATTERN.matcher(value).matches();
+    }
+
+    /**
+     * Parses a JSON array string into a List of Strings.
+     *
+     * @param jsonArrayString JSON array string to parse (e.g., "[\"item1\", \"item2\"]")
+     * @return List of strings parsed from the JSON array, or an empty list if the input is
+     *         null, empty, or invalid JSON
+     */
+    public static List<String> parseStringArrayToList(String jsonArrayString) {
+        if (jsonArrayString == null || jsonArrayString.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return gson.fromJson(jsonArrayString, TypeToken.getParameterized(List.class, String.class).getType());
+        } catch (JsonSyntaxException e) {
+            log.error("Failed to parse JSON array string: {}", jsonArrayString, e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Custom Gson adapter for Double and Float type.
+     * Serializes numbers without scientific notation.
+     * Writes null for null, NaN, and Infinity values.
+     * Deserializes JSON numbers back to Double and Float.
+     */
+    private static class PlainDoubleAdapter extends TypeAdapter<Double> {
+        @Override
+        public void write(JsonWriter out, Double value) throws IOException {
+            if (value == null || value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+                return;
+            }
+
+            BigDecimal bd = BigDecimal.valueOf(value).stripTrailingZeros();
+
+            out.jsonValue(bd.toPlainString());
+        }
+
+        @Override
+        public Double read(JsonReader in) throws IOException {
+            return in.nextDouble();
+        }
+    }
+
+    public static class PlainFloatAdapter extends TypeAdapter<Float> {
+        @Override
+        public void write(JsonWriter out, Float value) throws IOException {
+            if (value == null || value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+                return;
+            }
+
+            BigDecimal bd = new BigDecimal(Float.toString(value)).stripTrailingZeros();
+            out.jsonValue(bd.toPlainString());
+        }
+
+        @Override
+        public Float read(JsonReader in) throws IOException {
+            double d = in.nextDouble();
+            float f = (float) d;
+            return f;
+        }
+    }
+
+    public static String getStringField(JsonObject obj, String fieldName) {
+        JsonElement element = obj.get(fieldName);
+        return element != null && !element.isJsonNull() ? element.getAsString() : null;
+    }
 }

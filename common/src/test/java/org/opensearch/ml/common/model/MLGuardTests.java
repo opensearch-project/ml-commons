@@ -19,6 +19,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchModule;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -29,8 +30,11 @@ public class MLGuardTests {
     @Mock
     Client client;
     @Mock
+    SdkClient sdkClient;
+    @Mock
     ThreadPool threadPool;
     ThreadContext threadContext;
+    String tenantId;
 
     StopWords stopWords;
     String[] regex;
@@ -48,6 +52,7 @@ public class MLGuardTests {
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
+        tenantId = "tenantId";
 
         stopWords = new StopWords("test_index", List.of("test_field").toArray(new String[0]));
         regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
@@ -55,7 +60,7 @@ public class MLGuardTests {
         inputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         outputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         guardrails = new Guardrails("test_type", inputLocalRegexGuardrail, outputLocalRegexGuardrail);
-        mlGuard = new MLGuard(guardrails, xContentRegistry, client);
+        mlGuard = new MLGuard(guardrails, xContentRegistry, client, sdkClient, tenantId);
     }
 
     @Test
@@ -74,7 +79,7 @@ public class MLGuardTests {
         inputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         outputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         guardrails = new Guardrails("test_type", inputLocalRegexGuardrail, outputLocalRegexGuardrail);
-        mlGuard = new MLGuard(guardrails, xContentRegistry, client);
+        mlGuard = new MLGuard(guardrails, xContentRegistry, client, sdkClient, tenantId);
 
         String input = "\n\nHuman:hello good words.\n\nAssistant:";
         Boolean res = mlGuard.validate(input, MLGuard.Type.INPUT, Collections.emptyMap());

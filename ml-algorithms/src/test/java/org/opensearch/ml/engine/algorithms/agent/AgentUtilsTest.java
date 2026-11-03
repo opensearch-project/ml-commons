@@ -6,11 +6,47 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOLS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_DESCRIPTIONS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -20,30 +56,93 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
-public class AgentUtilsTest {
+import com.google.gson.JsonSyntaxException;
+
+import io.modelcontextprotocol.client.McpSyncClient;
+
+public class AgentUtilsTest extends MLStaticMockBase {
 
     @Mock
     private Tool tool1, tool2;
+
+    @Mock
+    private MLAgent mlAgent;
+    @Mock
+    private Client client;
+    @Mock
+    private SdkClient sdkClient;
+    @Mock
+    private Encryptor encryptor;
+
+    private ThreadContext threadContext;
+
+    @Mock
+    private ThreadPool threadPool;
 
     private Map<String, Map<String, String>> llmResponseExpectedParseResults;
 
@@ -397,9 +496,9 @@ public class AgentUtilsTest {
     @Test
     public void testExtractModelResponseJsonWithValidModelOutput() {
         String text =
-            "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"} \n``` other content";
+            "This is the model response\n```json\n{\"thought\":\"use ListIndexTool to get index first\",\"action\":\"ListIndexTool\"} \n``` other content";
         String responseJson = AgentUtils.extractModelResponseJson(text);
-        assertEquals("{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}", responseJson);
+        assertEquals("{\"thought\":\"use ListIndexTool to get index first\",\"action\":\"ListIndexTool\"}", responseJson);
     }
 
     @Test
@@ -477,7 +576,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         for (Map.Entry<String, Map<String, String>> entry : llmResponseExpectedParseResults.entrySet()) {
             ModelTensorOutput modelTensoOutput = ModelTensorOutput
                 .builder()
@@ -493,7 +592,8 @@ public class AgentUtilsTest {
                         )
                 )
                 .build();
-            Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+            Map<String, String> output = AgentUtils
+                .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
             for (String key : entry.getValue().keySet()) {
                 Assert.assertEquals(entry.getValue().get(key), output.get(key));
             }
@@ -502,7 +602,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_MultipleFields() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String thought = "Let me run VectorDBTool to get more information";
         String toolName = "vectordbtool";
         ModelTensorOutput modelTensoOutput = ModelTensorOutput
@@ -522,7 +622,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertEquals("VectorDBTool", output.get(ACTION));
@@ -536,7 +637,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_MultipleFields_NoActionAndFinalAnswer() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String key1 = "dummy key1";
         String value1 = "dummy value1";
         String key2 = "dummy key2";
@@ -555,7 +656,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(2, output.size());
         Assert.assertFalse(output.containsKey(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -570,7 +672,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_OneFields_NoActionAndFinalAnswer() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String thought = "Let me run VectorDBTool to get more information";
         ModelTensorOutput modelTensoOutput = ModelTensorOutput
             .builder()
@@ -584,7 +686,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -690,6 +793,1331 @@ public class AgentUtilsTest {
         Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
     }
 
+    @Test
+    public void testParseLLMOutputWithOpenAIFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.choices[0].message.content",
+                TOOL_CALLS_PATH,
+                "$.choices[0].message.tool_calls",
+                TOOL_CALLS_TOOL_NAME,
+                "function.name",
+                TOOL_CALLS_TOOL_INPUT,
+                "function.arguments",
+                TOOL_CALL_ID_PATH,
+                "id",
+                LLM_FINISH_REASON_PATH,
+                "$.choices[0].finish_reason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_calls"
+            );
+
+        // Test case 1: Response containing both text and toolUse
+        Map<String, Object> responseData1 = Map
+            .of(
+                "choices",
+                List
+                    .of(
+                        Map
+                            .of(
+                                "message",
+                                Map
+                                    .of(
+                                        "content",
+                                        "I will use ListIndexTool",
+                                        "tool_calls",
+                                        List
+                                            .of(
+                                                Map
+                                                    .of(
+                                                        "function",
+                                                        Map.of("name", "ListIndexTool", "arguments", "{\"indices\":[]}"),
+                                                        "id",
+                                                        "tool_1"
+                                                    )
+                                            )
+                                    ),
+                                "finish_reason",
+                                "tool_calls"
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only toolUse
+        Map<String, Object> responseData2 = Map
+            .of(
+                "choices",
+                List
+                    .of(
+                        Map
+                            .of(
+                                "message",
+                                Map
+                                    .of(
+                                        "tool_calls",
+                                        List
+                                            .of(
+                                                Map
+                                                    .of(
+                                                        "function",
+                                                        Map.of("name", "IndexMappingTool", "arguments", "{\"index\":[\"test_index\"]}"),
+                                                        "id",
+                                                        "tool_2"
+                                                    )
+                                            )
+                                    ),
+                                "finish_reason",
+                                "tool_calls"
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text
+        Map<String, Object> responseData3 = Map
+            .of("choices", List.of(Map.of("message", Map.of("content", "This is a test response"), "finish_reason", "stop")));
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testParseLLMOutputWithClaudeFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.output.message.content[0].text",
+                TOOL_CALLS_PATH,
+                "$.output.message.content[*].toolUse",
+                TOOL_CALLS_TOOL_NAME,
+                "name",
+                TOOL_CALLS_TOOL_INPUT,
+                "input",
+                TOOL_CALL_ID_PATH,
+                "toolUseId",
+                LLM_FINISH_REASON_PATH,
+                "$.stopReason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_use"
+            );
+
+        // Test case 1: Response containing both text and toolUse
+        Map<String, Object> responseData1 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map.of("text", "I will use ListIndexTool"),
+                                        Map
+                                            .of(
+                                                "toolUse",
+                                                Map
+                                                    .of(
+                                                        "input",
+                                                        Map.of("indices", List.of()),
+                                                        "name",
+                                                        "ListIndexTool",
+                                                        "toolUseId",
+                                                        "tool_1"
+                                                    )
+                                            )
+                                    )
+                            )
+                    ),
+                "stopReason",
+                "tool_use"
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only toolUse
+        Map<String, Object> responseData2 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "toolUse",
+                                                Map
+                                                    .of(
+                                                        "input",
+                                                        Map.of("index", List.of("test_index")),
+                                                        "name",
+                                                        "IndexMappingTool",
+                                                        "toolUseId",
+                                                        "tool_2"
+                                                    )
+                                            )
+                                    )
+                            )
+                    ),
+                "stopReason",
+                "tool_use"
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text
+        Map<String, Object> responseData3 = Map
+            .of("output", Map.of("message", Map.of("content", List.of(Map.of("text", "This is a test response")))), "stopReason", "stop");
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testParseLLMOutputWithDeepseekFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.output.message.content[0].text",
+                TOOL_CALLS_PATH,
+                "_llm_response.tool_calls",
+                TOOL_CALLS_TOOL_NAME,
+                "tool_name",
+                TOOL_CALLS_TOOL_INPUT,
+                "input",
+                TOOL_CALL_ID_PATH,
+                "id",
+                LLM_FINISH_REASON_PATH,
+                "_llm_response.stop_reason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_use"
+            );
+
+        // Test case 1: Response containing both text and tool use
+        Map<String, Object> responseData1 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"tool_use\", \"tool_calls\": [{\"id\":\"tool_1\",\"tool_name\":\"ListIndexTool\",\"input\": {\"indices\":[]}}]}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only tool use
+        Map<String, Object> responseData2 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"tool_use\", \"tool_calls\": [{\"id\":\"tool_2\",\"tool_name\":\"IndexMappingTool\",\"input\": {\"index\":[\"test_index\"]}}]}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text (final answer)
+        Map<String, Object> responseData3 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"end_turn\", \"message\": {\"content\":[{\"text\":\"This is a test response\"}]}}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        tools.put("Tool2", tool2);
+
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(Map.of("param1", "value1"));
+
+        when(tool2.getName()).thenReturn("Tool2");
+        when(tool2.getDescription()).thenReturn("Description of Tool2");
+        when(tool2.getAttributes()).thenReturn(Map.of("param2", "value2"));
+
+        Map<String, String> parameters = new HashMap<>();
+        String toolTemplate = "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}";
+        parameters.put(TOOL_TEMPLATE, toolTemplate);
+
+        List<String> inputTools = Arrays.asList("Tool1", "Tool2");
+        String prompt = "test prompt";
+
+        String expectedTool1 = "{\"name\": \"Tool1\", \"description\": \"Description of Tool1\"}";
+        String expectedTool2 = "{\"name\": \"Tool2\", \"description\": \"Description of Tool2\"}";
+        String expectedTools = expectedTool1 + ", " + expectedTool2;
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt);
+
+        assertEquals(expectedTools, parameters.get(TOOLS));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_ToolNotRegistered() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "template");
+        List<String> inputTools = Arrays.asList("Tool1", "UnregisteredTool");
+        String prompt = "test prompt";
+
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_setsEmptyToolPlaceholderParametersWhenNotProvided() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(null);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}");
+        List<String> inputTools = List.of("Tool1");
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, "test prompt");
+
+        assertEquals("", parameters.get(TOOL_DESCRIPTIONS));
+        assertEquals("", parameters.get(TOOL_NAMES));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_preservesExplicitToolPlaceholderParameters() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(null);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}");
+        parameters.put(TOOL_DESCRIPTIONS, "custom tool descriptions");
+        parameters.put(TOOL_NAMES, "Tool1,Tool2");
+        List<String> inputTools = List.of("Tool1");
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, "");
+
+        assertEquals("custom tool descriptions", parameters.get(TOOL_DESCRIPTIONS));
+        assertEquals("Tool1,Tool2", parameters.get(TOOL_NAMES));
+    }
+
+    private static MLToolSpec buildTool(String name) {
+        return MLToolSpec.builder().type(McpSseTool.TYPE).name(name).description("mock").build();
+    }
+
+    private void stubGetConnector() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    // create + register a mock McpConnector with Connector.createConnector
+    private void mockMcpConnector(MockedStatic<Connector> connectorStatic) {
+        McpConnector mockConnector = mock(McpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
+        connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    // create a mock MLAgent with connector-config JSON
+    private MLAgent mockAgent(String json, String tenant) {
+        MLAgent mockAgent = mock(MLAgent.class);
+        when(mockAgent.getParameters()).thenReturn(Map.of(MCP_CONNECTORS_FIELD, json));
+        when(mockAgent.getTenantId()).thenReturn(tenant);
+        return mockAgent;
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NoMcpJsonConfig() {
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+
+        verify(listener).onResponse(Collections.emptyList());
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_SingleConnectorSuccess() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> expected = List.of(buildTool("Demo"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolFilterApplied() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List.of(buildTool("FilterTool"), buildTool("TempTool"));
+        List<MLToolSpec> expected = List.of(buildTool("FilterTool"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"^Filter.*\", \"SecondDemoFilter\"]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionOverrideAppliedWithoutFilter() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("TempTool").description("temp description").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_DESCRIPTIONS_FIELD
+                + "\":[{\"FilterTool\":\"override description\"}]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener).onResponse(argThat(result -> {
+                if (result == null || result.size() != 2) {
+                    return false;
+                }
+                Map<String, String> descriptions = result
+                    .stream()
+                    .collect(java.util.stream.Collectors.toMap(MLToolSpec::getName, MLToolSpec::getDescription));
+                return "override description".equals(descriptions.get("FilterTool"))
+                    && "temp description".equals(descriptions.get("TempTool"));
+            }));
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionOverrideAndWithFilter() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("TempTool").description("temp description").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_DESCRIPTIONS_FIELD
+                + "\":[{\"FilterTool\":\"override description\"}],\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"^Filter.*\"]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener)
+                .onResponse(
+                    argThat(
+                        result -> result != null
+                            && result.size() == 1
+                            && "FilterTool".equals(result.get(0).getName())
+                            && "override description".equals(result.get(0).getDescription())
+                    )
+                );
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_OverrideMultipleToolDescriptions() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolA").description("desc-a").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolB").description("desc-b").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolC").description("desc-c").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_DESCRIPTIONS_FIELD
+                + "\":[{\"ToolA\":\"new-desc-a\"},{\"ToolB\":\"new-desc-b\"},{\"ToolC\":\"new-desc-c\"}]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener).onResponse(argThat(result -> {
+                if (result == null || result.size() != 3) {
+                    return false;
+                }
+                Map<String, String> descriptions = result
+                    .stream()
+                    .collect(java.util.stream.Collectors.toMap(MLToolSpec::getName, MLToolSpec::getDescription));
+                return "new-desc-a".equals(descriptions.get("ToolA"))
+                    && "new-desc-b".equals(descriptions.get("ToolB"))
+                    && "new-desc-c".equals(descriptions.get("ToolC"));
+            }));
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_DuplicateToolDescriptionKey_logsWarning_AndUsesLatestValue() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolA").description("desc-a").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolB").description("desc-b").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            ToolDescriptionOverrideLogAppender appender = new ToolDescriptionOverrideLogAppender("DuplicateToolDescriptionKeyAppender");
+            Logger agentUtilsLogger = LogManager.getLogger(AgentUtils.class);
+            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(agentUtilsLogger.getName());
+            try {
+                loggerConfig.addAppender(appender, Level.WARN, null);
+                context.updateLoggers();
+
+                mockMcpConnector(connStatic);
+                McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs()).thenReturn(repo);
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+                String mcpJsonConfig = "[{\""
+                    + MCP_CONNECTOR_ID_FIELD
+                    + "\":\"c1\",\""
+                    + TOOL_DESCRIPTIONS_FIELD
+                    + "\":[{\"ToolA\":\"first\"},{\"ToolA\":\"second\"}]}]";
+                MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+                ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+                AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+                verify(listener).onResponse(argThat(result -> {
+                    if (result == null || result.size() != 2) {
+                        return false;
+                    }
+                    Map<String, String> descriptions = result
+                        .stream()
+                        .collect(java.util.stream.Collectors.toMap(MLToolSpec::getName, MLToolSpec::getDescription));
+                    return "second".equals(descriptions.get("ToolA")) && "desc-b".equals(descriptions.get("ToolB"));
+                }));
+
+                List<LogEvent> duplicateWarns = appender.getLogEvents().stream().filter(e -> e.getLevel() == Level.WARN).filter(e -> {
+                    String m = e.getMessage().getFormattedMessage();
+                    return m.contains("Duplicate tool_descriptions entry for [ToolA]")
+                        && m.contains("previous value [first]")
+                        && m.contains("overridden by [second]");
+                }).collect(java.util.stream.Collectors.toList());
+                assertEquals(1, duplicateWarns.size());
+            } finally {
+                loggerConfig.removeAppender(appender.getName());
+                appender.stop();
+                context.updateLoggers();
+            }
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_IgnoreOverrideForNonExistingThirdTool() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolA").description("desc-a").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolB").description("desc-b").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            ToolDescriptionOverrideLogAppender appender = new ToolDescriptionOverrideLogAppender("IgnoreOverrideNonExistingToolAppender");
+            Logger agentUtilsLogger = LogManager.getLogger(AgentUtils.class);
+            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(agentUtilsLogger.getName());
+            try {
+                loggerConfig.addAppender(appender, Level.WARN, null);
+                context.updateLoggers();
+
+                mockMcpConnector(connStatic);
+                McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs()).thenReturn(repo);
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+                String mcpJsonConfig = "[{\""
+                    + MCP_CONNECTOR_ID_FIELD
+                    + "\":\"c1\",\""
+                    + TOOL_DESCRIPTIONS_FIELD
+                    + "\":[{\"ToolA\":\"new-desc-a\"},{\"ToolB\":\"new-desc-b\"},{\"ToolC\":\"new-desc-c\"}]}]";
+                MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+                ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+                AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+                verify(listener).onResponse(argThat(result -> {
+                    if (result == null || result.size() != 2) {
+                        return false;
+                    }
+                    Map<String, String> descriptions = result
+                        .stream()
+                        .collect(java.util.stream.Collectors.toMap(MLToolSpec::getName, MLToolSpec::getDescription));
+                    return "new-desc-a".equals(descriptions.get("ToolA"))
+                        && "new-desc-b".equals(descriptions.get("ToolB"))
+                        && !descriptions.containsKey("ToolC");
+                }));
+
+                List<LogEvent> unknownOverrideWarns = appender.getLogEvents().stream().filter(e -> e.getLevel() == Level.WARN).filter(e -> {
+                    String m = e.getMessage().getFormattedMessage();
+                    return m.contains("ToolC") && m.contains("c1") && m.contains("override is ignored");
+                }).collect(java.util.stream.Collectors.toList());
+                assertEquals(1, unknownOverrideWarns.size());
+            } finally {
+                loggerConfig.removeAppender(appender.getName());
+                appender.stop();
+                context.updateLoggers();
+            }
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_IgnoreOverrideForFilteredOutTool() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("desc-filter").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("TempTool").description("desc-temp").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            ToolDescriptionOverrideLogAppender appender = new ToolDescriptionOverrideLogAppender("IgnoreOverrideFilteredOutToolAppender");
+            Logger agentUtilsLogger = LogManager.getLogger(AgentUtils.class);
+            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(agentUtilsLogger.getName());
+            try {
+                loggerConfig.addAppender(appender, Level.WARN, null);
+                context.updateLoggers();
+
+                mockMcpConnector(connStatic);
+                McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs()).thenReturn(repo);
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+                String mcpJsonConfig = "[{\""
+                    + MCP_CONNECTOR_ID_FIELD
+                    + "\":\"c1\",\""
+                    + TOOL_DESCRIPTIONS_FIELD
+                    + "\":[{\"FilterTool\":\"new-desc-filter\"},{\"TempTool\":\"new-desc-temp\"}],\""
+                    + TOOL_FILTERS_FIELD
+                    + "\":[\"^Filter.*\"]}]";
+                MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+                ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+                AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+                verify(listener)
+                    .onResponse(
+                        argThat(
+                            result -> result != null
+                                && result.size() == 1
+                                && "FilterTool".equals(result.get(0).getName())
+                                && "new-desc-filter".equals(result.get(0).getDescription())
+                        )
+                    );
+
+                List<LogEvent> filteredOutWarns = appender.getLogEvents().stream().filter(e -> e.getLevel() == Level.WARN).filter(e -> {
+                    String m = e.getMessage().getFormattedMessage();
+                    return m.contains("TempTool") && m.contains("c1") && m.contains("filtered out by tool_filters");
+                }).collect(java.util.stream.Collectors.toList());
+                assertEquals(1, filteredOutWarns.size());
+            } finally {
+                loggerConfig.removeAppender(appender.getName());
+                appender.stop();
+                context.updateLoggers();
+            }
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionOverride_WithNull_Retain_OriginalDescription() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolA").description("remote description").build(),
+                MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolB").description("temp description").build()
+            );
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\",\"" + TOOL_DESCRIPTIONS_FIELD + "\":[{\"ToolA\":null}]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener).onResponse(argThat(result -> {
+                if (result == null || result.size() != 2) {
+                    return false;
+                }
+                Map<String, String> descriptions = result
+                    .stream()
+                    .collect(java.util.stream.Collectors.toMap(MLToolSpec::getName, MLToolSpec::getDescription));
+                return "remote description".equals(descriptions.get("ToolA")) && "temp description".equals(descriptions.get("ToolB"));
+            }));
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionNonStringValue_logsWarning_AndIgnored() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List.of(MLToolSpec.builder().type(McpSseTool.TYPE).name("ToolA").description("desc-a").build());
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            ToolDescriptionOverrideLogAppender appender = new ToolDescriptionOverrideLogAppender("AgentUtilsToolDescOverrideAppender");
+            Logger agentUtilsLogger = LogManager.getLogger(AgentUtils.class);
+            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(agentUtilsLogger.getName());
+            try {
+                loggerConfig.addAppender(appender, Level.WARN, null);
+                context.updateLoggers();
+
+                mockMcpConnector(connStatic);
+                McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+                when(exec.getMcpToolSpecs()).thenReturn(repo);
+                loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+                String mcpJsonConfig = "[{\""
+                    + MCP_CONNECTOR_ID_FIELD
+                    + "\":\"c1\",\""
+                    + TOOL_DESCRIPTIONS_FIELD
+                    + "\":[{\"ToolA\":true}]}]";
+                MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+                ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+                AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+                verify(listener)
+                    .onResponse(
+                        argThat(
+                            result -> result != null
+                                && result.size() == 1
+                                && "ToolA".equals(result.get(0).getName())
+                                && "desc-a".equals(result.get(0).getDescription())
+                        )
+                    );
+
+                List<LogEvent> warns = appender
+                    .getLogEvents()
+                    .stream()
+                    .filter(e -> e.getLevel() == Level.WARN)
+                    .collect(java.util.stream.Collectors.toList());
+                assertEquals(1, warns.size());
+                String msg = warns.get(0).getMessage().getFormattedMessage();
+                assertTrue(msg, msg.contains("ToolA"));
+                assertTrue(msg, msg.contains(Boolean.class.getName()));
+            } finally {
+                loggerConfig.removeAppender(appender.getName());
+                appender.stop();
+                context.updateLoggers();
+            }
+        }
+    }
+
+    private static final class ToolDescriptionOverrideLogAppender extends AbstractAppender {
+
+        private final List<LogEvent> logEvents = new ArrayList<>();
+
+        ToolDescriptionOverrideLogAppender(String name) {
+            super(name, null, PatternLayout.createDefaultLayout(), false);
+            start();
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            logEvents.add(event.toImmutable());
+        }
+
+        List<LogEvent> getLogEvents() {
+            return logEvents;
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionOverrideBlankValueIgnored() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build());
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_DESCRIPTIONS_FIELD
+                + "\":[{\"FilterTool\":\"\"}]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener)
+                .onResponse(
+                    argThat(
+                        result -> result != null
+                            && result.size() == 1
+                            && "FilterTool".equals(result.get(0).getName())
+                            && "remote description".equals(result.get(0).getDescription())
+                    )
+                );
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolDescriptionOverrideNonMapIgnored() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List
+            .of(MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build());
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\",\"" + TOOL_DESCRIPTIONS_FIELD + "\":[\"not-a-map\"]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            verify(listener)
+                .onResponse(
+                    argThat(
+                        result -> result != null
+                            && result.size() == 1
+                            && "FilterTool".equals(result.get(0).getName())
+                            && "remote description".equals(result.get(0).getDescription())
+                    )
+                );
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NullToolSpecElement_WithAndWithoutFilter() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = Arrays
+            .asList(null, MLToolSpec.builder().type(McpSseTool.TYPE).name("FilterTool").description("remote description").build());
+        String toolDescriptionsConfig = ",\"" + TOOL_DESCRIPTIONS_FIELD + "\":[{\"FilterTool\":\"override description\"}]";
+        String noFilterConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"" + toolDescriptionsConfig + "}]";
+        String withFilterConfig = "[{\""
+            + MCP_CONNECTOR_ID_FIELD
+            + "\":\"c1\""
+            + toolDescriptionsConfig
+            + ",\""
+            + TOOL_FILTERS_FIELD
+            + "\":[\"^Filter.*\"]}]";
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            ActionListener<List<MLToolSpec>> noFilterListener = mock(ActionListener.class);
+            AgentUtils.getMcpToolSpecs(mockAgent(noFilterConfig, "tenant"), client, sdkClient, encryptor, noFilterListener);
+            verify(noFilterListener)
+                .onResponse(
+                    argThat(
+                        result -> result != null
+                            && result.size() == 1
+                            && "FilterTool".equals(result.get(0).getName())
+                            && "override description".equals(result.get(0).getDescription())
+                    )
+                );
+
+            ActionListener<List<MLToolSpec>> withFilterListener = mock(ActionListener.class);
+            AgentUtils.getMcpToolSpecs(mockAgent(withFilterConfig, "tenant"), client, sdkClient, encryptor, withFilterListener);
+            verify(withFilterListener)
+                .onResponse(
+                    argThat(
+                        result -> result != null
+                            && result.size() == 1
+                            && "FilterTool".equals(result.get(0).getName())
+                            && "override description".equals(result.get(0).getDescription())
+                    )
+                );
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
+        stubGetConnector();                                  // now safe
+
+        List<MLToolSpec> aTools = List.of(buildTool("A1"));
+        List<MLToolSpec> bTools = List.of(buildTool("B1"), buildTool("B2"));
+        List<MLToolSpec> expected = new ArrayList<>();
+        expected.addAll(aTools);
+        expected.addAll(bTools);
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(aTools, bTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"A\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"B\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_DuplicateToolNamesWarning() throws Exception {
+        String loggerName = AgentUtils.class.getName();
+        DuplicateToolWarningLogAppender appender = new DuplicateToolWarningLogAppender("DuplicateToolWarningAppender");
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(loggerName);
+        Level originalLevel = loggerConfig.getLevel();
+        loggerConfig.addAppender(appender, Level.ALL, null);
+        context.updateLoggers();
+
+        try {
+            loggerConfig.setLevel(Level.WARN);
+            context.updateLoggers();
+            appender.clear();
+
+            List<MLToolSpec> responseWithWarn = fetchMcpToolSpecsFromDuplicateConnectors();
+            assertEquals(2, responseWithWarn.size());
+            assertEquals("shared_tool", responseWithWarn.get(0).getName());
+            assertEquals("shared_tool", responseWithWarn.get(1).getName());
+            assertTrue(hasDuplicateToolNameWarning(appender, "shared_tool", "connector-A", "connector-B"));
+
+            // Setting log level as ERROR disables WARN, so duplicate-tool tracking is skipped.
+            loggerConfig.setLevel(Level.ERROR);
+            context.updateLoggers();
+            appender.clear();
+
+            List<MLToolSpec> responseWhenWarnDisabled = fetchMcpToolSpecsFromDuplicateConnectors();
+            assertEquals(2, responseWhenWarnDisabled.size());
+            assertFalse(hasDuplicateToolNameWarning(appender, "shared_tool", "connector-A", "connector-B"));
+        } finally {
+            loggerConfig.removeAppender(appender.getName());
+            appender.stop();
+            loggerConfig.setLevel(originalLevel);
+            context.updateLoggers();
+        }
+    }
+
+    private List<MLToolSpec> fetchMcpToolSpecsFromDuplicateConnectors() throws Exception {
+        stubGetConnector();
+
+        MLToolSpec toolFromA = MLToolSpec.builder().type(McpSseTool.TYPE).name("shared_tool").description("from-A").build();
+        MLToolSpec toolFromB = MLToolSpec.builder().type(McpSseTool.TYPE).name("shared_tool").description("from-B").build();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(toolFromA), List.of(toolFromB));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"connector-A\"},"
+                + "{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"connector-B\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            return response.get();
+        }
+    }
+
+    private boolean hasDuplicateToolNameWarning(DuplicateToolWarningLogAppender appender, String toolName, String... connectorIds) {
+        for (LogEvent event : appender.getLogEvents()) {
+            if (event.getLevel() != Level.WARN) {
+                continue;
+            }
+            String message = event.getMessage().getFormattedMessage();
+            if (!message.contains(toolName)) {
+                continue;
+            }
+            boolean allConnectorsPresent = true;
+            for (String connectorId : connectorIds) {
+                if (!message.contains(connectorId)) {
+                    allConnectorsPresent = false;
+                    break;
+                }
+            }
+            if (allConnectorsPresent) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NonMcpConnectorReturnsEmpty() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mock(AwsConnector.class));
+            MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
         Map<String, Tool> tools = Map.of("tool1", tool1);
         Map<String, MLToolSpec> toolSpecMap = Map
@@ -698,5 +2126,1987 @@ public class AgentUtilsTest {
         String action = "tool1";
         Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
         verify.accept(toolParams);
+    }
+
+    @Test
+    public void testParseLLMOutput_WithExcludePath() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_EXCLUDE_PATH, "[\"$.exclude_field\"]");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("exclude_field", "should be excluded");
+        dataAsMap.put("keep_field", "should be kept");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertFalse(output.get(THOUGHT_RESPONSE).contains("exclude_field"));
+        Assert.assertTrue(output.get(THOUGHT_RESPONSE).contains("keep_field"));
+    }
+
+    @Test
+    public void testParseLLMOutput_EmptyDataAsMap() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(new HashMap<>(), modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertEquals("{}", output.get(THOUGHT_RESPONSE));
+    }
+
+    @Test
+    public void testParseLLMOutput_ToolUse() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_CALLS_PATH, "$.tool_calls");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "id");
+        parameters.put(LLM_RESPONSE_FILTER, "$.response");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.finish_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("tool_calls", List.of(Map.of("name", "test_tool", "input", "test_input", "id", "test_id")));
+        dataAsMap.put("response", "test response");
+        dataAsMap.put("finish_reason", "tool_use");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("test_input", output.get(ACTION_INPUT));
+        Assert.assertEquals("test_id", output.get(TOOL_CALL_ID));
+    }
+
+    @Test
+    public void testParseLLMOutput_WithFunctionCalling() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_CALLS_PATH, "$.tool_calls");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "id");
+        parameters.put(LLM_RESPONSE_FILTER, "$.response");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.finish_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap
+            .put(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map.of("text", "test"),
+                                        Map.of("toolUse", Map.of("name", "test_tool", "input", "test_input", "toolUseId", "test_id"))
+                                    )
+                            )
+                    )
+            );
+        dataAsMap.put("stopReason", "tool_use");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        FunctionCalling functionCalling = FunctionCallingFactory.create(LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE);
+        Assert.assertNotNull(functionCalling);
+        functionCalling.configure(parameters);
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), functionCalling);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("test_input", output.get(ACTION_INPUT));
+        Assert.assertEquals("test_id", output.get(TOOL_CALL_ID));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithStringPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        String excludePaths = "[\"$.field1\", \"$.nested.field3\"]";
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithListPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_InPlace() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", new HashMap<>(Map.of("field3", "value3")));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, true);
+        Assert.assertFalse(json.containsKey("field1"));
+        Assert.assertTrue(json.containsKey("field2"));
+        Assert.assertTrue(json.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) json.get("nested")).containsKey("field3"));
+        Assert.assertSame(json, result);
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithInvalidJsonPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        String invalidJsonPaths = "invalid json";
+        Assert.assertThrows(JsonSyntaxException.class, () -> AgentUtils.removeJsonPath(json, invalidJsonPaths, false));
+    }
+
+    @Test
+    public void testSubstitute() {
+        String template = "Hello ${parameters.name}! Welcome to ${parameters.place}.";
+        Map<String, String> params = new HashMap<>();
+        params.put("name", "AI");
+        params.put("place", "OpenSearch");
+        String prefix = "${parameters.";
+
+        String result = AgentUtils.substitute(template, params, prefix);
+
+        Assert.assertEquals("Hello AI! Welcome to OpenSearch.", result);
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithInvalidFormats() {
+        // null
+        String result = AgentUtils.getCurrentDateTime(null);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // empty
+        result = AgentUtils.getCurrentDateTime("");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // invalid
+        result = AgentUtils.getCurrentDateTime("invalid-format");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithValidFormat() {
+        String result = AgentUtils.getCurrentDateTime("EEEE, MMMM d, yyyy 'at' h:mm a z");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+        Assert.assertTrue(result.contains("UTC"));
+    }
+
+    @Test
+    public void testConstructToolParams_ToolInputSubstitution() {
+        String question = "What is the population?";
+        String actionInput = "{\"question\": \"Seattle 2025 population\"}";
+
+        Map<String, Object> queryObj = new HashMap<>();
+        queryObj
+            .put(
+                "query",
+                Map
+                    .of(
+                        "neural",
+                        Map
+                            .of(
+                                "population_description_embedding",
+                                Map.of("query_text", "${parameters.question}", "model_id", "embedding_model_id")
+                            )
+                    )
+            );
+        queryObj.put("size", 2);
+        queryObj.put("_source", "population_description");
+
+        Map<String, Tool> tools = Map.of("SearchIndexTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "SearchIndexTool",
+                MLToolSpec
+                    .builder()
+                    .type("SearchIndexTool")
+                    .parameters(
+                        Map
+                            .of(
+                                "index",
+                                "test_population_data",
+                                "input",
+                                "{\"index\": \"${parameters.index}\", \"query\": " + StringUtils.toJson(queryObj) + "}"
+                            )
+                    )
+                    .build()
+            );
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchIndexTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify
+        Assert.assertTrue(toolParams.get("input").contains("\"query_text\":\"Seattle 2025 population\""));
+        assertEquals("Seattle 2025 population", toolParams.get("question"));
+    }
+
+    @Test
+    public void testConstructToolParams_NoInputKey() {
+        // Setup
+        String question = "What is the population?";
+        String actionInput = "{\"question\": \"Seattle 2025 population\"}";
+
+        Map<String, Tool> tools = Map.of("SearchTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of("SearchTool", MLToolSpec.builder().type("SearchTool").parameters(Map.of("key1", "value1")).build());
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify - should fall back to actionInput
+        assertEquals(actionInput, toolParams.get("input"));
+        assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
+    public void testConstructToolParams_InputWithMultipleSubstitutions() {
+        // Setup
+        String question = "What is the population?";
+        String actionInput = "{\"city\": \"Seattle\", \"year\": \"2025\"}";
+
+        Map<String, Tool> tools = Map.of("SearchTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "SearchTool",
+                MLToolSpec
+                    .builder()
+                    .type("SearchTool")
+                    .parameters(Map.of("input", "Find population of ${parameters.city} in ${parameters.year}"))
+                    .build()
+            );
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify
+        assertEquals("Find population of Seattle in 2025", toolParams.get("input"));
+        assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
+    public void testCreateTool_Success() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("TestTool")
+            .description("Original description")
+            .parameters(Map.of("param1", "value1"))
+            .runtimeResources(Map.of("resource1", "value2"))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("TestTool.param2", "value3");
+        params.put("TestTool.description", "Custom description");
+
+        Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, toolSpec, "test_tenant");
+        createTool(toolFactories, toolParameters, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("param2").equals("value3")
+                && toolParams.get("resource1").equals("value2")
+                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
+        }));
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Custom description");
+    }
+
+    @Test
+    public void testCreateTool_ToolNotFound() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
+
+        assertThrows(IllegalArgumentException.class, () -> createTool(toolFactories, new HashMap<>(), toolSpec));
+    }
+
+    @Test
+    public void testCreateTool_WithDescription() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Tool description").build();
+
+        Map<String, String> params = new HashMap<>();
+
+        Tool result = createTool(toolFactories, params, toolSpec);
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Tool description");
+        assertEquals(mockTool, result);
+    }
+
+    @Test
+    public void testCreateTool_WithRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        Map<String, Object> runtimeResources = new HashMap<>();
+        runtimeResources.put("resource1", "value1");
+        runtimeResources.put("resource2", 42);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(runtimeResources).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("resource1").equals("value1")
+                && toolParams.get("resource2").equals(42);
+        }));
+    }
+
+    @Test
+    public void testCreateTool_WithNullRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(null).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
+    }
+
+    @Test
+    public void testParseLLMOutput_PathNotFoundExceptionWithEmptyToolCalls() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        parameters.put(TOOL_CALLS_PATH, "$.output.message.content[*].toolUse");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "toolUseId");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stopReason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = Map
+            .of("output", Map.of("message", Map.of("content", Collections.emptyList(), "role", "assistant")), "stopReason", "end_turn");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output.get(THOUGHT));
+        Assert.assertEquals("", output.get(ACTION_INPUT));
+        Assert.assertEquals("", output.get(TOOL_CALL_ID));
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        Assert.assertTrue(output.get(FINAL_ANSWER).contains("[]"));
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_McpStreamableHttpConnectorSuccess() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> expected = List
+            .of(MLToolSpec.builder().type(McpStreamableHttpTool.TYPE).name("StreamableHttpTool").description("mock").build());
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpStreamableHttpConnector, McpStreamableHttpConnectorExecutor, agent, and listener
+            mockMcpStreamableHttpConnector(connStatic);
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_UnsupportedConnectorType() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            // Mock an unsupported connector type (neither McpConnector nor McpStreamableHttpConnector)
+            HttpConnector mockConnector = mock(HttpConnector.class);
+            when(mockConnector.getProtocol()).thenReturn("http");
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString(), isA(ActionListener.class));
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMCPToolSpecsFromConnectorWithPropagatingFailures_With_UnsupportedConnectorType_ReturnsBadRequest() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            HttpConnector mockConnector = mock(HttpConnector.class);
+            when(mockConnector.getProtocol()).thenReturn("http");
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString(), isA(ActionListener.class));
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            AtomicReference<Exception> failureRef = new AtomicReference<>();
+            AgentUtils
+                .getMCPToolSpecsFromConnectorWithPropagatingFailures(
+                    "c1",
+                    "tenant",
+                    sdkClient,
+                    client,
+                    encryptor,
+                    ActionListener.wrap(r -> Assert.fail("Expected to fail for unsupported connector type"), failureRef::set)
+                );
+
+            assertNotNull(failureRef.get());
+            assertTrue(failureRef.get() instanceof OpenSearchStatusException);
+            assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failureRef.get()).status());
+        }
+    }
+
+    @Test
+    public void testGetMCPToolSpecsFromConnectorWithPropagatingFailures_With_GetConnectorFailure() throws Exception {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        AtomicReference<Exception> failureRef = new AtomicReference<>();
+        AgentUtils
+            .getMCPToolSpecsFromConnectorWithPropagatingFailures(
+                "c1",
+                "tenant",
+                sdkClient,
+                client,
+                encryptor,
+                ActionListener.wrap(r -> Assert.fail("Expected to fail when connector lookup fails"), failureRef::set)
+            );
+
+        assertNotNull(failureRef.get());
+        assertTrue(failureRef.get().getMessage().contains("Failed to get connector"));
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ExceptionInGetMcpToolSpecs() throws Exception {
+        stubGetConnector();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("Test exception"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ErrorInGetMcpToolSpecsDoesNotHang() throws Exception {
+        // Regression test for the MCP SDK 1.1.1 hang: ServiceConfigurationError is an Error (not an
+        // Exception), so a naive catch(Exception) would have let it escape and leave the async
+        // counter in getMcpToolSpecs stranded, hanging the agent forever.
+        stubGetConnector();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new java.util.ServiceConfigurationError("boom"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_OneConnectorFailsOthersSucceed() throws Exception {
+        // Regression test: one connector throwing an Error must not strand the AtomicInteger
+        // counter and prevent the listener from firing for the remaining connectors.
+        stubGetConnector();
+
+        List<MLToolSpec> goodTools = List.of(buildTool("good1"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new java.util.ServiceConfigurationError("boom")).thenReturn(goodTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"bad\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"good\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+            // Listener fires exactly once with just the good connector's tools.
+            verify(listener).onResponse(goodTools);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ExceptionInGetConnector() throws Exception {
+        // Mock getConnector to throw an exception
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+        verify(listener).onResponse(Collections.emptyList());
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_MixedOpenSearchAndMcpToolsSuccess() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            List<MLToolSpec> mcpFromConnector = List
+                .of(
+                    MLToolSpec
+                        .builder()
+                        .type(McpStreamableHttpTool.TYPE)
+                        .name("mcp_price")
+                        .description("remote price tool")
+                        .runtimeResources(Map.of(MCP_SYNC_CLIENT, "remote_client"))
+                        .build(),
+                    MLToolSpec
+                        .builder()
+                        .type(McpStreamableHttpTool.TYPE)
+                        .name("mcp_trending")
+                        .description("remote trending tool")
+                        .runtimeResources(Map.of(MCP_SYNC_CLIENT, "remote_client"))
+                        .build()
+                );
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(mcpFromConnector);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec osTool1 = MLToolSpec.builder().type("VectorDBTool").name("os_vector").description("os vector").build();
+            MLToolSpec mcpTool1 = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("mcp_price")
+                .description(null)
+                .runtimeResources(Map.of("custom_runtime", "agent_value"))
+                .build();
+            MLToolSpec osTool2 = MLToolSpec.builder().type("MLModelTool").name("os_llm").description("os llm").build();
+            MLToolSpec mcpTool2 = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("mcp_trending")
+                .description("configured trending description")
+                .build();
+
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(osTool1, mcpTool1, osTool2, mcpTool2))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            assertEquals(4, response.get().size());
+            // Ensure original configured order is preserved
+            assertEquals("os_vector", response.get().get(0).getName());
+            assertEquals("mcp_price", response.get().get(1).getName());
+            assertEquals("os_llm", response.get().get(2).getName());
+            assertEquals("mcp_trending", response.get().get(3).getName());
+
+            // MCP tool #1 takes remote description fallback and merged runtime resources
+            MLToolSpec resolvedMcp1 = response.get().get(1);
+            assertEquals("remote price tool", resolvedMcp1.getDescription());
+            assertEquals("remote_client", resolvedMcp1.getRuntimeResources().get(MCP_SYNC_CLIENT));
+            assertEquals("agent_value", resolvedMcp1.getRuntimeResources().get("custom_runtime"));
+
+            // MCP tool #2 keeps configured description
+            MLToolSpec resolvedMcp2 = response.get().get(3);
+            assertEquals("configured trending description", resolvedMcp2.getDescription());
+            assertEquals("remote_client", resolvedMcp2.getRuntimeResources().get(MCP_SYNC_CLIENT));
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_MissingConfiguredMcpTool() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs())
+                .thenReturn(
+                    List.of(MLToolSpec.builder().type(McpStreamableHttpTool.TYPE).name("available_tool").description("mock").build())
+                );
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(MLToolSpec.builder().type(McpStreamableHttpTool.TYPE).name("missing_tool").build()))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+            AtomicReference<Exception> failure = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener
+                .wrap(r -> { Assert.fail("Expected failure for missing MCP tool"); }, failure::set);
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(failure.get());
+            assertTrue(failure.get().getMessage().contains("missing_tool"));
+            assertTrue(failure.get().getMessage().contains("not available"));
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_NoToolConfigured() {
+        MLAgent agent = MLAgent.builder().tenantId("tenant").name("agent").type("flow").tools(Collections.emptyList()).build();
+        AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+        ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+        AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+        assertNotNull(response.get());
+        assertTrue(response.get().isEmpty());
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_NullConfiguredToolSpecs() {
+        MLAgent agent = MLAgent.builder().tenantId("tenant").name("agent").type("flow").tools(Collections.emptyList()).build();
+        AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+        ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+        try (MockedStatic<AgentUtils> agentUtilsStatic = mockStatic(AgentUtils.class)) {
+            agentUtilsStatic.when(() -> AgentUtils.getMlToolSpecs(any(MLAgent.class), any(Map.class))).thenReturn(null);
+            agentUtilsStatic
+                .when(
+                    () -> AgentUtils
+                        .resolveFlowToolSpecsWithMcpValidation(
+                            any(MLAgent.class),
+                            any(Map.class),
+                            any(Client.class),
+                            any(SdkClient.class),
+                            any(Encryptor.class),
+                            any(ActionListener.class)
+                        )
+                )
+                .thenCallRealMethod();
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+        }
+
+        assertNotNull(response.get());
+        assertTrue(response.get().isEmpty());
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_NoMcpToolConfigured() {
+        MLToolSpec configured = MLToolSpec.builder().type("MLModelTool").name("tool1").description("llm").build();
+        MLAgent agent = MLAgent.builder().tenantId("tenant").name("agent").type("flow").tools(List.of(configured)).build();
+        AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+        ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+        AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+        assertNotNull(response.get());
+        assertEquals(1, response.get().size());
+        assertEquals("tool1", response.get().get(0).getName());
+        assertEquals("MLModelTool", response.get().get(0).getType());
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_McpMergeUsesRuntimeResourcesAndFallbacks() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_simple_price")
+                .description("remote desc")
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, "from_remote"))
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_simple_price")
+                .description(null)
+                .attributes(null)
+                .runtimeResources(Map.of("custom_runtime", "from_agent"))
+                .build();
+            MLToolSpec configuredLlm = MLToolSpec.builder().type("MLModelTool").name("summarizer").description("keep me").build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp, configuredLlm))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            assertEquals(2, response.get().size());
+            MLToolSpec mergedMcp = response.get().get(0);
+            assertEquals("get_simple_price", mergedMcp.getName());
+            assertEquals("remote desc", mergedMcp.getDescription());
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                mergedMcp.getAttributes().get("input_schema")
+            );
+            assertEquals("from_remote", mergedMcp.getRuntimeResources().get(MCP_SYNC_CLIENT));
+            assertEquals("from_agent", mergedMcp.getRuntimeResources().get("custom_runtime"));
+            assertEquals("summarizer", response.get().get(1).getName());
+            assertEquals("keep me", response.get().get(1).getDescription());
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_ConfiguredMcpSyncClientIsIgnored() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            Object remoteClient = new Object();
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_price")
+                .description("remote desc")
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, remoteClient))
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_price")
+                .runtimeResources(Map.of(MCP_SYNC_CLIENT, "agent_override", "custom_runtime", "agent_value"))
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            assertEquals(1, response.get().size());
+            MLToolSpec mergedMcp = response.get().get(0);
+            assertSame(remoteClient, mergedMcp.getRuntimeResources().get(MCP_SYNC_CLIENT));
+            assertEquals("agent_value", mergedMcp.getRuntimeResources().get("custom_runtime"));
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_McpMergePreservesConfiguredAndEmptyRuntimeResources() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_search")
+                .description("remote desc")
+                .attributes(Map.of("remote_attr", "remote"))
+                .runtimeResources(null)
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_search")
+                .description("configured desc")
+                .attributes(Map.of("configured_attr", "configured"))
+                .runtimeResources(null)
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertNotNull(response.get());
+            assertEquals(1, response.get().size());
+            MLToolSpec mergedMcp = response.get().get(0);
+            assertEquals("configured desc", mergedMcp.getDescription());
+            assertEquals("remote", mergedMcp.getAttributes().get("remote_attr"));
+            assertEquals("configured", mergedMcp.getAttributes().get("configured_attr"));
+            assertNull(mergedMcp.getRuntimeResources());
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_PartialConfiguredAttributesMergeWithRemote() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("remote")
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
+                .runtimeResources(null)
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .attributes(Map.of("cache_ttl", "300"))
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertEquals(1, response.get().size());
+            MLToolSpec merged = response.get().get(0);
+            assertEquals("300", merged.getAttributes().get("cache_ttl"));
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                merged.getAttributes().get("input_schema")
+            );
+        }
+    }
+
+    @Test
+    public void testResolveFlowToolSpecsWithMcpValidation_EmptyConfiguredAttributesUsesRemote() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpStreamableHttpConnector(connStatic);
+            MLToolSpec mcpFetched = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("remote")
+                .attributes(
+                    Map
+                        .of(
+                            "input_schema",
+                            "\"{\"type\":\"object\",\"properties\":{\"query\":"
+                                + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}"
+                        )
+                )
+                .runtimeResources(null)
+                .build();
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpFetched));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLToolSpec configuredMcp = MLToolSpec
+                .builder()
+                .type(McpStreamableHttpTool.TYPE)
+                .name("get_tool")
+                .description("configured")
+                .attributes(Collections.emptyMap())
+                .runtimeResources(null)
+                .build();
+            MLAgent agent = MLAgent
+                .builder()
+                .tenantId("tenant")
+                .name("agent")
+                .type("flow")
+                .tools(List.of(configuredMcp))
+                .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+                .build();
+
+            AtomicReference<List<MLToolSpec>> response = new AtomicReference<>();
+            ActionListener<List<MLToolSpec>> listener = ActionListener.wrap(response::set, e -> { Assert.fail("Should not fail"); });
+
+            AgentUtils.resolveFlowToolSpecsWithMcpValidation(agent, new HashMap<>(), client, sdkClient, encryptor, listener);
+
+            assertEquals(1, response.get().size());
+            MLToolSpec merged = response.get().get(0);
+            assertEquals("configured", merged.getDescription());
+            assertEquals(
+                "\"{\"type\":\"object\",\"properties\":{\"query\":" + "{\"type\":\"string\",\"description\":\"The query to search for.\"}}",
+                merged.getAttributes().get("input_schema")
+            );
+        }
+    }
+
+    // Helper method to mock McpStreamableHttpConnector
+    private void mockMcpStreamableHttpConnector(MockedStatic<Connector> connectorStatic) {
+        McpStreamableHttpConnector mockConnector = mock(McpStreamableHttpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
+        connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    @Test
+    public void testCleanUpResource_closesSharedMcpSyncClientFromToolSpecs() {
+        McpSyncClient mcpSyncClient = mock(McpSyncClient.class);
+        MLToolSpec spec1 = MLToolSpec.builder().type("mcp_tool").name("tool1").build();
+        spec1.addRuntimeResource(MCP_SYNC_CLIENT, mcpSyncClient);
+
+        AgentUtils.cleanUpResource(List.of(spec1));
+
+        verify(mcpSyncClient, times(1)).closeGracefully();
+    }
+
+    @Test
+    public void testSanitizeForLogging_NullInput() {
+        assertNull(AgentUtils.sanitizeForLogging(null));
+    }
+
+    @Test
+    public void testSanitizeForLogging_EmptyMap() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+        assertTrue(result.isEmpty());
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        Map<String, String> credential = new HashMap<>();
+        credential.put("accessKey", "secretAccessKey123");
+        credential.put("secretKey", "verySecretKey456");
+        params.put(CREDENTIAL_FIELD, credential);
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify credential is redacted
+        assertEquals("[REDACTED]", result.get(CREDENTIAL_FIELD));
+        // Verify other fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        // Verify original map is not modified
+        assertEquals(credential, params.get(CREDENTIAL_FIELD));
+        // Verify it's a different map
+        assertNotSame(params, result);
+    }
+
+    @Test
+    public void testSanitizeForLogging_WithoutCredentialField() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("endpoint", "https://example.com");
+        params.put("region", "us-west-2");
+        params.put("memory_id", "test-memory-id");
+
+        Map<String, Object> result = AgentUtils.sanitizeForLogging(params);
+
+        // Verify all fields are unchanged
+        assertEquals("https://example.com", result.get("endpoint"));
+        assertEquals("us-west-2", result.get("region"));
+        assertEquals("test-memory-id", result.get("memory_id"));
+        // Verify it's a different map (shallow copy)
+        assertNotSame(params, result);
+    }
+
+    // ==================== Tests for extractTextFromMessage ====================
+
+    @Test
+    public void testExtractTextFromMessage_SingleTextBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("Hello world");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Hello world", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MultipleTextBlocks() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block1 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block1.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block1.setText("First");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block2 = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block2.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block2.setText("Second");
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(block1, block2)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("First\nSecond", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_MixedContentTypes() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock textBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        textBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        textBlock.setText("Text content");
+
+        org.opensearch.ml.common.input.execute.agent.ContentBlock imageBlock =
+            new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        imageBlock.setType(org.opensearch.ml.common.input.execute.agent.ContentType.IMAGE);
+
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Arrays.asList(textBlock, imageBlock)
+        );
+
+        String result = AgentUtils.extractTextFromMessage(message);
+        assertEquals("Text content", result);
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullMessage() {
+        assertEquals("", AgentUtils.extractTextFromMessage(null));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            null
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_EmptyContent() {
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.emptyList()
+        );
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_NullTextInBlock() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(null);
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("", AgentUtils.extractTextFromMessage(message));
+    }
+
+    @Test
+    public void testExtractTextFromMessage_WhitespaceTrimmed() {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText("  Hello  ");
+        org.opensearch.ml.common.input.execute.agent.Message message = new org.opensearch.ml.common.input.execute.agent.Message(
+            "user",
+            Collections.singletonList(block)
+        );
+
+        assertEquals("Hello", AgentUtils.extractTextFromMessage(message));
+    }
+
+    // ==================== Tests for extractMessagePairs ====================
+
+    private org.opensearch.ml.common.input.execute.agent.Message createMessage(String role, String text) {
+        org.opensearch.ml.common.input.execute.agent.ContentBlock block = new org.opensearch.ml.common.input.execute.agent.ContentBlock();
+        block.setType(org.opensearch.ml.common.input.execute.agent.ContentType.TEXT);
+        block.setText(text);
+        return new org.opensearch.ml.common.input.execute.agent.Message(role, Collections.singletonList(block));
+    }
+
+    @Test
+    public void testExtractMessagePairs_SinglePair() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "What is AI?"), createMessage("assistant", "AI is artificial intelligence."));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "session1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("What is AI?", pairs.get(0).getQuestion());
+        assertEquals("AI is artificial intelligence.", pairs.get(0).getResponse());
+        assertEquals("session1", pairs.get(0).getSessionId());
+        assertTrue(pairs.get(0).getFinalAnswer());
+    }
+
+    @Test
+    public void testExtractMessagePairs_MultiplePairs() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(
+                createMessage("user", "Q1"),
+                createMessage("assistant", "A1"),
+                createMessage("user", "Q2"),
+                createMessage("assistant", "A2")
+            );
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", "app");
+
+        assertEquals(2, pairs.size());
+        // Chronological order
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+        assertEquals("Q2", pairs.get(1).getQuestion());
+        assertEquals("A2", pairs.get(1).getResponse());
+        assertEquals("app", pairs.get(0).getType());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsTrailingUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), createMessage("assistant", "A1"), createMessage("user", "Trailing question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+        assertEquals("A1", pairs.get(0).getResponse());
+    }
+
+    @Test
+    public void testExtractMessagePairs_OnlyUserMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Collections
+            .singletonList(createMessage("user", "Just a question"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsSystemMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("system", "System prompt"), createMessage("user", "Q1"), createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_SkipsNullMessages() {
+        List<org.opensearch.ml.common.input.execute.agent.Message> messages = Arrays
+            .asList(createMessage("user", "Q1"), null, createMessage("assistant", "A1"));
+
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils.extractMessagePairs(messages, "s1", null);
+
+        assertEquals(1, pairs.size());
+        assertEquals("Q1", pairs.get(0).getQuestion());
+    }
+
+    @Test
+    public void testExtractMessagePairs_EmptyList() {
+        List<org.opensearch.ml.engine.memory.ConversationIndexMessage> pairs = AgentUtils
+            .extractMessagePairs(Collections.emptyList(), "s1", null);
+        assertTrue(pairs.isEmpty());
+    }
+
+    // ===== getModelMetadata tests =====
+
+    @Test
+    public void testGetModelMetadata_nullSdkClient() {
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils.getModelMetadata("model-1", "tenant-1", null, client, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertNotNull(result.get());
+        assertEquals("model-1", result.get()[0]); // url falls back to modelId
+        assertEquals("model-1", result.get()[1]); // name falls back to modelId
+    }
+
+    // ===== addTokenUsageTensor tests =====
+
+    @Test
+    public void testAddTokenUsageTensor_nullTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentUtils.addTokenUsageTensor(tensors, null, "tenant-1", true);
+        assertTrue(tensors.isEmpty());
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_emptyTracker() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", true);
+        assertTrue(tensors.isEmpty()); // hasUsage() is false
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_withUsage() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", true);
+
+        assertEquals(1, tensors.size());
+        ModelTensors modelTensors = tensors.get(0);
+        assertEquals(1, modelTensors.getMlModelTensors().size());
+
+        ModelTensor tensor = modelTensors.getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+        assertNotNull(tensor.getDataAsMap());
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_MODEL_USAGE));
+        assertTrue(tensor.getDataAsMap().containsKey(AgentTokenTracker.PER_TURN_USAGE));
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_excludedWhenFlagFalse() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://bedrock.amazonaws.com", "claude-v3");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", false);
+
+        // Tensor should NOT be added when includeTokenUsage is false
+        assertTrue(tensors.isEmpty());
+    }
+
+    @Test
+    public void testAddTokenUsageTensor_subAgentAlwaysIncludesTensor() {
+        List<ModelTensors> tensors = new ArrayList<>();
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setSubAgent(true);
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Even with includeTokenUsage=false, sub-agents must include the tensor for parent merging
+        AgentUtils.addTokenUsageTensor(tensors, tracker, "tenant-1", false);
+
+        assertEquals(1, tensors.size());
+        ModelTensor tensor = tensors.get(0).getMlModelTensors().get(0);
+        assertEquals(AgentTokenTracker.TOKEN_USAGE, tensor.getName());
+    }
+
+    // ===== getLongValue tests =====
+
+    @Test
+    public void testGetLongValue_fromNumber() {
+        Map<String, Object> map = Map.of("tokens", 42L);
+        assertEquals(Long.valueOf(42L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromString() {
+        Map<String, Object> map = Map.of("tokens", "100");
+        assertEquals(Long.valueOf(100L), AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_fromInvalidString() {
+        Map<String, Object> map = Map.of("tokens", "not_a_number");
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    @Test
+    public void testGetLongValue_missingKey() {
+        Map<String, Object> map = Map.of("other", 42);
+        assertNull(AgentUtils.getLongValue(map, "tokens"));
+    }
+
+    // ===== resolveModelUrl tests =====
+
+    @Test
+    public void testResolveModelUrl_withInlineConnector() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(Map.of());
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://bedrock.amazonaws.com/model/claude/converse");
+
+        AtomicReference<String> result = new AtomicReference<>();
+        AgentUtils.resolveModelUrl(mlModel, "tenant-1", null, null, ActionListener.wrap(result::set, e -> {
+            throw new AssertionError("Should not fail", e);
+        }));
+
+        assertEquals("https://bedrock.amazonaws.com/model/claude/converse", result.get());
+    }
+
+    @Test
+    public void testResolveModelUrl_noConnectorOrConnectorId() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void testResolveModelUrl_inlineConnectorNullEndpoint() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        Connector connector = mock(Connector.class);
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(connector.getParameters()).thenReturn(null);
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn(null);
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .resolveModelUrl(
+                mlModel,
+                "tenant-1",
+                null,
+                null,
+                ActionListener.wrap(url -> { throw new AssertionError("Should not succeed"); }, error::set)
+            );
+
+        assertNotNull(error.get());
+        assertTrue(error.get() instanceof IllegalStateException);
+    }
+
+    // ===== logTokenUsageDetails tests =====
+
+    @Test
+    public void testLogTokenUsageDetails_nullTracker() {
+        // Should not throw
+        AgentUtils.logTokenUsageDetails(null, Map.of(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_nullMap() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        // Should not throw
+        AgentUtils.logTokenUsageDetails(tracker, null, "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_subAgent_skipsLogging() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setSubAgent(true);
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Should not throw; sub-agent logging is silently skipped
+        AgentUtils.logTokenUsageDetails(tracker, tracker.toOutputMap(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_withPerModelUsage() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        tracker.setModelMetadata("model-1", "https://example.com", "test-model");
+        tracker
+            .recordTurn(
+                "model-1",
+                org.opensearch.ml.common.agent.TokenUsage.builder().inputTokens(100L).outputTokens(50L).totalTokens(150L).build()
+            );
+
+        // Should not throw; logs structured per-model usage
+        AgentUtils.logTokenUsageDetails(tracker, tracker.toOutputMap(), "tenant-1");
+    }
+
+    @Test
+    public void testLogTokenUsageDetails_emptyPerModelUsage() {
+        AgentTokenTracker tracker = new AgentTokenTracker();
+        Map<String, Object> emptyMap = new HashMap<>();
+        emptyMap.put(AgentTokenTracker.PER_MODEL_USAGE, "not_a_list");
+
+        // Should not throw; per_model_usage is not a List so logging loop is skipped
+        AgentUtils.logTokenUsageDetails(tracker, emptyMap, null);
+    }
+
+    // ===== getModel tests =====
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelSuccess(String modelJson) {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\""
+                + org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX
+                + "\",\"_id\":\"model-1\",\"found\":true,\"_source\":"
+                + modelJson
+                + "}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelNotFound() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"model-1\",\"found\":false}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void stubGetModelException(Throwable error) {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, error);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    @Test
+    public void testGetModel_success() {
+        String modelJson = "{\"name\":\"test-model\",\"algorithm\":\"TEXT_EMBEDDING\"}";
+        stubGetModelSuccess(modelJson);
+
+        AtomicReference<org.opensearch.ml.common.MLModel> result = new AtomicReference<>();
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils
+            .getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, error::set));
+
+        assertNull(error.get());
+        assertNotNull(result.get());
+        assertEquals("test-model", result.get().getName());
+    }
+
+    @Test
+    public void testGetModel_notFound() {
+        stubGetModelNotFound();
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    @Test
+    public void testGetModel_indexNotFoundException() {
+        stubGetModelException(new org.opensearch.index.IndexNotFoundException("test"));
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    @Test
+    public void testGetModel_genericException() {
+        stubGetModelException(new RuntimeException("Something went wrong"));
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+    }
+
+    @Test
+    public void testGetModel_nullParser() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(null);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+        assertTrue(error.get().getMessage().contains("Failed to find model"));
+    }
+
+    // ===== resolveModelUrl connector ID path tests =====
+
+    @Test
+    public void testResolveModelUrl_withConnectorId_success() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn("connector-1");
+
+        // Stub getConnector to return a connector with a valid endpoint
+        stubGetConnector();
+
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            Connector mockConnector = mock(Connector.class);
+            when(mockConnector.getParameters()).thenReturn(Map.of());
+            when(mockConnector.getActionEndpoint("predict", Map.of())).thenReturn("https://bedrock.amazonaws.com/model/test");
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            AtomicReference<String> result = new AtomicReference<>();
+            AtomicReference<Exception> error = new AtomicReference<>();
+            AgentUtils.resolveModelUrl(mlModel, "tenant-1", sdkClient, client, ActionListener.wrap(result::set, error::set));
+
+            assertNull(error.get());
+            assertEquals("https://bedrock.amazonaws.com/model/test", result.get());
+        }
+    }
+
+    @Test
+    public void testResolveModelUrl_withConnectorId_connectorFetchFails() {
+        org.opensearch.ml.common.MLModel mlModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mlModel.getConnector()).thenReturn(null);
+        when(mlModel.getConnectorId()).thenReturn("connector-1");
+
+        // Stub getConnector to fail
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AgentUtils.resolveModelUrl(mlModel, "tenant-1", sdkClient, client, ActionListener.wrap(url -> {
+            throw new AssertionError("Should not succeed");
+        }, error::set));
+
+        assertNotNull(error.get());
+    }
+
+    // ===== getModelMetadata with sdkClient tests =====
+
+    @Test
+    public void testGetModelMetadata_success() {
+        String modelJson = "{\"name\":\"test-model\",\"algorithm\":\"TEXT_EMBEDDING\"}";
+        stubGetModelSuccess(modelJson);
+
+        // Need a second stub for the connector fetch from resolveModelUrl
+        // But the model has no connector, so it will fail with IllegalStateException
+        // which triggers the fallback path
+
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils
+            .getModelMetadata("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, e -> {
+                throw new AssertionError("Should not fail", e);
+            }));
+
+        assertNotNull(result.get());
+        // URL falls back to modelId because model has no connector
+        assertEquals("model-1", result.get()[0]);
+        // Name comes from the model
+        assertEquals("test-model", result.get()[1]);
+    }
+
+    @Test
+    public void testGetModelMetadata_getModelFails_fallback() {
+        stubGetModelException(new RuntimeException("DB error"));
+
+        AtomicReference<String[]> result = new AtomicReference<>();
+        AgentUtils
+            .getModelMetadata("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(result::set, e -> {
+                throw new AssertionError("Should not fail", e);
+            }));
+
+        assertNotNull(result.get());
+        assertEquals("model-1", result.get()[0]); // falls back to modelId
+        assertEquals("model-1", result.get()[1]); // falls back to modelId
+    }
+
+    private static class DuplicateToolWarningLogAppender extends AbstractAppender {
+        private final List<LogEvent> logEvents = new ArrayList<>();
+
+        DuplicateToolWarningLogAppender(String name) {
+            super(name, null, PatternLayout.createDefaultLayout(), false);
+            start();
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            logEvents.add(event.toImmutable());
+        }
+
+        List<LogEvent> getLogEvents() {
+            return logEvents;
+        }
+
+        void clear() {
+            logEvents.clear();
+        }
+    }
+
+    // ===== Structured metric logging tests =====
+
+    @Test
+    public void testLogAgentExecutionFailure_completesWithoutException() {
+        AgentUtils.logAgentExecutionFailure("CONVERSATIONAL", "agent-1", "tenant-1", 100L, "500");
+    }
+
+    @Test
+    public void testLogAgentExecutionFailure_withNullValues() {
+        AgentUtils.logAgentExecutionFailure(null, null, null, 0L, null);
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_completesWithoutException() {
+        AgentUtils.logAgentExecutionLatency("CONVERSATIONAL", "agent-1", "tenant-1", 200L);
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_withTaskId_completesWithoutException() {
+        AgentUtils.logAgentExecutionLatency("CONVERSATIONAL", "agent-1", "tenant-1", 200L, "task-123");
+    }
+
+    @Test
+    public void testLogAgentExecutionLatency_withTaskId_nullValues() {
+        AgentUtils.logAgentExecutionLatency(null, null, null, 0L, null);
+    }
+
+    @Test
+    public void testLogToolInvocation_completesWithoutException() {
+        AgentUtils.logToolInvocation("SearchTool", "agent-1", "tenant-1");
+    }
+
+    @Test
+    public void testLogToolInvocation_withNullValues() {
+        AgentUtils.logToolInvocation(null, null, null);
+    }
+
+    @Test
+    public void testLogToolFailure_completesWithoutException() {
+        AgentUtils.logToolFailure("SearchTool", "agent-1", "tenant-1", "400");
+    }
+
+    @Test
+    public void testLogToolFailure_withNullValues() {
+        AgentUtils.logToolFailure(null, null, null, null);
+    }
+
+    @Test
+    public void testLogModelInvocationFailure_completesWithoutException() {
+        AgentUtils.logModelInvocationFailure("model-1", "agent-1", "tenant-1", "503");
+    }
+
+    @Test
+    public void testLogModelInvocationFailure_withNullValues() {
+        AgentUtils.logModelInvocationFailure(null, null, null, null);
+    }
+
+    @Test
+    public void testLogTimeToFirstToken_completesWithoutException() {
+        AgentUtils.logTimeToFirstToken("model-1", "tenant-1", 150L);
+    }
+
+    @Test
+    public void testLogTimeToFirstToken_withNullValues() {
+        AgentUtils.logTimeToFirstToken(null, null, 0L);
+    }
+
+    @Test
+    public void testLogMetric_oddKvPairs_triggersWarningAndDropsUnpairedKey() throws Exception {
+        // Exercises the private logMetric warning branch for odd number of kvPairs
+        java.lang.reflect.Method logMetric = AgentUtils.class.getDeclaredMethod("logMetric", boolean.class, String.class, Object[].class);
+        logMetric.setAccessible(true);
+        // Three kvPairs (odd) — the last "orphan-key" has no value and should be dropped
+        logMetric.invoke(null, false, "TestMetric", new Object[] { "key1", "val1", "orphan-key" });
     }
 }

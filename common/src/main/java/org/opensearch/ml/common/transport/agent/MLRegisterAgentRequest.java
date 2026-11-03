@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.agent;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -19,6 +22,7 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -45,12 +49,65 @@ public class MLRegisterAgentRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
         if (mlAgent == null) {
-            exception = addValidationError("ML agent can't be null", exception);
+            return addValidationError("ML agent can't be null", null);
+        }
+
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Agent provisioned_by field", new FieldDescriptor(mlAgent.getProvisionedBy(), false));
+        ActionRequestValidationException exception = validateFields(fieldsToValidate);
+
+        if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
+            exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
+        }
+        if (mlAgent.getContextManagementName() != null) {
+            exception = validateContextManagementTemplateName(mlAgent.getContextManagementName(), exception);
+        }
+        if (mlAgent.getContextManagement() != null) {
+            exception = validateInlineContextManagement(mlAgent.getContextManagement(), exception);
         }
 
         return exception;
+    }
+
+    private ActionRequestValidationException validateContextManagementTemplateName(
+        String templateName,
+        ActionRequestValidationException exception
+    ) {
+        if (templateName == null || templateName.trim().isEmpty()) {
+            exception = addValidationError("Context management template name cannot be null or empty", exception);
+        } else if (templateName.length() > 256) {
+            exception = addValidationError("Context management template name cannot exceed 256 characters", exception);
+        } else if (!templateName.matches("^[a-zA-Z0-9._-]+$")) {
+            exception = addValidationError(
+                "Context management template name can only contain letters, numbers, underscores, hyphens, and dots",
+                exception
+            );
+        }
+        return exception;
+    }
+
+    private ActionRequestValidationException validateInlineContextManagement(
+        org.opensearch.ml.common.contextmanager.ContextManagementTemplate contextManagement,
+        ActionRequestValidationException exception
+    ) {
+        if (contextManagement.getHooks() != null) {
+            for (String hookName : contextManagement.getHooks().keySet()) {
+                if (!isValidHookName(hookName)) {
+                    exception = addValidationError("Invalid hook name: " + hookName, exception);
+                }
+            }
+        }
+        return exception;
+    }
+
+    private boolean isValidHookName(String hookName) {
+        // Define valid hook names based on the system's supported hooks
+        return hookName.equals("POST_TOOL")
+            || hookName.equals("PRE_LLM")
+            || hookName.equals("PRE_TOOL")
+            || hookName.equals("POST_LLM")
+            || hookName.equals("POST_MEMORY");
     }
 
     @Override

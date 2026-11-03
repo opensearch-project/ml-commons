@@ -9,10 +9,12 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,18 +48,20 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.script.ScriptService;
@@ -83,6 +87,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     MLTaskManager mlTaskManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
     public CancelBatchJobTransportAction(
@@ -110,6 +116,10 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
 
     @Override
@@ -181,6 +191,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .orElse(null)
             );
 
+        ToolUtils.markResourcePathNameNoEscape(parameters);
+
         RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
             parameters,
             ActionType.BATCH_PREDICT_STATUS,
@@ -192,35 +204,50 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, model.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if (!access) {
-                        actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
-                    } else {
-                        if (model.getConnector() != null) {
-                            Connector connector = model.getConnector();
-                            executeConnector(connector, mlInput, actionListener);
-                        } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
-                            ActionListener<Connector> listener = ActionListener
-                                .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
-                                    log.error("Failed to get connector {}", model.getConnectorId(), e);
-                                    actionListener.onFailure(e);
-                                });
-                            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                connectorAccessControlHelper
-                                    .getConnector(
-                                        client,
-                                        model.getConnectorId(),
-                                        ActionListener.runBefore(listener, threadContext::restore)
-                                    );
+                modelAccessControlHelper
+                    .validateModelGroupAccess(
+                        user,
+                        model.getModelGroupId(),
+                        MLCancelBatchJobAction.NAME,
+                        client,
+                        ActionListener.wrap(access -> {
+                            if (!access) {
+                                actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
+                            } else {
+                                if (model.getConnector() != null) {
+                                    Connector connector = model.getConnector();
+                                    executeConnector(connector, mlInput, actionListener);
+                                } else if (MLIndicesHandler
+                                    .doesMultiTenantIndexExist(
+                                        clusterService,
+                                        mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                                        ML_CONNECTOR_INDEX
+                                    )) {
+                                    ActionListener<Connector> listener = ActionListener
+                                        .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
+                                            log.error("Failed to get connector {}", model.getConnectorId(), e);
+                                            actionListener.onFailure(e);
+                                        });
+                                    try (
+                                        ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()
+                                    ) {
+                                        connectorAccessControlHelper
+                                            .getConnector(
+                                                client,
+                                                model.getConnectorId(),
+                                                ActionListener.runBefore(listener, threadContext::restore)
+                                            );
+                                    }
+                                } else {
+                                    actionListener
+                                        .onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                                }
                             }
-                        } else {
-                            actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
-                        }
-                    }
-                }, e -> {
-                    log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
-                    actionListener.onFailure(e);
-                }));
+                        }, e -> {
+                            log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
+                            actionListener.onFailure(e);
+                        })
+                    );
             }, e -> {
                 log.error("Failed to retrieve the ML model with the given ID", e);
                 actionListener
@@ -242,15 +269,26 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connector.addAction(connectorAction);
         }
         // multi-tenancy isn't implemented in batch, so setting null as tenant by default
-        connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-        connectorExecutor.setScriptService(scriptService);
-        connectorExecutor.setClusterService(clusterService);
-        connectorExecutor.setClient(client);
-        connectorExecutor.setXContentRegistry(xContentRegistry);
-        connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(taskResponse, actionListener);
-        }, actionListener::onFailure));
+        ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
+            RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
+                .initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setScriptService(scriptService);
+            connectorExecutor.setClusterService(clusterService);
+            connectorExecutor.setClient(client);
+            connectorExecutor.setXContentRegistry(xContentRegistry);
+            connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
+            connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
+                connectorExecutor.close();
+                processTaskResponse(taskResponse, actionListener);
+            }, e -> {
+                connectorExecutor.close();
+                actionListener.onFailure(e);
+            }));
+        }, e -> {
+            log.error("Failed to decrypt credentials in connector", e);
+            actionListener.onFailure(e);
+        });
+        connector.decrypt(CANCEL_BATCH_PREDICT.name(), encryptor::decrypt, null, decryptSuccessfulListener);
     }
 
     private void processTaskResponse(MLTaskResponse taskResponse, ActionListener<MLCancelBatchJobResponse> actionListener) {
