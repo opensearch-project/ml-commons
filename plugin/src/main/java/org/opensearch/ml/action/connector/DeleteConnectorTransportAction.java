@@ -8,7 +8,6 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -154,7 +153,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would produce NPE on next line
             SearchHit[] searchHits = response.getHits().getHits();
 
             if (searchHits.length == 0) {
@@ -220,10 +220,10 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Connector deletion result: {}, connector id: {}", deleteResponse.getResult(), response.id());
                 actionListener.onResponse(deleteResponse);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 actionListener.onFailure(e);
             }
         }
