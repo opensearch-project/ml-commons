@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,6 +33,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -315,4 +318,47 @@ public class TransportSearchMemoryContainerActionTests extends OpenSearchTestCas
         verify(sdkClient).searchDataObjectAsync(any());
     }
 
+    @Test
+    public void testDoExecute_AllowsQueryScopedTermsAggregation() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        ThreadContext threadContext = new ThreadContext(Settings.builder().build());
+        threadContext
+            .putTransient(
+                org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT,
+                "regular_user|backend_role1,backend_role2|role1,role2"
+            );
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(memoryContainerHelper.isAdminUser(any())).thenReturn(false);
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .size(0)
+            .aggregation(AggregationBuilders.terms("by_name").field("name.keyword"));
+        SearchRequest searchRequest = new SearchRequest(new String[] { ML_MEMORY_CONTAINER_INDEX }).source(source);
+        MLSearchActionRequest request = MLSearchActionRequest.builder().searchRequest(searchRequest).tenantId(null).build();
+        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        doAnswer(invocation -> CompletableFuture.completedFuture(null)).when(sdkClient).searchDataObjectAsync(requestCaptor.capture());
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        verify(memoryContainerHelper).addUserBackendRolesFilter(any(), eq(source));
+        assertEquals(1, requestCaptor.getValue().searchSourceBuilder().aggregations().count());
+    }
+
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        SearchRequest searchRequest = new SearchRequest(new String[] { ML_MEMORY_CONTAINER_INDEX }).source(source);
+        MLSearchActionRequest request = MLSearchActionRequest.builder().searchRequest(searchRequest).tenantId(null).build();
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(sdkClient, never()).searchDataObjectAsync(any());
+        verify(memoryContainerHelper, never()).addUserBackendRolesFilter(any(), any());
+    }
 }

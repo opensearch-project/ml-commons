@@ -26,6 +26,8 @@ import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -68,6 +70,9 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
+        if (!MLSearchRequestValidator.validate(request, AggregationPolicy.REJECT, actionListener)) {
+            return;
+        }
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
         String tenantId = request.getTenantId();

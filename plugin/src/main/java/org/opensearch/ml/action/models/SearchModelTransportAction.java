@@ -14,6 +14,8 @@ import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -43,7 +45,10 @@ public class SearchModelTransportAction extends HandledTransportAction<MLSearchA
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
-
+        if (!MLSearchRequestValidator
+            .validate(request, AggregationPolicy.QUERY_SCOPED, MLSearchRequestValidator.MODEL_PROTECTED_FIELDS, actionListener)) {
+            return;
+        }
         String tenantId = request.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;

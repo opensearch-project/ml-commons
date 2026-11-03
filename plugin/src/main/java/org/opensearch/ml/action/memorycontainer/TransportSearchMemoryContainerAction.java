@@ -22,6 +22,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -65,6 +67,9 @@ public class TransportSearchMemoryContainerAction extends HandledTransportAction
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+        if (!MLSearchRequestValidator.validate(request, AggregationPolicy.QUERY_SCOPED, actionListener)) {
             return;
         }
         User user = RestActionUtils.getUserContext(client);
