@@ -7,6 +7,7 @@ package org.opensearch.ml.action.agenticsearch;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -89,6 +90,7 @@ public class TemplateStructureAnalyzerTests {
         schema.put("n", spec("number", true));
         schema.put("b", spec("boolean", false));
         schema.put("a", spec("array", false));
+        schema.put("l", spec("list", false));
 
         Map<String, Object> rp = TemplateStructureAnalyzer.buildMarkers(schema).renderParams();
 
@@ -96,6 +98,30 @@ public class TemplateStructureAnalyzerTests {
         assertTrue(rp.get("n") instanceof Long);
         assertEquals(Boolean.TRUE, rp.get("b"));
         assertEquals("[]", rp.get("a"));
+        // Two distinct items, matching pre-flight, so a separator-less loop misrenders here too.
+        List<?> list = (List<?>) rp.get("l");
+        assertEquals(2, list.size());
+        assertNotEquals(list.get(0), list.get(1));
+    }
+
+    @Test
+    public void locate_listParam_eitherTokenResolvesToTheParam() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("other", spec("string", true));
+        schema.put("brands", spec("list", false));
+        TemplateStructureAnalyzer.MarkerSet markers = TemplateStructureAnalyzer.buildMarkers(schema);
+        List<?> tokens = (List<?>) markers.renderParams().get("brands");
+
+        // A body that only kept the second item (e.g. {{^-first}}) still locates the param,
+        // and neither token is mistaken for the other param's.
+        Map<String, Object> rendered = Map.of("query", Map.of("terms", Map.of("brand", List.of(tokens.get(1)))));
+        Map<String, TemplateStructureAnalyzer.Located> located = TemplateStructureAnalyzer.locate(rendered, markers);
+        assertEquals(List.of("query", "terms", "brand", 0), located.get("brands").path);
+        assertFalse(located.containsKey("other"));
+
+        rendered = Map.of("query", Map.of("terms", Map.of("brand", tokens)));
+        located = TemplateStructureAnalyzer.locate(rendered, markers);
+        assertEquals(List.of("query", "terms", "brand", 0), located.get("brands").path);
     }
 
     @Test
