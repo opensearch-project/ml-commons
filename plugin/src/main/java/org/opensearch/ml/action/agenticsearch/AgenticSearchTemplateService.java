@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
@@ -42,6 +43,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.DocumentMissingException;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
@@ -202,7 +204,7 @@ public class AgenticSearchTemplateService {
                     log.info("Registered agentic search template: {}", template.getTemplateId());
                     listener.onResponse(true);
                 }, e -> {
-                    if (e instanceof VersionConflictEngineException) {
+                    if (ExceptionsHelper.unwrapCause(e) instanceof VersionConflictEngineException) {
                         listener
                             .onFailure(
                                 new OpenSearchStatusException(
@@ -474,7 +476,7 @@ public class AgenticSearchTemplateService {
                 listener.onFailure(e);
             }
         }, e -> {
-            if (e instanceof IndexNotFoundException) {
+            if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                 listener.onFailure(new OpenSearchStatusException("Index does not exist: " + index, RestStatus.BAD_REQUEST));
             } else {
                 listener.onFailure(e);
@@ -547,7 +549,7 @@ public class AgenticSearchTemplateService {
                     wrapped.onFailure(e);
                 }
             }, e -> {
-                if (e instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                     wrapped.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
                 } else {
                     wrapped.onFailure(e);
@@ -575,7 +577,7 @@ public class AgenticSearchTemplateService {
                     wrapped.onFailure(e);
                 }
             }, e -> {
-                if (e instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                     wrapped.onResponse(new MLListResult(new ArrayList<>(), 0));
                 } else {
                     wrapped.onFailure(e);
@@ -598,7 +600,7 @@ public class AgenticSearchTemplateService {
                 }
                 wrapped.onResponse(true);
             }, e -> {
-                if (e instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                     wrapped.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
                 } else {
                     wrapped.onFailure(e);
@@ -653,7 +655,7 @@ public class AgenticSearchTemplateService {
                     writeTemplatePatch(templateId, patch, seqNo, primaryTerm, wrapped);
                 }, wrapped::onFailure));
             }, e -> {
-                if (e instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
                     wrapped.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
                 } else {
                     wrapped.onFailure(e);
@@ -686,7 +688,9 @@ public class AgenticSearchTemplateService {
                 updateRequest.setIfSeqNo(seqNo).setIfPrimaryTerm(primaryTerm);
             }
             client.update(updateRequest, ActionListener.wrap(listener::onResponse, e -> {
-                if (e instanceof org.opensearch.index.engine.DocumentMissingException || e instanceof IndexNotFoundException) {
+                // A remote shard failure arrives wrapped in RemoteTransportException.
+                Throwable cause = ExceptionsHelper.unwrapCause(e);
+                if (cause instanceof DocumentMissingException || cause instanceof IndexNotFoundException) {
                     listener.onFailure(new OpenSearchStatusException(NOT_FOUND_ERROR + templateId, RestStatus.NOT_FOUND));
                 } else {
                     listener.onFailure(e);
