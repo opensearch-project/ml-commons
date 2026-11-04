@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -82,6 +83,7 @@ import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
@@ -4108,5 +4110,171 @@ public class AgentUtilsTest extends MLStaticMockBase {
         logMetric.setAccessible(true);
         // Three kvPairs (odd) — the last "orphan-key" has no value and should be dropped
         logMetric.invoke(null, false, "TestMetric", new Object[] { "key1", "val1", "orphan-key" });
+    }
+
+    // ==================== getMcpToolSpecsWithFailures ====================
+
+    private AgentUtils.McpToolLoadResult loadWithFailures(MLAgent agent) {
+        ActionListener<AgentUtils.McpToolLoadResult> listener = mock(ActionListener.class);
+        AgentUtils.getMcpToolSpecsWithFailures(agent, client, sdkClient, encryptor, listener);
+        ArgumentCaptor<AgentUtils.McpToolLoadResult> result = ArgumentCaptor.forClass(AgentUtils.McpToolLoadResult.class);
+        verify(listener).onResponse(result.capture());
+        verify(listener, never()).onFailure(any());
+        return result.getValue();
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_NoMcpConfig() {
+        MLAgent agentWithoutMcp = mock(MLAgent.class);
+        when(agentWithoutMcp.getParameters()).thenReturn(Map.of());
+        AgentUtils.McpToolLoadResult result = loadWithFailures(agentWithoutMcp);
+        assertEquals(0, result.getConfiguredConnectors());
+        assertTrue(result.getToolSpecs().isEmpty());
+        assertTrue(result.getFailedConnectors().isEmpty());
+        assertFalse(result.allConnectorsFailed());
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_UnreachableServerIsReportedWithItsCause() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs())
+                .thenThrow(new RuntimeException("Client failed to initialize", new java.net.ConnectException("Connection refused")));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant"));
+
+            assertTrue(result.allConnectorsFailed());
+            assertTrue(result.getToolSpecs().isEmpty());
+            assertEquals("ConnectException: Connection refused", result.getFailedConnectors().get("c1"));
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_RepeatedConnectorIdStillCountsEveryEntry() throws Exception {
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("down"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String config = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"a.*\"]},"
+                + "{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"b.*\"]}]";
+            AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
+
+            assertEquals(1, result.getFailedConnectors().size());
+            assertEquals(2, result.getFailedCount());
+            assertTrue(result.allConnectorsFailed());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_PartialFailureKeepsTheGoodTools() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> goodTools = List.of(buildTool("good1"));
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("down")).thenReturn(goodTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String config = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"bad\"},{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"good\"}]";
+            AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
+
+            assertFalse(result.allConnectorsFailed());
+            assertEquals(2, result.getConfiguredConnectors());
+            assertEquals(goodTools, result.getToolSpecs());
+            assertEquals(1, result.getFailedConnectors().size());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_ConnectorLookupFailureIsReported() throws Exception {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant"));
+
+        assertTrue(result.allConnectorsFailed());
+        assertTrue(result.getFailedConnectors().get("c1").contains("Failed to get connector"));
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ListingFailureStillReturnsWhatLoaded() throws Exception {
+        // The existing API is unchanged: failures are logged and the listener gets the tools that loaded.
+        stubGetConnector();
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("down"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+            AgentUtils
+                .getMcpToolSpecs(
+                    mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant"),
+                    client,
+                    sdkClient,
+                    encryptor,
+                    listener
+                );
+
+            verify(listener, times(1)).onResponse(Collections.emptyList());
+            verify(listener, never()).onFailure(any());
+        }
+    }
+
+    @Test
+    public void testRootCauseMessage() {
+        assertEquals(
+            "ConnectException: refused",
+            AgentUtils
+                .rootCauseMessage(new RuntimeException("outer", new IllegalStateException("mid", new java.net.ConnectException("refused"))))
+        );
+        assertEquals("IllegalStateException", AgentUtils.rootCauseMessage(new IllegalStateException()));
+        // As seen live for an unreachable MCP server: the network exception wraps a bare ClosedChannelException.
+        assertEquals(
+            "ConnectException",
+            AgentUtils
+                .rootCauseMessage(
+                    new RuntimeException(
+                        "Client failed to initialize by explicit API call",
+                        new java.net.ConnectException().initCause(new java.nio.channels.ClosedChannelException())
+                    )
+                )
+        );
     }
 }

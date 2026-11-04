@@ -19,10 +19,12 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -421,5 +423,118 @@ public class MLChatAgentRunnerV2Test {
             }
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    // ==================== MCP connectors that fail to load ====================
+
+    private static AgentUtils.McpToolLoadResult mcpResult(int configured, Map<String, String> failed, List<MLToolSpec> tools) {
+        return new AgentUtils.McpToolLoadResult(tools, configured, failed.size(), failed);
+    }
+
+    @Test
+    public void testMcpLoadFailure_NoFailuresContinues() {
+        assertNull(runner.mcpLoadFailure(mcpResult(2, Map.of(), List.of()), true, "a"));
+    }
+
+    @Test
+    public void testMcpLoadFailure_AllFailedAndNoOtherToolsFailsTheRun() {
+        Exception e = runner
+            .mcpLoadFailure(
+                mcpResult(2, Map.of("c2", "SocketTimeoutException", "c1", "ConnectException: Connection refused"), List.of()),
+                true,
+                "a"
+            );
+        assertTrue(e instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) e).status());
+        assertEquals(
+            "None of the agent's MCP connectors could be loaded, and it has no other tools. "
+                + "Failed connectors: c1 (ConnectException: Connection refused), c2 (SocketTimeoutException)",
+            e.getMessage()
+        );
+    }
+
+    @Test
+    public void testMcpLoadFailure_AllFailedButOtherToolsContinue() {
+        assertNull(runner.mcpLoadFailure(mcpResult(1, Map.of("c1", "ConnectException"), List.of()), false, "a"));
+    }
+
+    @Test
+    public void testMcpLoadFailure_PartialFailureContinues() {
+        // ml-commons' long-standing design: one bad MCP server doesn't fail the agent.
+        assertNull(runner.mcpLoadFailure(mcpResult(2, Map.of("c1", "ConnectException"), List.of()), true, "a"));
+    }
+
+    /** A spy of the runner whose MCP loading returns the given result. */
+    private MLChatAgentRunnerV2 runnerWithMcpResult(AgentUtils.McpToolLoadResult result) {
+        MLChatAgentRunnerV2 spyRunner = spy(runner);
+        doAnswer(invocation -> {
+            ActionListener<AgentUtils.McpToolLoadResult> listener = invocation.getArgument(1);
+            listener.onResponse(result);
+            return null;
+        }).when(spyRunner).loadMcpTools(any(), any());
+        return spyRunner;
+    }
+
+    @Test
+    public void testAllMcpConnectorsFailedFailsTheRunWithoutCallingTheModel() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(1, Map.of("c1", "ConnectException: Connection refused"), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertTrue(failure.getValue().getMessage().contains("c1 (ConnectException: Connection refused)"));
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+        verify(listener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testPartialMcpFailureStillRunsTheAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        mockLLMResponseWithNoTools();
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(2, Map.of("c1", "ConnectException"), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        verify(listener, timeout(5000)).onResponse(any());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testModelCallFailureDoesNotRunTheLoopTwice() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        when(modelProvider.mapMessages(anyList(), any())).thenThrow(new RuntimeException("boom"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(0, Map.of(), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        verify(listener, times(1)).onFailure(any());
+        verify(modelProvider, times(1)).mapMessages(anyList(), any());
+    }
+
+    @Test
+    public void testThrowingListenerIsNotCompletedTwice() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        when(modelProvider.mapMessages(anyList(), any())).thenThrow(new RuntimeException("boom"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        doThrow(new IllegalStateException("caller failed")).when(listener).onFailure(any());
+        MLChatAgentRunnerV2 spyRunner = runnerWithMcpResult(mcpResult(0, Map.of(), List.of()));
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> spyRunner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener)
+        );
+
+        verify(listener, times(1)).onFailure(any());
+        verify(listener, never()).onResponse(any());
     }
 }
