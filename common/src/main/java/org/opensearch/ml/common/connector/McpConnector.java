@@ -22,8 +22,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
@@ -381,18 +379,7 @@ public class McpConnector extends AbstractConnector {
 
     @Override
     public void validateConnectorURL(List<String> urlRegexes) {
-        boolean hasMatchedUrl = false;
-        for (String urlRegex : urlRegexes) {
-            Pattern pattern = Pattern.compile(urlRegex);
-            Matcher matcher = pattern.matcher(url);
-            if (matcher.matches()) {
-                hasMatchedUrl = true;
-                break;
-            }
-        }
-        if (!hasMatchedUrl) {
-            throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
-        }
+        validateResolvedEndpoint(url, urlRegexes);
     }
 
     @Override

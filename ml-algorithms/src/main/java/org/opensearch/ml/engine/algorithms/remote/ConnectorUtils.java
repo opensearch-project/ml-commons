@@ -377,6 +377,9 @@ public class ConnectorUtils {
                 e
             );
         }
+        if (uri.getRawUserInfo() != null) {
+            throw new IllegalArgumentException("Connector URL must not contain user information");
+        }
 
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
@@ -419,6 +422,9 @@ public class ConnectorUtils {
                 "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
                 e
             );
+        }
+        if (uri.getRawUserInfo() != null) {
+            throw new IllegalArgumentException("Connector URL must not contain user information");
         }
         Request.Builder requestBuilder = new Request.Builder();
         Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);

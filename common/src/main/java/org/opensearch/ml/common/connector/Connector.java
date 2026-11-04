@@ -9,11 +9,14 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -192,6 +195,19 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * The string endpoint allowlists are matched against: scheme and host lowercased (RFC 3986 section 6.2.2.1),
+     * then port, raw path and raw query as parsed. Callers must have rejected URIs without a scheme or host.
+     */
+    static String canonicalUrl(URI uri) {
+        return uri.getScheme().toLowerCase(Locale.ROOT)
+            + "://"
+            + uri.getHost().toLowerCase(Locale.ROOT)
+            + (uri.getPort() == -1 ? "" : ":" + uri.getPort())
+            + (uri.getRawPath() == null ? "" : uri.getRawPath())
+            + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
+    }
+
     default void validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
         if (urlRegexes == null || urlRegexes.isEmpty()) {
             throw new IllegalArgumentException(
@@ -201,14 +217,51 @@ public interface Connector extends ToXContentObject, Writeable {
         if (resolvedUrl == null) {
             throw new IllegalArgumentException("Resolved connector URL is null");
         }
+        if (resolvedUrl.contains("${")) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException(
+                "Connector URL contains an unresolved parameter placeholder; define it in the connector parameters"
+            );
+        }
+        URI uri;
+        try {
+            uri = new URI(resolvedUrl);
+        } catch (URISyntaxException e) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException("Connector URL is not a valid URI", e);
+        }
+        String scheme = uri.getScheme();
+        if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException("Connector URL scheme must be http or https");
+        }
+        if (uri.getRawUserInfo() != null) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException("Connector URL must not contain user information");
+        }
+        if (uri.getRawFragment() != null) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException("Connector URL must not contain a fragment");
+        }
+        String host = uri.getHost();
+        if (host == null || host.isEmpty()) {
+            logRejectedUrl(resolvedUrl);
+            throw new IllegalArgumentException("Connector URL has no host");
+        }
+        String canonical = canonicalUrl(uri);
         for (String urlRegex : urlRegexes) {
             Pattern pattern = Pattern.compile(urlRegex);
-            Matcher matcher = pattern.matcher(resolvedUrl);
+            Matcher matcher = pattern.matcher(canonical);
             if (matcher.matches()) {
                 return;
             }
         }
+        logRejectedUrl(resolvedUrl);
         throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
+    }
+
+    private static void logRejectedUrl(String resolvedUrl) {
+        RejectedConnectorUrlLog.warn(resolvedUrl);
     }
 
     Map<String, String> getDecryptedHeaders();
