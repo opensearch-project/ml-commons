@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.model.ModelProviderFactory;
@@ -30,8 +31,42 @@ public class AgentModelService {
         ModelProvider provider = ModelProviderFactory.getProvider(modelSpec.getModelProvider());
 
         Connector connector = provider.createConnector(modelSpec.getModelId(), modelSpec.getCredential(), modelSpec.getModelParameters());
+        applyClientConfigOverrides(connector.getConnectorClientConfig(), modelSpec.getClientConfig());
 
         return provider.createModelInput(modelSpec.getModelId(), connector, modelSpec.getModelParameters());
+    }
+
+    /**
+     * Lays the agent's client_config over the provider's defaults; only fields the user set replace them.
+     *
+     * @param target    the auto-created connector's client config, modified in place
+     * @param overrides the agent's client_config; fields left null keep the target's values
+     */
+    static void applyClientConfigOverrides(ConnectorClientConfig target, ConnectorClientConfig overrides) {
+        if (target == null || overrides == null) {
+            return;
+        }
+        if (overrides.getConnectionTimeout() != null) {
+            target.setConnectionTimeout(overrides.getConnectionTimeout());
+        }
+        if (overrides.getReadTimeout() != null) {
+            target.setReadTimeout(overrides.getReadTimeout());
+        }
+        if (overrides.getMaxConnections() != null) {
+            target.setMaxConnections(overrides.getMaxConnections());
+        }
+        if (overrides.getMaxRetryTimes() != null) {
+            target.setMaxRetryTimes(overrides.getMaxRetryTimes());
+        }
+        if (overrides.getRetryBackoffMillis() != null) {
+            target.setRetryBackoffMillis(overrides.getRetryBackoffMillis());
+        }
+        if (overrides.getRetryTimeoutSeconds() != null) {
+            target.setRetryTimeoutSeconds(overrides.getRetryTimeoutSeconds());
+        }
+        if (overrides.getRetryBackoffPolicy() != null) {
+            target.setRetryBackoffPolicy(overrides.getRetryBackoffPolicy());
+        }
     }
 
     /**
