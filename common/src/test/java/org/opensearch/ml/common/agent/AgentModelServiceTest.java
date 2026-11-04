@@ -15,6 +15,7 @@ import java.util.stream.Stream;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -254,5 +255,60 @@ public class AgentModelServiceTest {
         // Assert
         assertNotNull(result);
         assertNotNull(result.getConnector());
+    }
+
+    private static MLAgentModelSpec specWith(String provider, ConnectorClientConfig clientConfig) {
+        return MLAgentModelSpec
+            .builder()
+            .modelId("some-model")
+            .modelProvider(provider)
+            .credential(Map.of("openai_api_key", "k", "access_key", "a", "secret_key", "s", "gemini_api_key", "g"))
+            .modelParameters(Map.of("region", "us-east-1"))
+            .clientConfig(clientConfig)
+            .build();
+    }
+
+    @Test
+    public void testClientConfigOverridesOnlyTheFieldsSet() {
+        for (ModelProviderType provider : ModelProviderType.values()) {
+            MLRegisterModelInput input = AgentModelService
+                .createModelFromSpec(specWith(provider.getValue(), ConnectorClientConfig.builder().readTimeout(120).build()));
+            ConnectorClientConfig config = input.getConnector().getConnectorClientConfig();
+            assertEquals(provider.getValue(), Integer.valueOf(120), config.getReadTimeout());
+            // Everything else keeps the provider's defaults, including the agents' 3 retries.
+            assertEquals(provider.getValue(), Integer.valueOf(3), config.getMaxRetryTimes());
+            assertEquals(provider.getValue(), ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, config.getConnectionTimeout());
+        }
+    }
+
+    @Test
+    public void testWithoutClientConfigTheProviderDefaultsAreUnchanged() {
+        ConnectorClientConfig config = AgentModelService
+            .createModelFromSpec(specWith("openai/v1/chat/completions", null))
+            .getConnector()
+            .getConnectorClientConfig();
+        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, config.getReadTimeout());
+        assertEquals(Integer.valueOf(3), config.getMaxRetryTimes());
+    }
+
+    @Test
+    public void testClientConfigCanOverrideRetries() {
+        ConnectorClientConfig config = AgentModelService
+            .createModelFromSpec(
+                specWith("openai/v1/chat/completions", ConnectorClientConfig.builder().maxRetryTimes(0).connectionTimeout(5).build())
+            )
+            .getConnector()
+            .getConnectorClientConfig();
+        assertEquals(Integer.valueOf(0), config.getMaxRetryTimes());
+        assertEquals(Integer.valueOf(5), config.getConnectionTimeout());
+        assertEquals(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE, config.getReadTimeout());
+    }
+
+    @Test
+    public void testApplyClientConfigOverridesToleratesNulls() {
+        AgentModelService.applyClientConfigOverrides(null, ConnectorClientConfig.builder().readTimeout(1).build());
+        ConnectorClientConfig target = new ConnectorClientConfig();
+        AgentModelService.applyClientConfigOverrides(target, null);
+        assertEquals(new ConnectorClientConfig(), target);
     }
 }

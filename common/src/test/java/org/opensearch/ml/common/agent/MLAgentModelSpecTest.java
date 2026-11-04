@@ -20,6 +20,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 
 public class MLAgentModelSpecTest {
 
@@ -481,5 +484,162 @@ public class MLAgentModelSpecTest {
     private XContentParser createParser(String jsonString) throws IOException {
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, jsonString);
         return parser;
+    }
+
+    private MLAgentModelSpec parseSpec(String json) throws IOException {
+        XContentParser parser = createParser(json);
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+        return MLAgentModelSpec.parse(parser);
+    }
+
+    private static String withClientConfig(String clientConfigJson) {
+        return "{\"model_id\":\"m\",\"model_provider\":\"openai/v1/chat/completions\",\"client_config\":" + clientConfigJson + "}";
+    }
+
+    @Test
+    public void testParse_ClientConfigKeepsUnsetFieldsNull() throws IOException {
+        // Only read_timeout was set; everything else must stay null so the provider's defaults survive.
+        ConnectorClientConfig config = parseSpec(withClientConfig("{\"read_timeout\":120}")).getClientConfig();
+        assertEquals(Integer.valueOf(120), config.getReadTimeout());
+        assertNull(config.getConnectionTimeout());
+        assertNull(config.getMaxRetryTimes());
+        assertNull(config.getMaxConnections());
+        assertNull(config.getRetryBackoffPolicy());
+    }
+
+    @Test
+    public void testParse_ClientConfigAllSupportedFields() throws IOException {
+        ConnectorClientConfig config = parseSpec(
+            withClientConfig(
+                "{\"read_timeout\":120,\"connection_timeout\":10,\"max_connection\":20,\"max_retry_times\":5,"
+                    + "\"retry_backoff_millis\":500,\"retry_timeout_seconds\":90,\"retry_backoff_policy\":\"exponential_full_jitter\"}"
+            )
+        ).getClientConfig();
+        assertEquals(Integer.valueOf(120), config.getReadTimeout());
+        assertEquals(Integer.valueOf(10), config.getConnectionTimeout());
+        assertEquals(Integer.valueOf(20), config.getMaxConnections());
+        assertEquals(Integer.valueOf(5), config.getMaxRetryTimes());
+        assertEquals(Integer.valueOf(500), config.getRetryBackoffMillis());
+        assertEquals(Integer.valueOf(90), config.getRetryTimeoutSeconds());
+        assertEquals(RetryBackoffPolicy.EXPONENTIAL_FULL_JITTER, config.getRetryBackoffPolicy());
+    }
+
+    @Test
+    public void testParse_ClientConfigAbsentIsNull() throws IOException {
+        assertNull(parseSpec("{\"model_id\":\"m\",\"model_provider\":\"p\"}").getClientConfig());
+    }
+
+    @Test
+    public void testParse_ClientConfigNullIsUnset() throws IOException {
+        MLAgentModelSpec spec = parseSpec("{\"model_id\":\"m\",\"model_provider\":\"p\",\"client_config\":null}");
+        assertNull(spec.getClientConfig());
+        assertEquals("m", spec.getModelId());
+    }
+
+    @Test
+    public void testParse_ClientConfigRejectsTlsSettings() {
+        for (String field : new String[] { "skip_ssl_verification", "mutual_tls_enabled", "keystore_type" }) {
+            String value = field.equals("keystore_type") ? "\"PEM\"" : "true";
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> parseSpec(withClientConfig("{\"" + field + "\":" + value + "}"))
+            );
+            assertTrue(e.getMessage().contains("client_config." + field + " is not supported for an agent model"));
+            assertTrue(e.getMessage().contains("read_timeout"));
+        }
+    }
+
+    @Test
+    public void testParse_ClientConfigRejectsNonPositiveValues() {
+        for (String field : new String[] {
+            "read_timeout",
+            "connection_timeout",
+            "max_connection",
+            "retry_backoff_millis",
+            "retry_timeout_seconds" }) {
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> parseSpec(withClientConfig("{\"" + field + "\":0}"))
+            );
+            assertEquals("client_config." + field + " must be greater than 0", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testParse_ClientConfigMaxRetryTimes() throws IOException {
+        // -1 means "retry until retry_timeout_seconds", as on standalone connectors.
+        assertEquals(Integer.valueOf(-1), parseSpec(withClientConfig("{\"max_retry_times\":-1}")).getClientConfig().getMaxRetryTimes());
+        assertThrows(IllegalArgumentException.class, () -> parseSpec(withClientConfig("{\"max_retry_times\":-2}")));
+    }
+
+    @Test
+    public void testToXContent_ClientConfigWritesOnlySetFields() throws IOException {
+        MLAgentModelSpec spec = MLAgentModelSpec
+            .builder()
+            .modelId("m")
+            .modelProvider("p")
+            .clientConfig(ConnectorClientConfig.builder().readTimeout(120).build())
+            .build();
+        XContentBuilder builder = XContentType.JSON.contentBuilder();
+        spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String json = builder.toString();
+        assertTrue(json.contains("\"client_config\":{\"read_timeout\":120}"));
+    }
+
+    @Test
+    public void testXContentRoundTrip_ClientConfig() throws IOException {
+        MLAgentModelSpec original = MLAgentModelSpec
+            .builder()
+            .modelId("m")
+            .modelProvider("p")
+            .clientConfig(ConnectorClientConfig.builder().readTimeout(120).maxRetryTimes(5).build())
+            .build();
+        XContentBuilder builder = XContentType.JSON.contentBuilder();
+        original.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertEquals(original, parseSpec(builder.toString()));
+    }
+
+    @Test
+    public void testStreamSerialization_ClientConfig() throws IOException {
+        MLAgentModelSpec original = MLAgentModelSpec
+            .builder()
+            .modelId("m")
+            .modelProvider("p")
+            .clientConfig(ConnectorClientConfig.builder().readTimeout(120).build())
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+        MLAgentModelSpec deserialized = new MLAgentModelSpec(output.bytes().streamInput());
+        assertEquals(Integer.valueOf(120), deserialized.getClientConfig().getReadTimeout());
+        assertNull(deserialized.getClientConfig().getMaxRetryTimes());
+    }
+
+    @Test
+    public void testStreamSerialization_ClientConfigNotSentToOlderNodes() throws IOException {
+        // A 3.9 node doesn't know the field: it is neither written to nor read from its streams.
+        MLAgentModelSpec original = MLAgentModelSpec
+            .builder()
+            .modelId("m")
+            .modelProvider("p")
+            .modelParameters(Map.of("k", "v"))
+            .clientConfig(ConnectorClientConfig.builder().readTimeout(120).build())
+            .build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_9_0);
+        original.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_9_0);
+        MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
+        assertNull(deserialized.getClientConfig());
+        assertEquals(Map.of("k", "v"), deserialized.getModelParameters());
+        assertEquals(0, input.available());
+    }
+
+    @Test
+    public void testStreamSerialization_WithoutClientConfig() throws IOException {
+        MLAgentModelSpec original = new MLAgentModelSpec("m", "p", null, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+        assertNull(new MLAgentModelSpec(output.bytes().streamInput()).getClientConfig());
     }
 }
