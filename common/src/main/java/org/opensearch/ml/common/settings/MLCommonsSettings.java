@@ -24,6 +24,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 
@@ -904,6 +905,32 @@ public final class MLCommonsSettings {
         }
         return false;
     }
+
+    // Tool search for agents (experimental). Everything else is per agent, in MLToolSelectionConfig.
+    public static final Setting<Boolean> ML_COMMONS_TOOL_SELECTION_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "tool_selection.enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    /** Default TEXT_EMBEDDING model for tool search; an agent may name its own. Blank keeps the feature off. */
+    public static final Setting<String> ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID = Setting
+        .simpleString(
+            ML_PLUGIN_SETTING_PREFIX + "tool_selection.embedding_model_id",
+            "",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    /**
+     * Time budget for one search; on expiry the model is told search is unavailable. The default
+     * leaves headroom for a remote embedding model's round trip.
+     */
+    public static final Setting<TimeValue> ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT = Setting
+        .timeSetting(
+            ML_PLUGIN_SETTING_PREFIX + "tool_selection.search_timeout",
+            TimeValue.timeValueSeconds(5),
+            TimeValue.timeValueMillis(100),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences. The outer quantifier set intentionally includes '{':
