@@ -597,6 +597,47 @@ public class ConnectorUtilsTest {
         assertNull(inputData.getParameters());
     }
 
+    private static Connector userInfoConnector() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://api.example.com@evil.example/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        return HttpConnector.builder().name("test").protocol("http").version("1").actions(Arrays.asList(predictAction)).build();
+    }
+
+    @Test
+    public void buildSdkRequest_UserInfo_ThrowException() {
+        IllegalArgumentException e = org.junit.Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> ConnectorUtils
+                    .buildSdkRequest(
+                        "PREDICT",
+                        userInfoConnector(),
+                        Collections.emptyMap(),
+                        "{}",
+                        software.amazon.awssdk.http.SdkHttpMethod.POST
+                    )
+            );
+        assertEquals("Connector URL must not contain user information", e.getMessage());
+    }
+
+    @Test
+    public void buildOKHttpStreamingRequest_UserInfo_ThrowException() {
+        Connector connector = spy(userInfoConnector());
+        when(connector.getDecryptedHeaders()).thenReturn(ImmutableMap.of());
+        IllegalArgumentException e = org.junit.Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> ConnectorUtils
+                    .buildOKHttpStreamingRequest(PREDICT.name(), connector, ImmutableMap.of("input", "x"), "{\"input\": \"x\"}")
+            );
+        assertEquals("Connector URL must not contain user information", e.getMessage());
+    }
+
     @Test
     public void buildSdkRequest_InvalidEndpoint_ThrowException() {
         exceptionRule.expect(IllegalArgumentException.class);

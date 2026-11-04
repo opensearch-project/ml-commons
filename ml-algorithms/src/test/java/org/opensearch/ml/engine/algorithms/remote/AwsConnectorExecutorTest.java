@@ -211,10 +211,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
-        assertEquals(
-            "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
-            exceptionCaptor.getValue().getMessage()
-        );
+        assertEquals("Connector URL has no host", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -1466,5 +1463,45 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .algorithm(FunctionName.REMOTE)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
             .build();
+    }
+
+    @Test
+    public void invokeRemoteService_HostOverrideRejectedBeforeClientCall() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/m/invoke")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("aws_sigv4")
+            .parameters(ImmutableMap.of(REGION_FIELD, "us-east-1", SERVICE_NAME_FIELD, "bedrock"))
+            .credential(ImmutableMap.of(ACCESS_KEY_FIELD, "test_key", SECRET_KEY_FIELD, "test_secret_key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
+        executor
+            .setTrustedConnectorEndpointsRegex(
+                org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    .get(org.opensearch.common.settings.Settings.EMPTY)
+            );
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        org.mockito.Mockito.doReturn(httpClient).when(executor).getHttpClient();
+        @SuppressWarnings("unchecked")
+        ActionListener<Tuple<Integer, ModelTensors>> listener = mock(ActionListener.class);
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put("region", "evil.example?x=a");
+
+        executor.invokeRemoteService(PREDICT.name(), null, overrides, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        assertTrue(failure.getValue() instanceof IllegalArgumentException);
+        assertTrue(failure.getValue().getMessage(), failure.getValue().getMessage().contains("not matching"));
+        verify(httpClient, org.mockito.Mockito.never()).execute(any());
     }
 }
