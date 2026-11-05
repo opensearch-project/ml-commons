@@ -19,6 +19,15 @@ public class ToolCall {
     private String id;
     private String type;
     private ToolFunction function;
+    /**
+     * Opaque provider token that must be sent back with this call, such as a Gemini thought
+     * signature. Null for providers that don't use one.
+     */
+    private String thoughtSignature;
+
+    public ToolCall(String id, String type, ToolFunction function) {
+        this(id, type, function, null);
+    }
 
     /**
      * Represents the function details within a tool call.

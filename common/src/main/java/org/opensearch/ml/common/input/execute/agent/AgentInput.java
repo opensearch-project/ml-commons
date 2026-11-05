@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.input.execute.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -200,6 +201,9 @@ public class AgentInput implements Writeable {
         toolCall.setId(id);
         toolCall.setType(type);
         toolCall.setFunction(function);
+        if (in.getVersion().onOrAfter(VERSION_3_10_0)) {
+            toolCall.setThoughtSignature(in.readOptionalString());
+        }
         return toolCall;
     }
 
@@ -399,6 +403,7 @@ public class AgentInput implements Writeable {
         String id = null;
         String type = null;
         ToolCall.ToolFunction function = null;
+        String thoughtSignature = null;
 
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -414,6 +419,9 @@ public class AgentInput implements Writeable {
                 case "function":
                     function = parseToolFunctionFromXContent(parser);
                     break;
+                case "thoughtSignature":
+                    thoughtSignature = parser.textOrNull();
+                    break;
                 default:
                     // Skip unknown fields
                     parser.skipChildren();
@@ -426,7 +434,7 @@ public class AgentInput implements Writeable {
         }
 
         // Default to "function" if type not provided
-        return new ToolCall(id, type != null ? type : "function", function);
+        return new ToolCall(id, type != null ? type : "function", function, thoughtSignature);
     }
 
     /**
@@ -818,6 +826,9 @@ public class AgentInput implements Writeable {
         out.writeString(toolCall.getId());
         out.writeString(toolCall.getType());
         writeToolFunction(out, toolCall.getFunction());
+        if (out.getVersion().onOrAfter(VERSION_3_10_0)) {
+            out.writeOptionalString(toolCall.getThoughtSignature());
+        }
     }
 
     /**
