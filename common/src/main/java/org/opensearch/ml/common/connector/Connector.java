@@ -183,6 +183,10 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
+    /**
+     * Create-, update- and register-time check. Parameters supplied only at predict time may remain in the path
+     * and query; the scheme and host must already be resolved. Executors re-check the fully resolved URL.
+     */
     default void validateConnectorURL(List<String> urlRegexes) {
         if (getActions() == null) {
             throw new IllegalArgumentException("No actions configured for this connector");
@@ -191,8 +195,31 @@ public interface Connector extends ToXContentObject, Writeable {
         for (ConnectorAction action : getActions()) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             String url = substitutor.replace(action.getUrl());
-            validateResolvedEndpoint(url, urlRegexes);
+            validateResolvedEndpoint(fillPathPlaceholders(url), urlRegexes);
         }
+    }
+
+    /**
+     * Replaces placeholders after the authority with "0" so a URL whose path or query is completed at predict
+     * time can be checked at create time. Placeholders in the scheme or authority are left in place and rejected.
+     */
+    static String fillPathPlaceholders(String url) {
+        if (url == null) {
+            return null;
+        }
+        int schemeEnd = url.indexOf("://");
+        if (schemeEnd < 0) {
+            return url;
+        }
+        int authorityEnd = url.length();
+        for (int i = schemeEnd + 3; i < url.length(); i++) {
+            char c = url.charAt(i);
+            if (c == '/' || c == '?' || c == '#') {
+                authorityEnd = i;
+                break;
+            }
+        }
+        return url.substring(0, authorityEnd) + url.substring(authorityEnd).replaceAll("\\$\\{[^}]*\\}", "0");
     }
 
     /**

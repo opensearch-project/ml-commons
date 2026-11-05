@@ -1,6 +1,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.opensearch.ml.common.connector.HttpConnectorTest.createHttpConnector;
@@ -175,9 +176,35 @@ public class ConnectorTest {
     }
 
     @Test
-    public void validateResolvedEndpoint_singleLabelBucketHostStillMatchesDefault() {
+    public void validateResolvedEndpoint_awsDefaultsRejectS3BucketHosts() {
         HttpConnector connector = createHttpConnector();
-        connector.validateResolvedEndpoint("https://bedrock-runtime.s3.amazonaws.com/x", defaults());
+        List<String> defaults = defaults();
+        assertRejected(connector, "https://bedrock-runtime.s3.amazonaws.com/x", defaults);
+        assertRejected(connector, "https://bedrock-agent-runtime.s3.amazonaws.com/x", defaults);
+        assertRejected(connector, "https://bedrock-runtime.s3-accelerate.amazonaws.com/x", defaults);
+        assertRejected(connector, "https://textract.s3-external-1.amazonaws.com", defaults);
+        assertRejected(connector, "https://runtime.sagemaker.s3.amazonaws.com/x", defaults);
+    }
+
+    @Test
+    public void validateResolvedEndpoint_awsDefaultsAcceptRegionNamesInAllPartitions() {
+        HttpConnector connector = createHttpConnector();
+        List<String> defaults = defaults();
+        for (String region : List
+            .of(
+                "us-east-1",
+                "us-gov-west-1",
+                "cn-northwest-1",
+                "eusc-de-east-1",
+                "us-isob-east-1",
+                "eu-isoe-west-1",
+                "ap-southeast-7",
+                "il-central-1"
+            )) {
+            connector.validateResolvedEndpoint("https://bedrock-runtime." + region + ".amazonaws.com/model/m/invoke", defaults);
+            connector.validateResolvedEndpoint("https://rekognition-fips." + region + ".amazonaws.com", defaults);
+            connector.validateResolvedEndpoint("https://textract." + region + ".amazonaws.com", defaults);
+        }
     }
 
     @Test
@@ -294,12 +321,72 @@ public class ConnectorTest {
     }
 
     @Test
-    public void rejectedUrlLogIsSanitized() {
-        assertEquals("https://h/a?b", RejectedConnectorUrlLog.sanitize("https://h/a\nb"));
-        assertEquals("https://h/a??", RejectedConnectorUrlLog.sanitize("https://h/a\r\u007f"));
-        assertEquals("https://h/path", RejectedConnectorUrlLog.sanitize("https://h/path?token=secret#frag"));
-        String longUrl = "https://h/" + "a".repeat(2000);
-        assertEquals(RejectedConnectorUrlLog.MAX_LOGGED_LENGTH, RejectedConnectorUrlLog.sanitize(longUrl).length());
+    public void rejectedUrlLogCarriesOnlySchemeHostAndLength() {
+        String withUserInfo = "https://user:pass@Host.Example/x";
+        String described = RejectedConnectorUrlLog.describe(withUserInfo);
+        assertEquals("https://host.example (length " + withUserInfo.length() + ")", described);
+        assertFalse(described.contains("user"));
+        assertFalse(described.contains("pass"));
+        String withQuery = "https://h.example/path?token=secret#frag";
+        assertEquals("https://h.example (length " + withQuery.length() + ")", RejectedConnectorUrlLog.describe(withQuery));
+        String withControl = "https://h.example/a\r\nFAKE LOG LINE";
+        assertEquals("unparseable (length " + withControl.length() + ")", RejectedConnectorUrlLog.describe(withControl));
+        assertEquals("unparseable (length 6)", RejectedConnectorUrlLog.describe("${x}/a"));
+        assertEquals("null", RejectedConnectorUrlLog.describe(null));
+        String longUrl = "https://h.example/" + "a".repeat(2000);
+        assertEquals("https://h.example (length " + longUrl.length() + ")", RejectedConnectorUrlLog.describe(longUrl));
+    }
+
+    private static HttpConnector connectorWithUrl(String url, java.util.Map<String, String> parameters) {
+        ConnectorAction action = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url(url)
+            .requestBody("{}")
+            .build();
+        return HttpConnector.builder().name("n").protocol("http").parameters(parameters).actions(List.of(action)).build();
+    }
+
+    @Test
+    public void validateConnectorURL_acceptsPredictTimePlaceholdersInPathAndQuery() {
+        java.util.Map<String, String> parameters = java.util.Map.of("region", "us-east-1");
+        connectorWithUrl("https://bedrock-runtime.us-east-1.amazonaws.com/model/${parameters.model}/invoke", parameters)
+            .validateConnectorURL(defaults());
+        connectorWithUrl("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke", parameters)
+            .validateConnectorURL(defaults());
+        connectorWithUrl("https://bedrock-runtime.us-east-1.amazonaws.com/model/m/invoke?x=${parameters.x}", parameters)
+            .validateConnectorURL(defaults());
+    }
+
+    @Test
+    public void validateConnectorURL_rejectsUnresolvedHostPlaceholder() {
+        try {
+            connectorWithUrl("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/m/invoke", Collections.emptyMap())
+                .validateConnectorURL(defaults());
+            fail("expected rejection");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("unresolved parameter placeholder"));
+        }
+    }
+
+    @Test
+    public void validateResolvedEndpoint_stillRejectsUnresolvedPathPlaceholder() {
+        expectMessage(
+            createHttpConnector(),
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/${parameters.model}/invoke",
+            defaults(),
+            "unresolved parameter placeholder"
+        );
+    }
+
+    @Test
+    public void fillPathPlaceholders_onlyTouchesPathAndQuery() {
+        assertEquals("https://h/a/0/b?c=0", Connector.fillPathPlaceholders("https://h/a/${parameters.x}/b?c=${parameters.y}"));
+        assertEquals("https://h?c=0", Connector.fillPathPlaceholders("https://h?c=${parameters.y}"));
+        assertEquals("https://${parameters.h}/0", Connector.fillPathPlaceholders("https://${parameters.h}/${parameters.p}"));
+        assertEquals("${parameters.s}://h/a", Connector.fillPathPlaceholders("${parameters.s}://h/a"));
+        assertEquals("no-scheme/${x}", Connector.fillPathPlaceholders("no-scheme/${x}"));
     }
 
     private static List<String> defaults() {
