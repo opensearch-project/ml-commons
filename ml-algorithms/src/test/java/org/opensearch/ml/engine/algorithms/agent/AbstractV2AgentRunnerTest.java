@@ -661,7 +661,26 @@ public class AbstractV2AgentRunnerTest {
     }
 
     @Test
-    public void testExtractAssistantMessage_ParseToUnifiedFails() {
+    public void testExtractAssistantMessage_NoMessageButAFinishReasonIsAnEmptyReply() {
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(null);
+        when(modelProvider.extractFinishReason(dataMap)).thenReturn("length");
+
+        try {
+            runner.extractAssistantMessage(output, modelProvider);
+            fail("Should throw EmptyModelResponseException when the response has a finish reason but no message");
+        } catch (EmptyModelResponseException e) {
+            assertEquals("length", e.getFinishReason());
+            assertFalse(e.isRetryable());
+        }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_EmptyReply() {
         // Arrange
         Map<String, Object> dataMap = new HashMap<>();
         ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
@@ -672,12 +691,16 @@ public class AbstractV2AgentRunnerTest {
         when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(messageJson);
         when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(null);
 
-        // Act & Assert
+        when(modelProvider.extractFinishReason(dataMap)).thenReturn("stop");
+
+        // Act & Assert: a parsed-but-empty reply is reported as an empty response, with the provider's finish reason
         try {
             runner.extractAssistantMessage(output, modelProvider);
-            fail("Should throw IllegalStateException when parsing fails");
-        } catch (IllegalStateException e) {
-            assertTrue(e.getMessage().contains("ModelProvider failed to parse message JSON"));
+            fail("Should throw EmptyModelResponseException when the reply has no text and no tool calls");
+        } catch (EmptyModelResponseException e) {
+            assertEquals("stop", e.getFinishReason());
+            assertTrue(e.getMessage().startsWith("The model returned an empty response"));
+            assertTrue(e.isRetryable());
         }
     }
 

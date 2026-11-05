@@ -907,4 +907,25 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
             assertTrue(e.getMessage().contains("must be a valid number"));
         }
     }
+
+    @Test
+    public void testExtractFinishReason() {
+        Map<String, Object> response = Map.of("candidates", List.of(Map.of("finishReason", "MAX_TOKENS", "content", Map.of())));
+        assertEquals("MAX_TOKENS", provider.extractFinishReason(response));
+    }
+
+    @Test
+    public void testExtractFinishReasonMissingIsNull() {
+        assertNull(provider.extractFinishReason(null));
+        assertNull(provider.extractFinishReason(Map.of("candidates", List.of())));
+        assertNull(provider.extractFinishReason(Map.of("candidates", List.of(Map.of("content", Map.of())))));
+        assertNull(provider.extractFinishReason(Map.of("promptFeedback", Map.of())));
+    }
+
+    @Test
+    public void testBlockedPromptReportsTheBlockReason() {
+        Map<String, Object> response = Map.of("promptFeedback", Map.of("blockReason", "SAFETY"));
+        assertEquals("SAFETY", provider.extractFinishReason(response));
+        assertNull(provider.extractMessageFromResponse(response));
+    }
 }

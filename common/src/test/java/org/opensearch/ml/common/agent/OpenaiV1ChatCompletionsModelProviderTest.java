@@ -1483,4 +1483,26 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
     private List<Map<String, String>> extractMessages(String payload) {
         return (List<Map<String, String>>) StringUtils.gson.fromJson(payload, Map.class).get("messages");
     }
+
+    @Test
+    public void testExtractFinishReason() {
+        Map<String, Object> response = Map
+            .of("choices", List.of(Map.of("finish_reason", "length", "message", Map.of("role", "assistant"))));
+        assertEquals("length", provider.extractFinishReason(response));
+    }
+
+    @Test
+    public void testChoiceWithoutAMessageStillHasItsFinishReason() {
+        Map<String, Object> response = Map.of("choices", List.of(Map.of("index", 0, "finish_reason", "length")));
+        assertNull(provider.extractMessageFromResponse(response));
+        assertEquals("length", provider.extractFinishReason(response));
+    }
+
+    @Test
+    public void testExtractFinishReasonMissingIsNull() {
+        assertNull(provider.extractFinishReason(null));
+        assertNull(provider.extractFinishReason(Map.of()));
+        assertNull(provider.extractFinishReason(Map.of("choices", List.of())));
+        assertNull(provider.extractFinishReason(Map.of("choices", List.of(Map.of("message", Map.of())))));
+    }
 }

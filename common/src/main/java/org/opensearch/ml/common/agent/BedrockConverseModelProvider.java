@@ -440,6 +440,12 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * @return JSON string representation of the message object, or null if not found
      */
     @Override
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object reason = responseData == null ? null : responseData.get("stopReason");
+        return reason == null ? null : reason.toString();
+    }
+
+    @Override
     public String extractMessageFromResponse(Map<String, ?> responseData) {
         if (responseData == null) {
             return null;

@@ -305,6 +305,21 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
     }
 
     @Override
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object candidatesObj = responseData == null ? null : responseData.get("candidates");
+        if (candidatesObj instanceof List<?> candidates && !candidates.isEmpty() && candidates.get(0) instanceof Map<?, ?> candidate) {
+            Object reason = candidate.get("finishReason");
+            return reason == null ? null : reason.toString();
+        }
+        // A blocked prompt gets no candidates; the reason is in promptFeedback.blockReason instead.
+        Object feedback = responseData == null ? null : responseData.get("promptFeedback");
+        if (feedback instanceof Map<?, ?> promptFeedback && promptFeedback.get("blockReason") != null) {
+            return promptFeedback.get("blockReason").toString();
+        }
+        return null;
+    }
+
+    @Override
     public String extractMessageFromResponse(Map<String, ?> responseData) {
         if (responseData == null) {
             return null;
