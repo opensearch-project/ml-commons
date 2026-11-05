@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -40,6 +42,12 @@ public class GoogleCloudConnector extends HttpConnector {
     public static final String DEFAULT_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
     public static final String AUTHORIZATION_HEADER = "Authorization";
+
+    // Vertex batch_predict URLs embed an API version segment (/v1/ or /v1beta<N>/) used to derive the
+    // status/cancel URL. Checked on create/update (see validateConnectorURL) so a malformed endpoint fails
+    // before a job is submitted rather than after, which would orphan a Vertex billing job. Mirrors the runtime
+    // check in ConnectorUtils; duplicated here because common cannot depend on ml-algorithms.
+    private static final Pattern VERTEX_API_VERSION_PATTERN = Pattern.compile("/v1(beta\\d+)?/");
 
     // Runtime-only bearer token set by the executor before each request. Excluded from
     // equals/hashCode and serialization: it is transient per-request state, not connector config.
@@ -115,6 +123,29 @@ public class GoogleCloudConnector extends HttpConnector {
         // Service-account key mode.
         if (credential == null || !credential.containsKey(PRIVATE_KEY_FIELD) || !credential.containsKey(CLIENT_EMAIL_FIELD)) {
             throw new IllegalArgumentException("Missing credential");
+        }
+    }
+
+    /**
+     * Adds the batch_predict version-segment check to the trusted-endpoint check. Deliberately not part of
+     * {@link #validate()}: the constructors also run when a stored connector is read back from the index, and a
+     * connector saved before this check existed must stay readable and deletable, and fixable through an update.
+     * This method runs only where a connector is created or modified (connector create/update, inline connector
+     * on model register/update). The URL is resolved against the connector parameters first, as the runtime
+     * check does.
+     */
+    @Override
+    public void validateConnectorURL(List<String> urlRegexes) {
+        super.validateConnectorURL(urlRegexes);
+        for (ConnectorAction action : actions) {
+            if (action.getActionType() == ConnectorAction.ActionType.BATCH_PREDICT && action.getUrl() != null) {
+                String url = new StringSubstitutor(parameters, "${parameters.", "}").replace(action.getUrl());
+                if (!VERTEX_API_VERSION_PATTERN.matcher(url).find()) {
+                    throw new IllegalArgumentException(
+                        "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment, got: " + url
+                    );
+                }
+            }
         }
     }
 
