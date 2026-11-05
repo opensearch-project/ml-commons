@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.conversation.ConversationalIndexConstants
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_ANTHROPIC_V1_MESSAGES;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
@@ -309,6 +310,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE, LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 ->
                     "$.output.message.content[0].text";
                 case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS -> "$.choices[0].message.content";
+                case LLM_INTERFACE_ANTHROPIC_V1_MESSAGES -> "$.content[0].text";
                 default -> throw new MLException(String.format("Unsupported llm interface: %s", llmInterface));
             };
 

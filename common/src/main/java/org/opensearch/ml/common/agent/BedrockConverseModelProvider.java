@@ -7,6 +7,7 @@ package org.opensearch.ml.common.agent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -61,13 +62,16 @@ public class BedrockConverseModelProvider extends ModelProvider {
     // The default matters: a direct _predict against the auto-created model runs without an agent runner
     // and so does not set system_prompt, and would otherwise be rejected by Connector#validatePayload for
     // an unfilled placeholder. Every agent runner path does set it.
-    private static final String REQUEST_BODY_TEMPLATE =
-        "{\"system\": [{\"text\": \"${parameters.system_prompt:-You are a helpful assistant}\"}], "
-            + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
-            + "${parameters.tool_configs:-}, "
-            + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}"
-            + "${parameters.temperature_field:-}${parameters.top_p_field:-}}"
-            + " }";
+    private static final String SYSTEM_BLOCK = "{\"text\": \"${parameters.system_prompt:-You are a helpful assistant}\"}";
+
+    private static final String REQUEST_BODY_TEMPLATE = "{\"system\": ["
+        + SYSTEM_BLOCK
+        + "], "
+        + "\"messages\": [${parameters._chat_history:-}${parameters.body}${parameters._interactions:-}]"
+        + "${parameters.tool_configs:-}, "
+        + "\"inferenceConfig\": {\"maxTokens\": ${parameters.max_tokens:-4096}"
+        + "${parameters.temperature_field:-}${parameters.top_p_field:-}}"
+        + " }";
 
     // Body templates for different input types
     private static final String TEXT_INPUT_BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_text}\"}]}";
@@ -88,8 +92,12 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"content\":[${parameters.msg_content_array}]}";
 
+    private static final String TOOLS_PARAMETER = "_tools";
+
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
+        // cachePoint omits the TTL unless it's set, and Bedrock then applies 5m.
+        PromptCacheSettings.validateTtlOrder(modelParameters, PromptCacheSettings.TTL_5_MINUTES);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("region", DEFAULT_REGION); // Default region, can be overridden
         parameters.put("service_name", "bedrock");
@@ -122,7 +130,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
             .method("POST")
             .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse")
             .headers(headers)
-            .requestBody(REQUEST_BODY_TEMPLATE)
+            .requestBody(requestBodyTemplate(modelParameters))
             .build();
 
         // Set agent connector to have default 3 retries
@@ -140,6 +148,59 @@ public class BedrockConverseModelProvider extends ModelProvider {
             .actions(List.of(predictAction))
             .connectorClientConfig(connectorClientConfig)
             .build();
+    }
+
+    /**
+     * Returns the request body template, with a cache point after the system prompt when
+     * {@code system_prompt_cache_enabled} is set. Without it the template is unchanged.
+     */
+    private static String requestBodyTemplate(Map<String, String> modelParameters) {
+        if (!PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.SYSTEM_PROMPT_CACHE_ENABLED)) {
+            return REQUEST_BODY_TEMPLATE;
+        }
+        String cachePoint = cachePointBlock(
+            PromptCacheSettings.systemPromptCacheType(modelParameters),
+            PromptCacheSettings.explicitTtl(modelParameters, PromptCacheSettings.SYSTEM_PROMPT_CACHE_TTL)
+        );
+        return REQUEST_BODY_TEMPLATE.replace(SYSTEM_BLOCK + "]", SYSTEM_BLOCK + ", " + cachePoint + "]");
+    }
+
+    /**
+     * Builds a Bedrock Converse cache point block. The TTL is only sent when it is configured explicitly,
+     * so models that don't accept it keep working with the default.
+     */
+    private static String cachePointBlock(String type, String ttl) {
+        Map<String, Object> cachePoint = new LinkedHashMap<>();
+        cachePoint.put("type", type);
+        if (ttl != null) {
+            cachePoint.put("ttl", ttl);
+        }
+        return StringUtils.toJson(Map.of("cachePoint", cachePoint));
+    }
+
+    /**
+     * Adds a cache point after the last tool in {@code toolConfig.tools} and at the end of the last
+     * message's content, each when its flag is set.
+     */
+    @Override
+    public void applyPromptCache(
+        Map<String, String> llmParams,
+        List<Message> messages,
+        MLAgentType type,
+        Map<String, String> modelParameters
+    ) {
+        String tools = llmParams.get(TOOLS_PARAMETER);
+        if (PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.TOOLS_CACHE_ENABLED) && tools != null && !tools.isBlank()) {
+            String ttl = PromptCacheSettings.explicitTtl(modelParameters, PromptCacheSettings.SYSTEM_PROMPT_CACHE_TTL);
+            llmParams.put(TOOLS_PARAMETER, tools + ", " + cachePointBlock(PromptCacheSettings.DEFAULT_SYSTEM_PROMPT_CACHE_TYPE, ttl));
+        }
+        if (PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.MESSAGES_CACHE_ENABLED)
+            && messages != null
+            && !messages.isEmpty()) {
+            String ttl = PromptCacheSettings.explicitTtl(modelParameters, PromptCacheSettings.MESSAGES_CACHE_TTL);
+            String cachePoint = cachePointBlock(PromptCacheSettings.DEFAULT_SYSTEM_PROMPT_CACHE_TYPE, ttl);
+            llmParams.put("body", buildMessagesArray(messages, type, cachePoint));
+        }
     }
 
     @Override
@@ -197,7 +258,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
     @Override
     public Map<String, String> mapMessages(List<Message> messages, MLAgentType type) {
         Map<String, String> parameters = new HashMap<>();
-        String messagesString = buildMessagesArray(messages, type);
+        String messagesString = buildMessagesArray(messages, type, null);
         parameters.put("body", messagesString);
         // todo: Merge function calling code into this class
         // body is added to no_escape_params as the json constructed is a sequence of objects and not a valid json
@@ -281,8 +342,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
     /**
      * Builds messages array using templates for Bedrock Converse API.
      * Converts messages to conversation history format, handling tool calls and results.
+     *
+     * @param lastMessageCachePoint a cache point block to append to the last message's content, or null
      */
-    private String buildMessagesArray(List<Message> messages, MLAgentType type) {
+    private String buildMessagesArray(List<Message> messages, MLAgentType type, String lastMessageCachePoint) {
         if (messages == null || messages.isEmpty()) {
             return "";
         }
@@ -331,6 +394,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
                 if (message.getContent() != null && !message.getContent().isEmpty()) {
                     contentArray.append(buildContentArrayFromBlocks(message.getContent(), type));
                 }
+            }
+
+            if (lastMessageCachePoint != null && i == messages.size() - 1 && contentArray.length() > 0) {
+                contentArray.append(",").append(lastMessageCachePoint);
             }
 
             if (!first) {

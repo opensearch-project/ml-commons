@@ -113,6 +113,27 @@ public abstract class ModelProvider {
     public abstract Message parseToUnifiedMessage(String json);
 
     /**
+     * Adds prompt-cache breakpoints after the tool definitions and at the end of the conversation, when
+     * the agent's model parameters enable them (see {@link org.opensearch.ml.common.agent.PromptCacheSettings}).
+     * V2 agent runners call this once the request parameters hold the mapped messages ({@code body}) and the
+     * rendered tools ({@code _tools}). The breakpoint after the system prompt is part of the connector's
+     * request template instead, because it does not change between requests.
+     *
+     * The default does nothing, for providers that don't support explicit cache breakpoints.
+     *
+     * @param llmParams the request parameters to update in place
+     * @param messages the messages that {@code body} was mapped from
+     * @param type the agent type
+     * @param modelParameters the agent's model parameters; may be null
+     */
+    public void applyPromptCache(
+        Map<String, String> llmParams,
+        List<Message> messages,
+        MLAgentType type,
+        Map<String, String> modelParameters
+    ) {}
+
+    /**
      * Maps standardized AgentInput to provider-specific request body parameters.
      * This is the main entry point that delegates to the specific mapping methods.
      *

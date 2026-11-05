@@ -8,7 +8,9 @@ package org.opensearch.ml.common.model;
 import static org.junit.Assert.*;
 
 import org.junit.Test;
+import org.opensearch.ml.common.agent.AnthropicMessagesModelProvider;
 import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
+import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 
 public class ModelProviderFactoryTest {
 
@@ -102,5 +104,27 @@ public class ModelProviderFactoryTest {
         // Assert
         assertNotNull(provider);
         assertEquals("bedrock/converse/claude", provider.getLLMInterface());
+    }
+
+    @Test
+    public void testGetProvider_AnthropicMessages() {
+        ModelProvider provider = ModelProviderFactory.getProvider("anthropic/v1/messages");
+
+        assertTrue(provider instanceof AnthropicMessagesModelProvider);
+        assertEquals("anthropic/v1/messages", provider.getLLMInterface());
+    }
+
+    @Test
+    public void testModelProviderType_AnthropicMessages() {
+        assertEquals(ModelProviderType.ANTHROPIC_MESSAGES, ModelProviderType.from("anthropic/v1/messages"));
+        assertEquals(ModelProviderType.ANTHROPIC_MESSAGES, ModelProviderType.from("Anthropic/V1/Messages"));
+        assertEquals("anthropic/v1/messages", ModelProviderType.ANTHROPIC_MESSAGES.getValue());
+    }
+
+    @Test
+    public void testGetProvider_EveryProviderTypeIsSupported() {
+        for (ModelProviderType type : ModelProviderType.values()) {
+            assertNotNull(ModelProviderFactory.getProvider(type.getValue()));
+        }
     }
 }

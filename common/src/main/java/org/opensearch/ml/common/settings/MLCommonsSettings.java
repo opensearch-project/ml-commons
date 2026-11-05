@@ -295,6 +295,7 @@ public final class MLCommonsSettings {
                     "^https://runtime\\.sagemaker\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
                     "^https://api\\.sagemaker\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
+                    "^https://api\\.anthropic\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
                     "^https://generativelanguage\\.googleapis\\.com/.*$",
