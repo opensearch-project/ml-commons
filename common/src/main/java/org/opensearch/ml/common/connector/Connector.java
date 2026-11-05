@@ -200,8 +200,9 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     /**
-     * Replaces placeholders after the authority with "0" so a URL whose path or query is completed at predict
-     * time can be checked at create time. Placeholders in the scheme or authority are left in place and rejected.
+     * Replaces {@code ${parameters.*}} placeholders after the authority with "0" so a URL whose path or query is
+     * completed at predict time can be checked at create time. Predict time fills in nothing else, so any other
+     * placeholder, and any placeholder in the scheme or authority, is left in place and rejected.
      */
     static String fillPathPlaceholders(String url) {
         if (url == null) {
@@ -219,7 +220,7 @@ public interface Connector extends ToXContentObject, Writeable {
                 break;
             }
         }
-        return url.substring(0, authorityEnd) + url.substring(authorityEnd).replaceAll("\\$\\{[^}]*\\}", "0");
+        return url.substring(0, authorityEnd) + url.substring(authorityEnd).replaceAll("\\$\\{parameters\\.[^}]*\\}", "0");
     }
 
     /**

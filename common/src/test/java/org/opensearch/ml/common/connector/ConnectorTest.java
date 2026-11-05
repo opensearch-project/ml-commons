@@ -389,6 +389,22 @@ public class ConnectorTest {
         assertEquals("no-scheme/${x}", Connector.fillPathPlaceholders("no-scheme/${x}"));
     }
 
+    @Test
+    public void validateConnectorURL_rejectsPlaceholderThatPredictTimeNeverFills() {
+        assertEquals("https://h/${model}/0", Connector.fillPathPlaceholders("https://h/${model}/${parameters.p}"));
+        List<String> allow = new java.util.ArrayList<>(defaults());
+        allow.add("^https://h/.*$");
+        for (String url : Arrays
+            .asList("https://h/${model}", "https://bedrock-runtime.us-east-1.amazonaws.com/model/${model}/invoke?x=${parameters.x}")) {
+            try {
+                connectorWithUrl(url, Collections.emptyMap()).validateConnectorURL(allow);
+                fail("expected rejection for " + url);
+            } catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("unresolved parameter placeholder"));
+            }
+        }
+    }
+
     private static List<String> defaults() {
         return MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY);
     }
