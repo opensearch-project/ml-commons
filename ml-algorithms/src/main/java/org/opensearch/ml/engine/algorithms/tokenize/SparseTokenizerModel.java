@@ -137,11 +137,14 @@ public class SparseTokenizerModel extends DLModel {
     public void close() {
         if (modelHelper != null && modelId != null) {
             modelHelper.deleteFileCache(modelId);
-            if (idf != null || tokenizer != null) {
-                tokenizer = null;
-                idf = null;
-            }
+            release();
         }
+    }
+
+    @Override
+    public void release() {
+        tokenizer = null;
+        idf = null;
     }
 
     @Override
