@@ -146,14 +146,19 @@ public abstract class DLModel implements Predictable {
     public void close() {
         if (modelHelper != null && modelId != null) {
             modelHelper.deleteFileCache(modelId);
-            if (predictors != null) {
-                closePredictors(predictors);
-                predictors = null;
-            }
-            if (models != null) {
-                closeModels(models);
-                models = null;
-            }
+            release();
+        }
+    }
+
+    @Override
+    public void release() {
+        if (predictors != null) {
+            closePredictors(predictors);
+            predictors = null;
+        }
+        if (models != null) {
+            closeModels(models);
+            models = null;
         }
     }
 
