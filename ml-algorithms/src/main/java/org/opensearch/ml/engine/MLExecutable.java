@@ -22,4 +22,14 @@ public interface MLExecutable extends Executable {
      * Close resources like deployed model.
      */
     void close();
+
+    /**
+     * Release only what this instance holds in memory, such as its predictors and loaded models, without deleting the
+     * model's local files. Every deploy attempt of a model on a node shares those files, so an instance that is
+     * discarded without being published to the model cache must not delete them: another attempt may still be loading
+     * from them. Defaults to {@link #close()}, for implementations that keep no local model files.
+     */
+    default void release() {
+        close();
+    }
 }
