@@ -415,4 +415,41 @@ public class McpStreamableHttpConnectorTest {
             Assert.assertEquals("Not implemented.", e.getMessage());
         }
     }
+
+    @Test
+    public void validateConnectorURL_usesParsedUrl() {
+        McpStreamableHttpConnector accepted = McpStreamableHttpConnector
+            .builder()
+            .name("n")
+            .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+            .url("https://mcp.example.com/sse")
+            .build();
+        accepted.validateConnectorURL(Arrays.asList("^https://mcp\\.example\\.com/.*$"));
+
+        McpStreamableHttpConnector userInfo = McpStreamableHttpConnector
+            .builder()
+            .name("n")
+            .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+            .url("https://mcp.example.com@evil.example/sse")
+            .build();
+        IllegalArgumentException e = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> userInfo.validateConnectorURL(Arrays.asList("^https://mcp\\.example\\.com.*$"))
+            );
+        Assert.assertEquals("Connector URL must not contain user information", e.getMessage());
+
+        McpStreamableHttpConnector fragment = McpStreamableHttpConnector
+            .builder()
+            .name("n")
+            .protocol(ConnectorProtocols.MCP_STREAMABLE_HTTP)
+            .url("https://mcp.evil.io#a.example.com/sse")
+            .build();
+        e = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> fragment.validateConnectorURL(Arrays.asList("^https://mcp\\.[^/]+\\.example\\.com/.*$"))
+            );
+        Assert.assertEquals("Connector URL must not contain a fragment", e.getMessage());
+    }
 }

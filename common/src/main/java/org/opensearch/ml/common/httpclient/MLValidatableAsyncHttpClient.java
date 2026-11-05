@@ -7,12 +7,16 @@ package org.opensearch.ml.common.httpclient;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
+
+import org.opensearch.ml.common.connector.Connector;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
@@ -107,12 +111,31 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
 
-        if (connectorTrustedPrivateEndpoints != null && !connectorTrustedPrivateEndpoints.isEmpty()) {
-            boolean hasMatchedUrl = connectorTrustedPrivateEndpoints.stream().anyMatch(pattern -> pattern.matcher(endpoint).matches());
-            if (hasPrivateIpAddress && !hasMatchedUrl) {
+        if (hasPrivateIpAddress && connectorTrustedPrivateEndpoints != null && !connectorTrustedPrivateEndpoints.isEmpty()) {
+            String canonical = canonicalPrivateEndpoint(endpoint);
+            boolean hasMatchedUrl = canonical != null
+                && connectorTrustedPrivateEndpoints.stream().anyMatch(pattern -> pattern.matcher(canonical).matches());
+            if (!hasMatchedUrl) {
                 throw new IllegalArgumentException("Connector URL is not matching the trusted connector private endpoint regex");
             }
         }
+    }
+
+    /** The canonical form of {@code endpoint}, or null when it cannot be parsed into scheme and host alone. */
+    private static String canonicalPrivateEndpoint(String endpoint) {
+        if (endpoint == null) {
+            return null;
+        }
+        URI uri;
+        try {
+            uri = new URI(endpoint);
+        } catch (URISyntaxException e) {
+            return null;
+        }
+        if (uri.getScheme() == null || uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawFragment() != null) {
+            return null;
+        }
+        return Connector.canonicalUrl(uri);
     }
 
     private boolean hasPrivateIpAddress(InetAddress[] ipAddress) {

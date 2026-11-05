@@ -11,6 +11,12 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.Test;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
@@ -411,6 +417,102 @@ public class MLCommonsSettingsTests {
         List<String> result = MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             .get(Settings.builder().putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), defaults).build());
         assertEquals(defaults, result);
+    }
+
+    @Test
+    public void testAuthorityWildcardWarnsForPermissivePatternsOnly() {
+        RecordingAppender appender = new RecordingAppender();
+        appender.start();
+        Logger named = (Logger) LogManager.getLogger(MLCommonsSettings.class);
+        Level previousLevel = named.getLevel();
+        Configurator.setLevel(MLCommonsSettings.class.getName(), Level.WARN);
+        named.addAppender(appender);
+        try {
+            assertTrue(MLCommonsSettings.authorityContainsWildcard(".*amazonaws\\.com"));
+            assertTrue(
+                MLCommonsSettings.authorityContainsWildcard(MLCommonsSettings.authorityPart("^https://.*\\.internal\\.example/.*$"))
+            );
+            assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock-runtime\\.[^/]+\\.amazonaws"));
+            assertFalse(MLCommonsSettings.authorityContainsWildcard("runtime\\.sagemaker\\.[a-z0-9-]+\\.amazonaws\\.com"));
+            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                .get(
+                    Settings
+                        .builder()
+                        .putList(
+                            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(),
+                            List.of("^https://.*amazonaws\\.com/.*$", "^https://bedrock-runtime\\.[^/]+\\.amazonaws\\.com/.*$")
+                        )
+                        .build()
+                );
+            assertTrue(appender.messages.toString(), appender.messages.stream().anyMatch(message -> message.contains("amazonaws")));
+            assertTrue(appender.messages.toString(), appender.messages.stream().anyMatch(message -> message.contains("[^/]")));
+            appender.messages.clear();
+            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                .get(
+                    Settings
+                        .builder()
+                        .putList(
+                            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(),
+                            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY)
+                        )
+                        .build()
+                );
+            assertTrue(appender.messages.isEmpty());
+        } finally {
+            named.removeAppender(appender);
+            Configurator.setLevel(MLCommonsSettings.class.getName(), previousLevel);
+            appender.stop();
+        }
+    }
+
+    @Test
+    public void testAuthorityWildcardHeuristicCases() {
+        // flagged: patterns without "://" are all host position
+        assertTrue(MLCommonsSettings.authorityContainsWildcard(MLCommonsSettings.authorityPart("^.*$")));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard(MLCommonsSettings.authorityPart("^https.*amazonaws\\.com.*$")));
+        // flagged: broad escapes, inside or outside a class
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.\\S+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.\\W+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.\\D+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.\\p{Print}+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.\\P{Alpha}+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[\\S]+\\.amazonaws\\.com"));
+        // flagged: negated classes that do not exclude all of '/', '?', '#'
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^/]+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^ ]+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^.]+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^:]+\\.amazonaws\\.com"));
+        assertTrue(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^/?]+\\.amazonaws\\.com"));
+        // not flagged
+        assertFalse(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[^/?#]+\\.amazonaws\\.com"));
+        assertFalse(MLCommonsSettings.authorityContainsWildcard("bedrock\\.[a-z0-9-]+\\.amazonaws\\.com"));
+        assertFalse(MLCommonsSettings.authorityContainsWildcard("host\\.example\\.com(:\\d+)?"));
+        assertFalse(MLCommonsSettings.authorityContainsWildcard("([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com"));
+        // the authority stops at the first '/' outside a class
+        assertEquals("api\\.openai\\.com", MLCommonsSettings.authorityPart("^https://api\\.openai\\.com/.*$"));
+    }
+
+    @Test
+    public void testShippedDefaultsHaveNoAuthorityWildcard() {
+        for (String regex : MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY)) {
+            assertFalse(regex, MLCommonsSettings.authorityContainsWildcard(MLCommonsSettings.authorityPart(regex)));
+        }
+        for (String regex : MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX.get(Settings.EMPTY)) {
+            assertFalse(regex, MLCommonsSettings.authorityContainsWildcard(MLCommonsSettings.authorityPart(regex)));
+        }
+    }
+
+    private static final class RecordingAppender extends AbstractAppender {
+        private final List<String> messages = new java.util.ArrayList<>();
+
+        private RecordingAppender() {
+            super("authority-wildcard-test", null, null, true, Property.EMPTY_ARRAY);
+        }
+
+        @Override
+        public void append(org.apache.logging.log4j.core.LogEvent event) {
+            messages.add(event.getMessage().getFormattedMessage());
+        }
     }
 
     // A zero or negative bound would clamp the dynamic batching queue's memory budget to nothing, rejecting every queued
