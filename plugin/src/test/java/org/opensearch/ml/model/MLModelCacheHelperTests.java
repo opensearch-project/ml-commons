@@ -16,6 +16,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -445,6 +447,187 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertTrue(publishFailure.get() instanceof MLModelCacheHelper.StaleDeployAttemptException);
         assertEquals(0, cacheHelper.getAllModels().length);
         assertFalse(cacheHelper.isModelDeployed(modelId));
+    }
+
+    /**
+     * A deploy that takes over an unfinished automatic deploy keeps that attempt from publishing into its entry or
+     * writing its deploy-time settings (they were built for that automatic deploy); the attempt waits for the entry
+     * instead. An undeploy ends the takeover, and the attempt is then stale.
+     */
+    public void testInitModelState_takeOverAutoDeploy_attemptWaitsInsteadOfPublishing() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt clusterDeploy = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelStateAutoDeploy(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes, autoDeploy);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes, false, clusterDeploy);
+
+        assertTrue(cacheHelper.isBoundOrTakenOver(modelId, autoDeploy));
+        assertFalse(cacheHelper.isBoundTo(modelId, autoDeploy));
+        assertFalse(cacheHelper.updateIfBound(modelId, autoDeploy, modelCache -> modelCache.setRateLimiter(rateLimiter)));
+        assertNull(cacheHelper.getRateLimiter(modelId));
+        assertTrue(cacheHelper.isBoundTo(modelId, clusterDeploy));
+        assertEquals(
+            MLModelCacheHelper.PublishResult.AWAITING_OWNER,
+            cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy, recordingWaiter(new ArrayList<>()))
+        );
+        assertNull(cacheHelper.getPredictor(modelId));
+        assertFalse(cacheHelper.isModelDeployed(modelId));
+        // A caller that cannot wait treats the takeover as stale rather than publishing.
+        expectThrows(
+            MLModelCacheHelper.StaleDeployAttemptException.class,
+            () -> cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy)
+        );
+
+        cacheHelper.removeModel(modelId);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes, false, clusterDeploy);
+        assertFalse(cacheHelper.isBoundOrTakenOver(modelId, autoDeploy));
+        expectThrows(
+            MLModelCacheHelper.StaleDeployAttemptException.class,
+            () -> cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy, recordingWaiter(new ArrayList<>()))
+        );
+    }
+
+    /** A taken-over attempt's waiter succeeds, outside the lock, once the entry's owner publishes; never twice. */
+    public void testTakenOverWaiter_ownerPublishes_completesOnce() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt clusterDeploy = takeOverAutoDeploy(autoDeploy);
+        List<String> outcomes = new ArrayList<>();
+        cacheHelper.publishDeployedPredictor(modelId, mock(TextEmbeddingDenseModel.class), autoDeploy, recordingWaiter(outcomes));
+
+        assertEquals(
+            MLModelCacheHelper.PublishResult.PUBLISHED,
+            cacheHelper.publishDeployedPredictor(modelId, predictor, clusterDeploy, recordingWaiter(new ArrayList<>()))
+        );
+
+        assertEquals(List.of("success"), outcomes);
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        cacheHelper.removeModel(modelId);
+        assertEquals(List.of("success"), outcomes);
+    }
+
+    /**
+     * If the entry was given a predictor some other way (a cache refresh), the owner's publish finds it deployed; the
+     * waiting taken-over attempt still succeeds then instead of waiting until the entry is removed.
+     */
+    public void testTakenOverWaiter_entryDeployedOtherwise_ownerPublishCompletesIt() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt clusterDeploy = takeOverAutoDeploy(autoDeploy);
+        List<String> outcomes = new ArrayList<>();
+        cacheHelper.publishDeployedPredictor(modelId, mock(TextEmbeddingDenseModel.class), autoDeploy, recordingWaiter(outcomes));
+        cacheHelper.setPredictor(modelId, predictor);
+
+        assertEquals(
+            MLModelCacheHelper.PublishResult.ALREADY_DEPLOYED,
+            cacheHelper.publishDeployedPredictor(modelId, mock(TextEmbeddingDenseModel.class), clusterDeploy, recordingWaiter(outcomes))
+        );
+
+        assertEquals(List.of("success"), outcomes);
+    }
+
+    /** Once the owner has published, a taken-over attempt that finishes later is told so and registers no waiter. */
+    public void testTakenOverAttempt_finishesAfterOwnerPublished_alreadyDeployed() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt clusterDeploy = takeOverAutoDeploy(autoDeploy);
+        cacheHelper.publishDeployedPredictor(modelId, predictor, clusterDeploy);
+        List<String> outcomes = new ArrayList<>();
+
+        assertEquals(
+            MLModelCacheHelper.PublishResult.ALREADY_DEPLOYED,
+            cacheHelper.publishDeployedPredictor(modelId, mock(TextEmbeddingDenseModel.class), autoDeploy, recordingWaiter(outcomes))
+        );
+
+        assertSame(predictor, cacheHelper.getPredictor(modelId));
+        cacheHelper.removeModel(modelId);
+        assertTrue(outcomes.isEmpty());
+    }
+
+    /**
+     * Every path that drops the entry fails a waiting taken-over attempt, outside the lock, so none waits forever. All
+     * but the owner's failure cleanup (see the next test) fail it as stale.
+     */
+    public void testTakenOverWaiter_everyRemovalPath_failsIt() {
+        assertRemovalFailsTakenOverWaiter(false, () -> cacheHelper.removeModel(modelId));
+        assertRemovalFailsTakenOverWaiter(true, () -> cacheHelper.removeWorkerNodes(Set.of(nodeId), false));
+        assertRemovalFailsTakenOverWaiter(true, () -> cacheHelper.removeWorkerNode(modelId, nodeId, false));
+        assertRemovalFailsTakenOverWaiter(true, () -> cacheHelper.clearWorkerNodes());
+        assertRemovalFailsTakenOverWaiter(true, () -> cacheHelper.clearWorkerNodes(modelId));
+    }
+
+    /** When the owner's deploy fails, its failure cleanup fails a waiting taken-over attempt with the owner's failure. */
+    public void testTakenOverWaiter_ownerFailureCleanup_failsItWithOwnerCause() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        MLModelCacheHelper.DeployAttempt clusterDeploy = takeOverAutoDeploy(autoDeploy);
+        List<Exception> failures = new ArrayList<>();
+        cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy, ActionListener.wrap(r -> fail("unexpected success"), e -> {
+            assertFalse(Thread.holdsLock(cacheHelper));
+            failures.add(e);
+        }));
+        RuntimeException ownerFailure = new RuntimeException("cluster-wide deploy failed");
+
+        assertTrue(cacheHelper.removeModelIfOwner(modelId, clusterDeploy, ownerFailure));
+
+        assertFalse(Arrays.asList(cacheHelper.getAllModels()).contains(modelId));
+        assertEquals(1, failures.size());
+        assertSame(ownerFailure, failures.get(0));
+    }
+
+    /** A failed taken-over attempt cannot remove the entry it was taken over by, so its waiting peers keep waiting. */
+    public void testTakenOverWaiter_takenOverAttemptCannotRemoveEntry() {
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        takeOverAutoDeploy(autoDeploy);
+        List<String> outcomes = new ArrayList<>();
+        cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy, recordingWaiter(outcomes));
+
+        assertFalse(cacheHelper.removeModelIfOwner(modelId, autoDeploy, new RuntimeException("automatic deploy failed")));
+
+        assertTrue(cacheHelper.isModelRunningOnNode(modelId));
+        assertTrue(outcomes.isEmpty());
+    }
+
+    private void assertRemovalFailsTakenOverWaiter(boolean emptyEntry, Runnable removal) {
+        cacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLModelCacheHelper.DeployAttempt autoDeploy = new MLModelCacheHelper.DeployAttempt();
+        takeOverAutoDeploy(autoDeploy);
+        cacheHelper.addWorkerNode(modelId, nodeId);
+        List<String> outcomes = new ArrayList<>();
+        cacheHelper.publishDeployedPredictor(modelId, predictor, autoDeploy, recordingWaiter(outcomes));
+        if (emptyEntry) {
+            // The worker-node paths drop only an entry with no state and no workers left.
+            // Defensive paths: production never drops a DEPLOYING entry there.
+            entryOf(modelId).setModelState(null);
+        }
+
+        removal.run();
+
+        assertFalse(Arrays.asList(cacheHelper.getAllModels()).contains(modelId));
+        assertEquals(List.of("StaleDeployAttemptException"), outcomes);
+    }
+
+    // An automatic deploy by autoDeploy, taken over by an explicit deploy; returns the explicit deploy's attempt.
+    private MLModelCacheHelper.DeployAttempt takeOverAutoDeploy(MLModelCacheHelper.DeployAttempt autoDeploy) {
+        MLModelCacheHelper.DeployAttempt clusterDeploy = new MLModelCacheHelper.DeployAttempt();
+        cacheHelper.initModelStateAutoDeploy(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes, autoDeploy);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.REMOTE, targetWorkerNodes, false, clusterDeploy);
+        return clusterDeploy;
+    }
+
+    private ActionListener<Void> recordingWaiter(List<String> outcomes) {
+        return ActionListener.wrap(r -> {
+            assertFalse(Thread.holdsLock(cacheHelper));
+            outcomes.add("success");
+        }, e -> {
+            assertFalse(Thread.holdsLock(cacheHelper));
+            outcomes.add(e.getClass().getSimpleName());
+        });
+    }
+
+    private MLModelCache entryOf(String modelId) {
+        try {
+            Field field = MLModelCacheHelper.class.getDeclaredField("modelCaches");
+            field.setAccessible(true);
+            return ((Map<String, MLModelCache>) field.get(cacheHelper)).get(modelId);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+        }
     }
 
     public void testPublishDeployedExecutor_boundEntry_publishes() {

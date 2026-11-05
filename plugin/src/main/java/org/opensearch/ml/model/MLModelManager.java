@@ -1120,9 +1120,9 @@ public class MLModelManager {
         return new ThreadedActionListener<>(log, threadPool, threadPoolName, listener, false);
     }
 
-    // An automatic deploy must always complete, or the callers coalesced on it wait forever.
-    private <T> ActionListener<T> deployModelListener(boolean autoDeployModel, ActionListener<T> listener) {
-        return autoDeployModel ? threadedOnResponse(DEPLOY_THREAD_POOL, listener) : threadedActionListener(DEPLOY_THREAD_POOL, listener);
+    // Every deploy must complete: coalesced and taken-over callers wait on its outcome.
+    private <T> ActionListener<T> deployModelListener(ActionListener<T> listener) {
+        return threadedOnResponse(DEPLOY_THREAD_POOL, listener);
     }
 
     /**
@@ -1430,7 +1430,7 @@ public class MLModelManager {
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
-            this.getModel(modelId, tenantId, deployModelListener(autoDeployModel, ActionListener.wrap(mlModel -> {
+            this.getModel(modelId, tenantId, deployModelListener(ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
                     modelCache.setModelInfo(mlModel);
@@ -1473,8 +1473,9 @@ public class MLModelManager {
                     String hash = calculateFileHash(modelZipFile);
                     if (modelContentHash != null && !modelContentHash.equals(hash)) {
                         log.error("Model content hash can't match original hash value");
-                        removeModelIfOwner(modelId, deployOwner);
-                        wrappedListener.onFailure(new IllegalArgumentException("model content changed"));
+                        IllegalArgumentException contentChanged = new IllegalArgumentException("model content changed");
+                        removeModelIfOwner(modelId, deployOwner, contentChanged);
+                        wrappedListener.onFailure(contentChanged);
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
@@ -1623,7 +1624,7 @@ public class MLModelManager {
             if (!autoDeployModel) {
                 checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             }
-            this.getModel(modelId, deployModelListener(autoDeployModel, ActionListener.wrap(mlModel -> {
+            this.getModel(modelId, deployModelListener(ActionListener.wrap(mlModel -> {
                 modelCacheHelper.updateIfBound(modelId, deployOwner, modelCache -> {
                     modelCache.setIsModelEnabled(mlModel.getIsEnabled());
                     modelCache.setModelInfo(mlModel);
@@ -1666,8 +1667,9 @@ public class MLModelManager {
                     String hash = calculateFileHash(modelZipFile);
                     if (modelContentHash != null && !modelContentHash.equals(hash)) {
                         log.error("Model content hash can't match original hash value");
-                        removeModelIfOwner(modelId, deployOwner);
-                        wrappedListener.onFailure(new IllegalArgumentException("model content changed"));
+                        IllegalArgumentException contentChanged = new IllegalArgumentException("model content changed");
+                        removeModelIfOwner(modelId, deployOwner, contentChanged);
+                        wrappedListener.onFailure(contentChanged);
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
@@ -1750,7 +1752,7 @@ public class MLModelManager {
             handleDeployModelException(modelId, deployOwner, mlModel.getAlgorithm(), wrappedListener, e);
         });
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-            deployPredictable(modelId, mlModel, deployOwner, initModelActionListener);
+            deployPredictable(modelId, mlModel, deployOwner, initModelActionListener, wrappedListener);
             return;
         }
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
@@ -1759,7 +1761,7 @@ public class MLModelManager {
             if (rejectMcpBackedRemoteModel(mlModel, deployOwner, wrappedListener)) {
                 return;
             }
-            deployPredictable(modelId, mlModel, deployOwner, initModelActionListener);
+            deployPredictable(modelId, mlModel, deployOwner, initModelActionListener, wrappedListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, e -> {
             log.error("Failed to get connector {} for model {}", mlModel.getConnectorId(), modelId, e);
@@ -1796,45 +1798,74 @@ public class MLModelManager {
                 mlModel.getModelId(),
                 mlModel.getConnector().getProtocol()
             );
+        OpenSearchStatusException rejection = new OpenSearchStatusException(
+            "Model "
+                + mlModel.getModelId()
+                + " is backed by an MCP connector [protocol "
+                + mlModel.getConnector().getProtocol()
+                + "], which defines no predict action. Point the model at an inference connector instead.",
+            RestStatus.BAD_REQUEST
+        );
         // Remove this attempt's DEPLOYING entry, or later deploys on this node are refused as duplicates.
-        removeModelIfOwner(mlModel.getModelId(), deployOwner);
-        listener
-            .onFailure(
-                new OpenSearchStatusException(
-                    "Model "
-                        + mlModel.getModelId()
-                        + " is backed by an MCP connector [protocol "
-                        + mlModel.getConnector().getProtocol()
-                        + "], which defines no predict action. Point the model at an inference connector instead.",
-                    RestStatus.BAD_REQUEST
-                )
-            );
+        removeModelIfOwner(mlModel.getModelId(), deployOwner, rejection);
+        listener.onFailure(rejection);
         return true;
     }
 
     /**
      * Deploy path counterpart of {@link #setupParamsAndPredictable}: publishes the predictor only into this attempt's
-     * own cache entry ({@link MLModelCacheHelper#publishDeployedPredictor}), otherwise releases it.
+     * own cache entry, otherwise releases it. An automatic deploy taken over by an explicit deploy never publishes (its
+     * predictor may lack that deploy's rate limiters and guardrails); it completes with that deploy's outcome instead
+     * ({@link MLModelCacheHelper#publishDeployedPredictor(String, Predictable, DeployAttempt, ActionListener)}).
+     *
+     * @param listener completes this attempt; its failure path runs this attempt's failure cleanup and stats
+     * @param ownerFailureListener receives the taking-over deploy's own failure, which that deploy already counted and
+     *                             cleaned up after
      */
-    private void deployPredictable(String modelId, MLModel mlModel, DeployAttempt deployOwner, ActionListener<String> listener) {
+    private void deployPredictable(
+        String modelId,
+        MLModel mlModel,
+        DeployAttempt deployOwner,
+        ActionListener<String> listener,
+        ActionListener<String> ownerFailureListener
+    ) {
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         mlEngine.deploy(mlModel, params, ActionListener.wrap(predictor -> {
-            boolean published;
+            ActionListener<Void> onOwnerOutcome = ContextPreservingActionListener
+                .wrapPreservingContext(ActionListener.wrap(r -> listener.onResponse("successful"), e -> {
+                    if (e instanceof MLModelCacheHelper.StaleDeployAttemptException) {
+                        listener.onFailure(e);
+                    } else {
+                        ownerFailureListener.onFailure(e);
+                    }
+                }), client.threadPool().getThreadContext());
+            MLModelCacheHelper.PublishResult result;
             try {
-                published = modelCacheHelper.publishDeployedPredictor(modelId, predictor, deployOwner);
+                result = modelCacheHelper.publishDeployedPredictor(modelId, predictor, deployOwner, onOwnerOutcome);
             } catch (MLModelCacheHelper.StaleDeployAttemptException e) {
                 log.info("Discarding a stale deploy of model {}: {}", modelId, e.getMessage());
                 predictor.release();
                 listener.onFailure(e);
                 return;
             }
-            if (published) {
-                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-            } else {
-                log.info("Model {} was already deployed on this node by another deploy, discarding this deploy's predictor", modelId);
-                predictor.release();
+            switch (result) {
+                case PUBLISHED:
+                    mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
+                    listener.onResponse("successful");
+                    break;
+                case ALREADY_DEPLOYED:
+                    log.info("Model {} was already deployed on this node by another deploy, discarding this deploy's predictor", modelId);
+                    predictor.release();
+                    listener.onResponse("successful");
+                    break;
+                case AWAITING_OWNER:
+                    log.info("Automatic deploy of model {} was taken over by another deploy, waiting for its outcome", modelId);
+                    predictor.release();
+                    break;
+                default:
+                    predictor.release();
+                    throw new IllegalStateException("Unexpected publish result " + result);
             }
-            listener.onResponse("successful");
         }, e -> {
             log.error("Failed to deploy model", e);
             listener.onFailure(e);
@@ -1906,13 +1937,14 @@ public class MLModelManager {
             mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
-        removeModelIfOwner(modelId, deployOwner);
+        removeModelIfOwner(modelId, deployOwner, e);
         listener.onFailure(e);
     }
 
     /**
      * Coalesces automatic deploys of one model on this node: the first caller leads one attempt and later callers wait
-     * for its result. A caller never joins an attempt whose cache entry was removed or replaced; it leads a fresh one.
+     * for its result. A caller never joins an attempt whose cache entry was removed, or replaced other than by a deploy
+     * taking it over (then the attempt completes with that deploy's outcome); it leads a fresh one.
      *
      * @return the listener the leader must deploy with, which also notifies every waiter; null if the caller joined
      *         an attempt already in flight and must not deploy
@@ -1958,9 +1990,9 @@ public class MLModelManager {
             this.listener = listener;
         }
 
-        // The attempt has created or joined a cache entry that is no longer the model's current one.
+        // The attempt's cache entry was removed, or replaced by an entry that did not take the attempt over.
         private boolean isStale() {
-            return deployOwner.hasBound() && !modelCacheHelper.isBoundTo(modelId, deployOwner);
+            return deployOwner.hasBound() && !modelCacheHelper.isBoundOrTakenOver(modelId, deployOwner);
         }
 
         boolean isCompleted() {
@@ -2984,9 +3016,12 @@ public class MLModelManager {
         modelHelper.deleteFileCache(modelId);
     }
 
-    /** Failure cleanup for a deploy attempt: removes the cache entry and local model files only if the attempt owns them. */
-    private void removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
-        if (modelCacheHelper.removeModelIfOwner(modelId, deployOwner)) {
+    /**
+     * Failure cleanup for a deploy attempt: removes the cache entry and local model files only if the attempt owns them.
+     * Automatic deploys waiting on the removed entry fail with {@code cause}, the attempt's failure.
+     */
+    private void removeModelIfOwner(String modelId, DeployAttempt deployOwner, Exception cause) {
+        if (modelCacheHelper.removeModelIfOwner(modelId, deployOwner, cause)) {
             modelHelper.deleteFileCache(modelId);
         } else {
             log.debug("Skipped cleanup of model {}: its cache entry belongs to another deploy", modelId);

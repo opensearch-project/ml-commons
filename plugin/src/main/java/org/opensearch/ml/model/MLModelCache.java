@@ -6,6 +6,7 @@
 package org.opensearch.ml.model;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
 import java.util.IdentityHashMap;
@@ -18,6 +19,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLGuard;
@@ -60,9 +62,17 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean isAutoDeploying;
     // The deploy attempt that may remove this entry on failure: its creator, or the attempt that published into it.
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) DeployAttempt deployOwner;
-    // The attempts allowed to publish into or write to this entry: its creator and any that joined it. Guarded by
-    // MLModelCacheHelper's lock.
+    // The attempts bound to this entry, which may publish into it and write to it: its creator and any that joined it.
+    // Guarded by MLModelCacheHelper's lock.
     private final Set<DeployAttempt> deployAttempts = Collections.newSetFromMap(new IdentityHashMap<>());
+    // Unfinished automatic deploys whose entry this one took over (see MLModelCacheHelper#initModelState). They neither
+    // publish into nor write to it: their predictor and deploy-time settings were built for that automatic deploy (for
+    // example rate limits for a single node, or no guardrails yet). They complete with this entry's outcome instead.
+    // Guarded by MLModelCacheHelper's lock.
+    private final Set<DeployAttempt> takenOverAttempts = Collections.newSetFromMap(new IdentityHashMap<>());
+    // Taken-over attempts waiting for this entry to be deployed (success) or removed (failure). Guarded by
+    // MLModelCacheHelper's lock; completed outside it.
+    private final List<ActionListener<Void>> takenOverWaiters = new ArrayList<>();
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
@@ -167,6 +177,30 @@ public class MLModelCache {
         if (deployAttempt != null) {
             deployAttempts.add(deployAttempt);
         }
+    }
+
+    protected void takeOverDeployAttemptsOf(MLModelCache other) {
+        takenOverAttempts.addAll(other.deployAttempts);
+        takenOverAttempts.addAll(other.takenOverAttempts);
+        takenOverWaiters.addAll(other.drainTakenOverWaiters());
+    }
+
+    protected boolean isTakenOver(DeployAttempt deployAttempt) {
+        return deployAttempt != null && !isBoundTo(deployAttempt) && takenOverAttempts.contains(deployAttempt);
+    }
+
+    protected boolean isBoundOrTakenOver(DeployAttempt deployAttempt) {
+        return isBoundTo(deployAttempt) || isTakenOver(deployAttempt);
+    }
+
+    protected void addTakenOverWaiter(ActionListener<Void> waiter) {
+        takenOverWaiters.add(waiter);
+    }
+
+    protected List<ActionListener<Void>> drainTakenOverWaiters() {
+        List<ActionListener<Void>> drained = new ArrayList<>(takenOverWaiters);
+        takenOverWaiters.clear();
+        return drained;
     }
 
     protected boolean isBoundTo(DeployAttempt deployAttempt) {

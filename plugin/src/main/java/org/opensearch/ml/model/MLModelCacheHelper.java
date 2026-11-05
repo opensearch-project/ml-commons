@@ -9,9 +9,11 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MON
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +24,7 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLException;
@@ -70,7 +73,7 @@ public class MLModelCacheHelper {
     /**
      * Initialize model state on behalf of a deploy attempt.
      *
-     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, DeployAttempt)}
+     * @param deployOwner identity of the deploy attempt; see {@link #removeModelIfOwner(String, DeployAttempt, Exception)}
      */
     public synchronized void initModelState(
         String modelId,
@@ -92,6 +95,13 @@ public class MLModelCacheHelper {
         modelCache.setLastAccessTime(Instant.now());
         modelCache.setDeployOwner(deployOwner);
         bind(modelCache, deployOwner);
+        MLModelCache replaced = modelCaches.get(modelId);
+        if (replaced != null && BooleanUtils.isTrue(replaced.getIsAutoDeploying())) {
+            // This deploy takes over an automatic deploy of the same model that has not finished (a predict on a cold
+            // cluster starts both). That attempt does not publish here; it completes with this entry's outcome (see
+            // #publishDeployedPredictor(String, Predictable, DeployAttempt, ActionListener)).
+            modelCache.takeOverDeployAttemptsOf(replaced);
+        }
         modelCaches.put(modelId, modelCache);
     }
 
@@ -546,15 +556,18 @@ public class MLModelCacheHelper {
      */
     public void removeModel(String modelId) {
         MLModelCache modelCache;
+        List<ActionListener<Void>> orphanedWaiters;
         synchronized (this) {
             modelCache = takeModel(modelId);
+            orphanedWaiters = drainTakenOverWaiters(modelCache);
         }
         if (modelCache != null) {
             modelCache.clear();
         }
+        failTakenOverWaiters(modelId, orphanedWaiters);
     }
 
-    // Caller holds this helper's lock.
+    // Caller holds this helper's lock, and fails the removed entry's taken-over waiters once it has released it.
     private MLModelCache takeModel(String modelId) {
         autoDeployModels.remove(modelId);
         MLModelCache modelCache = modelCaches.remove(modelId);
@@ -564,46 +577,141 @@ public class MLModelCacheHelper {
         return modelCache;
     }
 
+    private static List<ActionListener<Void>> drainTakenOverWaiters(MLModelCache modelCache) {
+        return modelCache == null ? List.of() : modelCache.drainTakenOverWaiters();
+    }
+
+    private void completeTakenOverWaiters(String modelId, List<ActionListener<Void>> waiters) {
+        assert !Thread.holdsLock(this) : "taken-over deploy waiters must be completed outside the cache lock";
+        for (ActionListener<Void> waiter : waiters) {
+            try {
+                waiter.onResponse(null);
+            } catch (Exception e) {
+                log.warn("A deploy waiting on model {} failed to complete", modelId, e);
+            }
+        }
+    }
+
+    private void failTakenOverWaiters(String modelId, List<ActionListener<Void>> waiters) {
+        failTakenOverWaiters(modelId, waiters, null);
+    }
+
+    // A null cause fails each waiter with a StaleDeployAttemptException.
+    private void failTakenOverWaiters(String modelId, List<ActionListener<Void>> waiters, Exception cause) {
+        assert !Thread.holdsLock(this) : "taken-over deploy waiters must be completed outside the cache lock";
+        for (ActionListener<Void> waiter : waiters) {
+            try {
+                waiter
+                    .onFailure(
+                        cause != null
+                            ? cause
+                            : new StaleDeployAttemptException(
+                                "The cache entry of model "
+                                    + modelId
+                                    + " on this node was removed before the deploy that took over this automatic deploy finished"
+                            )
+                    );
+            } catch (Exception e) {
+                log.warn("A deploy waiting on model {} failed to complete", modelId, e);
+            }
+        }
+    }
+
+    /** Outcome of {@link #publishDeployedPredictor(String, Predictable, DeployAttempt, ActionListener)}. */
+    public enum PublishResult {
+        /** This attempt's predictor now serves the model; the attempt owns the entry. */
+        PUBLISHED,
+        /** Another attempt's deployment already serves the model; the caller must release its own predictor. */
+        ALREADY_DEPLOYED,
+        /**
+         * The attempt's automatic deploy was taken over (see {@link #initModelState}) and the entry is not deployed yet.
+         * The caller must release its own predictor; its waiter completes when the entry is deployed or removed.
+         */
+        AWAITING_OWNER
+    }
+
     /**
      * Publish a deploy attempt's predictor, only into the cache entry the attempt created or joined and only if no
      * predictor is there yet. On success the attempt takes ownership of the entry. When this does not publish, nothing
-     * is changed and the caller must release its own predictor.
+     * is changed and the caller must release its own predictor. An attempt whose entry was taken over is stale here.
      *
      * @return true if published; false if another attempt's deployment is already serving on this node
      * @throws StaleDeployAttemptException if the attempt's entry is gone and the model is not deployed on this node
      */
-    public synchronized boolean publishDeployedPredictor(String modelId, Predictable predictor, DeployAttempt deployOwner) {
-        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setPredictor(predictor));
+    public boolean publishDeployedPredictor(String modelId, Predictable predictor, DeployAttempt deployOwner) {
+        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setPredictor(predictor), null) == PublishResult.PUBLISHED;
     }
 
     /**
-     * Executor counterpart of {@link #publishDeployedPredictor}, with the same rules.
+     * As {@link #publishDeployedPredictor(String, Predictable, DeployAttempt)}, except that an attempt whose automatic
+     * deploy was taken over never publishes: its predictor was built before the taking-over deploy wrote the entry's
+     * deploy-time settings (rate limiters, guardrails). If the entry is not deployed yet, {@code onOwnerOutcome} is
+     * completed, outside this helper's lock, with success once the entry is found deployed by any publish, with the
+     * owner's failure once the owner's failure cleanup removes it ({@link #removeModelIfOwner}), or with a
+     * {@link StaleDeployAttemptException} once it is removed any other way. It is never completed for any other result.
+     *
+     * @throws StaleDeployAttemptException if the attempt's entry is gone and the model is not deployed on this node
+     */
+    public PublishResult publishDeployedPredictor(
+        String modelId,
+        Predictable predictor,
+        DeployAttempt deployOwner,
+        ActionListener<Void> onOwnerOutcome
+    ) {
+        return publishDeployed(
+            modelId,
+            deployOwner,
+            modelCache -> modelCache.setPredictor(predictor),
+            Objects.requireNonNull(onOwnerOutcome)
+        );
+    }
+
+    /**
+     * Executor counterpart of {@link #publishDeployedPredictor(String, Predictable, DeployAttempt)}, with the same rules.
      *
      * @return true if this attempt's executor was published; false if another attempt's deployment is serving
      * @throws StaleDeployAttemptException if this attempt's entry is gone and the model is not deployed on this node
      */
-    public synchronized boolean publishDeployedExecutor(String modelId, MLExecutable executor, DeployAttempt deployOwner) {
-        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setExecutor(executor));
+    public boolean publishDeployedExecutor(String modelId, MLExecutable executor, DeployAttempt deployOwner) {
+        return publishDeployed(modelId, deployOwner, modelCache -> modelCache.setExecutor(executor), null) == PublishResult.PUBLISHED;
     }
 
-    private boolean publishDeployed(String modelId, DeployAttempt deployOwner, Consumer<MLModelCache> install) {
-        MLModelCache modelCache = modelCaches.get(modelId);
-        boolean deployed = modelCache != null && (modelCache.getPredictor() != null || modelCache.getExecutor() != null);
-        if (!deployed && modelCache != null && modelCache.isBoundTo(deployOwner)) {
-            install.accept(modelCache);
-            modelCache.setModelState(MLModelState.DEPLOYED);
-            modelCache.setLastAccessTime(Instant.now());
-            modelCache.setDeployOwner(deployOwner);
-            return true;
+    // A null onOwnerOutcome means the caller cannot wait, so a taken-over attempt is treated as stale.
+    private PublishResult publishDeployed(
+        String modelId,
+        DeployAttempt deployOwner,
+        Consumer<MLModelCache> install,
+        ActionListener<Void> onOwnerOutcome
+    ) {
+        List<ActionListener<Void>> waiters;
+        PublishResult result;
+        synchronized (this) {
+            MLModelCache modelCache = modelCaches.get(modelId);
+            if (modelCache != null && (modelCache.getPredictor() != null || modelCache.getExecutor() != null)) {
+                result = PublishResult.ALREADY_DEPLOYED;
+                waiters = modelCache.drainTakenOverWaiters();
+            } else if (modelCache != null && onOwnerOutcome != null && modelCache.isTakenOver(deployOwner)) {
+                modelCache.addTakenOverWaiter(onOwnerOutcome);
+                return PublishResult.AWAITING_OWNER;
+            } else if (modelCache == null || !modelCache.isBoundTo(deployOwner)) {
+                throw new StaleDeployAttemptException(
+                    "The cache entry of model "
+                        + modelId
+                        + " on this node was removed or replaced (undeploy, redeploy, or a failed concurrent deploy) while this deploy"
+                        + " was running"
+                );
+            } else {
+                install.accept(modelCache);
+                modelCache.setModelState(MLModelState.DEPLOYED);
+                modelCache.setLastAccessTime(Instant.now());
+                modelCache.setDeployOwner(deployOwner);
+                result = PublishResult.PUBLISHED;
+                waiters = modelCache.drainTakenOverWaiters();
+            }
         }
-        if (deployed) {
-            return false;
-        }
-        throw new StaleDeployAttemptException(
-            "The cache entry of model "
-                + modelId
-                + " on this node was removed or replaced (undeploy, redeploy, or a failed concurrent deploy) while this deploy was running"
-        );
+        // The entry is deployed either way, so attempts waiting on it succeed.
+        completeTakenOverWaiters(modelId, waiters);
+        return result;
     }
 
     /** Whether the model's current cache entry is the one {@code deployOwner} created or joined. */
@@ -612,9 +720,16 @@ public class MLModelCacheHelper {
         return modelCache != null && modelCache.isBoundTo(deployOwner);
     }
 
+    /** Whether the model's current cache entry is the one {@code deployOwner} created or joined, or one that took it over. */
+    public synchronized boolean isBoundOrTakenOver(String modelId, DeployAttempt deployOwner) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        return modelCache != null && modelCache.isBoundOrTakenOver(deployOwner);
+    }
+
     /**
      * Apply a deploy-time write (metadata, rate limiters, guardrails, model interface) only if the model's cache entry
-     * is still the one {@code deployOwner} created or joined, never to a replacement or a recreated entry.
+     * is still the one {@code deployOwner} created or joined, never to a replacement (including one that took over its
+     * automatic deploy) or a recreated entry.
      *
      * @return true if the write was applied
      */
@@ -670,20 +785,26 @@ public class MLModelCacheHelper {
 
     /**
      * Failure cleanup for a deploy attempt: remove the model's entry only if {@code deployOwner} owns it. An attempt
-     * owns the entry it created until another attempt publishes into it.
+     * owns the entry it created until another attempt publishes into it. Attempts waiting on the removed entry (see
+     * {@link #publishDeployedPredictor(String, Predictable, DeployAttempt, ActionListener)}) fail with {@code cause}.
      *
+     * @param cause the owner's deploy failure
      * @return true if the entry was removed
      */
-    public boolean removeModelIfOwner(String modelId, DeployAttempt deployOwner) {
+    public boolean removeModelIfOwner(String modelId, DeployAttempt deployOwner, Exception cause) {
+        Objects.requireNonNull(cause);
         MLModelCache modelCache;
+        List<ActionListener<Void>> orphanedWaiters;
         synchronized (this) {
             modelCache = modelCaches.get(modelId);
             if (deployOwner == null || modelCache == null || modelCache.getDeployOwner() != deployOwner) {
                 return false;
             }
             takeModel(modelId);
+            orphanedWaiters = drainTakenOverWaiters(modelCache);
         }
         modelCache.clear();
+        failTakenOverWaiters(modelId, orphanedWaiters, cause);
         return true;
     }
 
@@ -741,17 +862,22 @@ public class MLModelCacheHelper {
      * 
      * @param removedNodes removed nodes
      */
-    public synchronized void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
-        Set<String> modelIds = modelCaches.keySet();
-        for (String modelId : modelIds) {
-            MLModelCache modelCache = modelCaches.get(modelId);
-            log.debug("remove worker nodes of model {} : {}", modelId, removedNodes.toArray(new String[0]));
-            modelCache.removeWorkerNodes(removedNodes, isFromUndeploy);
-            if (!modelCache.isValidCache()) {
-                log.debug("remove model cache {}", modelId);
-                modelCaches.remove(modelId);
+    public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
+        Map<String, List<ActionListener<Void>>> orphanedWaiters = new HashMap<>();
+        synchronized (this) {
+            Set<String> modelIds = modelCaches.keySet();
+            for (String modelId : modelIds) {
+                MLModelCache modelCache = modelCaches.get(modelId);
+                log.debug("remove worker nodes of model {} : {}", modelId, removedNodes.toArray(new String[0]));
+                modelCache.removeWorkerNodes(removedNodes, isFromUndeploy);
+                if (!modelCache.isValidCache()) {
+                    log.debug("remove model cache {}", modelId);
+                    modelCaches.remove(modelId);
+                    orphanedWaiters.put(modelId, modelCache.drainTakenOverWaiters());
+                }
             }
         }
+        orphanedWaiters.forEach(this::failTakenOverWaiters);
     }
 
     /**
@@ -766,16 +892,21 @@ public class MLModelCacheHelper {
      *                       with model index, also we need to change the target
      *                       worker nodes to exclude the removed worker nodes.
      */
-    public synchronized void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
-        MLModelCache modelCache = modelCaches.get(modelId);
-        if (modelCache != null) {
-            log.debug("remove worker node {} of model {} from cache", nodeId, modelId);
-            modelCache.removeWorkerNode(nodeId, isFromUndeploy);
-            if (!modelCache.isValidCache()) {
-                log.debug("remove model {} from cache as no node running it", modelId);
-                modelCaches.remove(modelId);
+    public void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
+        List<ActionListener<Void>> orphanedWaiters = List.of();
+        synchronized (this) {
+            MLModelCache modelCache = modelCaches.get(modelId);
+            if (modelCache != null) {
+                log.debug("remove worker node {} of model {} from cache", nodeId, modelId);
+                modelCache.removeWorkerNode(nodeId, isFromUndeploy);
+                if (!modelCache.isValidCache()) {
+                    log.debug("remove model {} from cache as no node running it", modelId);
+                    modelCaches.remove(modelId);
+                    orphanedWaiters = modelCache.drainTakenOverWaiters();
+                }
             }
         }
+        failTakenOverWaiters(modelId, orphanedWaiters);
     }
 
     /**
@@ -812,9 +943,18 @@ public class MLModelCacheHelper {
     /**
      * Clear worker nodes for all models.
      */
-    public synchronized void clearWorkerNodes() {
+    public void clearWorkerNodes() {
         log.debug("clear all model worker nodes");
-        modelCaches.entrySet().forEach(entry -> clearWorkerNodes(entry.getKey()));
+        Map<String, List<ActionListener<Void>>> orphanedWaiters = new HashMap<>();
+        synchronized (this) {
+            modelCaches.keySet().forEach(modelId -> {
+                List<ActionListener<Void>> waiters = clearWorkerNodesLocked(modelId);
+                if (!waiters.isEmpty()) {
+                    orphanedWaiters.put(modelId, waiters);
+                }
+            });
+        }
+        orphanedWaiters.forEach(this::failTakenOverWaiters);
     }
 
     /**
@@ -822,15 +962,26 @@ public class MLModelCacheHelper {
      * 
      * @param modelId model id
      */
-    public synchronized void clearWorkerNodes(String modelId) {
+    public void clearWorkerNodes(String modelId) {
+        List<ActionListener<Void>> orphanedWaiters;
+        synchronized (this) {
+            orphanedWaiters = clearWorkerNodesLocked(modelId);
+        }
+        failTakenOverWaiters(modelId, orphanedWaiters);
+    }
+
+    // Caller holds this helper's lock. Returns the taken-over waiters of the entry if this removed it.
+    private List<ActionListener<Void>> clearWorkerNodesLocked(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache != null) {
             log.debug("clear worker nodes of model {}", modelId);
             modelCache.clearWorkerNodes();
             if (!modelCache.isValidCache()) {
                 modelCaches.remove(modelId);
+                return modelCache.drainTakenOverWaiters();
             }
         }
+        return List.of();
     }
 
     /**
