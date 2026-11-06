@@ -35,6 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -109,7 +110,9 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
-    public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
+    // Register tasks download the model over the network, which can take more than 20 seconds on a slow CI runner.
+    // waitForTask returns as soon as the task finishes, so a longer cap only delays a task that is stuck.
+    public static long CUSTOM_MODEL_TIMEOUT = 60_000; // 60 seconds
 
     protected boolean isHttps() {
         boolean isHttps = Optional.ofNullable(System.getProperty("https")).map("true"::equalsIgnoreCase).orElse(false);
@@ -985,9 +988,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public void waitForTask(String taskId, MLTaskState targetState) throws InterruptedException {
         AtomicBoolean taskDone = new AtomicBoolean(false);
+        AtomicReference<String> lastState = new AtomicReference<>();
         waitUntil(() -> {
             try {
                 String state = getTaskState(taskId);
+                lastState.set(state);
                 if (targetState.name().equals(state)) {
                     taskDone.set(true);
                 } else if (MLTaskState.FAILED.name().equals(state) || MLTaskState.CANCELLED.name().equals(state)) {
@@ -999,7 +1004,18 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             }
             return taskDone.get();
         }, CUSTOM_MODEL_TIMEOUT, TimeUnit.MILLISECONDS);
-        assertTrue(String.format(Locale.ROOT, "Task Id %s could not get to %s state", taskId, targetState.name()), taskDone.get());
+        assertTrue(
+            String
+                .format(
+                    Locale.ROOT,
+                    "Task Id %s could not get to %s state within %d ms, last state: %s",
+                    taskId,
+                    targetState.name(),
+                    CUSTOM_MODEL_TIMEOUT,
+                    lastState.get()
+                ),
+            taskDone.get()
+        );
     }
 
     public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
