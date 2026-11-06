@@ -21,7 +21,9 @@ import org.opensearch.Version;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -1097,5 +1099,149 @@ public class MLAgentTest {
         ActionRequestValidationException exception = request.validate();
 
         assertNull(exception);
+    }
+
+    @Test
+    public void toolSelection_StreamRoundTrip() throws IOException {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test_model").parameters(Map.of("test_key", "test_value")).build())
+            .toolSelection(MLToolSelectionConfig.builder().enabled(true).topK(5).build())
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        // opensearch.version is 3.9.0-SNAPSHOT, so Version.CURRENT predates the 3.10.0 gate.
+        // Set the stream version explicitly to exercise the write and read paths.
+        out.setVersion(CommonValue.VERSION_3_10_0);
+        agent.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_10_0);
+        MLAgent restored = new MLAgent(in);
+
+        assertNotNull(restored.getToolSelection());
+        assertEquals(Boolean.TRUE, restored.getToolSelection().getEnabled());
+        assertEquals(Integer.valueOf(5), restored.getToolSelection().getTopK());
+        assertNull(restored.getToolSelection().getPinnedTools());
+    }
+
+    @Test
+    public void toolSelection_AbsentStaysNull() throws IOException {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test_model").parameters(Map.of("test_key", "test_value")).build())
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_10_0);
+        agent.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_10_0);
+        assertNull(new MLAgent(in).getToolSelection());
+    }
+
+    @Test
+    public void toolSelection_ParseFromRegistrationJson() throws IOException {
+        String jsonStr = "{\"name\":\"test_agent\",\"type\":\"conversational\","
+            + "\"llm\":{\"model_id\":\"test_model\",\"parameters\":{\"test_key\":\"test_value\"}},"
+            + "\"tool_selection\":{\"enabled\":true,\"top_k\":5}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parse(parser);
+
+        assertNotNull(agent.getToolSelection());
+        assertEquals(Boolean.TRUE, agent.getToolSelection().getEnabled());
+        assertEquals(Integer.valueOf(5), agent.getToolSelection().getTopK());
+        assertNull(agent.getToolSelection().getPinnedTools());
+    }
+
+    @Test
+    public void toolSelection_XContentRoundTrip() throws IOException {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test_model").parameters(Map.of("test_key", "test_value")).build())
+            .toolSelection(MLToolSelectionConfig.builder().topK(3).pinnedTools(List.of("SearchIndexTool")).build())
+            .build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String serialized = BytesReference.bytes(builder).utf8ToString();
+        assertTrue(serialized.contains("\"tool_selection\""));
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                serialized
+            );
+        parser.nextToken();
+        assertEquals(agent.getToolSelection(), MLAgent.parse(parser).getToolSelection());
+    }
+
+    @Test
+    public void toolSelection_OmittedFromXContentWhenUnset() throws IOException {
+        // Existing agents must not grow a tool_selection block in their stored document.
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test_model").parameters(Map.of("test_key", "test_value")).build())
+            .build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertFalse(BytesReference.bytes(builder).utf8ToString().contains("tool_selection"));
+    }
+
+    @Test
+    public void toolSelection_NotWrittenToOlderNodes() throws IOException {
+        // A 3.9.0 node never reads the field, so writing it would desync the stream.
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test_model").parameters(Map.of("test_key", "test_value")).build())
+            .toolSelection(MLToolSelectionConfig.builder().topK(5).build())
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(CommonValue.VERSION_3_9_0);
+        agent.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(CommonValue.VERSION_3_9_0);
+        MLAgent restored = new MLAgent(in);
+        assertNull(restored.getToolSelection());
+        // The rest of the agent must survive intact, proving the stream stayed in sync.
+        assertEquals("test_agent", restored.getName());
+        assertEquals("test_model", restored.getLlm().getModelId());
+    }
+
+    @Test
+    public void toolSelection_ExplicitNullParsesAsUnset() throws IOException {
+        String jsonStr = "{\"name\":\"test_agent\",\"type\":\"conversational\","
+            + "\"llm\":{\"model_id\":\"test_model\",\"parameters\":{\"test_key\":\"test_value\"}},"
+            + "\"tool_selection\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        assertNull(MLAgent.parse(parser).getToolSelection());
     }
 }

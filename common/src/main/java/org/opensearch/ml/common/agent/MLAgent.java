@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse.AGENT_ID_FIELD;
@@ -59,6 +60,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONTEXT_MANAGEMENT_NAME_FIELD = "context_management_name";
     public static final String CONTEXT_MANAGEMENT_FIELD = "context_management";
+    public static final String TOOL_SELECTION_FIELD = "tool_selection";
     private static final String LLM_INTERFACE_FIELD = "_llm_interface";
     private static final String TAG_VALUE_UNKNOWN = "unknown";
     private static final String TAG_MEMORY_TYPE = "memory_type";
@@ -68,6 +70,8 @@ public class MLAgent implements ToXContentObject, Writeable {
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT = CommonValue.VERSION_3_5_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID = VERSION_3_9_0;
+    // 3.9.0 is already cut, so the tool_selection field ships in 3.10.0.
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_SELECTION = VERSION_3_10_0;
 
     private String name;
     private String type;
@@ -87,6 +91,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String tenantId;
     private String provisionedBy;
     private String agentId;
+    private MLToolSelectionConfig toolSelection;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -106,7 +111,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         ContextManagementTemplate contextManagement,
         String tenantId,
         String provisionedBy,
-        String agentId
+        String agentId,
+        MLToolSelectionConfig toolSelection
     ) {
         this.name = name;
         this.type = type;
@@ -126,6 +132,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         this.provisionedBy = provisionedBy;
         this.agentId = agentId;
+        this.toolSelection = toolSelection;
         validate();
     }
 
@@ -162,6 +169,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             contextManagementName,
             contextManagement,
             tenantId,
+            null,
             null,
             null
         );
@@ -202,6 +210,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             contextManagement,
             tenantId,
             provisionedBy,
+            null,
             null
         );
     }
@@ -297,6 +306,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.provisionedBy = streamInputVersion.onOrAfter(VERSION_3_7_0) ? input.readOptionalString() : null;
         this.agentId = streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID) ? input.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_SELECTION) && input.readBoolean()) {
+            toolSelection = new MLToolSelectionConfig(input);
+        }
         validate();
     }
 
@@ -363,6 +375,14 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID)) {
             out.writeOptionalString(agentId);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_SELECTION)) {
+            if (toolSelection != null) {
+                out.writeBoolean(true);
+                toolSelection.writeTo(out);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     /**
@@ -427,6 +447,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (provisionedBy != null) {
             builder.field(PROVISIONED_BY_FIELD, provisionedBy);
         }
+        if (toolSelection != null) {
+            builder.field(TOOL_SELECTION_FIELD, toolSelection);
+        }
         builder.endObject();
         return builder;
     }
@@ -457,6 +480,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         String tenantId = null;
         String provisionedBy = null;
         String agentId = null;
+        MLToolSelectionConfig toolSelection = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -520,6 +544,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case PROVISIONED_BY_FIELD:
                     provisionedBy = parser.textOrNull();
                     break;
+                case TOOL_SELECTION_FIELD:
+                    toolSelection = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : MLToolSelectionConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -545,6 +572,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             .tenantId(tenantId)
             .provisionedBy(provisionedBy)
             .agentId(agentId)
+            .toolSelection(toolSelection)
             .build();
     }
 
