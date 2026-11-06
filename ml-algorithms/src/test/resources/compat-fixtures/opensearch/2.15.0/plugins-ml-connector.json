@@ -1,0 +1,61 @@
+[
+  {
+    "_id": "ci5VEKEB6Wfw9rVdfn_l",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "content-type": "application/json",
+            "x-amz-content-sha256": "required"
+          },
+          "method": "POST",
+          "post_process_function": "connector.post_process.bedrock.embedding",
+          "pre_process_function": "connector.pre_process.bedrock.embedding",
+          "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+          "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
+        }
+      ],
+      "credential": {
+        "access_key": "AgV4wZOQqz4TeIiJtsvteZdjiH1qfeB5hmIdp5oyiRoTP7UAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREFnUktGUlZXY0NvbHJlaGhLN2dYVnV5TmJaelBycE5JeWhURUJsUVpGN3hZcldnZGhxeXc0dXFlU1FBUDBJNGE3dz09AAEABkN1c3RvbQAUAAAAgAAAAAz0j3gPQIB2nnUfXasAMBCPQczTbCGLM0V7Xjytjp5a/D/s6PO547hk3/epOwfPX9jhJwNlDyZJXbd6+2mFdQIAABAAwIcySeUBri9gIhhxaQF6jC4RcCMhQpetU0nQ/PNgMMwKGkfGlQ2Xc5p7eXcWp2fC/////wAAAAEAAAAAAAAAAAAAAAEAAAAUN1f4dC2rIBG3IoK+hFvAvnTiSicvYZTYKQf9V+z8PSuu9YqVAGcwZQIxAKiLEJyMifVVugjWVNF/T9EfXj8UYz1ZJ3XHX8JkMVuYMWId3wFj4o9Znme6/FGXUQIwKLahSBZpk0DrZYpmhfGhDX4Ko7sHF+BW6nbrlAJmuj/AYbW95hh3XXryd/WVNOPl",
+        "secret_key": "AgV4plZLBXwBaS+CFi9xGJQ6BsSQIJBlD1Idam9XINgGeuMAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREE2WDZKSFJNWVRZaHlRUnZ0NFpPV2NJRHFLQXpQOXk2WmUxSVg3RmlYZ2VPS0NtSnBpN21GSWR5U2ZxbDVrb2VjUT09AAEABkN1c3RvbQAUAAAAgAAAAAy5orxQcoujj8ibMFcAMOb1WwzinkQ8BEOywGidNnyYpbsSj9Znky6ebKtBUWyJTX6gf4/KK5wzcw11znkBggIAABAAAIkVp3SL/aZVfOOOgcdRoqLFT/mJYeKMzKHQ/MFaOqj+ngnI6S+YpbrQBX8Srp8A/////wAAAAEAAAAAAAAAAAAAAAEAAAAU9y3kr/lmg3ixULuKxwxAyUEbPRk6V5kJ5LtIgkLf8LtPLpWMAGcwZQIxAIMISEsxjR3xpIqNrmHwrCOeZqgTAgLQP987KTIHTwKY1IV5U8PEPBDuH38v5adINwIwJN7HgxEo5xD3KnHwgYEVSjY9W67lcbZw9bYzbArz9yaVCpNbrMTXfOTiuzbgSHkt",
+        "session_token": "AgV4ruh6Js0aAZ/ciUI5YhRokfq3MohExwT24KFNZlvE0YgAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREFpTStXNU1LV2RPRlJSVTRJWUhoQ2t2blA5eWhkNThUK0VaNGhqeW1LMW5rTGdZV0ZKbmFUb1A4elFLdUhNeGhvZz09AAEABkN1c3RvbQAUAAAAgAAAAAw3O3KF8UvhgfUTrQIAMI18hfbHe5KtacC1vcF2d8PUnlLmxfQDWopcmKKHR2aeqo2ss9RFxdGpDhzazI7+4gIAABAAszNJBfickt/k4eX4IMUMoisCCQ6KZNPwz1MUDsFZJkzW64bUK2vHgU9oVt/2fZd2/////wAAAAEAAAAAAAAAAAAAAAEAAAATDFfGsSmYshFxXEWCHMFWck/Q8ajefgQbJQfecoiMsCNgLBQAZzBlAjEA9oL6vHv2buZVLoqTgv8FA9YNSAiUPhGFdppCp8P5DNcmZ0RYjPWze8s3bjvHCB4iAjA6MeMVdIxahG0n/3T9HxU9bE5uLlK1y4dzkasMjVHrtZoNOD0ne+zUg0K1jwPMfpc="
+      },
+      "description": "fixture, dummy creds",
+      "name": "compat-bedrock-titan-embed",
+      "parameters": {
+        "region": "us-east-1",
+        "service_name": "bedrock"
+      },
+      "protocol": "aws_sigv4",
+      "version": "1"
+    }
+  },
+  {
+    "_id": "cy5VEKEB6Wfw9rVdf38N",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "Authorization": "Bearer ${credential.openAI_key}"
+          },
+          "method": "POST",
+          "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }",
+          "url": "https://${parameters.endpoint}/v1/chat/completions"
+        }
+      ],
+      "credential": {
+        "openAI_key": "AgV4nkhXPxrI4esRGaRQocS5dZs7gs2Sd949rHdOTW8zFqAAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREFucUkrWC9sdEdRVmhmQnd3djBDOUg3cWFsSjR2SFYzczNKZksvSC9QOXNCTTBOQTNWZkhIS0NSemJvSkxtQlByQT09AAEABkN1c3RvbQAUAAAAgAAAAAzyfYUKmawyKYWVbCQAMPmiWnksmg/tQfxje9gz1w+ZbcqkZoF4zFFYqkGjgsvenfWwUv5ISwCt2evq8BWkPgIAABAAd6OmEe7U0O2kYFbHJ+YIqbO8mCZiB4E/eG1hA6DpHAsVvJEap8IkoBOmogdpVrt0/////wAAAAEAAAAAAAAAAAAAAAEAAAAQKT3zirQclus0nl3vdlO8JLxAVKVd8qrDMtTdKeqnMoMAZzBlAjEAg87WkDh8u4Eu5GySl2Pgd1gsNit4FXEVxNglwtBjrcRLcZ4HcUWorE4FCCHgi6zBAjApY2fXrFX5pB+sxtvDENhb84Tq+lcgweoAUoJhhpWfMqapReHqBsNaAfCqGu/MngI="
+      },
+      "description": "fixture, dummy creds",
+      "name": "compat-openai-chat",
+      "parameters": {
+        "endpoint": "api.openai.com",
+        "model": "gpt-4o-mini"
+      },
+      "protocol": "http",
+      "version": "1"
+    }
+  }
+]

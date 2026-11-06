@@ -1,0 +1,40 @@
+{
+  "nyZYEKEBjAN6Nq94FXDA": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "volatile_headers_present": [
+      "authorization",
+      "content-length",
+      "host",
+      "x-amz-content-sha256",
+      "x-amz-date",
+      "x-amz-security-token"
+    ],
+    "body": {
+      "inputText": "compat test"
+    }
+  },
+  "oiZYEKEBjAN6Nq94FnB2": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "volatile_headers_present": [
+      "authorization",
+      "content-length"
+    ],
+    "body": {
+      "model": "gpt-4o-mini",
+      "messages": [
+        {
+          "role": "user",
+          "content": "compat test"
+        }
+      ]
+    }
+  }
+}

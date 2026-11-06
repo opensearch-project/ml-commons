@@ -1,0 +1,23 @@
+[
+  {
+    "_id": "6gRYEKEBP8ECMCIeU6su",
+    "_source": {
+      "created_time": 1791275586235,
+      "description": "fixture",
+      "is_hidden": false,
+      "last_updated_time": 1791275586235,
+      "name": "compat-flow-agent",
+      "tools": [
+        {
+          "include_output_in_agent_response": false,
+          "parameters": {
+            "model_id": "6ARYEKEBP8ECMCIeUqua",
+            "prompt": "${parameters.question}"
+          },
+          "type": "MLModelTool"
+        }
+      ],
+      "type": "flow"
+    }
+  }
+]

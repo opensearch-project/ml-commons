@@ -1,0 +1,36 @@
+{
+  "artifacts": {
+    "bedrock_sigv4_embedding": "_EpVEKEBuqlXj9W8pMHy",
+    "chat_model": "A0pVEKEBuqlXj9W8p8Jw",
+    "flow_agent": "BEpVEKEBuqlXj9W8p8L1",
+    "openai_http_chat": "_UpVEKEBuqlXj9W8pcEb",
+    "text_embedding_model": "AEpVEKEBuqlXj9W8psLV"
+  },
+  "build_hash": "7ec678d1b7c87d6e779fdef94e33623e1f1e2647",
+  "captured_at": "2026-10-06T08:30:11Z",
+  "master_key": "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=",
+  "opensearch_version": "2.13.0",
+  "plugins": [
+    "opensearch-alerting@2.13.0.0",
+    "opensearch-anomaly-detection@2.13.0.0",
+    "opensearch-asynchronous-search@2.13.0.0",
+    "opensearch-cross-cluster-replication@2.13.0.0",
+    "opensearch-custom-codecs@2.13.0.0",
+    "opensearch-flow-framework@2.13.0.0",
+    "opensearch-geospatial@2.13.0.0",
+    "opensearch-index-management@2.13.0.0",
+    "opensearch-job-scheduler@2.13.0.0",
+    "opensearch-knn@2.13.0.0",
+    "opensearch-ml@2.13.0.0",
+    "opensearch-neural-search@2.13.0.0",
+    "opensearch-notifications@2.13.0.0",
+    "opensearch-notifications-core@2.13.0.0",
+    "opensearch-observability@2.13.0.0",
+    "opensearch-performance-analyzer@2.13.0.0",
+    "opensearch-reports-scheduler@2.13.0.0",
+    "opensearch-security@2.13.0.0",
+    "opensearch-security-analytics@2.13.0.0",
+    "opensearch-skills@2.13.0.0",
+    "opensearch-sql@2.13.0.0"
+  ]
+}
