@@ -259,32 +259,31 @@ public class ModelAccessControlHelper {
     }
 
     public void checkModelGroupPermission(MLModelGroup mlModelGroup, User user, ActionListener<Boolean> wrappedListener) {
-        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
-        if (mlModelGroup.getOwner() == null) {
-            // previous security plugin not enabled, model defaults to public.
-            wrappedListener.onResponse(true);
-        } else {
-            switch (modelAccessMode) {
-                case RESTRICTED:
-                    if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().isEmpty()) {
-                        throw new IllegalStateException("Backend roles shouldn't be null");
-                    } else {
-                        wrappedListener
-                            .onResponse(
-                                Optional
-                                    .ofNullable(user.getBackendRoles())
-                                    .orElse(Collections.emptyList())
-                                    .stream()
-                                    .anyMatch(mlModelGroup.getBackendRoles()::contains)
-                            );
-                    }
-                    break;
-                case PRIVATE:
-                    wrappedListener.onResponse(isOwner(mlModelGroup.getOwner(), user));
-                    break;
-                default: // PUBLIC
-                    wrappedListener.onResponse(true);
-            }
+        // A model group created before access control was enabled has no owner. It defaults to public only
+        // while its access mode is unset or public; an explicitly set private/restricted mode is enforced.
+        AccessMode modelAccessMode = mlModelGroup.getAccess() == null ? AccessMode.PUBLIC : AccessMode.from(mlModelGroup.getAccess());
+        switch (modelAccessMode) {
+            case RESTRICTED:
+                if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().isEmpty()) {
+                    throw new IllegalStateException("Backend roles shouldn't be null");
+                } else {
+                    wrappedListener
+                        .onResponse(
+                            Optional
+                                .ofNullable(user.getBackendRoles())
+                                .orElse(Collections.emptyList())
+                                .stream()
+                                .anyMatch(mlModelGroup.getBackendRoles()::contains)
+                        );
+                }
+                break;
+            case PRIVATE:
+                // isOwner returns false when the owner is null, so an owner-less private group is admin-only
+                // (admins are allowed before this method is called).
+                wrappedListener.onResponse(isOwner(mlModelGroup.getOwner(), user));
+                break;
+            default: // PUBLIC
+                wrappedListener.onResponse(true);
         }
     }
 
