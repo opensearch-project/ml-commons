@@ -14,6 +14,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.PaginationTokenUtil;
 import org.opensearch.rest.RestRequest;
 
 import lombok.Getter;
@@ -103,22 +104,16 @@ public class GetTracesRequest extends ActionRequest {
      */
     public static GetTracesRequest fromRestRequest(RestRequest request) throws IOException {
         String cid = request.param(ActionConstants.RESPONSE_INTERACTION_ID_FIELD);
-        if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
-            int from = Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD));
-            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
-                int maxResults = Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD));
-                return new GetTracesRequest(cid, maxResults, from);
-            } else {
-                return new GetTracesRequest(cid, ActionConstants.DEFAULT_MAX_RESULTS, from);
-            }
-        } else {
-            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
-                int maxResults = Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD));
-                return new GetTracesRequest(cid, maxResults);
-            } else {
-                return new GetTracesRequest(cid);
-            }
+        int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
+            ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
+            : ActionConstants.DEFAULT_MAX_RESULTS;
+
+        Integer from = PaginationTokenUtil
+            .resolveOffset(request.param(ActionConstants.NEXT_PAGE_TOKEN_FIELD), request.param(ActionConstants.NEXT_TOKEN_FIELD));
+        if (from != null) {
+            return new GetTracesRequest(cid, maxResults, from);
         }
+        return new GetTracesRequest(cid, maxResults);
     }
 
 }
