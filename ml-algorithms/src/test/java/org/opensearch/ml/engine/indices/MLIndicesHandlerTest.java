@@ -1,6 +1,7 @@
 package org.opensearch.ml.engine.indices;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -8,6 +9,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
@@ -18,8 +20,10 @@ import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 
+import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,6 +34,7 @@ import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
@@ -669,5 +674,108 @@ public class MLIndicesHandlerTest {
         ArgumentCaptor<CreateIndexRequest> requestCaptor = ArgumentCaptor.forClass(CreateIndexRequest.class);
         verify(indicesAdminClient).create(requestCaptor.capture(), any());
         assertEquals("test-index", requestCaptor.getValue().index());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void resetConfigIndexMappingUpdated() throws Exception {
+        Field field = MLIndicesHandler.class.getDeclaredField("indexMappingUpdated");
+        field.setAccessible(true);
+        Map<String, AtomicBoolean> flags = (Map<String, AtomicBoolean>) field.get(null);
+        flags.get(ML_CONFIG_INDEX).set(false);
+    }
+
+    private void mockLegacyConfigIndexMapping() {
+        IndexMetadata configIndexMetadata = mock(IndexMetadata.class);
+        MappingMetadata configMappingMetadata = mock(MappingMetadata.class);
+        when(metadata.indices()).thenReturn(Map.of(ML_CONFIG_INDEX, configIndexMetadata));
+        when(configIndexMetadata.mapping()).thenReturn(configMappingMetadata);
+        // Legacy dynamic mapping: master_key typed text, no _meta.schema_version
+        when(configMappingMetadata.getSourceAsMap()).thenReturn(Map.of("properties", Map.of("master_key", Map.of("type", "text"))));
+    }
+
+    @Test
+    public void initMLConfigIndex_legacyMappingTypeConflict_appliesAdditiveMapping() throws Exception {
+        resetConfigIndexMappingUpdated();
+        mockLegacyConfigIndexMapping();
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        int[] putMappingCalls = { 0 };
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            if (putMappingCalls[0]++ == 0) {
+                actionListener
+                    .onFailure(new IllegalArgumentException("mapper [master_key] cannot be changed from type [text] to [keyword]"));
+            } else {
+                actionListener.onResponse(new AcknowledgedResponse(true));
+            }
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).updateSettings(any(), any());
+
+        indicesHandler.initMLConfigIndex(listener);
+
+        ArgumentCaptor<PutMappingRequest> requestCaptor = ArgumentCaptor.forClass(PutMappingRequest.class);
+        verify(indicesAdminClient, times(2)).putMapping(requestCaptor.capture(), any());
+        String additiveSource = requestCaptor.getAllValues().get(1).source();
+        assertTrue(additiveSource.contains("schema_version"));
+        assertTrue(additiveSource.contains("config_type"));
+        assertFalse(additiveSource.contains("master_key"));
+        ArgumentCaptor<Boolean> resultCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(listener).onResponse(resultCaptor.capture());
+        assertTrue(resultCaptor.getValue());
+    }
+
+    @Test
+    public void initMLConfigIndex_otherMappingFailure_propagatesFailure() throws Exception {
+        resetConfigIndexMappingUpdated();
+        mockLegacyConfigIndexMapping();
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("cluster block"));
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+
+        indicesHandler.initMLConfigIndex(listener);
+
+        verify(indicesAdminClient, times(1)).putMapping(any(), any());
+        verify(listener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void initMLConfigIndex_settingsNotAcknowledged_stillSucceeds() throws Exception {
+        resetConfigIndexMappingUpdated();
+        IndexMetadata configIndexMetadata = mock(IndexMetadata.class);
+        MappingMetadata configMappingMetadata = mock(MappingMetadata.class);
+        when(metadata.indices()).thenReturn(Map.of(ML_CONFIG_INDEX, configIndexMetadata));
+        when(configIndexMetadata.mapping()).thenReturn(configMappingMetadata);
+        when(configMappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, 1)));
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(false));
+            return null;
+        }).when(indicesAdminClient).updateSettings(any(), any());
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        indicesHandler.initMLConfigIndex(listener);
+
+        verify(indicesAdminClient, times(1)).updateSettings(any(), any());
+        verify(listener).onResponse(true);
+    }
+
+    @Test
+    public void isFieldTypeConflict_onlyForConfigIndex() {
+        Exception conflict = new IllegalArgumentException("mapper [master_key] cannot be changed from type [text] to [keyword]");
+        assertTrue(indicesHandler.isFieldTypeConflict(ML_CONFIG_INDEX, new RuntimeException("wrapped", conflict)));
+        assertFalse(indicesHandler.isFieldTypeConflict(ML_AGENT_INDEX, conflict));
+        assertFalse(indicesHandler.isFieldTypeConflict(ML_CONFIG_INDEX, new IllegalArgumentException("other")));
     }
 }
