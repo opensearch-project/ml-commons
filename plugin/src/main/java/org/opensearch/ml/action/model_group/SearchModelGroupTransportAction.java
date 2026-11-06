@@ -11,8 +11,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
-import java.util.Collections;
-
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -93,7 +91,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
             if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
                 // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
                 // to only contain model-groups that the user at-least has read access to.
-                addAccessibleModelGroupsFilterAndSearch(tenantId, request, doubleWrappedListener);
+                addAccessibleModelGroupsFilterAndSearch(tenantId, request, wrappedListener, doubleWrappedListener);
                 return;
             }
             if (!modelAccessControlHelper.skipModelAccessControl(user)) {
@@ -111,7 +109,8 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     private void addAccessibleModelGroupsFilterAndSearch(
         String tenantId,
         SearchRequest request,
-        ActionListener<SearchResponse> wrappedListener
+        ActionListener<SearchResponse> wrappedListener,
+        ActionListener<SearchResponse> searchListener
     ) {
         SearchSourceBuilder sourceBuilder = request.source() != null ? request.source() : new SearchSourceBuilder();
         var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
@@ -119,12 +118,11 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(ids -> {
             sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), ids));
             request.source(sourceBuilder);
-            search(tenantId, request, wrappedListener);
+            search(tenantId, request, searchListener);
         }, e -> {
-            // Fail-safe: deny-all and still return a response
-            sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), Collections.emptySet()));
-            request.source(sourceBuilder);
-            search(tenantId, request, wrappedListener);
+            // Fail the request instead of returning an empty result that looks like "no accessible model groups"
+            log.error("Failed to build or run accessible model group search", e);
+            wrappedListener.onFailure(e);
         }));
     }
 
