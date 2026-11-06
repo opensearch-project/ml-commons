@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
@@ -477,6 +478,31 @@ public class MLChatAgentRunnerV2Test {
         verify(listener, timeout(5000)).onResponse(result.capture());
         assertEquals("end_turn", result.getValue().stopReason);
         assertEquals(2, calls.get());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testRetriedEmptyReplyDoesNotUseAnIteration() {
+        // Replies: empty, then a tool call, then the final answer. With max_iteration=2 the run only ends
+        // with end_turn if the retry gave its step back; otherwise the tool-call reply hits the limit.
+        // The tool itself is not registered, which is fine: a missing tool still yields a result and the loop goes on.
+        AtomicInteger calls = mockLLMReplies("stop", true, false, false);
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+        when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenAnswer(invocation -> calls.get() == 2 ? toolCalls : null);
+        LLMMessage toolResult = mock(LLMMessage.class);
+        when(toolResult.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(anyList())).thenReturn(List.of(toolResult));
+        Map<String, String> params = agentParams();
+        params.put("max_iteration", "2");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> result = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(result.capture());
+        assertEquals("end_turn", result.getValue().stopReason);
+        assertEquals(3, calls.get());
         verify(listener, never()).onFailure(any());
     }
 

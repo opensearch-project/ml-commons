@@ -386,16 +386,6 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
      * @return JSON string representation of the message object, or null if not found
      */
     @Override
-    public String extractFinishReason(Map<String, ?> responseData) {
-        Object choicesObj = responseData == null ? null : responseData.get("choices");
-        if (choicesObj instanceof List<?> choices && !choices.isEmpty() && choices.get(0) instanceof Map<?, ?> choice) {
-            Object reason = choice.get("finish_reason");
-            return reason == null ? null : reason.toString();
-        }
-        return null;
-    }
-
-    @Override
     public String extractMessageFromResponse(Map<String, ?> responseData) {
         if (responseData == null) {
             return null;
@@ -415,6 +405,23 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Extracts the finish reason from an OpenAI Chat Completions API response, read from choices[0].finish_reason
+     * (for example "stop" or "length").
+     *
+     * @param responseData Map containing the OpenAI Chat Completions API response data
+     * @return the finish reason, or null if not present
+     */
+    @Override
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object choicesObj = responseData == null ? null : responseData.get("choices");
+        if (choicesObj instanceof List<?> choices && !choices.isEmpty() && choices.get(0) instanceof Map<?, ?> choice) {
+            Object reason = choice.get("finish_reason");
+            return reason == null ? null : reason.toString();
+        }
         return null;
     }
 
