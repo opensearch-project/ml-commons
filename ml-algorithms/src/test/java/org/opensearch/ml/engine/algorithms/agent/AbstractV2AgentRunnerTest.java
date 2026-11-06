@@ -23,7 +23,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
@@ -1008,5 +1010,46 @@ public class AbstractV2AgentRunnerTest {
         runner.runV2(mlAgent, params, listener, channel, null, new ArrayList<>());
 
         verify(listener).onFailure(any(IllegalStateException.class));
+    }
+
+    // ==================== Tests for applyPromptCache ====================
+
+    @Test
+    public void testApplyPromptCache_FlagSet_DelegatesToProvider() {
+        Map<String, String> modelParameters = Map.of("messages_cache_enabled", "true");
+        when(mlAgent.getLlm()).thenReturn(LLMSpec.builder().modelId("model-id").parameters(modelParameters).build());
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
+        Map<String, String> llmParams = new HashMap<>();
+        List<Message> messages = List.of(new Message());
+
+        runner.applyPromptCache(mlAgent, llmParams, messages, modelProvider);
+
+        verify(modelProvider).applyPromptCache(llmParams, messages, MLAgentType.CONVERSATIONAL_V2, modelParameters);
+    }
+
+    @Test
+    public void testApplyPromptCache_NoFlag_StillDelegatesSoProviderValidates() {
+        // The provider gates each flag and validates the cache settings, so the runner always delegates.
+        Map<String, String> modelParameters = Map.of("max_tokens", "100");
+        when(mlAgent.getLlm()).thenReturn(LLMSpec.builder().modelId("model-id").parameters(modelParameters).build());
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
+        Map<String, String> llmParams = new HashMap<>();
+        List<Message> messages = List.of(new Message());
+
+        runner.applyPromptCache(mlAgent, llmParams, messages, modelProvider);
+
+        verify(modelProvider).applyPromptCache(llmParams, messages, MLAgentType.CONVERSATIONAL_V2, modelParameters);
+    }
+
+    @Test
+    public void testApplyPromptCache_NoLlmSpec_DelegatesWithNullParameters() {
+        when(mlAgent.getLlm()).thenReturn(null);
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
+        Map<String, String> llmParams = new HashMap<>();
+        List<Message> messages = List.of(new Message());
+
+        runner.applyPromptCache(mlAgent, llmParams, messages, modelProvider);
+
+        verify(modelProvider).applyPromptCache(llmParams, messages, MLAgentType.CONVERSATIONAL_V2, null);
     }
 }

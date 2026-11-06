@@ -196,6 +196,31 @@ public class MLAGUIAgentRunnerTest {
     }
 
     @Test
+    public void testRun_AnthropicMessagesInterface_FailsFast() {
+        // Arrange - AG-UI always streams, and the Anthropic Messages interface is non-streaming only.
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAGUIAgent")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("test-model-id").build())
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLChatAgentRunner.LLM_INTERFACE, "anthropic/v1/messages");
+
+        // Act
+        aguiAgentRunner.run(mlAgent, params, agentActionListener, channel);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener).onFailure(errorCaptor.capture());
+        assertEquals(IllegalArgumentException.class, errorCaptor.getValue().getClass());
+        assertTrue(errorCaptor.getValue().getMessage().contains("Anthropic Messages"));
+        assertNull(params.get("agent_type"));
+        verify(agentActionListener, never()).onResponse(any());
+    }
+
+    @Test
     public void testConstructor_WithHookRegistry() {
         // Arrange
         HookRegistry hookRegistry = new HookRegistry();

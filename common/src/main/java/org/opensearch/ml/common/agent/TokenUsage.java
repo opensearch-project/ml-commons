@@ -134,7 +134,12 @@ public class TokenUsage {
         return null;
     }
 
-    private static Long addNullable(Long a, Long b) {
+    /**
+     * Adds two token counts, treating null as absent.
+     *
+     * @return the sum, the non-null value when only one is set, or null when neither is
+     */
+    public static Long addNullable(Long a, Long b) {
         return a == null ? b : b == null ? a : Long.valueOf(a + b);
     }
 }
