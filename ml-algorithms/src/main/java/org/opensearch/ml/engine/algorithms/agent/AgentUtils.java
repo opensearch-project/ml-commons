@@ -64,6 +64,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -125,6 +126,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
 import io.modelcontextprotocol.client.McpSyncClient;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -892,12 +895,64 @@ public class AgentUtils {
         Encryptor encryptor,
         ActionListener<List<MLToolSpec>> finalListener
     ) {
+        loadMcpToolSpecs(
+            mlAgent,
+            client,
+            sdkClient,
+            encryptor,
+            false,
+            ActionListener.wrap(result -> finalListener.onResponse(result.getToolSpecs()), finalListener::onFailure)
+        );
+    }
+
+    /**
+     * Like {@link #getMcpToolSpecs}, but also reports which MCP connectors failed and why.
+     * Connector failures are carried in the result, not sent to onFailure.
+     */
+    public static void getMcpToolSpecsWithFailures(
+        MLAgent mlAgent,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        ActionListener<McpToolLoadResult> listener
+    ) {
+        loadMcpToolSpecs(mlAgent, client, sdkClient, encryptor, true, listener);
+    }
+
+    /** Tools loaded from an agent's MCP connectors, plus the connectors that failed (id to {@code rootCauseMessage} of the cause). */
+    @Getter
+    @AllArgsConstructor
+    public static class McpToolLoadResult {
+        private final List<MLToolSpec> toolSpecs;
+        private final int configuredConnectors;
+        /** Counted per mcp_connectors entry: a repeated or missing id is one key in failedConnectors. */
+        private final int failedCount;
+        private final Map<String, String> failedConnectors;
+
+        /** True when MCP connectors are configured and every one of them failed. */
+        public boolean allConnectorsFailed() {
+            return configuredConnectors > 0 && failedCount >= configuredConnectors;
+        }
+    }
+
+    /**
+     * @param propagateConnectorFailures when true, a connector that isn't an MCP connector, or that
+     *                                   fails synchronously, counts as failed instead of contributing no tools
+     */
+    private static void loadMcpToolSpecs(
+        MLAgent mlAgent,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        boolean propagateConnectorFailures,
+        ActionListener<McpToolLoadResult> finalListener
+    ) {
         String tenantId = mlAgent.getTenantId();
 
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         // If mcpConnectorConfigJSON is null i.e no config for MCP Connectors, return an empty list
         if (mcpConnectorConfigJSON == null) {
-            finalListener.onResponse(Collections.emptyList());
+            finalListener.onResponse(new McpToolLoadResult(Collections.emptyList(), 0, 0, Map.of()));
             return;
         }
 
@@ -910,6 +965,14 @@ public class AgentUtils {
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
         boolean isLogWarnEnabled = log.isWarnEnabled();
         Map<String, List<String>> toolNameToConnectorIds = isLogWarnEnabled ? new ConcurrentHashMap<>() : null;
+        Map<String, String> failedConnectors = new ConcurrentHashMap<>();
+        AtomicInteger failedCount = new AtomicInteger();
+        BiConsumer<String, Throwable> recordFailure = (connectorId, cause) -> {
+            failedCount.incrementAndGet();
+            failedConnectors.put(String.valueOf(connectorId), rootCauseMessage(cause));
+        };
+        Runnable onAllDone = () -> finalListener
+            .onResponse(new McpToolLoadResult(finalToolSpecs, mcpConnectorConfigs.size(), failedCount.get(), failedConnectors));
 
         // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
@@ -949,17 +1012,20 @@ public class AgentUtils {
                         finalToolSpecs.addAll(filteredTools);
                     } catch (Throwable t) {
                         log.error("Error post-processing MCP tool specs for connector: " + connectorId, t);
+                        recordFailure.accept(connectorId, t);
                     } finally {
-                        completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+                        completeIfLast(remainingConnectors, toolNameToConnectorIds, onAllDone);
                     }
                 }, e -> {
-                    log.error("Error processing connector: " + connectorId, e);
-                    completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
-                }));
+                    log.error("Failed to load tools from MCP connector: " + connectorId, e);
+                    recordFailure.accept(connectorId, e);
+                    completeIfLast(remainingConnectors, toolNameToConnectorIds, onAllDone);
+                }), propagateConnectorFailures);
             } catch (Throwable t) {
                 // Catch synchronous throws (including Errors) so one bad connector can't strand the counter.
                 log.error("Synchronous failure initiating MCP tool spec lookup for connector: " + connectorId, t);
-                completeIfLast(remainingConnectors, toolNameToConnectorIds, finalToolSpecs, finalListener);
+                recordFailure.accept(connectorId, t);
+                completeIfLast(remainingConnectors, toolNameToConnectorIds, onAllDone);
             }
         }
     }
@@ -982,15 +1048,40 @@ public class AgentUtils {
     private static void completeIfLast(
         AtomicInteger remainingConnectors,
         Map<String, List<String>> toolNameToConnectorIds,
-        List<MLToolSpec> finalToolSpecs,
-        ActionListener<List<MLToolSpec>> finalListener
+        Runnable onAllDone
     ) {
         if (remainingConnectors.decrementAndGet() == 0) {
             if (toolNameToConnectorIds != null) {
                 warnOnDuplicateMcpToolNames(toolNameToConnectorIds);
             }
-            finalListener.onResponse(finalToolSpecs);
+            onAllDone.run();
         }
+    }
+
+    /**
+     * "ExceptionType: message" for the first java.net exception in the chain, else the innermost
+     * cause. A refused connection's innermost cause is often a bare ClosedChannelException.
+     */
+    static String rootCauseMessage(Throwable t) {
+        if (t == null) {
+            return "unknown error";
+        }
+        Throwable chosen = null;
+        Throwable cause = t;
+        while (true) {
+            if (chosen == null && cause.getClass().getName().startsWith("java.net.")) {
+                chosen = cause;
+            }
+            if (cause.getCause() == null || cause.getCause() == cause) {
+                break;
+            }
+            cause = cause.getCause();
+        }
+        if (chosen == null) {
+            chosen = cause;
+        }
+        String message = chosen.getMessage();
+        return chosen.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
     private static void warnOnDuplicateMcpToolNames(Map<String, List<String>> toolNameToConnectorIds) {
@@ -1138,6 +1229,21 @@ public class AgentUtils {
         getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, toolListener, true);
     }
 
+    private static List<MLToolSpec> listMcpTools(Connector connector, Client client) {
+        if (client == null) {
+            throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+        }
+        if (connector instanceof McpConnector) {
+            McpConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+            connectorExecutor.setClient(client);
+            return connectorExecutor.getMcpToolSpecs();
+        }
+        McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
+            .initInstance(connector.getProtocol(), connector, Connector.class);
+        connectorExecutor.setClient(client);
+        return connectorExecutor.getMcpToolSpecs();
+    }
+
     private static void getMCPToolSpecsFromConnector(
         String connectorId,
         String tenantId,
@@ -1159,32 +1265,33 @@ public class AgentUtils {
                     }
                     return;
                 }
-                ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
-                    List<MLToolSpec> mcpToolSpecs;
-                    if (client == null) {
-                        throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                // Not ActionListener.wrap: it would report a tool-listing failure as a decrypt failure.
+                ActionListener<Boolean> decryptSuccessfulListener = new ActionListener<>() {
+                    @Override
+                    public void onResponse(Boolean decrypted) {
+                        List<MLToolSpec> mcpToolSpecs;
+                        try {
+                            mcpToolSpecs = listMcpTools(connector, client);
+                        } catch (Throwable t) {
+                            // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
+                            log.error("Failed to list tools from MCP connector: " + connectorId, t);
+                            toolListener
+                                .onFailure(
+                                    t instanceof Exception
+                                        ? (Exception) t
+                                        : new RuntimeException("Failed to list tools from MCP connector: " + connectorId, t)
+                                );
+                            return;
+                        }
+                        toolListener.onResponse(mcpToolSpecs);
                     }
 
-                    if (connector instanceof McpConnector) {
-                        McpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                            .initInstance(connector.getProtocol(), connector, Connector.class);
-                        connectorExecutor.setClient(client);
-                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                        toolListener.onResponse(mcpToolSpecs);
-                        return;
+                    @Override
+                    public void onFailure(Exception e) {
+                        log.error("Failed to decrypt credentials in MCP connector: " + connectorId, e);
+                        toolListener.onFailure(e);
                     }
-                    if (connector instanceof McpStreamableHttpConnector) {
-                        McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                            .initInstance(connector.getProtocol(), connector, Connector.class);
-                        connectorExecutor.setClient(client);
-                        mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                        toolListener.onResponse(mcpToolSpecs);
-                        return;
-                    }
-                }, e -> {
-                    log.error("Failed to decrypt credentials in connector", e);
-                    toolListener.onFailure(e);
-                });
+                };
                 connector.decrypt("", encryptor::decrypt, tenantId, decryptSuccessfulListener);
             } catch (Throwable t) {
                 // Throwable, not Exception: ServiceConfigurationError would otherwise stall the async chain.
