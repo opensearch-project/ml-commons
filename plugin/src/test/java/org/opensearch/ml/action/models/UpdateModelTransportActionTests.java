@@ -94,6 +94,7 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -188,6 +189,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     MLEngine mlEngine;
 
     @Mock
+    MLIndicesHandler mlIndicesHandler;
+
+    @Mock
     NamedXContentRegistry xContentRegistry;
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
@@ -200,6 +204,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(List.of("mock"));
             return null;
         }).when(mlEngine).encrypt(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
@@ -282,7 +291,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 clusterService,
                 mlEngine,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlIndicesHandler
             )
         );
 
@@ -428,6 +438,58 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
         assertEquals(updateResponse.getResult(), argumentCaptor.getValue().getResult());
+    }
+
+    @Test
+    public void testUpdateModelInitsModelIndexBeforeWriting() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(mlIndicesHandler).initModelIndexIfAbsent(any());
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+    }
+
+    // After an upgrade, the model index mapping must be brought up to date before an update writes to it (issue #5146).
+    @Test
+    public void testUpdateModelFailsWithoutWritingWhenModelIndexInitFails() throws InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onFailure(new IllegalArgumentException("mapping update failed"));
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("mapping update failed", argumentCaptor.getValue().getMessage());
+        verify(client, never()).update(any(UpdateRequest.class));
+        verify(client, never()).update(any(UpdateRequest.class), any());
+    }
+
+    @Test
+    public void testUpdateModelFailsWithoutWritingWhenModelIndexNotReady() throws InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to init ML model index", argumentCaptor.getValue().getMessage());
+        verify(client, never()).update(any(UpdateRequest.class));
+        verify(client, never()).update(any(UpdateRequest.class), any());
     }
 
     @Test
