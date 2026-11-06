@@ -285,15 +285,16 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX = "^https://rekognition(-fips)?\\.[a-z0-9-]+\\.amazonaws\\.com$";
+    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX =
+        "^https://rekognition(-fips)?\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$";
 
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             ML_PLUGIN_SETTING_PREFIX + "trusted_connector_endpoints_regex",
             ImmutableList
                 .of(
-                    "^https://runtime\\.sagemaker\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
-                    "^https://api\\.sagemaker\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
+                    "^https://runtime\\.sagemaker\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://api\\.sagemaker\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.anthropic\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
@@ -304,11 +305,11 @@ public final class MLCommonsSettings {
                     // The prefix must start with an alphanumeric because a DNS label cannot begin with a
                     // hyphen; "[a-z0-9-]+-" would have admitted "--aiplatform" and "-us-aiplatform".
                     "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$",
-                    "^https://bedrock-runtime\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
-                    "^https://bedrock-agent-runtime\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
-                    "^https://bedrock\\.[a-z0-9-]+\\.amazonaws\\.com/.*$",
-                    "^https://textract\\.[a-z0-9-]+\\.amazonaws\\.com$",
-                    "^https://comprehend\\.[a-z0-9-]+\\.amazonaws\\.com$",
+                    "^https://bedrock-runtime\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://bedrock-agent-runtime\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://bedrock\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://textract\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$",
+                    "^https://comprehend\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$",
                     REKOGNITION_TRUST_ENDPOINT_REGEX
                 ),
             Function.identity(),

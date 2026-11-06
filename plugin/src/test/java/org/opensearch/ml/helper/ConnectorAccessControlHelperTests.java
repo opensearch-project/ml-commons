@@ -154,6 +154,35 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_hasPermission_connectorOwner_is_null_access_private_return_false() {
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getOwner()).thenReturn(null);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.PRIVATE);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
+        assertFalse(hasPermission);
+    }
+
+    @Test
+    public void test_hasPermission_connectorOwner_is_null_access_restricted_userHasBackendRole_return_true() {
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getOwner()).thenReturn(null);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
+        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-1"));
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
+        assertTrue(hasPermission);
+    }
+
+    @Test
+    public void test_hasPermission_connectorOwner_is_null_access_restricted_userNotHasBackendRole_return_false() {
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getOwner()).thenReturn(null);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
+        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-3"));
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
+        assertFalse(hasPermission);
+    }
+
+    @Test
     public void test_hasPermission_user_is_admin_return_true() {
         User user = User.parse("admin|role-1|all_access");
         boolean hasPermission = connectorAccessControlHelper.hasPermission(user, mock(HttpConnector.class));
