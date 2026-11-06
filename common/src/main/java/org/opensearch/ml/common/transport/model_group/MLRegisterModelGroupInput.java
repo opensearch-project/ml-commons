@@ -159,13 +159,13 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
             parser.nextToken();
             switch (fieldName) {
                 case MLRegisterModelGroupResponse.MODEL_GROUP_ID_FIELD:
-                    modelGroupId = parser.text();
+                    modelGroupId = parser.textOrNull();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case BACKEND_ROLES_FIELD:
                     backendRoles = new ArrayList<>();

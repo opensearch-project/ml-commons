@@ -151,6 +151,29 @@ public class MLRegisterModelGroupInputTest {
     }
 
     @Test
+    public void parse_withNullModelGroupId() throws IOException {
+        String json = "{\"name\":\"name\",\"model_group_id\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, json);
+        parser.nextToken();
+        MLRegisterModelGroupInput parsedInput = MLRegisterModelGroupInput.parse(parser);
+        assertNull(parsedInput.getModelGroupId());
+    }
+
+    @Test
+    public void parse_withNullDescription() throws IOException {
+        String json = "{\"name\":\"name\",\"description\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, json);
+        parser.nextToken();
+        MLRegisterModelGroupInput parsedInput = MLRegisterModelGroupInput.parse(parser);
+        assertEquals("name", parsedInput.getName());
+        assertNull(parsedInput.getDescription());
+    }
+
+    @Test
     public void toXContent_WithCustomModelGroupId() throws Exception {
         MLRegisterModelGroupInput input = MLRegisterModelGroupInput.builder().name("name").modelGroupId("my-model-group").build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
