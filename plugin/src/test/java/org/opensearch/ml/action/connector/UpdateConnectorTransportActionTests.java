@@ -610,6 +610,20 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         verify(actionListener, never()).onFailure(any());
     }
 
+    /** A path parameter that is only supplied at predict time must not block unrelated updates. */
+    @Test
+    public void testUpdate_unrelatedFieldWithPredictTimePathPlaceholder_isAccepted() {
+        stubStoredConnector(ConnectorClientConfig.builder().build(), null, "https://api.openai.com/v1/${parameters.endpoint_path}");
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).description("just a description change").build());
+        stubUpdateSucceeds();
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(actionListener, never()).onFailure(any());
+    }
+
     /** Otherwise an update would be a way around the check performed at create time. */
     @Test
     public void testUpdate_addingSkipSslVerification_isRejected() {
@@ -682,6 +696,10 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     }
 
     private void stubStoredConnector(ConnectorClientConfig clientConfig, Map<String, String> credential) {
+        stubStoredConnector(clientConfig, credential, "https://api.openai.com/v1/chat/completions");
+    }
+
+    private void stubStoredConnector(ConnectorClientConfig clientConfig, Map<String, String> credential, String actionUrl) {
         // Without this the mock denies access and doExecute never reaches the mutual TLS validation.
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
         doAnswer(invocation -> {
@@ -703,7 +721,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                                         .builder()
                                         .actionType(ConnectorAction.ActionType.PREDICT)
                                         .method("POST")
-                                        .url("https://api.openai.com/v1/chat/completions")
+                                        .url(actionUrl)
                                         .headers(Map.of("Content-Type", "application/json"))
                                         .requestBody("{\"model\": \"${parameters.model}\"}")
                                         .build()

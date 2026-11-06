@@ -285,7 +285,9 @@ public class ConnectorAccessControlHelper {
     }
 
     private boolean previouslyPublicConnector(Connector connector) {
-        return connector.getOwner() == null;
+        // A connector created before access control was enabled has no owner and no access mode. Treat it as
+        // public only while no access mode has been set; an explicit private/restricted mode is enforced.
+        return connector.getOwner() == null && connector.getAccess() == null;
     }
 
     private boolean isPublicConnector(Connector connector) {
