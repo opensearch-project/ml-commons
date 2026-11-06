@@ -458,6 +458,19 @@ public class BedrockConverseModelProvider extends ModelProvider {
         return null;
     }
 
+    /**
+     * Extracts the stop reason from a Bedrock Converse API response, read from the top-level stopReason field
+     * (for example "end_turn" or "max_tokens").
+     *
+     * @param responseData Map containing the Bedrock Converse API response data
+     * @return the stop reason, or null if not present
+     */
+    @Override
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object reason = responseData == null ? null : responseData.get("stopReason");
+        return reason == null ? null : reason.toString();
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public Message parseToUnifiedMessage(String json) {

@@ -1370,4 +1370,15 @@ public class BedrockConverseModelProviderTest {
         List<Map<String, Object>> system = (List<Map<String, Object>>) StringUtils.gson.fromJson(payload, Map.class).get("system");
         assertEquals("You are a helpful assistant", system.get(0).get("text"));
     }
+
+    @Test
+    public void testExtractFinishReason() {
+        assertEquals("max_tokens", provider.extractFinishReason(Map.of("stopReason", "max_tokens", "output", Map.of())));
+    }
+
+    @Test
+    public void testExtractFinishReasonMissingIsNull() {
+        assertNull(provider.extractFinishReason(null));
+        assertNull(provider.extractFinishReason(Map.of("output", Map.of())));
+    }
 }

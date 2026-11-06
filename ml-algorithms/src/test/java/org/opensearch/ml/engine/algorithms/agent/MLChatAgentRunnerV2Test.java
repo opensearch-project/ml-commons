@@ -13,16 +13,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -42,6 +45,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
@@ -421,5 +425,126 @@ public class MLChatAgentRunnerV2Test {
             }
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    // ==================== Empty model replies ====================
+
+    /**
+     * Stubs one LLM reply per call: {@code emptyReplies[i]} true means call i returns a reply with
+     * no text and no tool calls (the provider parses it to null). Calls past the array get a normal reply.
+     */
+    private AtomicInteger mockLLMReplies(String finishReason, boolean... emptyReplies) {
+        AtomicInteger calls = new AtomicInteger();
+        Message full = new Message();
+        full.setRole("assistant");
+        ContentBlock block = new ContentBlock();
+        block.setType(ContentType.TEXT);
+        block.setText("The weather is sunny.");
+        full.setContent(List.of(block));
+        when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(null);
+        when(modelProvider.extractFinishReason(any())).thenReturn(finishReason);
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            int call = calls.getAndIncrement();
+            boolean empty = call < emptyReplies.length && emptyReplies[call];
+            String messageJson = "{\"call\":" + call + "}";
+            when(modelProvider.extractMessageFromResponse(any())).thenReturn(messageJson);
+            when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(empty ? null : full);
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("response", "test")).build();
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+            listener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build()).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+        return calls;
+    }
+
+    private Map<String, String> agentParams() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        return params;
+    }
+
+    @Test
+    public void testEmptyReplyIsRetriedOnceThenSucceeds() {
+        AtomicInteger calls = mockLLMReplies("stop", true, false);
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, agentParams(), createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> result = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(result.capture());
+        assertEquals("end_turn", result.getValue().stopReason);
+        assertEquals(2, calls.get());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testRetriedEmptyReplyDoesNotUseAnIteration() {
+        // Replies: empty, then a tool call, then the final answer. With max_iteration=2 the run only ends
+        // with end_turn if the retry gave its step back; otherwise the tool-call reply hits the limit.
+        // The tool itself is not registered, which is fine: a missing tool still yields a result and the loop goes on.
+        AtomicInteger calls = mockLLMReplies("stop", true, false, false);
+        List<Map<String, String>> toolCalls = List.of(Map.of("tool_name", "test-tool", "tool_input", "{}", "tool_call_id", "call-1"));
+        when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenAnswer(invocation -> calls.get() == 2 ? toolCalls : null);
+        LLMMessage toolResult = mock(LLMMessage.class);
+        when(toolResult.getResponse()).thenReturn("{\"role\":\"user\",\"content\":[{\"toolResult\":{}}]}");
+        when(functionCalling.supply(anyList())).thenReturn(List.of(toolResult));
+        Map<String, String> params = agentParams();
+        params.put("max_iteration", "2");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<AbstractV2AgentRunner.AgentLogicResult> result = ArgumentCaptor
+            .forClass(AbstractV2AgentRunner.AgentLogicResult.class);
+        verify(listener, timeout(5000)).onResponse(result.capture());
+        assertEquals("end_turn", result.getValue().stopReason);
+        assertEquals(3, calls.get());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testSecondEmptyReplyFailsWithAClearMessage() {
+        AtomicInteger calls = mockLLMReplies("stop", true, true);
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, agentParams(), createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(failure.capture());
+        assertEquals("only one retry", 2, calls.get());
+        assertTrue(failure.getValue().getMessage().startsWith("The model returned an empty response"));
+        assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) failure.getValue()).status());
+    }
+
+    @Test
+    public void testEmptyReplyAtTheTokenLimitFailsWithoutRetrying() {
+        AtomicInteger calls = mockLLMReplies("length", true, false);
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, agentParams(), createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(failure.capture());
+        assertEquals("the same request would hit the same limit", 1, calls.get());
+        assertTrue(failure.getValue().getMessage().contains("increase max_tokens"));
+    }
+
+    @Test
+    public void testHandleEmptyReplyRetriesOnlyOnceAndOnlyWhenRetryable() {
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        AtomicInteger retries = new AtomicInteger();
+
+        runner.handleEmptyReply(new EmptyModelResponseException("P", "stop"), false, "a", listener, retries::incrementAndGet);
+        assertEquals(1, retries.get());
+        verify(listener, never()).onFailure(any());
+
+        runner.handleEmptyReply(new EmptyModelResponseException("P", "stop"), true, "a", listener, retries::incrementAndGet);
+        runner.handleEmptyReply(new EmptyModelResponseException("P", "SAFETY"), false, "a", listener, retries::incrementAndGet);
+        assertEquals(1, retries.get());
+        verify(listener, times(2)).onFailure(any());
     }
 }

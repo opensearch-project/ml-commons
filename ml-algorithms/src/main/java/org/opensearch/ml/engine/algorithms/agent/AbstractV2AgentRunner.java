@@ -388,26 +388,28 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         // Delegate to ModelProvider - it knows its own response format
         // First extract the message portion from the full response
         String messageJson = modelProvider.extractMessageFromResponse(dataAsMap);
+        String provider = modelProvider.getClass().getSimpleName();
         if (messageJson == null) {
+            // A finish reason without a message (e.g. a token limit spent entirely on thinking) is an empty reply.
+            String finishReason = modelProvider.extractFinishReason(dataAsMap);
+            if (finishReason != null) {
+                throw new EmptyModelResponseException(provider, finishReason);
+            }
             throw new IllegalStateException(
                 "ModelProvider failed to extract message from response. Provider: "
-                    + modelProvider.getClass().getSimpleName()
+                    + provider
                     + ". This may indicate an unexpected response format."
             );
         }
 
-        // Then parse the message to unified format
+        // Then parse the message to unified format. Providers return null for a message with no text,
+        // no tool calls and no tool result: memory loading relies on that to skip such messages, but
+        // for a live reply it means the model answered with nothing.
         Message message = modelProvider.parseToUnifiedMessage(messageJson);
         if (message != null) {
             return message;
         }
-
-        // If provider parsing failed, throw with context for debugging
-        throw new IllegalStateException(
-            "ModelProvider failed to parse message JSON. Provider: "
-                + modelProvider.getClass().getSimpleName()
-                + ". This may indicate an unexpected message format."
-        );
+        throw new EmptyModelResponseException(provider, modelProvider.extractFinishReason(dataAsMap));
     }
 
     /**
