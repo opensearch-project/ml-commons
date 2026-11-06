@@ -19,7 +19,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.agent.PromptCacheSettings;
 import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.memory.Memory;
@@ -338,7 +337,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     /**
      * Add the model provider's prompt-cache breakpoints for the tools and the conversation, as configured in
      * the agent's model parameters. Call once the request parameters hold the messages and the tools.
-     * Does nothing when no cache flag is set.
+     * The provider checks each flag itself and validates the cache settings on every request.
      *
      * @param mlAgent Agent configuration; its LLM parameters are the model_parameters given at registration
      * @param llmParams LLM request parameters, updated in place
@@ -352,9 +351,6 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         ModelProvider modelProvider
     ) {
         Map<String, String> modelParameters = mlAgent.getLlm() != null ? mlAgent.getLlm().getParameters() : null;
-        if (!PromptCacheSettings.isAnyEnabled(modelParameters)) {
-            return;
-        }
         modelProvider.applyPromptCache(llmParams, messages, MLAgentType.from(mlAgent.getType()), modelParameters);
     }
 

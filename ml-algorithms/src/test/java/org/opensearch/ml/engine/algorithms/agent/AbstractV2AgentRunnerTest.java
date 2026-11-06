@@ -1028,20 +1028,28 @@ public class AbstractV2AgentRunnerTest {
     }
 
     @Test
-    public void testApplyPromptCache_NoFlag_SkipsProvider() {
-        when(mlAgent.getLlm()).thenReturn(LLMSpec.builder().modelId("model-id").parameters(Map.of("max_tokens", "100")).build());
+    public void testApplyPromptCache_NoFlag_StillDelegatesSoProviderValidates() {
+        // The provider gates each flag and validates the cache settings, so the runner always delegates.
+        Map<String, String> modelParameters = Map.of("max_tokens", "100");
+        when(mlAgent.getLlm()).thenReturn(LLMSpec.builder().modelId("model-id").parameters(modelParameters).build());
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
+        Map<String, String> llmParams = new HashMap<>();
+        List<Message> messages = List.of(new Message());
 
-        runner.applyPromptCache(mlAgent, new HashMap<>(), List.of(new Message()), modelProvider);
+        runner.applyPromptCache(mlAgent, llmParams, messages, modelProvider);
 
-        verify(modelProvider, never()).applyPromptCache(any(), any(), any(), any());
+        verify(modelProvider).applyPromptCache(llmParams, messages, MLAgentType.CONVERSATIONAL_V2, modelParameters);
     }
 
     @Test
-    public void testApplyPromptCache_NoLlmSpec_SkipsProvider() {
+    public void testApplyPromptCache_NoLlmSpec_DelegatesWithNullParameters() {
         when(mlAgent.getLlm()).thenReturn(null);
+        when(mlAgent.getType()).thenReturn("CONVERSATIONAL_V2");
+        Map<String, String> llmParams = new HashMap<>();
+        List<Message> messages = List.of(new Message());
 
-        runner.applyPromptCache(mlAgent, new HashMap<>(), List.of(new Message()), modelProvider);
+        runner.applyPromptCache(mlAgent, llmParams, messages, modelProvider);
 
-        verify(modelProvider, never()).applyPromptCache(any(), any(), any(), any());
+        verify(modelProvider).applyPromptCache(llmParams, messages, MLAgentType.CONVERSATIONAL_V2, null);
     }
 }

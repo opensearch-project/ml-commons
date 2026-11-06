@@ -25,6 +25,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.AnthropicMessagesModelProvider;
 import org.opensearch.ml.common.agent.TokenUsage;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -135,6 +136,31 @@ public class AnthropicMessagesFunctionCallingTests {
     }
 
     @Test
+    public void testSupply_ToolErrorFalseIsNotAnError() {
+        Map<String, Object> toolResult = Map
+            .of(TOOL_CALL_ID, "toolu_1", TOOL_RESULT, Map.of("text", "ok"), AnthropicMessagesFunctionCalling.TOOL_ERROR, false);
+
+        List<LLMMessage> messages = functionCalling.supply(List.of(toolResult));
+
+        Object block = ((List<?>) messages.get(0).getContent()).get(0);
+        assertEquals(Map.of("type", "tool_result", "tool_use_id", "toolu_1", "content", "ok"), block);
+    }
+
+    @Test
+    public void testSupply_ErrorFlagSurvivesUnifiedMessageIntoNextRequest() {
+        // V2 agents turn supply() output into a unified Message and render it again for the next request.
+        AnthropicMessagesModelProvider provider = new AnthropicMessagesModelProvider();
+        List<LLMMessage> messages = functionCalling
+            .supply(List.of(Map.of(TOOL_CALL_ID, "toolu_1", TOOL_RESULT, Map.of("error", "Tool not found: x"))));
+
+        Message message = provider.parseToUnifiedMessage(messages.get(0).getResponse());
+        String body = provider.mapMessages(List.of(message), MLAgentType.CONVERSATIONAL_V2).get("body");
+
+        assertEquals(Boolean.TRUE, message.getToolError());
+        assertEquals(StringUtils.fromJson(messages.get(0).getResponse(), "response"), StringUtils.fromJson(body, "response"));
+    }
+
+    @Test
     public void testSupply_ParsesBackToUnifiedToolMessage() {
         List<LLMMessage> messages = functionCalling.supply(List.of(Map.of(TOOL_CALL_ID, "toolu_1", TOOL_RESULT, Map.of("text", "42"))));
 
@@ -210,6 +236,17 @@ public class AnthropicMessagesFunctionCallingTests {
         assertNull(usage.getCacheReadInputTokens());
         assertNull(usage.getCacheCreationInputTokens());
         assertEquals(Long.valueOf(70), usage.getTotalTokens());
+    }
+
+    @Test
+    public void testExtractTokenUsage_OnlySomeCacheTokens() {
+        Map<String, Object> response = response("end_turn", List.of());
+        response.put("usage", Map.of("input_tokens", 50, "output_tokens", 20, "cache_read_input_tokens", 9000));
+
+        TokenUsage usage = functionCalling.extractTokenUsage(response);
+
+        assertNull(usage.getCacheCreationInputTokens());
+        assertEquals(Long.valueOf(9070), usage.getTotalTokens());
     }
 
     @Test

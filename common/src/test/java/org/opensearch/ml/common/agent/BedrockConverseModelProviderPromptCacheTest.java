@@ -229,6 +229,44 @@ public class BedrockConverseModelProviderPromptCacheTest {
     }
 
     @Test
+    public void testConfiguredCacheType_UsedForEveryCachePoint() {
+        Map<String, String> modelParameters = Map
+            .of(
+                "system_prompt_cache_enabled",
+                "true",
+                "system_prompt_cache_type",
+                "custom",
+                "tools_cache_enabled",
+                "true",
+                "messages_cache_enabled",
+                "true"
+            );
+        Connector connector = provider.createConnector("model", CREDENTIAL, modelParameters);
+        Map<String, String> params = requestParams(connector, conversation());
+
+        provider.applyPromptCache(params, conversation(), MLAgentType.CONVERSATIONAL_V2, modelParameters);
+        String payload = StringUtils.gson.toJson(renderRequest(connector, params));
+
+        assertEquals(3, payload.split("\\{\"type\":\"custom\"\\}", -1).length - 1);
+        assertFalse(payload.contains("\"type\":\"default\""));
+    }
+
+    @Test
+    public void testApplyPromptCache_FlagsChangedAfterRegistrationAreValidated() {
+        Connector connector = provider.createConnector("model", CREDENTIAL, null);
+        Map<String, String> params = requestParams(connector, conversation());
+        // No system TTL: Bedrock applies 5m to the tools breakpoint, so a 1h messages breakpoint can't follow it.
+        Map<String, String> changedParameters = Map
+            .of("tools_cache_enabled", "true", "messages_cache_enabled", "true", "messages_cache_ttl", "1h");
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> provider.applyPromptCache(params, conversation(), MLAgentType.CONVERSATIONAL_V2, changedParameters)
+        );
+        assertTrue(e.getMessage().contains("messages_cache_ttl"));
+    }
+
+    @Test
     public void testNullModelParameters_NoChange() {
         Map<String, String> params = new HashMap<>();
         params.put("_tools", TWO_TOOLS);

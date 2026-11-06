@@ -143,6 +143,18 @@ public class AnthropicMessagesModelProviderTest {
     }
 
     @Test
+    public void testCreateConnector_MaxTokensMustBePositiveInteger() {
+        assertEquals("512", provider.createConnector(MODEL_ID, null, Map.of("max_tokens", " 512 ")).getParameters().get("max_tokens"));
+        for (String maxTokens : new String[] { "100,\"tool_choice\":{\"type\":\"any\"}", "abc", "1.5", "0", "-1", "" }) {
+            assertThrows(
+                maxTokens,
+                IllegalArgumentException.class,
+                () -> provider.createConnector(MODEL_ID, null, Map.of("max_tokens", maxTokens))
+            );
+        }
+    }
+
+    @Test
     public void testCreateModelInput() {
         Connector connector = provider.createConnector(MODEL_ID, null, null);
 
@@ -289,6 +301,53 @@ public class AnthropicMessagesModelProviderTest {
     }
 
     @Test
+    public void testApplyPromptCache_FlagsChangedAfterRegistrationAreValidated() {
+        Connector connector = provider.createConnector(MODEL_ID, null, null);
+        Map<String, String> params = requestParams(connector, userMessages());
+        Map<String, String> changedParameters = Map
+            .of(
+                "tools_cache_enabled",
+                "true",
+                "system_prompt_cache_ttl",
+                "5m",
+                "messages_cache_enabled",
+                "true",
+                "messages_cache_ttl",
+                "1h"
+            );
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> provider.applyPromptCache(params, userMessages(), MLAgentType.CONVERSATIONAL_V2, changedParameters)
+        );
+        assertTrue(e.getMessage().contains("messages_cache_ttl"));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> provider.applyPromptCache(params, userMessages(), MLAgentType.CONVERSATIONAL_V2, Map.of("messages_cache_ttl", "2h"))
+        );
+    }
+
+    @Test
+    public void testApplyPromptCache_MessagesBreakpointSkipsDroppedLastMessage() {
+        Map<String, String> modelParameters = Map.of("messages_cache_enabled", "true");
+        Connector connector = provider.createConnector(MODEL_ID, null, modelParameters);
+        List<Message> messages = List.of(textMessage("user", "hello"), textMessage("assistant", " "));
+        Map<String, String> params = requestParams(connector, messages);
+        params.put("_tools", TWO_TOOLS);
+
+        provider.applyPromptCache(params, messages, MLAgentType.CONVERSATIONAL_V2, modelParameters);
+        String payload = connector.createPayload(ConnectorAction.ActionType.PREDICT.name(), params);
+        connector.validatePayload(payload);
+
+        List<Object> rendered = list(parse(payload).get("messages"));
+        assertEquals(1, rendered.size());
+        Map<String, Object> block = map(list(map(rendered.get(0)).get("content")).get(0));
+        assertEquals("hello", block.get("text"));
+        assertEquals(Map.of("type", "ephemeral"), block.get("cache_control"));
+        assertEquals(1, countOccurrences(payload, "cache_control"));
+    }
+
+    @Test
     public void testCreateConnector_InvalidCacheTtl() {
         Map<String, String> modelParameters = Map.of("system_prompt_cache_enabled", "true", "system_prompt_cache_ttl", "2h");
 
@@ -401,6 +460,40 @@ public class AnthropicMessagesModelProviderTest {
     }
 
     @Test
+    public void testMapMessages_ToolErrorRendersIsError() {
+        Message failed = toolResult("call_1", "Tool not found: x");
+        failed.setToolError(true);
+        List<Message> messages = List.of(failed, toolResult("call_2", "ok"));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL_V2).get("body");
+
+        List<Object> content = list(parse(body).get("content"));
+        assertEquals(
+            Map.of("type", "tool_result", "tool_use_id", "call_1", "content", "Tool not found: x", "is_error", true),
+            content.get(0)
+        );
+        assertFalse(map(content.get(1)).containsKey("is_error"));
+    }
+
+    @Test
+    public void testMapMessages_BlankTextBlocksAndEmptyMessagesAreDropped() {
+        Message emptyAssistant = new Message("assistant", List.of(textBlock(""), textBlock("  ")));
+        Message toolCallWithEmptyText = new Message("assistant", List.of(textBlock("")));
+        toolCallWithEmptyText.setToolCalls(List.of(new ToolCall("call_1", "function", new ToolCall.ToolFunction("search", "{}"))));
+        List<Message> messages = List.of(textMessage("user", "q"), emptyAssistant, toolCallWithEmptyText, new Message("user", null));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL_V2).get("body");
+
+        List<Object> rendered = list(StringUtils.gson.fromJson("[" + body + "]", List.class));
+        assertEquals(2, rendered.size());
+        List<Object> assistantContent = list(map(rendered.get(1)).get("content"));
+        assertEquals(1, assistantContent.size());
+        assertEquals("tool_use", map(assistantContent.get(0)).get("type"));
+        assertFalse(body.contains("\"text\":\"\""));
+        assertFalse(body.contains("\"content\":[]"));
+    }
+
+    @Test
     public void testToolInputJson_ArgumentsAreReserializedNotSpliced() {
         assertEquals("{}", AnthropicMessagesModelProvider.toolInputJson(null));
         assertEquals("{}", AnthropicMessagesModelProvider.toolInputJson(" "));
@@ -495,6 +588,33 @@ public class AnthropicMessagesModelProviderTest {
         Message emptyResult = provider.parseToUnifiedMessage(empty);
         assertEquals("t2", emptyResult.getToolCallId());
         assertNull(emptyResult.getContent());
+    }
+
+    @Test
+    public void testParseToUnifiedMessage_ToolResultIsError() {
+        String failed = "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\","
+            + "\"content\":\"boom\",\"is_error\":true}]}";
+        String succeeded = "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t2\","
+            + "\"content\":\"ok\",\"is_error\":false}]}";
+
+        Message failedMessage = provider.parseToUnifiedMessage(failed);
+
+        assertEquals(Boolean.TRUE, failedMessage.getToolError());
+        assertNull(provider.parseToUnifiedMessage(succeeded).getToolError());
+        assertEquals(parse(failed), parse(provider.mapMessages(List.of(failedMessage), MLAgentType.CONVERSATIONAL_V2).get("body")));
+    }
+
+    @Test
+    public void testParseToUnifiedMessage_BlankTextIsSkipped() {
+        String json = "{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"\"},"
+            + "{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"search\",\"input\":{}}]}";
+
+        Message message = provider.parseToUnifiedMessage(json);
+
+        assertNull(message.getContent());
+        assertEquals(1, message.getToolCalls().size());
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\" \"}]}"));
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"assistant\",\"content\":\" \"}"));
     }
 
     @Test

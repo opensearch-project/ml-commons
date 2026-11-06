@@ -171,7 +171,7 @@ public class AnthropicMessagesFunctionCalling implements FunctionCalling {
 
     private static Map<String, Object> toolResultBlock(String toolUseId, Map<String, Object> toolResult) {
         Object result = toolResult.get(TOOL_RESULT);
-        boolean isError = toolResult.containsKey(TOOL_ERROR);
+        boolean isError = Boolean.TRUE.equals(toolResult.get(TOOL_ERROR));
         Object content = result;
         if (result instanceof Map<?, ?> resultMap && resultMap.containsKey("text")) {
             content = resultMap.get("text");
@@ -228,27 +228,18 @@ public class AnthropicMessagesFunctionCalling implements FunctionCalling {
             Long outputTokens = AgentUtils.getLongValue(usageMap, "output_tokens");
             Long cacheReadTokens = AgentUtils.getLongValue(usageMap, "cache_read_input_tokens");
             Long cacheCreationTokens = AgentUtils.getLongValue(usageMap, "cache_creation_input_tokens");
+            Long cacheTokens = TokenUsage.addNullable(cacheReadTokens, cacheCreationTokens);
             return TokenUsage
                 .builder()
                 .inputTokens(inputTokens)
                 .outputTokens(outputTokens)
-                .totalTokens(sum(inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens))
+                .totalTokens(TokenUsage.addNullable(TokenUsage.addNullable(inputTokens, outputTokens), cacheTokens))
                 .cacheReadInputTokens(cacheReadTokens)
                 .cacheCreationInputTokens(cacheCreationTokens)
                 .build();
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private static Long sum(Long... values) {
-        Long total = null;
-        for (Long value : values) {
-            if (value != null) {
-                total = total == null ? value : total + value;
-            }
-        }
-        return total;
     }
 
     @Override

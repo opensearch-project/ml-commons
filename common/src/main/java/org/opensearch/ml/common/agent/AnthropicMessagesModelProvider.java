@@ -51,8 +51,8 @@ import org.opensearch.ml.common.utils.ToolUtils;
  *   <li>{@code mutual_tls_enabled} / {@code keystore_type}: client-certificate authentication, applied to the
  *       connector's client config. The certificate material goes in the credential
  *       ({@code client_cert_pem} and {@code client_key_pem}, or {@code client_cert_pkcs12}).</li>
- *   <li>{@code max_tokens} (default 4096), {@code temperature}, {@code top_p}. When {@code top_p} is set,
- *       {@code temperature} is not sent, because recent Claude models reject both together.</li>
+ *   <li>{@code max_tokens} (a positive integer, default 4096), {@code temperature}, {@code top_p}. When
+ *       {@code top_p} is set, {@code temperature} is not sent, because recent Claude models reject both together.</li>
  *   <li>Prompt caching flags, see {@link PromptCacheSettings}. Breakpoints are sent as
  *       {@code cache_control: {"type": "ephemeral"}}, with a {@code ttl} when it isn't the default 5m.</li>
  * </ul>
@@ -73,6 +73,7 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
     public static final String API_KEY_CREDENTIAL_PLACEHOLDER = "${credential.anthropic_api_key}";
 
     private static final String TOOLS_PARAMETER = "_tools";
+    private static final String MAX_TOKENS_PARAMETER = "max_tokens";
     private static final String BODY_PARAMETER = "body";
 
     // The default system prompt matters: a direct _predict against the auto-created model runs without an
@@ -121,6 +122,10 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
             return parameters;
         }
         parameters.putAll(modelParameters);
+        if (modelParameters.containsKey(MAX_TOKENS_PARAMETER)) {
+            String maxTokens = validatePositiveIntegerParameter(modelParameters.get(MAX_TOKENS_PARAMETER), MAX_TOKENS_PARAMETER);
+            parameters.put(MAX_TOKENS_PARAMETER, maxTokens);
+        }
         if (modelParameters.containsKey("top_p")) {
             String topP = validateNumericParameter(modelParameters.get("top_p"), "top_p");
             parameters.put("top_p_field", ",\"top_p\":" + topP);
@@ -174,8 +179,9 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
     }
 
     /**
-     * Validates the cache TTLs at registration rather than on the first request. The tools and system
-     * breakpoints default to 1h here.
+     * Validates the cache TTLs and their order. The tools and system breakpoints default to 1h here.
+     * Runs at registration and again on every request, because the agent's model parameters can change
+     * after the connector is created.
      */
     private static void validatePromptCacheSettings(Map<String, String> modelParameters) {
         PromptCacheSettings.validateTtlOrder(modelParameters, PromptCacheSettings.DEFAULT_SYSTEM_PROMPT_CACHE_TTL);
@@ -221,6 +227,8 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
     /**
      * Adds {@code cache_control} to the last tool definition and to the last content block of the last
      * message, each when its flag is set.
+     *
+     * @throws IllegalArgumentException if a cache TTL is invalid or a 1h breakpoint would follow a 5m one
      */
     @Override
     public void applyPromptCache(
@@ -229,6 +237,7 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
         MLAgentType type,
         Map<String, String> modelParameters
     ) {
+        validatePromptCacheSettings(modelParameters);
         String tools = llmParams.get(TOOLS_PARAMETER);
         if (PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.TOOLS_CACHE_ENABLED) && tools != null) {
             String trimmedTools = tools.strip();
@@ -288,14 +297,35 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
     /**
      * Renders messages as Anthropic messages. Consecutive tool results are merged into one user message,
      * because Anthropic expects every result for an assistant turn's tool calls in the next user message.
+     * Messages without any content block are left out, because Anthropic rejects empty content.
      *
-     * @param lastBlockCacheControl a cache_control value for the last block of the last message, or null
+     * @param lastBlockCacheControl a cache_control value for the last block of the last rendered message, or null
      */
     private String buildMessagesArray(List<Message> messages, MLAgentType type, String lastBlockCacheControl) {
-        if (messages == null || messages.isEmpty()) {
-            return "";
+        List<MessageBlocks> messageBlocks = collectMessageBlocks(messages, type);
+        if (lastBlockCacheControl != null && !messageBlocks.isEmpty()) {
+            List<String> lastBlocks = messageBlocks.get(messageBlocks.size() - 1).blocks();
+            int last = lastBlocks.size() - 1;
+            lastBlocks.set(last, withCacheControl(lastBlocks.get(last), lastBlockCacheControl));
         }
         List<String> renderedMessages = new ArrayList<>();
+        for (MessageBlocks message : messageBlocks) {
+            renderedMessages.add(renderMessage(message.role(), message.blocks()));
+        }
+        return String.join(",", renderedMessages);
+    }
+
+    /**
+     * A message's role and its rendered content blocks, never empty.
+     */
+    private record MessageBlocks(String role, List<String> blocks) {
+    }
+
+    private List<MessageBlocks> collectMessageBlocks(List<Message> messages, MLAgentType type) {
+        List<MessageBlocks> messageBlocks = new ArrayList<>();
+        if (messages == null) {
+            return messageBlocks;
+        }
         for (int i = 0; i < messages.size(); i++) {
             Message message = messages.get(i);
             List<String> blocks = new ArrayList<>();
@@ -311,13 +341,11 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
                 blocks.addAll(buildContentBlocks(message.getContent(), type));
                 blocks.addAll(toolUseBlocks(message));
             }
-            if (lastBlockCacheControl != null && i == messages.size() - 1 && !blocks.isEmpty()) {
-                int last = blocks.size() - 1;
-                blocks.set(last, withCacheControl(blocks.get(last), lastBlockCacheControl));
+            if (!blocks.isEmpty()) {
+                messageBlocks.add(new MessageBlocks(role, blocks));
             }
-            renderedMessages.add(renderMessage(role, blocks));
         }
-        return String.join(",", renderedMessages);
+        return messageBlocks;
     }
 
     private static boolean isToolResult(Message message) {
@@ -381,7 +409,9 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
             + StringEscapeUtils.escapeJson(message.getToolCallId())
             + "\",\"content\":\""
             + StringEscapeUtils.escapeJson(text)
-            + "\"}";
+            + "\""
+            + (Boolean.TRUE.equals(message.getToolError()) ? ",\"is_error\":true" : "")
+            + "}";
     }
 
     /**
@@ -395,15 +425,15 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
         }
         for (ContentBlock block : contentBlocks) {
             switch (block.getType()) {
-                case TEXT -> blocks
-                    .add(
+                case TEXT -> {
+                    if (type == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
                         // ToDo: Remove workaround after PER supports messages format
-                        textBlock(
-                            type == MLAgentType.PLAN_EXECUTE_AND_REFLECT
-                                ? "${parameters.prompt}"
-                                : StringEscapeUtils.escapeJson(block.getText())
-                        )
-                    );
+                        blocks.add(textBlock("${parameters.prompt}"));
+                    } else if (!isBlank(block.getText())) {
+                        // Anthropic rejects empty text blocks, so blank text is left out
+                        blocks.add(textBlock(StringEscapeUtils.escapeJson(block.getText())));
+                    }
+                }
                 case IMAGE -> blocks.add(imageBlock(block.getImage()));
                 case DOCUMENT -> blocks.add(documentBlock(block.getDocument()));
                 case VIDEO -> throw new IllegalArgumentException("Video content is not supported in Anthropic Messages API");
@@ -472,9 +502,10 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
         List<ContentBlock> textBlocks = new ArrayList<>();
         List<ToolCall> toolCalls = new ArrayList<>();
         String toolCallId = null;
+        boolean toolError = false;
 
         Object content = parsed.get("content");
-        if (content instanceof String text && !text.isEmpty()) {
+        if (content instanceof String text && !text.isBlank()) {
             textBlocks.add(textContent(text));
         } else if (content instanceof List) {
             for (Object item : (List<Object>) content) {
@@ -483,7 +514,7 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
                 }
                 Map<String, Object> block = (Map<String, Object>) item;
                 String blockType = String.valueOf(block.get("type"));
-                if ("text".equals(blockType) && block.get("text") != null) {
+                if ("text".equals(blockType) && !isBlank(block.get("text"))) {
                     textBlocks.add(textContent(String.valueOf(block.get("text"))));
                 } else if ("tool_use".equals(blockType)) {
                     toolCalls.add(toToolCall(block));
@@ -497,8 +528,9 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
                     // Anthropic sends tool results as role=user; map to role=tool for the unified format
                     role = "tool";
                     toolCallId = String.valueOf(block.getOrDefault("tool_use_id", ""));
+                    toolError = Boolean.TRUE.equals(block.get("is_error"));
                     String resultText = toolResultText(block.get("content"));
-                    if (!resultText.isEmpty()) {
+                    if (!resultText.isBlank()) {
                         textBlocks.add(textContent(resultText));
                     }
                 }
@@ -517,7 +549,14 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
         if (toolCallId != null) {
             message.setToolCallId(toolCallId);
         }
+        if (toolError) {
+            message.setToolError(true);
+        }
         return message;
+    }
+
+    private static boolean isBlank(Object text) {
+        return text == null || String.valueOf(text).isBlank();
     }
 
     private static ContentBlock textContent(String text) {

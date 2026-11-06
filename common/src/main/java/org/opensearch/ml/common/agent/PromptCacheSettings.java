@@ -15,15 +15,22 @@ import java.util.Set;
  * built in the order tools, system prompt, messages, so a breakpoint covers everything before it.
  * <ul>
  *   <li>{@code system_prompt_cache_enabled} (default {@code false}): breakpoint after the system prompt.
- *       {@code system_prompt_cache_type} (default {@code default}) and {@code system_prompt_cache_ttl}
- *       (default {@code 1h}) refine it.</li>
+ *       {@code system_prompt_cache_ttl} refines it. When it isn't set, Anthropic Messages applies
+ *       {@code 1h}; Bedrock Converse omits the TTL and Bedrock applies {@code 5m}.
+ *       {@code system_prompt_cache_type} (default {@code default}) is the Bedrock {@code cachePoint} type,
+ *       used for every Bedrock breakpoint; Anthropic always sends {@code ephemeral}.
+ *       This breakpoint is built into the connector when the agent's model is created, so changing
+ *       {@code system_prompt_cache_enabled}, {@code system_prompt_cache_ttl} or
+ *       {@code system_prompt_cache_type} afterwards takes effect only once the model is re-created or updated.</li>
  *   <li>{@code tools_cache_enabled} (default {@code false}): breakpoint after the last tool definition.
- *       It uses the system prompt TTL, because the tools come first in the prefix and a provider may
- *       reject a longer-lived breakpoint that follows a shorter-lived one.</li>
+ *       It uses the system prompt TTL and its per-provider default, because the tools come first in the
+ *       prefix and a provider may reject a longer-lived breakpoint that follows a shorter-lived one.</li>
  *   <li>{@code messages_cache_enabled} (default {@code false}): breakpoint at the end of the conversation.
  *       {@code messages_cache_ttl} (default {@code 5m}) refines it.</li>
  * </ul>
- * Each provider renders the breakpoints in its own format; with every flag off the request is unchanged.
+ * The tools and messages flags are read on every request. The TTL order is checked when the model is
+ * created and again on every request. Each provider renders the breakpoints in its own format; with every
+ * flag off the request is unchanged.
  */
 public final class PromptCacheSettings {
 
@@ -49,15 +56,6 @@ public final class PromptCacheSettings {
      */
     public static boolean isEnabled(Map<String, String> modelParameters, String flag) {
         return modelParameters != null && Boolean.parseBoolean(modelParameters.get(flag));
-    }
-
-    /**
-     * @return true when any of the three cache breakpoints is enabled
-     */
-    public static boolean isAnyEnabled(Map<String, String> modelParameters) {
-        return isEnabled(modelParameters, SYSTEM_PROMPT_CACHE_ENABLED)
-            || isEnabled(modelParameters, TOOLS_CACHE_ENABLED)
-            || isEnabled(modelParameters, MESSAGES_CACHE_ENABLED);
     }
 
     /**
@@ -102,7 +100,8 @@ public final class PromptCacheSettings {
      *
      * @param defaultPrefixTtl the TTL the provider applies to the tools and system breakpoints when
      *                         {@code system_prompt_cache_ttl} isn't set
-     * @throws IllegalArgumentException if a TTL is invalid or the order is
+     * @throws IllegalArgumentException if a TTL is not one of "5m" and "1h", or if a 1h messages breakpoint
+     *                                  follows a 5m tools or system breakpoint
      */
     public static void validateTtlOrder(Map<String, String> modelParameters, String defaultPrefixTtl) {
         String prefixTtl = ttl(modelParameters, SYSTEM_PROMPT_CACHE_TTL, defaultPrefixTtl);

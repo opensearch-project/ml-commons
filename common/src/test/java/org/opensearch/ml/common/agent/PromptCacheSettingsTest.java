@@ -26,13 +26,6 @@ public class PromptCacheSettingsTest {
     }
 
     @Test
-    public void testIsAnyEnabled() {
-        assertTrue(PromptCacheSettings.isAnyEnabled(Map.of("messages_cache_enabled", "true")));
-        assertFalse(PromptCacheSettings.isAnyEnabled(Map.of("system_prompt_cache_enabled", "false")));
-        assertFalse(PromptCacheSettings.isAnyEnabled(null));
-    }
-
-    @Test
     public void testTtl() {
         assertEquals("1h", PromptCacheSettings.ttl(null, PromptCacheSettings.MESSAGES_CACHE_TTL, "1h"));
         assertEquals("5m", PromptCacheSettings.ttl(Map.of("messages_cache_ttl", " 5m "), PromptCacheSettings.MESSAGES_CACHE_TTL, "1h"));
@@ -74,6 +67,15 @@ public class PromptCacheSettingsTest {
         // With no system TTL set, the provider's default for the earlier breakpoints decides.
         assertThrows(IllegalArgumentException.class, () -> PromptCacheSettings.validateTtlOrder(toolsThenMessages, "5m"));
         PromptCacheSettings.validateTtlOrder(toolsThenMessages, "1h");
+    }
+
+    @Test
+    public void testValidateTtlOrder_RejectsInvalidTtlEvenWhenBreakpointsAreOff() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> PromptCacheSettings.validateTtlOrder(Map.of("system_prompt_cache_ttl", "1d"), "1h")
+        );
+        assertTrue(e.getMessage().contains("system_prompt_cache_ttl"));
     }
 
     @Test

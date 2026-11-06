@@ -96,8 +96,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
-        // cachePoint omits the TTL unless it's set, and Bedrock then applies 5m.
-        PromptCacheSettings.validateTtlOrder(modelParameters, PromptCacheSettings.TTL_5_MINUTES);
+        validatePromptCacheSettings(modelParameters);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("region", DEFAULT_REGION); // Default region, can be overridden
         parameters.put("service_name", "bedrock");
@@ -151,6 +150,15 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     /**
+     * Validates the cache TTLs and their order. A cachePoint omits the TTL unless it's set, and Bedrock then
+     * applies 5m. Runs at registration and again on every request, because the agent's model parameters can
+     * change after the connector is created.
+     */
+    private static void validatePromptCacheSettings(Map<String, String> modelParameters) {
+        PromptCacheSettings.validateTtlOrder(modelParameters, PromptCacheSettings.TTL_5_MINUTES);
+    }
+
+    /**
      * Returns the request body template, with a cache point after the system prompt when
      * {@code system_prompt_cache_enabled} is set. Without it the template is unchanged.
      */
@@ -180,7 +188,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     /**
      * Adds a cache point after the last tool in {@code toolConfig.tools} and at the end of the last
-     * message's content, each when its flag is set.
+     * message's content, each when its flag is set. Every cache point uses {@code system_prompt_cache_type}.
+     *
+     * @throws IllegalArgumentException if a cache TTL is invalid or a 1h breakpoint would follow a 5m one
      */
     @Override
     public void applyPromptCache(
@@ -189,16 +199,18 @@ public class BedrockConverseModelProvider extends ModelProvider {
         MLAgentType type,
         Map<String, String> modelParameters
     ) {
+        validatePromptCacheSettings(modelParameters);
+        String cacheType = PromptCacheSettings.systemPromptCacheType(modelParameters);
         String tools = llmParams.get(TOOLS_PARAMETER);
         if (PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.TOOLS_CACHE_ENABLED) && tools != null && !tools.isBlank()) {
             String ttl = PromptCacheSettings.explicitTtl(modelParameters, PromptCacheSettings.SYSTEM_PROMPT_CACHE_TTL);
-            llmParams.put(TOOLS_PARAMETER, tools + ", " + cachePointBlock(PromptCacheSettings.DEFAULT_SYSTEM_PROMPT_CACHE_TYPE, ttl));
+            llmParams.put(TOOLS_PARAMETER, tools + ", " + cachePointBlock(cacheType, ttl));
         }
         if (PromptCacheSettings.isEnabled(modelParameters, PromptCacheSettings.MESSAGES_CACHE_ENABLED)
             && messages != null
             && !messages.isEmpty()) {
             String ttl = PromptCacheSettings.explicitTtl(modelParameters, PromptCacheSettings.MESSAGES_CACHE_TTL);
-            String cachePoint = cachePointBlock(PromptCacheSettings.DEFAULT_SYSTEM_PROMPT_CACHE_TYPE, ttl);
+            String cachePoint = cachePointBlock(cacheType, ttl);
             llmParams.put("body", buildMessagesArray(messages, type, cachePoint));
         }
     }

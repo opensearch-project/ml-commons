@@ -43,6 +43,30 @@ public abstract class ModelProvider {
     }
 
     /**
+     * Validates that a parameter value is a positive integer, for values placed unquoted into a request
+     * body template. Surrounding whitespace is ignored.
+     *
+     * @param value the parameter value to validate
+     * @param paramName the parameter name (for error messages)
+     * @return the validated value, trimmed
+     * @throws IllegalArgumentException if the value is not a positive integer
+     */
+    protected static String validatePositiveIntegerParameter(String value, String paramName) {
+        if (value == null) {
+            throw new IllegalArgumentException(paramName + " must not be null");
+        }
+        String trimmed = value.trim();
+        try {
+            if (Integer.parseInt(trimmed) > 0) {
+                return trimmed;
+            }
+        } catch (NumberFormatException e) {
+            // Falls through to the error below
+        }
+        throw new IllegalArgumentException(paramName + " must be a positive integer, got: " + value);
+    }
+
+    /**
      * Creates a connector for this model provider
      * @param modelName the model name (e.g., "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
      * @param credential credential map for the connector
@@ -115,9 +139,10 @@ public abstract class ModelProvider {
     /**
      * Adds prompt-cache breakpoints after the tool definitions and at the end of the conversation, when
      * the agent's model parameters enable them (see {@link org.opensearch.ml.common.agent.PromptCacheSettings}).
-     * V2 agent runners call this once the request parameters hold the mapped messages ({@code body}) and the
-     * rendered tools ({@code _tools}). The breakpoint after the system prompt is part of the connector's
-     * request template instead, because it does not change between requests.
+     * V2 agent runners call this on every request, once the request parameters hold the mapped messages
+     * ({@code body}) and the rendered tools ({@code _tools}); implementations check each flag themselves.
+     * The breakpoint after the system prompt is part of the connector's request template instead, because it
+     * does not change between requests.
      *
      * The default does nothing, for providers that don't support explicit cache breakpoints.
      *
