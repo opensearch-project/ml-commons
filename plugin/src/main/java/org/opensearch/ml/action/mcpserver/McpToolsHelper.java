@@ -138,33 +138,24 @@ public class McpToolsHelper {
             ActionListener<List<McpToolRegisterInput>> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<SearchResponse> actionListener = ActionListener.wrap(r -> {
                 List<McpToolRegisterInput> mcpTools = new ArrayList<>();
-                List<IOException> errors = new ArrayList<>();
 
+                // Leniency is intentional and confined to this serving read path; write paths remain strict.
                 Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                     try {
                         McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                         mcpTools.add(mcpTool);
-                    } catch (IOException e) {
-                        errors.add(e); // Collect the error instead of calling listener.onFailure
+                    } catch (IOException | RuntimeException e) {
+                        log
+                            .error(
+                                "Skipping MCP tool document that failed to parse in index [{}]: {}",
+                                MLIndex.MCP_TOOLS.getIndexName(),
+                                x.getId(),
+                                e
+                            );
                     }
                 });
 
-                if (!errors.isEmpty()) {
-                    // Create a composite exception with all errors
-                    String errorMessage = String
-                        .format("Failed to parse %d out of %d MCP tools", errors.size(), r.getHits().getHits().length);
-                    OpenSearchException compositeException = new OpenSearchException(errorMessage);
-
-                    // Add all errors as suppressed exceptions
-                    for (IOException error : errors) {
-                        compositeException.addSuppressed(error);
-                    }
-
-                    log.error("Multiple parsing errors occurred: {}", errorMessage);
-                    restoreListener.onFailure(compositeException);
-                } else {
-                    restoreListener.onResponse(mcpTools);
-                }
+                restoreListener.onResponse(mcpTools);
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
                     restoreListener.onResponse(new ArrayList<>());
