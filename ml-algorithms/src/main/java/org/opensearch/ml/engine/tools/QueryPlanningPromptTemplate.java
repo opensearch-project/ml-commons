@@ -222,6 +222,7 @@ public class QueryPlanningPromptTemplate {
         + TEMPLATE_USE_INSTRUCTIONS;
 
     public static final String DEFAULT_QUERY_PLANNING_USER_PROMPT = "Question: ${parameters.question}\n"
+        + "Index: ${parameters.index_name}\n"
         + "Mapping: ${parameters.index_mapping:-}\n"
         + "Query Fields: ${parameters.query_fields:-}\n"
         + "Sample Document from index:${parameters.sample_document:-}\n"

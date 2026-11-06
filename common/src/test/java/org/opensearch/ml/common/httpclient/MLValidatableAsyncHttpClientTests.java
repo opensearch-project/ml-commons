@@ -316,4 +316,54 @@ public class MLValidatableAsyncHttpClientTests {
         );
         client.validate("http://10.0.0.1", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
     }
+
+    private static MLValidatableAsyncHttpClient trustingPrivate(String... patterns) {
+        return new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            Arrays.stream(patterns).map(Pattern::compile).collect(java.util.stream.Collectors.toList()),
+            Collections.emptyList()
+        );
+    }
+
+    @Test
+    public void test_trustedPrivateEndpoint_matchesCanonicalForm() throws Exception {
+        MLValidatableAsyncHttpClient client = trustingPrivate("^http://10\\.0\\.0\\.1/v1/.*$");
+        client.validate("http://10.0.0.1/v1/chat", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
+        client.validate("HTTP://10.0.0.1/v1/chat", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
+    }
+
+    @Test
+    public void test_trustedPrivateEndpoint_rejectsUserInfoFragmentAndUnparseable() {
+        MLValidatableAsyncHttpClient client = trustingPrivate("^https?://.*$");
+        String message = "Connector URL is not matching the trusted connector private endpoint regex";
+        for (String endpoint : new String[] { "http://user@10.0.0.1/v1", "http://10.0.0.1/v1#frag", "http://10.0.0.1/a b" }) {
+            IllegalArgumentException e = assertThrows(
+                endpoint,
+                IllegalArgumentException.class,
+                () -> client.validate(endpoint, HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED)
+            );
+            assertEquals(message, e.getMessage());
+        }
+    }
+
+    @Test
+    public void test_trustedPrivateEndpoint_publicHostNotParsed() throws Exception {
+        // Public hosts skip the private-endpoint list entirely, even when the endpoint string would not parse.
+        MLValidatableAsyncHttpClient client = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_DISABLED,
+            Arrays.asList(Pattern.compile("^http://10\\..*$")),
+            Collections.emptyList()
+        );
+        client.validate("http://177.16.0.1/a b", HTTP, "177.16.0.1", 80, PRIVATE_IP_DISABLED);
+    }
+
+    @Test
+    public void test_trustedPrivateEndpoint_hostWildcardPatternStillAdmitsPathTrick() throws Exception {
+        // A '.*' in the host position spans into the path even on the canonical form; the settings validator
+        // warns about such patterns (see MLCommonsSettingsTests). Documented here so the behaviour is explicit.
+        MLValidatableAsyncHttpClient client = trustingPrivate("^https://.*\\.internal\\.example/.*$");
+        client.validate("https://127.0.0.1/x.internal.example/y", HTTPS, "127.0.0.1", 443, PRIVATE_IP_ENABLED);
+    }
 }
