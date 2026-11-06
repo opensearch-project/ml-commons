@@ -4277,4 +4277,9 @@ public class AgentUtilsTest extends MLStaticMockBase {
                 )
         );
     }
+
+    @Test
+    public void testRootCauseMessage_Null() {
+        assertEquals("unknown error", AgentUtils.rootCauseMessage(null));
+    }
 }

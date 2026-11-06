@@ -165,7 +165,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         if (result.getFailedConnectors().isEmpty()) {
             return null;
         }
-        String failures = describeFailures(result.getFailedConnectors());
+        String failures = describeFailures(result.getFailedConnectors(), true);
         if (result.allConnectorsFailed() && noOtherTools) {
             log
                 .error(
@@ -173,8 +173,10 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                     agentId,
                     failures
                 );
+            // Only exception types reach the caller: the messages can name internal hosts. The log above has them.
             return new OpenSearchStatusException(
-                "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: " + failures,
+                "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: "
+                    + describeFailures(result.getFailedConnectors(), false),
                 RestStatus.BAD_GATEWAY
             );
         }
@@ -189,12 +191,23 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         return null;
     }
 
-    private static String describeFailures(Map<String, String> failedConnectors) {
+    /**
+     * "id (cause)" per failed connector, sorted by id.
+     *
+     * @param withMessages true for the full "ExceptionType: message" cause, false for the exception type only
+     */
+    private static String describeFailures(Map<String, String> failedConnectors, boolean withMessages) {
         return new TreeMap<>(failedConnectors)
             .entrySet()
             .stream()
-            .map(entry -> entry.getKey() + " (" + entry.getValue() + ")")
+            .map(entry -> entry.getKey() + " (" + (withMessages ? entry.getValue() : exceptionType(entry.getValue())) + ")")
             .collect(Collectors.joining(", "));
+    }
+
+    /** The exception type from an {@code AgentUtils.rootCauseMessage} string, without its message. */
+    private static String exceptionType(String rootCauseMessage) {
+        int colon = rootCauseMessage.indexOf(':');
+        return colon < 0 ? rootCauseMessage : rootCauseMessage.substring(0, colon);
     }
 
     /**

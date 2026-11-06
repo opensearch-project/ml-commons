@@ -14,6 +14,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -448,9 +453,34 @@ public class MLChatAgentRunnerV2Test {
         assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) e).status());
         assertEquals(
             "None of the agent's MCP connectors could be loaded, and it has no other tools. "
-                + "Failed connectors: c1 (ConnectException: Connection refused), c2 (SocketTimeoutException)",
+                + "Failed connectors: c1 (ConnectException), c2 (SocketTimeoutException)",
             e.getMessage()
         );
+    }
+
+    @Test
+    public void testMcpLoadFailure_ExceptionMessagesAreLoggedButNotReturned() {
+        List<String> logged = new ArrayList<>();
+        AbstractAppender appender = new AbstractAppender("McpLoadFailureAppender", null, PatternLayout.createDefaultLayout(), false) {
+            @Override
+            public void append(LogEvent event) {
+                logged.add(event.getMessage().getFormattedMessage());
+            }
+        };
+        appender.start();
+        Logger logger = (Logger) LogManager.getLogger(MLChatAgentRunnerV2.class);
+        logger.addAppender(appender);
+        try {
+            Exception e = runner
+                .mcpLoadFailure(mcpResult(1, Map.of("c1", "UnknownHostException: internal-host.example"), List.of()), true, "a");
+
+            assertTrue(e.getMessage().endsWith("Failed connectors: c1 (UnknownHostException)"));
+            assertFalse(e.getMessage().contains("internal-host.example"));
+            assertTrue(logged.stream().anyMatch(line -> line.contains("c1 (UnknownHostException: internal-host.example)")));
+        } finally {
+            logger.removeAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test
@@ -486,7 +516,8 @@ public class MLChatAgentRunnerV2Test {
 
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
-        assertTrue(failure.getValue().getMessage().contains("c1 (ConnectException: Connection refused)"));
+        assertTrue(failure.getValue().getMessage().contains("c1 (ConnectException)"));
+        assertFalse(failure.getValue().getMessage().contains("Connection refused"));
         verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
         verify(listener, never()).onResponse(any());
     }

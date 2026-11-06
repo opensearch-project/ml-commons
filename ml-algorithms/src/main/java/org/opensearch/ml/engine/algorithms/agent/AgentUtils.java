@@ -919,7 +919,7 @@ public class AgentUtils {
         loadMcpToolSpecs(mlAgent, client, sdkClient, encryptor, true, listener);
     }
 
-    /** Tools loaded from an agent's MCP connectors, plus the connectors that failed (id to cause). */
+    /** Tools loaded from an agent's MCP connectors, plus the connectors that failed (id to {@code rootCauseMessage} of the cause). */
     @Getter
     @AllArgsConstructor
     public static class McpToolLoadResult {
@@ -1063,6 +1063,9 @@ public class AgentUtils {
      * cause. A refused connection's innermost cause is often a bare ClosedChannelException.
      */
     static String rootCauseMessage(Throwable t) {
+        if (t == null) {
+            return "unknown error";
+        }
         Throwable chosen = null;
         Throwable cause = t;
         while (true) {
