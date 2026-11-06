@@ -516,7 +516,19 @@ public class MLModelManager {
 
                                 sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
                                     if (ut == null) {
-                                        indexRemoteModel(sdkClient, mlRegisterModelInput, mlTask, updatedVersion + "", listener);
+                                        // Handle exceptions explicitly, since the CompletableFuture would swallow them.
+                                        try {
+                                            indexRemoteModel(sdkClient, mlRegisterModelInput, mlTask, updatedVersion + "", listener);
+                                        } catch (Exception e) {
+                                            log.error("Failed to index remote model", e);
+                                            handleException(
+                                                mlRegisterModelInput.getFunctionName(),
+                                                mlTask.getTaskId(),
+                                                mlRegisterModelInput.getTenantId(),
+                                                e
+                                            );
+                                            listener.onFailure(e);
+                                        }
                                     } else {
                                         Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
                                         log.error("Failed to update model group {}", modelGroupId, e);
@@ -541,6 +553,8 @@ public class MLModelManager {
                             listener.onFailure(new MLResourceNotFoundException("Model Group Response is empty for " + modelGroupId));
                         }
                     } catch (Exception e) {
+                        log.error("Failed to register remote model", e);
+                        handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), mlRegisterModelInput.getTenantId(), e);
                         listener.onFailure(e);
                     }
                 } else {
@@ -686,6 +700,7 @@ public class MLModelManager {
                     performIndexRemoteModel(sdkClient, registerModelInput, mlTask, modelVersion, listener);
                 }, e -> {
                     log.error("Failed to encrypt credentials in connector", e);
+                    handleException(mlTask.getFunctionName(), mlTask.getTaskId(), registerModelInput.getTenantId(), e);
                     listener.onFailure(e);
                 });
                 registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId(), encryptSuccessfulListener);
@@ -710,7 +725,9 @@ public class MLModelManager {
             Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
                 if (!boolResponse) {
-                    listener.onFailure(new RuntimeException("No response to create ML Model index"));
+                    Exception e = new RuntimeException("No response to create ML Model index");
+                    handleException(functionName, taskId, registerModelInput.getTenantId(), e);
+                    listener.onFailure(e);
                     return;
                 }
                 MLModel mlModelMeta = MLModel
