@@ -94,7 +94,19 @@ public class CommonValue {
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
 
     // Resource type used in resource-access-control
+    /**
+     * Model groups were the shareable unit before models became shareable in their own right. Share models instead.
+     * This registration stays until group-derived access is removed, which is gated on a shipped migration path
+     * (ml-commons issue 5107). See docs/model_access_control.md.
+     */
     public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
+    public static final String ML_MODEL_RESOURCE_TYPE = "ml-model";
+    /**
+     * Field stamped on model metadata documents to mark them as resources. Model chunks share
+     * {@link #ML_MODEL_INDEX} but are not resources, and the resource-sharing framework has no way to skip a
+     * document other than failing to resolve its type — so only the metadata document carries this field.
+     */
+    public static final String RESOURCE_TYPE_FIELD = "resource_type";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");

@@ -451,10 +451,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
@@ -483,10 +483,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     public void testDoExecute_modelAccessControl_notEnabled() {
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(false);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         MLUndeployModelsResponse mlUndeployModelsResponse = new MLUndeployModelsResponse(mock(MLUndeployModelNodesResponse.class));
         doAnswer(invocation -> {
@@ -501,10 +501,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_validate_false() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLUndeployModelsResponse> listener = invocation.getArgument(2);

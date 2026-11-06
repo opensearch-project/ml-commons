@@ -247,10 +247,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("testModelID"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -337,10 +337,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -362,10 +362,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(4);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -391,10 +391,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -422,10 +422,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(7);
+            ActionListener<Boolean> listener = invocation.getArgument(8);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
