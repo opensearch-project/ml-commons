@@ -56,7 +56,7 @@ public class MLValidatableAsyncHttpClientTests {
             IllegalArgumentException.class,
             () -> validatingHttpClient.validate("http://127.0.0.1", HTTP, "169.254.0.1", 80, PRIVATE_IP_DISABLED)
         );
-        assertEquals("Remote inference host name has private ip address: 169.254.0.1", e3.getMessage());
+        assertEquals("Remote inference host name has restricted ip address: 169.254.0.1", e3.getMessage());
 
         IllegalArgumentException e4 = assertThrows(
             IllegalArgumentException.class,
@@ -315,6 +315,132 @@ public class MLValidatableAsyncHttpClientTests {
             null
         );
         client.validate("http://10.0.0.1", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
+    }
+
+    private static final String[] IPV6_PRIVATE = { "fd00::1", "fc00::1", "fec0::1", "::1" };
+    private static final String[] ALWAYS_BLOCKED = {
+        "fe80::1",
+        "fd00:ec2::254",
+        "fd00:ec2::253",
+        "169.254.169.254",
+        "169.254.1.1",
+        "::",
+        "0.0.0.0" };
+
+    private static String url(String ip) {
+        return ip.indexOf(':') >= 0 ? "http://[" + ip + "]/" : "http://" + ip + "/";
+    }
+
+    @Test
+    public void test_ipv6PrivateRanges_rejectedWhenPrivateIpDisabled() {
+        for (String ip : IPV6_PRIVATE) {
+            IllegalArgumentException e = assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
+            );
+            assertEquals("Remote inference host name has private ip address: " + ip, e.getMessage());
+            // bracketed literal, as the SDK hands it over
+            assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, "[" + ip + "]", 80, PRIVATE_IP_DISABLED)
+            );
+        }
+    }
+
+    @Test
+    public void test_ipv6PrivateRanges_allowedWhenPrivateIpEnabled() throws Exception {
+        for (String ip : IPV6_PRIVATE) {
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED);
+        }
+    }
+
+    @Test
+    public void test_linkLocalAndMetadata_rejectedRegardlessOfPrivateIpEnabled() {
+        for (String ip : ALWAYS_BLOCKED) {
+            for (boolean enabled : new boolean[] { PRIVATE_IP_DISABLED, PRIVATE_IP_ENABLED }) {
+                IllegalArgumentException e = assertThrows(
+                    ip,
+                    IllegalArgumentException.class,
+                    () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, enabled)
+                );
+                assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void test_embeddedIpv4_classifiedByEmbeddedAddress() throws Exception {
+        for (String ip : new String[] { "::10.0.0.1", "64:ff9b::10.0.0.1", "64:ff9b:1::10.0.0.1", "::ffff:127.0.0.1" }) {
+            assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
+            );
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED);
+        }
+        for (String ip : new String[] { "64:ff9b::169.254.169.254", "::169.254.169.254" }) {
+            IllegalArgumentException e = assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED)
+            );
+            assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
+        }
+        validatingHttpClient.validate(url("64:ff9b::203.0.113.1"), HTTP, "64:ff9b::203.0.113.1", 80, PRIVATE_IP_DISABLED);
+    }
+
+    @Test
+    public void test_publicAddresses_allowedWhenPrivateIpDisabled() throws Exception {
+        for (String ip : new String[] { "2001:db8::1", "2606:4700::1111", "203.0.113.1", "64:ff9b:2::10.0.0.1" }) {
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED);
+        }
+    }
+
+    @Test
+    public void test_classify_takesStrictestClassAcrossResolvedAddresses() throws Exception {
+        java.net.InetAddress pub = java.net.InetAddress.getByName("203.0.113.1");
+        java.net.InetAddress ula = java.net.InetAddress.getByName("fd00::1");
+        java.net.InetAddress link = java.net.InetAddress.getByName("fe80::1");
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.PUBLIC,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { pub })
+        );
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.PRIVATE,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { pub, ula })
+        );
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.BLOCKED,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { ula, link, pub })
+        );
+    }
+
+    @Test
+    public void test_ipv6UniqueLocal_subjectToPrivateEndpointAllowlist() throws Exception {
+        trustingPrivate("^http://\\[fd00::1\\]/.*$").validate("http://[fd00::1]/predict", HTTP, "fd00::1", 80, PRIVATE_IP_ENABLED);
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> trustingPrivate("^http://10\\.0\\.0\\.1/.*$")
+                .validate("http://[fd00::1]/predict", HTTP, "fd00::1", 80, PRIVATE_IP_ENABLED)
+        );
+        assertEquals("Connector URL is not matching the trusted connector private endpoint regex", e.getMessage());
+    }
+
+    @Test
+    public void test_restrictedPattern_stillCheckedFirstForIpv6() {
+        MLValidatableAsyncHttpClient client = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            Collections.emptyList(),
+            Collections.singletonList(Pattern.compile("fd00:1:.*"))
+        );
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> client.validate("http://[fd00:1::5]/", HTTP, "fd00:1::5", 80, PRIVATE_IP_ENABLED)
+        );
+        assertEquals("Remote inference host name has restricted ip address: fd00:1::5", e.getMessage());
     }
 
     private static MLValidatableAsyncHttpClient trustingPrivate(String... patterns) {

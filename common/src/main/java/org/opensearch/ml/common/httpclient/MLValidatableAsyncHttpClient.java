@@ -92,7 +92,7 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
 
     private void validateIp(String endpoint, String hostName, boolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
-        boolean hasPrivateIpAddress = hasPrivateIpAddress(addresses);
+        AddressClass addressClass = classify(addresses);
 
         if (connectorRestrictedIpPatterns != null && !connectorRestrictedIpPatterns.isEmpty()) {
             boolean hasRestrictedAddress = Arrays
@@ -106,6 +106,12 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
             }
         }
 
+        if (addressClass == AddressClass.BLOCKED) {
+            log.error("Remote inference host name has restricted ip address: {}", hostName);
+            throw new IllegalArgumentException("Remote inference host name has restricted ip address: " + hostName);
+        }
+
+        boolean hasPrivateIpAddress = addressClass == AddressClass.PRIVATE;
         if (!connectorPrivateIpEnabled && hasPrivateIpAddress) {
             log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
@@ -138,30 +144,126 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         return Connector.canonicalUrl(uri);
     }
 
-    private boolean hasPrivateIpAddress(InetAddress[] ipAddress) {
-        for (InetAddress ip : ipAddress) {
-            if (ip instanceof Inet4Address) {
-                byte[] bytes = ip.getAddress();
-                if (bytes.length != 4) {
-                    return true;
-                } else {
-                    if (isPrivateIPv4(bytes)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
+    /**
+     * How a resolved address is treated. {@code BLOCKED} addresses are refused regardless of
+     * {@code connector.private_ip_enabled}: link-local ranges, the unspecified address and the EC2 instance-service
+     * prefix that carries the IPv6 metadata endpoint. {@code PRIVATE} addresses need that setting and, when one is
+     * configured, a match in {@code trusted_connector_private_endpoints_regex}.
+     */
+    enum AddressClass {
+        PUBLIC,
+        PRIVATE,
+        BLOCKED
     }
 
-    private boolean isPrivateIPv4(byte[] bytes) {
+    /** The strictest class among the resolved addresses. */
+    static AddressClass classify(InetAddress[] addresses) {
+        AddressClass strictest = AddressClass.PUBLIC;
+        for (InetAddress address : addresses) {
+            AddressClass current = classify(address);
+            if (current.ordinal() > strictest.ordinal()) {
+                strictest = current;
+            }
+        }
+        return strictest;
+    }
+
+    static AddressClass classify(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        if (address instanceof Inet4Address) {
+            return classifyIpv4(bytes);
+        }
+        if (bytes.length != 16) {
+            return AddressClass.BLOCKED;
+        }
+        AddressClass ipv6Class = classifyIpv6(bytes);
+        // ::a.b.c.d and the NAT64 prefixes carry an IPv4 address that the network may deliver to; the stricter of
+        // the two classifications wins. ::ffff:a.b.c.d never gets here: the JDK returns it as an Inet4Address.
+        byte[] embedded = embeddedIpv4(bytes);
+        if (embedded != null) {
+            AddressClass ipv4Class = classifyIpv4(embedded);
+            return ipv4Class.ordinal() > ipv6Class.ordinal() ? ipv4Class : ipv6Class;
+        }
+        return ipv6Class;
+    }
+
+    private static AddressClass classifyIpv4(byte[] bytes) {
+        if (bytes.length != 4) {
+            return AddressClass.BLOCKED;
+        }
         int first = bytes[0] & 0xff;
         int second = bytes[1] & 0xff;
+        if (first == 0 && second == 0 && bytes[2] == 0 && bytes[3] == 0) {
+            return AddressClass.BLOCKED; // 0.0.0.0
+        }
+        if (first == 169 && second == 254) {
+            return AddressClass.BLOCKED; // link-local, including the instance metadata service
+        }
+        if (first == 127 || first == 10 || (first == 172 && second >= 16 && second <= 31) || (first == 192 && second == 168)) {
+            return AddressClass.PRIVATE;
+        }
+        return AddressClass.PUBLIC;
+    }
 
-        // 127.0.0.1, 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x
-        return (first == 10)
-            || (first == 172 && second >= 16 && second <= 31)
-            || (first == 192 && second == 168)
-            || (first == 169 && second == 254);
+    private static AddressClass classifyIpv6(byte[] bytes) {
+        int first = bytes[0] & 0xff;
+        int second = bytes[1] & 0xff;
+        boolean leadingZero = true;
+        for (int i = 0; i < 15; i++) {
+            if (bytes[i] != 0) {
+                leadingZero = false;
+                break;
+            }
+        }
+        if (leadingZero && bytes[15] == 0) {
+            return AddressClass.BLOCKED; // ::
+        }
+        if (leadingZero && bytes[15] == 1) {
+            return AddressClass.PRIVATE; // ::1
+        }
+        if (first == 0xfe && (second & 0xc0) == 0x80) {
+            return AddressClass.BLOCKED; // fe80::/10 link-local
+        }
+        if (first == 0xfe && (second & 0xc0) == 0xc0) {
+            return AddressClass.PRIVATE; // fec0::/10, deprecated site-local
+        }
+        if ((first & 0xfe) == 0xfc) {
+            // fc00::/7 unique-local. fd00:ec2::/32 is the EC2 instance-service prefix (metadata at fd00:ec2::254).
+            if (first == 0xfd && second == 0x00 && (bytes[2] & 0xff) == 0x0e && (bytes[3] & 0xff) == 0xc2) {
+                return AddressClass.BLOCKED;
+            }
+            return AddressClass.PRIVATE;
+        }
+        return AddressClass.PUBLIC;
+    }
+
+    /** The IPv4 address embedded in an IPv4-compatible (::a.b.c.d) or NAT64 (64:ff9b::/96, 64:ff9b:1::/48) address, or null. */
+    private static byte[] embeddedIpv4(byte[] bytes) {
+        boolean compatible = true;
+        for (int i = 0; i < 12; i++) {
+            if (bytes[i] != 0) {
+                compatible = false;
+                break;
+            }
+        }
+        if (compatible) {
+            boolean unspecifiedOrLoopback = bytes[12] == 0 && bytes[13] == 0 && bytes[14] == 0 && (bytes[15] == 0 || bytes[15] == 1);
+            return unspecifiedOrLoopback ? null : Arrays.copyOfRange(bytes, 12, 16);
+        }
+        boolean nat64Prefix = bytes[0] == 0x00 && (bytes[1] & 0xff) == 0x64 && (bytes[2] & 0xff) == 0xff && (bytes[3] & 0xff) == 0x9b;
+        if (nat64Prefix) {
+            boolean wellKnown = true;
+            for (int i = 4; i < 12; i++) {
+                if (bytes[i] != 0) {
+                    wellKnown = false;
+                    break;
+                }
+            }
+            boolean localUse = bytes[4] == 0x00 && bytes[5] == 0x01;
+            if (wellKnown || localUse) {
+                return Arrays.copyOfRange(bytes, 12, 16);
+            }
+        }
+        return null;
     }
 }
