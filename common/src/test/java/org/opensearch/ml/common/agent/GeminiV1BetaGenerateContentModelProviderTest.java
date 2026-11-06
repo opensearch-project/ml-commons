@@ -987,6 +987,31 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
     }
 
     @Test
+    public void testParse_FunctionCallWithoutANameIsSkipped() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":[{\"text\":\"Checking.\"},"
+                    + "{\"functionCall\":{\"args\":{\"q\":\"x\"}}},"
+                    + "{\"functionCall\":{\"name\":\" \",\"args\":{}}},"
+                    + "{\"functionCall\":{\"name\":\"a\",\"args\":{}}}]}"
+            );
+        assertEquals(1, message.getToolCalls().size());
+        assertEquals("a", message.getToolCalls().get(0).getId());
+        assertEquals("a", message.getToolCalls().get(0).getFunction().getName());
+        // A reply holding only a nameless call has nothing usable in it.
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"args\":{}}}]}"));
+    }
+
+    @Test
+    public void testParse_FunctionResponseWithoutANameHasNoToolCallId() {
+        Message message = provider
+            .parseToUnifiedMessage("{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"response\":{\"text\":\"green\"}}}]}");
+        assertEquals("tool", message.getRole());
+        assertNull(message.getToolCallId());
+        assertEquals("green", message.getContent().get(0).getText());
+    }
+
+    @Test
     public void testParse_EmptyContentIsNull() {
         assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\",\"parts\":[]}"));
         assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\"}"));

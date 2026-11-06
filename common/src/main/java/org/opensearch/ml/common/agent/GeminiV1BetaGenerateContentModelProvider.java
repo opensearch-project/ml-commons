@@ -35,6 +35,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 
+import lombok.extern.log4j.Log4j2;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -57,6 +58,7 @@ import tools.jackson.databind.JsonNode;
  * All parameters consistently use the ${parameters.} prefix for uniformity.
  */
 // todo: refactor the processing so providers have to only provide the constants
+@Log4j2
 public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE =
@@ -342,12 +344,17 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         if (arguments == null || arguments.isBlank()) {
             return StringUtils.MAPPER.createObjectNode();
         }
+        // The arguments can hold user data, so only their length is logged.
         try {
             JsonNode parsed = StringUtils.MAPPER.readTree(arguments);
-            return parsed != null && parsed.isObject() ? parsed : StringUtils.MAPPER.createObjectNode();
+            if (parsed != null && parsed.isObject()) {
+                return parsed;
+            }
+            log.warn("Tool call arguments are not a JSON object; sending empty args to Gemini. length={}", arguments.length());
         } catch (Exception e) {
-            return StringUtils.MAPPER.createObjectNode();
+            log.warn("Tool call arguments are not valid JSON; sending empty args to Gemini. length={}", arguments.length());
         }
+        return StringUtils.MAPPER.createObjectNode();
     }
 
     /**
@@ -462,7 +469,11 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                 continue;
             }
             if (part.get("functionCall") instanceof Map<?, ?> functionCall) {
-                String name = String.valueOf(functionCall.get("name"));
+                // The name is both the call id and the function to run, so a call without one can't be used.
+                if (!(functionCall.get("name") instanceof String name) || name.isBlank()) {
+                    log.warn("Skipping a Gemini functionCall part that has no function name");
+                    continue;
+                }
                 Object args = functionCall.get("args");
                 String arguments = args == null ? "{}" : StringUtils.toJson(args);
                 Object signature = part.get(THOUGHT_SIGNATURE_FIELD);
@@ -515,7 +526,9 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         block.setText(text);
         Message message = new Message();
         message.setRole(TOOL_ROLE);
-        message.setToolCallId(String.valueOf(functionResponse.get("name")));
+        if (functionResponse.get("name") instanceof String name && !name.isBlank()) {
+            message.setToolCallId(name);
+        }
         message.setContent(List.of(block));
         return message;
     }
