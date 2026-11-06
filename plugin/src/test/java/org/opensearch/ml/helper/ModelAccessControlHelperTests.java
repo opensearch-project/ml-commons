@@ -325,6 +325,122 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertFalse(argumentCaptor.getValue());
     }
 
+    // Model groups created before access control was enabled have no owner. They must stay public by default,
+    // but an explicitly set private/restricted access mode must be enforced.
+    public void test_OwnerlessModelGroupWithoutAccess_AllowsNonOwner() throws IOException, InterruptedException {
+        setupModelGroup(null, null, null);
+        User user = User.parse("user|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_OwnerlessPublicModelGroup_AllowsNonOwner() throws IOException, InterruptedException {
+        setupModelGroup(null, AccessMode.PUBLIC.getValue(), null);
+        User user = User.parse("user|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_OwnerlessPrivateModelGroup_DeniesNonOwner() throws IOException, InterruptedException {
+        setupModelGroup(null, AccessMode.PRIVATE.getValue(), null);
+        User user = User.parse("user|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertFalse(argumentCaptor.getValue());
+    }
+
+    public void test_OwnerlessPrivateModelGroup_AllowsAdmin() throws IOException, InterruptedException {
+        setupModelGroup(null, AccessMode.PRIVATE.getValue(), null);
+        User user = User.parse("admin|IT,HR|all_access");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_OwnerlessRestrictedModelGroup_MatchingBackendRole() throws IOException, InterruptedException {
+        setupModelGroup(null, AccessMode.RESTRICTED.getValue(), Arrays.asList("IT"));
+        User user = User.parse("user|IT|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_OwnerlessRestrictedModelGroup_NonMatchingBackendRole() throws IOException, InterruptedException {
+        setupModelGroup(null, AccessMode.RESTRICTED.getValue(), Arrays.asList("IT"));
+        User user = User.parse("user|Finance|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertFalse(argumentCaptor.getValue());
+    }
+
     public void test_SkipModelAccessControl() {
         User admin = User.parse("owner|IT,HR|all_access");
         User user = User.parse("owner|IT,HR|myTenant");
