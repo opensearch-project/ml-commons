@@ -26,6 +26,7 @@ import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
 public class GeminiV1BetaGenerateContentModelProviderTest {
@@ -906,5 +907,215 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
             assertTrue(e.getMessage().contains("top_p"));
             assertTrue(e.getMessage().contains("must be a valid number"));
         }
+    }
+
+    // ==================== parseToUnifiedMessage(s): Gemini replies and tool results ====================
+
+    @Test
+    public void testParse_TextReply() {
+        Message message = provider.parseToUnifiedMessage("{\"role\":\"model\",\"parts\":[{\"text\":\"The cluster is green.\"}]}");
+        assertEquals("assistant", message.getRole());
+        assertEquals("The cluster is green.", message.getContent().get(0).getText());
+        assertNull(message.getToolCalls());
+    }
+
+    @Test
+    public void testParse_ThoughtSummaryPartsAreSkipped() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":[{\"text\":\"Let me think...\",\"thought\":true},{\"text\":\"Answer.\"}]}"
+            );
+        assertEquals(1, message.getContent().size());
+        assertEquals("Answer.", message.getContent().get(0).getText());
+    }
+
+    @Test
+    public void testParse_FunctionCallKeepsItsThoughtSignature() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":[{\"text\":\"Checking.\"},"
+                    + "{\"functionCall\":{\"name\":\"ClusterHealthTool\",\"args\":{\"index\":\"orders\"}},\"thoughtSignature\":\"c2lnLTE=\"}]}"
+            );
+        assertEquals("assistant", message.getRole());
+        assertEquals("Checking.", message.getContent().get(0).getText());
+        ToolCall call = message.getToolCalls().get(0);
+        assertEquals("ClusterHealthTool", call.getId());
+        assertEquals("ClusterHealthTool", call.getFunction().getName());
+        assertEquals("{\"index\":\"orders\"}", call.getFunction().getArguments());
+        assertEquals("c2lnLTE=", call.getThoughtSignature());
+    }
+
+    @Test
+    public void testParse_ParallelFunctionCallsOnlyTheFirstCarriesASignature() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":["
+                    + "{\"functionCall\":{\"name\":\"a\",\"args\":{}},\"thoughtSignature\":\"sig\"},"
+                    + "{\"functionCall\":{\"name\":\"b\"}}]}"
+            );
+        assertEquals(2, message.getToolCalls().size());
+        assertEquals("sig", message.getToolCalls().get(0).getThoughtSignature());
+        assertNull(message.getToolCalls().get(1).getThoughtSignature());
+        assertEquals("{}", message.getToolCalls().get(1).getFunction().getArguments());
+    }
+
+    @Test
+    public void testParse_FunctionResponseBecomesAToolMessage() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"ClusterHealthTool\",\"response\":{\"text\":\"green\"}}}]}"
+            );
+        assertEquals("tool", message.getRole());
+        assertEquals("ClusterHealthTool", message.getToolCallId());
+        assertEquals("green", message.getContent().get(0).getText());
+    }
+
+    @Test
+    public void testParseMessages_KeepsEveryResultOfParallelCalls() {
+        List<Message> messages = provider
+            .parseToUnifiedMessages(
+                "{\"role\":\"user\",\"parts\":["
+                    + "{\"functionResponse\":{\"name\":\"a\",\"response\":{\"text\":\"one\"}}},"
+                    + "{\"functionResponse\":{\"name\":\"b\",\"response\":{\"error\":\"Tool not found: b\"}}}]}"
+            );
+        assertEquals(2, messages.size());
+        assertEquals("a", messages.get(0).getToolCallId());
+        assertEquals("one", messages.get(0).getContent().get(0).getText());
+        assertEquals("b", messages.get(1).getToolCallId());
+        // A non-text response is kept as JSON rather than dropped.
+        assertEquals("{\"error\":\"Tool not found: b\"}", messages.get(1).getContent().get(0).getText());
+    }
+
+    @Test
+    public void testParse_FunctionCallWithoutANameIsSkipped() {
+        Message message = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":[{\"text\":\"Checking.\"},"
+                    + "{\"functionCall\":{\"args\":{\"q\":\"x\"}}},"
+                    + "{\"functionCall\":{\"name\":\" \",\"args\":{}}},"
+                    + "{\"functionCall\":{\"name\":\"a\",\"args\":{}}}]}"
+            );
+        assertEquals(1, message.getToolCalls().size());
+        assertEquals("a", message.getToolCalls().get(0).getId());
+        assertEquals("a", message.getToolCalls().get(0).getFunction().getName());
+        // A reply holding only a nameless call has nothing usable in it.
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"args\":{}}}]}"));
+    }
+
+    @Test
+    public void testParse_FunctionResponseWithoutANameHasNoToolCallId() {
+        Message message = provider
+            .parseToUnifiedMessage("{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"response\":{\"text\":\"green\"}}}]}");
+        assertEquals("tool", message.getRole());
+        assertNull(message.getToolCallId());
+        assertEquals("green", message.getContent().get(0).getText());
+    }
+
+    @Test
+    public void testParse_EmptyContentIsNull() {
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\",\"parts\":[]}"));
+        assertNull(provider.parseToUnifiedMessage("{\"role\":\"model\"}"));
+        assertTrue(provider.parseToUnifiedMessages("{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]}").isEmpty());
+    }
+
+    // ==================== mapMessages: sending tool calls and results back ====================
+
+    private static Message text(String role, String text) {
+        ContentBlock block = new ContentBlock();
+        block.setType(ContentType.TEXT);
+        block.setText(text);
+        Message message = new Message();
+        message.setRole(role);
+        message.setContent(List.of(block));
+        return message;
+    }
+
+    private static Message toolResult(String name, String text) {
+        Message message = text("tool", text);
+        message.setToolCallId(name);
+        return message;
+    }
+
+    @Test
+    public void testMapMessages_ToolCallsAndResultsRoundTrip() {
+        Message assistant = text("assistant", "Checking.");
+        assistant
+            .setToolCalls(
+                List
+                    .of(
+                        new ToolCall("a", "function", new ToolCall.ToolFunction("a", "{\"x\":1}"), "sig-a"),
+                        new ToolCall("b", "function", new ToolCall.ToolFunction("b", null))
+                    )
+            );
+        List<Message> messages = List.of(text("user", "Is it healthy?"), assistant, toolResult("a", "green"), toolResult("b", "ok"));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL).get("body");
+
+        assertEquals(
+            "{\"role\":\"user\",\"parts\":[{\"text\":\"Is it healthy?\"}]},"
+                + "{\"role\":\"model\",\"parts\":[{\"text\":\"Checking.\"},"
+                + "{\"functionCall\":{\"name\":\"a\",\"args\":{\"x\":1}},\"thoughtSignature\":\"sig-a\"},"
+                + "{\"functionCall\":{\"name\":\"b\",\"args\":{}}}]},"
+                + "{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"a\",\"response\":{\"text\":\"green\"}}},"
+                + "{\"functionResponse\":{\"name\":\"b\",\"response\":{\"text\":\"ok\"}}}]}",
+            body
+        );
+    }
+
+    @Test
+    public void testMapMessages_ToolResultTextIsEscaped() {
+        String body = provider.mapMessages(List.of(toolResult("a", "say \"hi\"\nnow")), MLAgentType.CONVERSATIONAL).get("body");
+        assertTrue(body.contains("\"response\":{\"text\":\"say \\\"hi\\\"\\nnow\"}"));
+    }
+
+    @Test
+    public void testMapMessages_ParseThenMapPreservesTheSignature() {
+        Message parsed = provider
+            .parseToUnifiedMessage(
+                "{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"t\",\"args\":{\"q\":\"x\"}},\"thoughtSignature\":\"opaque==\"}]}"
+            );
+        String body = provider.mapMessages(List.of(parsed), MLAgentType.CONVERSATIONAL).get("body");
+        assertTrue(body.contains("\"thoughtSignature\":\"opaque==\""));
+        assertTrue(body.contains("\"functionCall\":{\"name\":\"t\",\"args\":{\"q\":\"x\"}}"));
+    }
+
+    @Test
+    public void testMapMessages_ResultFromAnotherProviderUsesTheCallsFunctionName() {
+        Message assistant = text("assistant", "");
+        assistant.setToolCalls(List.of(new ToolCall("call_abc123", "function", new ToolCall.ToolFunction("ClusterHealthTool", "{}"))));
+        List<Message> messages = List.of(text("user", "health?"), assistant, toolResult("call_abc123", "green"));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL).get("body");
+
+        assertTrue(body.contains("{\"functionResponse\":{\"name\":\"ClusterHealthTool\",\"response\":{\"text\":\"green\"}}}"));
+    }
+
+    @Test
+    public void testMapMessages_ResultWithoutAnIdIsMatchedByPosition() {
+        Message assistant = text("assistant", "");
+        assistant
+            .setToolCalls(
+                List
+                    .of(
+                        new ToolCall("1", "function", new ToolCall.ToolFunction("first", "{}")),
+                        new ToolCall("2", "function", new ToolCall.ToolFunction("second", "{}"))
+                    )
+            );
+        List<Message> messages = List.of(text("user", "go"), assistant, toolResult(null, "one"), toolResult(null, "two"));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL).get("body");
+
+        assertFalse(body.contains("\"name\":null"));
+        assertTrue(body.contains("\"name\":\"first\",\"response\":{\"text\":\"one\"}"));
+        assertTrue(body.contains("\"name\":\"second\",\"response\":{\"text\":\"two\"}"));
+    }
+
+    @Test
+    public void testMapMessages_ResultWithNothingToMatchFailsClearly() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> provider.mapMessages(List.of(text("user", "go"), toolResult(null, "orphan")), MLAgentType.CONVERSATIONAL)
+        );
+        assertTrue(e.getMessage().contains("no tool_call_id"));
     }
 }

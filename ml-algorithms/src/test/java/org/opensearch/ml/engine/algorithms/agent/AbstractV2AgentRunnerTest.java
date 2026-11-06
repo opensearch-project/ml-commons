@@ -117,6 +117,8 @@ public class AbstractV2AgentRunnerTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        // parseToUnifiedMessages is concrete: let it delegate to the stubbed parseToUnifiedMessage, as in production.
+        when(modelProvider.parseToUnifiedMessages(anyString())).thenCallRealMethod();
         settings = Settings.builder().build();  // Create real Settings instance - cannot mock final class
         runner = new TestV2AgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
     }
