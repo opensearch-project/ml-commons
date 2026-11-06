@@ -666,6 +666,8 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         final Map<String, DiscoveryNode> dataNodes = Collections.unmodifiableMap(Map.of("dataNodeId", mock(DiscoveryNode.class)));
         when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
         when(discoveryNodes.getSize()).thenReturn(2); // a ml node join cluster.
+        // auto redeploy runs on the elected cluster manager, and stops when this node is no longer it
+        when(discoveryNodes.isLocalNodeElectedClusterManager()).thenReturn(true);
         when(clusterState.nodes()).thenReturn(discoveryNodes);
         when(clusterService.state()).thenReturn(clusterState);
     }
@@ -729,16 +731,16 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         // m1 is taken from the queue and its deploy request is in flight; m2 waits for it
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
         verify(client, times(1)).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
-        assertEquals(Set.of("m2"), mlModelAutoReDeployer.getQueuedModelIds());
+        assertEquals(Set.of("m1", "m2"), mlModelAutoReDeployer.getQueuedModelIds());
 
-        // m1's task timed out and nothing advanced the queue: m2 stops being protected
+        // m1's deploy request was never answered (stale after 10 min) and nothing advanced the queue: neither is protected
         now[0] += 2 * 600_000L + 1;
         assertEquals(Set.of(), mlModelAutoReDeployer.getQueuedModelIds());
 
-        // disabling auto redeploy empties the queue
+        // disabling auto redeploy empties the queue; m1's deploy request was already sent
         now[0] = 1_000_000L;
         clusterSettings.applySettings(Settings.builder().put(settings).put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), false).build());
-        assertEquals(Set.of(), mlModelAutoReDeployer.getQueuedModelIds());
+        assertEquals(Set.of("m1"), mlModelAutoReDeployer.getQueuedModelIds());
     }
 
     public void test_getQueuedModelIds_takingTheNextModelCountsAsProgress() throws Exception {
@@ -768,7 +770,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         now[0] += stall - 1_000;
         mlModelAutoReDeployer.redeployAModel(); // m1's deploy completed: m2 is taken
         now[0] += 2_000; // past the bound counted from the fill, within it counted from taking m2
-        assertEquals(Set.of("m3"), mlModelAutoReDeployer.getQueuedModelIds());
+        assertEquals("m2 in flight, m3 still queued", Set.of("m2", "m3"), mlModelAutoReDeployer.getQueuedModelIds());
     }
 
     public void test_getQueuedModelIds_stallBoundFollowsTheLiveTaskTimeout() throws Exception {
@@ -816,9 +818,10 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
                     .put(org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.getKey(), 60)
                     .build()
             );
+        // m1's unanswered deploy request is reported until it goes stale (10 min), independently of the queue
         now[0] = 1_000_000L + 2 * 60_000L - 1;
-        assertEquals(Set.of("m2"), mlModelAutoReDeployer.getQueuedModelIds());
+        assertEquals(Set.of("m1", "m2"), mlModelAutoReDeployer.getQueuedModelIds());
         now[0] += 2;
-        assertEquals(Set.of(), mlModelAutoReDeployer.getQueuedModelIds());
+        assertEquals(Set.of("m1"), mlModelAutoReDeployer.getQueuedModelIds());
     }
 }
