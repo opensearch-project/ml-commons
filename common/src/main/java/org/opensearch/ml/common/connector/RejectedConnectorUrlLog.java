@@ -5,37 +5,40 @@
 
 package org.opensearch.ml.common.connector;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Locale;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-/** Logs connector URLs rejected by {@link Connector#validateResolvedEndpoint} in a form that is safe to write to a log. */
+/**
+ * Logs connector URLs rejected by {@link Connector#validateResolvedEndpoint}. Only the scheme, the host and the
+ * length are written: user information, path, query and fragment can carry secrets.
+ */
 final class RejectedConnectorUrlLog {
-    static final int MAX_LOGGED_LENGTH = 512;
     private static final Logger LOGGER = LogManager.getLogger(Connector.class);
 
     private RejectedConnectorUrlLog() {}
 
     static void warn(String resolvedUrl) {
-        LOGGER.warn("Rejected connector URL: {}", sanitize(resolvedUrl));
+        LOGGER.warn("Rejected connector URL: {}", describe(resolvedUrl));
     }
 
-    /** Drops query and fragment, replaces control characters and caps the length. */
-    static String sanitize(String resolvedUrl) {
-        int cut = resolvedUrl.length();
-        int query = resolvedUrl.indexOf('?');
-        int fragment = resolvedUrl.indexOf('#');
-        if (query >= 0) {
-            cut = Math.min(cut, query);
+    /** "scheme://host (length N)" when the URL parses with a scheme and host, otherwise "unparseable (length N)". */
+    static String describe(String resolvedUrl) {
+        if (resolvedUrl == null) {
+            return "null";
         }
-        if (fragment >= 0) {
-            cut = Math.min(cut, fragment);
+        String length = " (length " + resolvedUrl.length() + ")";
+        try {
+            URI uri = new URI(resolvedUrl);
+            if (uri.getScheme() != null && uri.getHost() != null) {
+                return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + uri.getHost().toLowerCase(Locale.ROOT) + length;
+            }
+        } catch (URISyntaxException e) {
+            // fall through
         }
-        cut = Math.min(cut, MAX_LOGGED_LENGTH);
-        StringBuilder sanitized = new StringBuilder(cut);
-        for (int i = 0; i < cut; i++) {
-            char c = resolvedUrl.charAt(i);
-            sanitized.append(c < 0x20 || c == 0x7f ? '?' : c);
-        }
-        return sanitized.toString();
+        return "unparseable" + length;
     }
 }
