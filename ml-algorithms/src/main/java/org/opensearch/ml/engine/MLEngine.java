@@ -78,7 +78,7 @@ public class MLEngine {
     }
 
     public Path getRegisterModelPath(String modelId, String modelName, String version) {
-        return getRegisterModelPath(modelId).resolve(version).resolve(modelName);
+        return resolveWithin(getRegisterModelRootPath(), modelId, version, modelName);
     }
 
     public Path getRegisterModelPath(String modelId) {
@@ -94,7 +94,7 @@ public class MLEngine {
     }
 
     public String getDeployModelZipPath(String modelId, String modelName) {
-        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER).resolve(modelId).resolve(modelName) + ".zip";
+        return resolveWithin(getDeployModelRootPath(), modelId, modelName) + ".zip";
     }
 
     public Path getDeployModelRootPath() {
@@ -106,7 +106,7 @@ public class MLEngine {
     }
 
     public Path getModelCachePath(String modelId, String modelName, String version) {
-        return getModelCachePath(modelId).resolve(version).resolve(modelName);
+        return resolveWithin(getModelCacheRootPath(), modelId, version, modelName);
     }
 
     public Path getModelCachePath(String modelId) {
@@ -119,6 +119,33 @@ public class MLEngine {
 
     public Path getAnalysisRootPath() {
         return mlModelsCachePath.resolve(ANALYSIS_FOLDER);
+    }
+
+    /**
+     * Resolve relative components under {@code root}. An absolute component replaces the parent in
+     * {@link Path#resolve}, and a component containing {@code ..} can leave {@code root} after normalization.
+     * Both are rejected so a model name or version cannot select a directory outside the cache.
+     */
+    private Path resolveWithin(Path root, String... components) {
+        Path resolved = root;
+        for (String component : components) {
+            if (component == null || component.isBlank()) {
+                throw new IllegalArgumentException("Model path component must not be empty");
+            }
+            // Use the cache path's own filesystem. Integ tests install a Lucene mock
+            // filesystem, and Path.of() would create a default-provider path that cannot
+            // be resolved against that root.
+            Path componentPath = root.getFileSystem().getPath(component);
+            if (componentPath.isAbsolute()) {
+                throw new IllegalArgumentException("Model path component must be a relative path inside the cache directory");
+            }
+            resolved = resolved.resolve(component);
+        }
+        Path normalized = resolved.normalize();
+        if (!normalized.startsWith(root.normalize())) {
+            throw new IllegalArgumentException("Model path must stay inside the cache directory");
+        }
+        return normalized;
     }
 
     public MLModel train(Input input) {
