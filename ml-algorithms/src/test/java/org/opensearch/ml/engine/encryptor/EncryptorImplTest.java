@@ -1260,6 +1260,74 @@ public class EncryptorImplTest {
         Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
     }
 
+    @Test
+    public void clusterChanged_ConfigIndexCreationAppliedDuringFetch_KeepsFetchedMasterKey() throws IOException {
+        // Another node created the config index; this node's request sees it and reads the key before this node's
+        // listener sees the creation (none -> new). The key belongs to that index, so it must not be discarded.
+        mockInitMLConfigIndexSucceeds();
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            encryptor.clusterChanged(configIndexChange(null, "uuid-created"));
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Assert.assertNotNull(MLTestHelper.encryptCredentials(List.of("test"), null, encryptor));
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexCreationAppliedDuringKeyCreation_KeepsCreatedMasterKey() throws IOException {
+        // As above, on the path that creates the key because the new index has none yet.
+        mockInitMLConfigIndexSucceeds();
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        GetResponse getResponse = prepareNotExistsGetResponse();
+        doAnswer(invocation -> {
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        IndexResponse indexResponse = prepareIndexResponse();
+        doAnswer(invocation -> {
+            encryptor.clusterChanged(configIndexChange(null, "uuid-created"));
+            ((ActionListener<IndexResponse>) invocation.getArgument(1)).onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        Assert.assertNotNull(MLTestHelper.encryptCredentials(List.of("test"), null, encryptor));
+        Assert.assertNotNull(encryptor.getMasterKey(null));
+    }
+
+    @Test
+    public void clusterChanged_ConfigIndexReplacedBeforeWaitingRequestReadsKey_FailsWithNotReady() throws IOException {
+        // A second request waits for the first one's fetch. The index is replaced after the fetched key is cached but
+        // before the second request reads it from the cache: it must get the retryable "not ready" error, not an NPE.
+        mockInitMLConfigIndexSucceeds();
+        EncryptorImpl encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        GetResponse response = prepareMLConfigResponse(null);
+        AtomicReference<Exception> waitingRequestFailure = new AtomicReference<>();
+        doAnswer(invocation -> {
+            encryptor
+                .encrypt(
+                    List.of("second"),
+                    null,
+                    ActionListener.wrap(r -> Assert.fail("expected the waiting request to fail"), waitingRequestFailure::set)
+                );
+            ((ActionListener<GetResponse>) invocation.getArgument(1)).onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        AtomicReference<List<String>> firstResult = new AtomicReference<>();
+
+        encryptor.encrypt(List.of("first"), null, ActionListener.wrap(r -> {
+            firstResult.set(r);
+            encryptor.clusterChanged(configIndexChange("uuid-before-restore", "uuid-after-restore"));
+        }, e -> Assert.fail("unexpected failure: " + e)));
+
+        Assert.assertNotNull(firstResult.get());
+        Assert.assertTrue(waitingRequestFailure.get() instanceof ResourceNotFoundException);
+        Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, waitingRequestFailure.get().getMessage());
+    }
+
     private void mockInitMLConfigIndexSucceeds() {
         doAnswer(invocation -> {
             ((ActionListener<Boolean>) invocation.getArgument(0)).onResponse(true);
