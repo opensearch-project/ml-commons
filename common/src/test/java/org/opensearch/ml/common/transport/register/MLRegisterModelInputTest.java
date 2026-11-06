@@ -273,6 +273,22 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
+    public void parse_WithRemoteModel_MissingSpaceType_Rejected() throws Exception {
+        // Registration keeps the space_type requirement; only reading stored documents back is lenient (issue #4999).
+        String remoteModelInput = "{"
+            + "\"function_name\": \"remote\","
+            + "\"model_config\": {"
+            + "\"model_type\": \"text_embedding\","
+            + "\"embedding_dimension\": 768,"
+            + "\"framework_type\": \"SENTENCE_TRANSFORMERS\""
+            + "}}";
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Space type must be provided in additional_config for remote text embedding model");
+        testParseFromJsonString("remoteModelName", "1.0", true, remoteModelInput, parsedInput -> {});
+    }
+
+    @Test
     public void parse_WithBaseModel() throws Exception {
         String baseModelInput = "{"
             + "\"function_name\": \"SPARSE_ENCODING\","
