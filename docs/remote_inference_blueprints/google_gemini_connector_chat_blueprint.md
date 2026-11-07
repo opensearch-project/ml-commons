@@ -1,6 +1,8 @@
 # Google Gemini Connector Blueprint for Chat
 
-This blueprint connects a Google Gemini chat model to your OpenSearch cluster using the [Gemini API](https://ai.google.dev/api/generate-content). You will need a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey).
+This blueprint connects a Google Gemini chat model to your OpenSearch cluster using the [Gemini API](https://ai.google.dev/api/generate-content) (`generativelanguage.googleapis.com`) with an API key from [Google AI Studio](https://aistudio.google.com/apikey).
+
+For GCP Vertex AI Gemini (`generateContent` with the `google_cloud` protocol), use the [Vertex AI Gemini blueprint](gcp_vertexai_gemini_blueprint.md) instead.
 
 > **Note:** `supports_structured_output: true` enables JSON schema enforcement for agentic memory fact extraction. See [connector action parameters](../tutorials/remote_inference.md#connector) for details.
 
@@ -20,6 +22,8 @@ PUT /_cluster/settings
 ## 2. Create connector
 
 The Gemini API uses `contents` (not `messages`) with `role` and `parts`. `generationConfig` is optional and can be passed per-request if needed.
+
+> **Note:** The API key must be sent as the `x-goog-api-key` header rather than a `?key=` query parameter. `${credential.*}` substitution is only applied to headers, not to the action `url`, so a credential placeholder left in the URL will not be resolved at request time.
 
 ```json
 POST /_plugins/_ml/connectors/_create
