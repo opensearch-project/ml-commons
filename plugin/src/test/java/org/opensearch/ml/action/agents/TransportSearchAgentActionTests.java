@@ -34,6 +34,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.internal.InternalSearchResponse;
@@ -316,5 +317,41 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         // Execute the action
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_AllowsQueryScopedTermsAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder().aggregation(AggregationBuilders.terms("by_type").field("type"));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest("my_index").source(source), null);
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(requestCaptor.capture(), any());
+
+        transportSearchAgentAction.doExecute(null, request, actionListener);
+
+        verify(client, times(1)).search(any(), any());
+        SearchRequest actualRequest = requestCaptor.getValue();
+        assertTrue(actualRequest.source().query().toString().contains("is_hidden"));
+        assertEquals(1, actualRequest.source().aggregations().count());
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        transportSearchAgentAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).search(any(), any());
     }
 }
