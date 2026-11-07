@@ -6,14 +6,19 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -24,6 +29,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.collect.Tuple;
@@ -39,6 +45,9 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.auth.oauth2.AccessToken;
+import com.google.auth.oauth2.GoogleCredentials;
 
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -207,5 +216,74 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
 
         executor.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(), "{}", null, streamListener);
         Mockito.verify(streamListener, times(1)).onFailure(Mockito.any(Exception.class));
+    }
+
+    @Test
+    public void credentialProvider_LazilyBuildsOnceAndCaches() {
+        // Every other test pre-injects a provider, so the lazy branch that calls
+        // GoogleCredentialProvider.fromConnector is otherwise never exercised.
+        GoogleCredentials adc = GoogleCredentials.create(new AccessToken("ya29.adc-token", new Date(Long.MAX_VALUE)));
+        GoogleCloudConnector connector = adcConnector("POST", "https://us-central1-aiplatform.googleapis.com/v1/x:generateContent");
+        connector
+            .decrypt(PREDICT.name(), (keys, tenantId, listener) -> listener.onResponse(keys), null, ActionListener.wrap(r -> {}, e -> {}));
+        GoogleConnectorExecutor executor = new GoogleConnectorExecutor(connector);
+
+        try (MockedStatic<GoogleCredentials> mocked = mockStatic(GoogleCredentials.class)) {
+            mocked.when(GoogleCredentials::getApplicationDefault).thenReturn(adc);
+
+            GoogleCredentialProvider first = executor.credentialProvider();
+            assertSame(first, executor.credentialProvider());
+            mocked.verify(GoogleCredentials::getApplicationDefault, times(1));
+        }
+    }
+
+    @Test
+    public void invokeRemoteService_HostOverrideRejectedBeforeClientCall() {
+        GoogleCloudConnector connector = adcConnector("POST", "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/m/invoke");
+        GoogleConnectorExecutor executor = spy(new GoogleConnectorExecutor(connector));
+        executor
+            .setTrustedConnectorEndpointsRegex(
+                org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    .get(org.opensearch.common.settings.Settings.EMPTY)
+            );
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        org.mockito.Mockito.doReturn(httpClient).when(executor).getHttpClient();
+        @SuppressWarnings("unchecked")
+        ActionListener<Tuple<Integer, ModelTensors>> listener = mock(ActionListener.class);
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put("region", "evil.example?x=a");
+
+        executor.invokeRemoteService(PREDICT.name(), null, overrides, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        assertTrue(failure.getValue() instanceof IllegalArgumentException);
+        assertTrue(failure.getValue().getMessage(), failure.getValue().getMessage().contains("not matching"));
+        verify(httpClient, org.mockito.Mockito.never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_HostOverrideRejected() {
+        GoogleCloudConnector connector = adcConnector("POST", "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/m/invoke");
+        GoogleConnectorExecutor executor = spy(new GoogleConnectorExecutor(connector));
+        executor
+            .setTrustedConnectorEndpointsRegex(
+                org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    .get(org.opensearch.common.settings.Settings.EMPTY)
+            );
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
+        Map<String, String> overrides = new HashMap<>();
+        overrides.put("region", "evil.example?x=a");
+        overrides.put("_llm_interface", "openai/v1/chat/completions");
+
+        executor.invokeRemoteServiceStream(PREDICT.name(), null, overrides, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        Throwable cause = failure.getValue() instanceof IllegalArgumentException ? failure.getValue() : failure.getValue().getCause();
+        assertTrue(String.valueOf(cause), cause instanceof IllegalArgumentException && cause.getMessage().contains("not matching"));
     }
 }

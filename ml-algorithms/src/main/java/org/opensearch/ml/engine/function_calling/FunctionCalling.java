@@ -72,4 +72,40 @@ public interface FunctionCalling {
     default boolean supportsStrictSchema() {
         return false; // Default: assume no strict schema support
     }
+
+    /**
+     * Whether this provider can force the model to call one named tool (see {@link #forcedToolConfigs}).
+     */
+    default boolean supportsForcedToolCall() {
+        return false;
+    }
+
+    /**
+     * Build the {@code tool_configs} request fragment that declares a single tool and forces the model
+     * to call it. The fragment is spliced into the connector request body through the
+     * {@code ${parameters.tool_configs}} placeholder, so it starts with a comma like {@link #configure} does.
+     *
+     * @param toolName the tool name the model must call
+     * @param toolDescription the tool description
+     * @param inputSchema the tool's JSON Schema as a map
+     * @return the request fragment
+     * @throws UnsupportedOperationException if the provider cannot force a tool call
+     */
+    default String forcedToolConfigs(String toolName, String toolDescription, Map<String, Object> inputSchema) {
+        throw new UnsupportedOperationException("This LLM interface does not support forced tool calls");
+    }
+
+    /**
+     * Extract the input of the named tool call from a response to a {@link #forcedToolConfigs} request.
+     * Unlike {@link #handle}, this does not depend on the finish reason, which some providers report as
+     * a normal stop when the tool choice is forced.
+     *
+     * @param modelTensorOutput the response from LLM
+     * @param toolName the forced tool's name
+     * @return the tool input as a JSON string, or null if the response carries no call to that tool
+     * @throws UnsupportedOperationException if the provider cannot force a tool call
+     */
+    default String extractForcedToolInput(ModelTensorOutput modelTensorOutput, String toolName) {
+        throw new UnsupportedOperationException("This LLM interface does not support forced tool calls");
+    }
 }

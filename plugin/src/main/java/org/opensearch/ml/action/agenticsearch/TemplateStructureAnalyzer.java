@@ -60,6 +60,13 @@ public final class TemplateStructureAnalyzer {
     static final String ROLE_SCORE_MODE = "score_mode";
     static final String ROLE_BOOST_MODE = "boost_mode";
     static final String ROLE_BOOST = "boost";
+    static final String ROLE_MULTI_MATCH_TYPE = "multi_match_type";
+
+    // bool occurrence keys that change what a value clause means (see Facts.occur).
+    static final String OCCUR_MUST = "must";
+    static final String OCCUR_FILTER = "filter";
+    static final String OCCUR_SHOULD = "should";
+    static final String OCCUR_MUST_NOT = "must_not";
 
     private TemplateStructureAnalyzer() {}
 
@@ -75,47 +82,64 @@ public final class TemplateStructureAnalyzer {
         Map<String, Object> renderParams() {
             return renderParams;
         }
+
+        /** Whether a rendered scalar is one of this set's markers rather than a literal value. */
+        boolean isMarker(Object value) {
+            if (value instanceof String) {
+                return stringMarkers.containsKey(value);
+            }
+            return value instanceof Number && numberMarkers.containsKey(((Number) value).longValue());
+        }
     }
 
     /** Where a param's marker was found in the rendered JSON. */
     static final class Located {
         final List<Object> path; // object keys (String) and array indices (Integer) from the root
         final boolean asKey;     // the marker was a JSON object key (a field-selector param) not a value
+        // Every path where the marker was a key, since one param may name several sort clauses.
+        final List<List<Object>> keyPaths = new ArrayList<>();
 
         Located(List<Object> path, boolean asKey) {
             this.path = path;
             this.asKey = asKey;
-        }
-
-        /** A path with no array index is stable across renders, so a default can be read at it. */
-        boolean isStablePath() {
-            for (Object step : path) {
-                if (step instanceof Integer) {
-                    return false;
-                }
-            }
-            return true;
         }
     }
 
     /** A param's recovered clause role and the field(s) it targets. */
     static final class Facts {
         final String role;
-        final List<String> fields; // target field name(s); may be empty when not recoverable
-        final String bound;        // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final List<String> fields;       // target field name(s); may be empty when not recoverable
+        final String bound;              // range bound key (gte/gt/lte/lt) for ROLE_RANGE_BOUND, else null
+        final String sortUnmappedType;   // the sort clause's unmapped_type for ROLE_SORT_FIELD, else null
+        final String occur;              // nearest enclosing bool occurrence (must/filter/should/must_not), else null
+        // A should clause is optional (only scores) when its bool also has must/filter and no
+        // minimum_should_match; otherwise at least one should must match, so it decides inclusion.
+        final boolean shouldIsOptional;
 
         Facts(String role, List<String> fields, String bound) {
+            this(role, fields, bound, null, null, false);
+        }
+
+        Facts(String role, List<String> fields, String bound, String sortUnmappedType) {
+            this(role, fields, bound, sortUnmappedType, null, false);
+        }
+
+        Facts(String role, List<String> fields, String bound, String sortUnmappedType, String occur, boolean shouldIsOptional) {
             this.role = role;
             this.fields = fields;
             this.bound = bound;
+            this.sortUnmappedType = sortUnmappedType;
+            this.occur = occur;
+            this.shouldIsOptional = shouldIsOptional;
         }
     }
 
     /**
      * Build a unique marker value per param, typed so the rendered body stays legal JSON:
      * a string param renders a token into its quoted slot, a number param a large distinct
-     * integer, a boolean {@code true} (so its section renders), and an array an empty array
-     * (kept legal but not located, since a raw-JSON slot has no single field to describe).
+     * integer, a boolean {@code true} (so its section renders), a list a two-item list of
+     * string tokens, and an array an empty array (kept legal but not located, since a raw-JSON
+     * slot has no single field to describe).
      */
     static MarkerSet buildMarkers(Map<String, Object> schema) {
         MarkerSet markers = new MarkerSet();
@@ -139,6 +163,16 @@ public final class TemplateStructureAnalyzer {
                     // pre-flight) but carries no single field, so it is not tracked for a role.
                     markers.renderParams.put(param, "[]");
                     break;
+                case MustacheTemplateAnalyzer.TYPE_LIST: {
+                    // Two distinct tokens, so the render mirrors pre-flight's two-item sample
+                    // and a key-iterating body stays legal JSON; both map back to this param.
+                    String token = MARKER_PREFIX + index + MARKER_SUFFIX;
+                    String second = MARKER_PREFIX + index + "b" + MARKER_SUFFIX;
+                    markers.stringMarkers.put(token, param);
+                    markers.stringMarkers.put(second, param);
+                    markers.renderParams.put(param, List.of(token, second));
+                    break;
+                }
                 default: {
                     String token = MARKER_PREFIX + index + MARKER_SUFFIX;
                     markers.stringMarkers.put(token, param);
@@ -154,7 +188,7 @@ public final class TemplateStructureAnalyzer {
     /**
      * Walk the rendered JSON and record where each param's marker landed. A marker found as
      * an object key marks a field-selector param; found as a scalar value it marks the slot
-     * that param fills. The first occurrence wins.
+     * that param fills. The first occurrence wins the role; every key occurrence is kept.
      */
     static Map<String, Located> locate(Object renderedRoot, MarkerSet markers) {
         Map<String, Located> found = new LinkedHashMap<>();
@@ -171,7 +205,7 @@ public final class TemplateStructureAnalyzer {
                 String keyParam = markers.stringMarkers.get(key);
                 List<Object> childPath = append(path, key);
                 if (keyParam != null) {
-                    found.putIfAbsent(keyParam, new Located(childPath, true));
+                    found.computeIfAbsent(keyParam, k -> new Located(childPath, true)).keyPaths.add(childPath);
                 }
                 walk(entry.getValue(), childPath, markers, found);
             }
@@ -194,23 +228,55 @@ public final class TemplateStructureAnalyzer {
     }
 
     /**
+     * Classify a located marker ({@link #classifyClause}) and record the nearest enclosing bool
+     * occurrence, which decides whether a value clause includes, excludes or only scores.
+     */
+    static Facts classify(Located located, Object renderedRoot) {
+        List<String> keys = keysOnly(located.path);
+        // Under an aggregation, a field-name slot (a key or a literal "field") is still a field
+        // selector, but a value slot gets no role: terms, filter, size and friends are
+        // aggregation settings there, not query clauses, so the clause table would misdescribe it.
+        boolean underAgg = keys.contains("aggs") || keys.contains("aggregations");
+        boolean fieldSlot = located.asKey || (!keys.isEmpty() && "field".equals(keys.get(keys.size() - 1)));
+        if (underAgg && !fieldSlot) {
+            return new Facts(null, List.of(), null);
+        }
+        Facts facts = classifyClause(located, renderedRoot);
+        String occur = nearestOccur(keys);
+        boolean shouldIsOptional = OCCUR_SHOULD.equals(occur) && isShouldOptional(governingBool(renderedRoot, located.path));
+        return new Facts(facts.role, facts.fields, facts.bound, facts.sortUnmappedType, occur, shouldIsOptional);
+    }
+
+    /**
      * Map a located marker to its clause role and target field(s) by matching the tail of its
      * key-path against the DSL clause table. Array indices are ignored: only the object keys
      * carry clause meaning.
      */
-    static Facts classify(Located located, Object renderedRoot) {
+    private static Facts classifyClause(Located located, Object renderedRoot) {
         List<String> keys = keysOnly(located.path);
         int n = keys.size();
 
         if (located.asKey) {
             // The param supplies a field name (e.g. the sort key), not a value.
-            String role = keys.contains("sort") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
-            return new Facts(role, List.of(), null);
+            String role = sortOrSelector(keys);
+            return new Facts(role, List.of(), null, ROLE_SORT_FIELD.equals(role) ? sortUnmappedType(located, renderedRoot) : null);
+        }
+
+        // A key literally named "field" always holds a field name in the DSL (terms agg,
+        // collapse, exists, rank_feature), never a value, so it must not fall through to the
+        // <clause>.<field> value rules below (e.g. aggs.<name>.terms.field is not a terms filter).
+        if (n >= 1 && "field".equals(keys.get(n - 1))) {
+            return new Facts(sortOrSelector(keys), List.of(), null);
         }
 
         String last = n >= 1 ? keys.get(n - 1) : null;
         String prev = n >= 2 ? keys.get(n - 2) : null;
         String prev2 = n >= 3 ? keys.get(n - 3) : null;
+
+        // A bare sort key given as a value: "sort":"{{x}}" or "sort":["{{x}}"].
+        if ("sort".equals(last)) {
+            return new Facts(ROLE_SORT_FIELD, List.of(), null);
+        }
 
         // Top-level paging controls.
         if (n == 1) {
@@ -251,6 +317,9 @@ public final class TemplateStructureAnalyzer {
         }
         if ("boost".equals(last) && prev != null) {
             return new Facts(ROLE_BOOST, List.of(), null);
+        }
+        if ("type".equals(last) && "multi_match".equals(prev)) {
+            return new Facts(ROLE_MULTI_MATCH_TYPE, List.of(), null);
         }
 
         // multi_match: the query slot names its fields in a sibling array.
@@ -298,6 +367,8 @@ public final class TemplateStructureAnalyzer {
                 return List.of("multiply", "sum", "avg", "first", "max", "min");
             case ROLE_BOOST_MODE:
                 return List.of("multiply", "replace", "sum", "avg", "max", "min");
+            case ROLE_MULTI_MATCH_TYPE:
+                return List.of("best_fields", "most_fields", "cross_fields", "phrase", "phrase_prefix", "bool_prefix");
             default:
                 return null;
         }
@@ -368,9 +439,13 @@ public final class TemplateStructureAnalyzer {
             case ROLE_BOOST:
                 base = "Relevance boost weight for this clause.";
                 break;
+            case ROLE_MULTI_MATCH_TYPE:
+                base = "How the multi_match query combines matches across its fields.";
+                break;
             default:
                 return null;
         }
+        base = withOccur(base, facts, field);
         if (defaultValue != null) {
             base = base + " Defaults to " + renderDefault(defaultValue) + " if unset.";
         }
@@ -391,6 +466,7 @@ public final class TemplateStructureAnalyzer {
         Set<String> fuzzy = new LinkedHashSet<>();
         Set<String> filters = new LinkedHashSet<>();
         Set<String> ranges = new LinkedHashSet<>();
+        Set<String> excludes = new LinkedHashSet<>();
         boolean fullTextNoField = false;
         boolean sortable = false;
         boolean paged = false;
@@ -402,6 +478,11 @@ public final class TemplateStructureAnalyzer {
             }
             Facts facts = classify(loc, renderedRoot);
             if (facts.role == null) {
+                continue;
+            }
+            // A must_not clause excludes rather than matches or filters, whatever its role.
+            if (OCCUR_MUST_NOT.equals(facts.occur) && isValueRole(facts.role)) {
+                excludes.addAll(facts.fields);
                 continue;
             }
             switch (facts.role) {
@@ -456,6 +537,9 @@ public final class TemplateStructureAnalyzer {
         if (!ranges.isEmpty()) {
             clauses.add("range filters on " + joinFields(new ArrayList<>(ranges)));
         }
+        if (!excludes.isEmpty()) {
+            clauses.add("excludes by " + joinFields(new ArrayList<>(excludes)));
+        }
         if (sortable) {
             clauses.add("sortable");
         }
@@ -478,7 +562,179 @@ public final class TemplateStructureAnalyzer {
         return node instanceof Map || node instanceof List ? null : node;
     }
 
+    /**
+     * Read a param's default from the defaults render at the path its marker took in the marker
+     * render. An array index only names the same element in both trees when the array has the
+     * same length in each (an optional clause omitted from one render shifts every later
+     * element), so the lookup gives up on any array whose lengths differ.
+     */
+    static Object alignedValueAt(Object rendered, Object defaults, List<Object> path) {
+        Object r = rendered;
+        Object d = defaults;
+        for (Object step : path) {
+            if (step instanceof Integer && (!(r instanceof List) || !(d instanceof List) || ((List<?>) r).size() != ((List<?>) d).size())) {
+                return null;
+            }
+            r = navigate(r, List.of(step));
+            d = navigate(d, List.of(step));
+            if (r == null || d == null) {
+                return null;
+            }
+        }
+        return d instanceof Map || d instanceof List ? null : d;
+    }
+
+    /**
+     * Params for the defaults render: each required param gets its marker, so a slot whose
+     * default is another param's value renders a recognizable marker (discarded by the caller)
+     * rather than a plausible-looking sample; every optional param is omitted so the body's
+     * own default shows.
+     */
+    static Map<String, Object> defaultsRenderParams(Map<String, Object> schema, MarkerSet markers) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : schema.entrySet()) {
+            Object spec = entry.getValue();
+            if (spec instanceof Map && Boolean.TRUE.equals(((Map<?, ?>) spec).get(MustacheTemplateAnalyzer.REQUIRED_KEY))) {
+                params.put(entry.getKey(), markers.renderParams.get(entry.getKey()));
+            }
+        }
+        return params;
+    }
+
+    /**
+     * Copy a defaults tree with every marker scalar replaced by null, so a slot whose default is
+     * another param's value reads as having no default. Containers and keys are kept, so array
+     * lengths (and so {@link #alignedValueAt}) are unchanged.
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> withoutMarkers(Map<String, Object> defaults, MarkerSet markers) {
+        return defaults == null ? null : (Map<String, Object>) scrub(defaults, markers);
+    }
+
+    private static Object scrub(Object node, MarkerSet markers) {
+        if (node instanceof Map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) node).entrySet()) {
+                copy.put((String) entry.getKey(), scrub(entry.getValue(), markers));
+            }
+            return copy;
+        }
+        if (node instanceof List) {
+            List<Object> copy = new ArrayList<>();
+            for (Object item : (List<?>) node) {
+                copy.add(scrub(item, markers));
+            }
+            return copy;
+        }
+        return markers.isMarker(node) ? null : node;
+    }
+
     // ---- internals ---------------------------------------------------------
+
+    /** A geo-distance sort takes a geo_point, which is never in the sortable set. */
+    private static String sortOrSelector(List<String> keys) {
+        return keys.contains("sort") && !keys.contains("_geo_distance") ? ROLE_SORT_FIELD : ROLE_FIELD_SELECTOR;
+    }
+
+    /** The last bool occurrence key on the path, i.e. the one that governs the marker's clause. */
+    private static String nearestOccur(List<String> keys) {
+        for (int i = keys.size() - 1; i >= 1; i--) {
+            String key = keys.get(i);
+            boolean occur = OCCUR_MUST.equals(key) || OCCUR_FILTER.equals(key) || OCCUR_SHOULD.equals(key) || OCCUR_MUST_NOT.equals(key);
+            // Only under a bool: a function_score function also has a "filter" key, with a
+            // different meaning.
+            if (occur && "bool".equals(keys.get(i - 1))) {
+                return key;
+            }
+        }
+        return null;
+    }
+
+    /** The bool map whose occurrence {@link #nearestOccur} found, located on the full path; null if none. */
+    private static Map<?, ?> governingBool(Object root, List<Object> path) {
+        for (int i = path.size() - 1; i >= 1; i--) {
+            Object step = path.get(i);
+            boolean occur = OCCUR_MUST.equals(step)
+                || OCCUR_FILTER.equals(step)
+                || OCCUR_SHOULD.equals(step)
+                || OCCUR_MUST_NOT.equals(step);
+            if (occur && "bool".equals(path.get(i - 1))) {
+                Object bool = navigate(root, path.subList(0, i));
+                return bool instanceof Map ? (Map<?, ?>) bool : null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether a should clause in this bool is optional, i.e. only scores. Only claimed when
+     * provable: a missing bool, an empty must/filter array (how an unset raw-JSON param renders)
+     * or a non-literal minimum_should_match all fall back to the base wording.
+     */
+    private static boolean isShouldOptional(Map<?, ?> bool) {
+        if (bool == null || (!hasClauses(bool.get(OCCUR_MUST)) && !hasClauses(bool.get(OCCUR_FILTER)))) {
+            return false;
+        }
+        Object msm = bool.get("minimum_should_match");
+        return msm == null || (msm instanceof Number && ((Number) msm).intValue() == 0);
+    }
+
+    private static boolean hasClauses(Object occurValue) {
+        return occurValue instanceof Map || (occurValue instanceof List && !((List<?>) occurValue).isEmpty());
+    }
+
+    /** Roles that match documents by a value, so their meaning depends on the bool occurrence. */
+    private static boolean isValueRole(String role) {
+        switch (role) {
+            case ROLE_FULL_TEXT:
+            case ROLE_PHRASE:
+            case ROLE_FILTER_TERM:
+            case ROLE_FILTER_TERMS:
+            case ROLE_PATTERN:
+            case ROLE_FUZZY:
+            case ROLE_RANGE_BOUND:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Reword a value-clause description for its bool occurrence: under must_not the clause
+     * excludes matches, and under an optional should it contributes to the score rather than
+     * filtering. Option slots (operator, boost), must/filter clauses and a should that must
+     * match keep the base wording.
+     */
+    private static String withOccur(String base, Facts facts, String field) {
+        if (!isValueRole(facts.role)) {
+            return base;
+        }
+        if (OCCUR_MUST_NOT.equals(facts.occur)) {
+            switch (facts.role) {
+                case ROLE_FILTER_TERM:
+                    return field == null ? "Exact value to exclude." : "Exclude results with this exact " + field + " value.";
+                case ROLE_FILTER_TERMS:
+                    return field == null
+                        ? "One or more exact values to exclude."
+                        : "Exclude results with any of these " + field + " values.";
+                default:
+                    return "Excludes results that match: " + Character.toLowerCase(base.charAt(0)) + base.substring(1);
+            }
+        }
+        if (OCCUR_SHOULD.equals(facts.occur) && facts.shouldIsOptional) {
+            switch (facts.role) {
+                case ROLE_FILTER_TERM:
+                    return (field == null ? "Exact value to match" : "Match on exact " + field + " value")
+                        + " (should clause, contributes to scoring).";
+                case ROLE_FILTER_TERMS:
+                    return (field == null ? "One or more exact values to match" : "Match on one or more " + field + " values")
+                        + " (should clause, contributes to scoring).";
+                default:
+                    return base + " Contributes to scoring as a should clause.";
+            }
+        }
+        return base;
+    }
 
     private static boolean isRangeBound(String key) {
         return "gte".equals(key) || "gt".equals(key) || "lte".equals(key) || "lt".equals(key);
@@ -533,6 +789,35 @@ public final class TemplateStructureAnalyzer {
             }
         }
         return out;
+    }
+
+    /**
+     * The literal {@code unmapped_type} a sort key carries, or null. Only its presence matters: it
+     * tells the enum a field missing from some indices is allowed. One clause without it would
+     * still fail on such an index, so every sort clause the param names must carry one; a marker
+     * (the value is itself a param) does not count, since it may be omitted.
+     */
+    private static String sortUnmappedType(Located located, Object root) {
+        String first = null;
+        for (List<Object> keyPath : located.keyPaths) {
+            if (!ROLE_SORT_FIELD.equals(sortOrSelector(keysOnly(keyPath)))) {
+                continue;
+            }
+            Object clause = navigate(root, keyPath);
+            if (!(clause instanceof Map)) {
+                return null;
+            }
+            Object unmappedType = ((Map<?, ?>) clause).get("unmapped_type");
+            if (!(unmappedType instanceof String)
+                || ((String) unmappedType).isEmpty()
+                || ((String) unmappedType).startsWith(MARKER_PREFIX)) {
+                return null;
+            }
+            if (first == null) {
+                first = (String) unmappedType;
+            }
+        }
+        return first;
     }
 
     /** Navigate to a (possibly container) node at a key-path, for reading a clause's siblings. */

@@ -401,39 +401,24 @@ public class MLIndicesHandler {
                                     new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
-                                            UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest.indices(indexName);
-                                            if (indexSettings != null) {
-                                                updateSettingRequest.settings(indexSettings);
-                                            } else {
-                                                updateSettingRequest
-                                                    .settings(
-                                                        indexName.equals(MLIndex.CONFIG.getIndexName())
-                                                            ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
-                                                            : UPDATED_DEFAULT_INDEX_SETTINGS
-                                                    );
-                                            }
-                                            client
-                                                .admin()
-                                                .indices()
-                                                .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
-                                                    if (response.isAcknowledged()) {
-                                                        indexMappingUpdated.get(indexName).set(true);
-                                                        internalListener.onResponse(true);
-                                                    } else {
-                                                        internalListener
-                                                            .onFailure(new MLException("Failed to update index setting for: " + indexName));
-                                                    }
-                                                }, exception -> {
-                                                    log.error("Failed to update index setting for: {}", indexName, exception);
-                                                    internalListener.onFailure(exception);
-                                                }));
+                                            updateIndexSettings(indexName, indexSettings, internalListener);
                                         } else {
                                             internalListener.onFailure(new MLException("Failed to update index: " + indexName));
                                         }
                                     }, exception -> {
-                                        log.error("Failed to update index {}", indexName, exception);
-                                        internalListener.onFailure(exception);
+                                        if (isFieldTypeConflict(indexName, exception)) {
+                                            // Legacy field types can't change in place; apply only the schema version and missing fields.
+                                            log
+                                                .warn(
+                                                    "Mapping update for index {} conflicts with an existing field type, applying additive update",
+                                                    indexName,
+                                                    exception
+                                                );
+                                            putAdditiveMapping(indexName, mapping, indexSettings, internalListener);
+                                        } else {
+                                            log.error("Failed to update index {}", indexName, exception);
+                                            internalListener.onFailure(exception);
+                                        }
                                     })
                                 );
                         } else {
@@ -453,6 +438,96 @@ public class MLIndicesHandler {
             }
         } catch (Exception e) {
             log.error("Failed to init index {}", indexName, e);
+            listener.onFailure(e);
+        }
+    }
+
+    private void updateIndexSettings(String indexName, Map<String, Object> indexSettings, ActionListener<Boolean> listener) {
+        UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
+        updateSettingRequest.indices(indexName);
+        if (indexSettings != null) {
+            updateSettingRequest.settings(indexSettings);
+        } else {
+            updateSettingRequest
+                .settings(
+                    indexName.equals(MLIndex.CONFIG.getIndexName())
+                        ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
+                        : UPDATED_DEFAULT_INDEX_SETTINGS
+                );
+        }
+        client.admin().indices().updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
+            if (!updateResponse.isAcknowledged()) {
+                log.warn("Index setting update for {} was not acknowledged", indexName);
+            }
+            indexMappingUpdated.get(indexName).set(true);
+            listener.onResponse(true);
+        }, exception -> {
+            log.error("Failed to update index setting for: {}", indexName, exception);
+            listener.onFailure(exception);
+        }));
+    }
+
+    /**
+     * Returns true if the ML config index mapping update failed on a field type conflict.
+     * Safe to work around because config docs are read by id, not queried by field.
+     */
+    @VisibleForTesting
+    boolean isFieldTypeConflict(String indexName, Exception exception) {
+        if (!MLIndex.CONFIG.getIndexName().equals(indexName)) {
+            return false;
+        }
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof IllegalArgumentException
+                && cause.getMessage() != null
+                && cause.getMessage().contains("cannot be changed from type")) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    /**
+     * Puts the target mapping minus fields the index already has, so existing fields keep their type.
+     */
+    @SuppressWarnings("unchecked")
+    private void putAdditiveMapping(String indexName, String mapping, Map<String, Object> indexSettings, ActionListener<Boolean> listener) {
+        try {
+            Map<String, Object> targetMapping = XContentHelper.convertToMap(XContentType.JSON.xContent(), mapping, true);
+            Map<String, Object> existingProperties = new HashMap<>();
+            IndexMetadata indexMetadata = clusterService.state().getMetadata().indices().get(indexName);
+            if (indexMetadata != null && indexMetadata.mapping() != null) {
+                Object properties = indexMetadata.mapping().getSourceAsMap().get("properties");
+                if (properties instanceof Map) {
+                    existingProperties.putAll((Map<String, Object>) properties);
+                }
+            }
+            Map<String, Object> additiveMapping = new HashMap<>(targetMapping);
+            Object targetProperties = targetMapping.get("properties");
+            if (targetProperties instanceof Map) {
+                Map<String, Object> newProperties = new HashMap<>((Map<String, Object>) targetProperties);
+                newProperties.keySet().removeAll(existingProperties.keySet());
+                additiveMapping.put("properties", newProperties);
+            }
+            client
+                .admin()
+                .indices()
+                .putMapping(
+                    new PutMappingRequest().indices(indexName).source(StringUtils.toJson(additiveMapping), XContentType.JSON),
+                    ActionListener.wrap(response -> {
+                        if (response.isAcknowledged()) {
+                            updateIndexSettings(indexName, indexSettings, listener);
+                        } else {
+                            listener.onFailure(new MLException("Failed to update index: " + indexName));
+                        }
+                    }, exception -> {
+                        log.error("Failed to apply additive mapping update for index {}", indexName, exception);
+                        listener.onFailure(exception);
+                    })
+                );
+        } catch (Exception e) {
+            log.error("Failed to build additive mapping for index {}", indexName, e);
             listener.onFailure(e);
         }
     }

@@ -20,6 +20,8 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
@@ -28,6 +30,7 @@ import org.opensearch.core.common.unit.ByteSizeValue;
 import com.google.common.collect.ImmutableList;
 
 public final class MLCommonsSettings {
+    private static final Logger logger = LogManager.getLogger(MLCommonsSettings.class);
 
     private MLCommonsSettings() {}
 
@@ -282,24 +285,30 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX = "^https://rekognition(-fips)?\\..*[a-z0-9-]\\.amazonaws\\.com$";
+    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX =
+        "^https://rekognition(-fips)?\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$";
 
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             ML_PLUGIN_SETTING_PREFIX + "trusted_connector_endpoints_regex",
             ImmutableList
                 .of(
-                    "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://runtime\\.sagemaker\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://api\\.sagemaker\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
                     "^https://generativelanguage\\.googleapis\\.com/.*$",
-                    "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://textract\\..*[a-z0-9-]\\.amazonaws\\.com$",
-                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    // Vertex AI joins the region to the host with a hyphen (us-central1-aiplatform.googleapis.com)
+                    // and also serves a global aiplatform.googleapis.com, so the region prefix is optional.
+                    // The prefix must start with an alphanumeric because a DNS label cannot begin with a
+                    // hyphen; "[a-z0-9-]+-" would have admitted "--aiplatform" and "-us-aiplatform".
+                    "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$",
+                    "^https://bedrock-runtime\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://bedrock-agent-runtime\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://bedrock\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
+                    "^https://textract\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$",
+                    "^https://comprehend\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com$",
                     REKOGNITION_TRUST_ENDPOINT_REGEX
                 ),
             Function.identity(),
@@ -308,6 +317,7 @@ public final class MLCommonsSettings {
                 public void validate(List<String> value) {
                     for (String regex : value) {
                         validateRegexSafety(regex);
+                        warnIfAuthorityWildcard(regex);
                     }
                 }
             },
@@ -325,6 +335,7 @@ public final class MLCommonsSettings {
                 public void validate(List<String> value) {
                     for (String regex : value) {
                         validateRegexSafety(regex);
+                        warnIfAuthorityWildcard(regex);
                     }
                 }
             },
@@ -401,8 +412,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_UNIFIED_AGENT_API_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "unified_agent_api_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list).
-    // Disabled by default pending security review of the new APIs.
+    // This setting enables/disables the agentic search template CRUD APIs (register/get/update/delete/list) and
+    // SearchTemplateFillTool. Disabled by default pending security review of the new APIs, and has no effect with
+    // multi-tenancy, since templates are not yet tenant-scoped.
     public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED = Setting
         .boolSetting(
             ML_PLUGIN_SETTING_PREFIX + "agentic_search_template_enabled",
@@ -412,7 +424,8 @@ public final class MLCommonsSettings {
         );
     public static final String ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_DISABLED_MESSAGE =
         "The agentic search template APIs are not enabled. To enable, please update the setting "
-            + ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.getKey();
+            + ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.getKey()
+            + ". They are not yet supported when multi-tenancy is enabled.";
 
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting(
@@ -760,6 +773,138 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    /**
+     * Operators may persist patterns that let the host position match path or query characters.
+     * Rejecting those on restart would break the cluster, so this only warns.
+     */
+    static void warnIfAuthorityWildcard(String regex) {
+        if (authorityContainsWildcard(authorityPart(regex))) {
+            logger
+                .warn(
+                    "Trusted connector endpoint pattern \"{}\" uses a wildcard in the host position that can match path or query characters; use [a-z0-9-]+",
+                    regex
+                );
+        }
+    }
+
+    /**
+     * The pattern text between "://" and the first unescaped '/' outside a character class. A pattern
+     * without "://" gives no hint where the host ends, so all of it is treated as host position.
+     */
+    static String authorityPart(String regex) {
+        int scheme = regex.indexOf("://");
+        if (scheme < 0) {
+            return regex;
+        }
+        StringBuilder authority = new StringBuilder();
+        boolean escaped = false;
+        boolean inClass = false;
+        for (int i = scheme + 3; i < regex.length(); i++) {
+            char c = regex.charAt(i);
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '[') {
+                inClass = true;
+            } else if (c == ']') {
+                inClass = false;
+            } else if (c == '/' && !inClass) {
+                break;
+            }
+            authority.append(c);
+        }
+        return authority.toString();
+    }
+
+    /**
+     * True when the host-position text can match a character outside a host: an unescaped '.', a broad
+     * escape (\S, \W, \D, \p, \P), or a negated class that does not exclude all of '/', '?' and '#'.
+     */
+    static boolean authorityContainsWildcard(String authority) {
+        for (int i = 0; i < authority.length(); i++) {
+            char c = authority.charAt(i);
+            if (c == '\\') {
+                if (i + 1 < authority.length() && isBroadEscape(authority.charAt(i + 1))) {
+                    return true;
+                }
+                i++;
+                continue;
+            }
+            if (c == '[') {
+                int end = classEnd(authority, i);
+                if (end < 0) {
+                    return true;
+                }
+                boolean negated = i + 1 < end && authority.charAt(i + 1) == '^';
+                String content = authority.substring(negated ? i + 2 : i + 1, end);
+                if (negated) {
+                    if (!(classLists(content, '/') && classLists(content, '?') && classLists(content, '#'))) {
+                        return true;
+                    }
+                } else if (hasBroadEscape(content)) {
+                    return true;
+                }
+                i = end;
+                continue;
+            }
+            if (c == '.') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isBroadEscape(char c) {
+        return c == 'S' || c == 'W' || c == 'D' || c == 'p' || c == 'P';
+    }
+
+    /** Index of the ']' closing the class opened at {@code start}, or -1. Nested classes are tracked by depth. */
+    private static int classEnd(String text, int start) {
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\\') {
+                i++;
+            } else if (c == '[') {
+                depth++;
+            } else if (c == ']') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean classLists(String content, char target) {
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '\\') {
+                if (i + 1 < content.length() && content.charAt(i + 1) == target) {
+                    return true;
+                }
+                i++;
+            } else if (c == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasBroadEscape(String content) {
+        for (int i = 0; i + 1 < content.length(); i++) {
+            if (content.charAt(i) == '\\') {
+                if (isBroadEscape(content.charAt(i + 1))) {
+                    return true;
+                }
+                i++;
+            }
+        }
+        return false;
+    }
 
     private static void validateRegexSafety(String regex) {
         // Reject nested quantifiers or backreferences. The outer quantifier set intentionally includes '{':

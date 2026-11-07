@@ -26,6 +26,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     public static final String FINISH_REASON_PATH = "$.choices[0].finish_reason";
@@ -168,5 +170,48 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     @Override
     public boolean supportsStrictSchema() {
         return true; // OpenAI supports strict schema enforcement via "strict": true
+    }
+
+    @Override
+    public boolean supportsForcedToolCall() {
+        return true;
+    }
+
+    @Override
+    public String forcedToolConfigs(String toolName, String toolDescription, Map<String, Object> inputSchema) {
+        Map<String, Object> function = new LinkedHashMap<>();
+        function.put("name", toolName);
+        function.put("description", toolDescription);
+        function.put("parameters", inputSchema);
+        Map<String, Object> tool = Map.of("type", "function", "function", function);
+        Map<String, Object> toolChoice = Map.of("type", "function", "function", Map.of("name", toolName));
+        return ", \"tools\": ["
+            + StringUtils.toJson(tool)
+            + "], \"tool_choice\": "
+            + StringUtils.toJson(toolChoice)
+            + ", \"parallel_tool_calls\": false";
+    }
+
+    @Override
+    public String extractForcedToolInput(ModelTensorOutput modelTensorOutput, String toolName) {
+        Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        List<?> toolCalls;
+        try {
+            toolCalls = JsonPath.read(dataAsMap, CALL_PATH);
+        } catch (PathNotFoundException e) {
+            return null;
+        }
+        if (toolCalls == null) {
+            return null;
+        }
+        for (Object call : toolCalls) {
+            Object function = call instanceof Map ? ((Map<?, ?>) call).get("function") : null;
+            if (function instanceof Map && toolName.equals(((Map<?, ?>) function).get("name"))) {
+                // OpenAI returns the arguments as a JSON-encoded string.
+                Object arguments = ((Map<?, ?>) function).get("arguments");
+                return arguments instanceof String ? (String) arguments : StringUtils.toJson(arguments);
+            }
+        }
+        return null;
     }
 }

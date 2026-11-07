@@ -55,7 +55,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "    \"content_type\": \"application/json\",\n"
         + "    \"max_tokens\": 7,\n"
         + "    \"temperature\": 0,\n"
-        + "    \"model\": \"gpt-3.5-turbo-instruct\"\n"
+        + "    \"model\": \"gpt-4o-mini\"\n"
         + "  },\n"
         + "  \"credential\": {\n"
         + "    \"openAI_key\": \""
@@ -66,11 +66,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         + "      {"
         + "      \"action_type\": \"predict\",\n"
         + "      \"method\": \"POST\",\n"
-        + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+        + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
         + "       \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "       },\n"
-        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+        + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
         + "      }\n"
         + "  ]\n"
         + "}";
@@ -264,7 +264,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
+        assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
 
         getModelProfile(modelId, verifyRemoteModelDeployed());
         TimeUnit.SECONDS.sleep(71);
@@ -293,13 +293,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
+            return;
         }
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public void testPredictRemoteModelWithCorrectInterface() throws IOException, InterruptedException {
@@ -315,7 +321,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 return;
             }
             responseMap = (Map) responseList.get(0);
-            assertFalse(((String) responseMap.get("text")).isEmpty());
+            assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
         }, null);
     }
 
@@ -360,13 +366,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a ${parameters.test}\"\n" + "  }\n" + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
+            return;
         }
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public void testPredictRemoteModelWithSkipValidatingMissingParameterMissing() throws IOException, InterruptedException {
@@ -388,7 +400,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 return;
             }
             responseMap = (Map) responseList.get(0);
-            assertFalse(((String) responseMap.get("text")).isEmpty());
+            assertFalse(((String) ((Map) responseMap.get("message")).get("content")).isEmpty());
         }, null);
     }
 
@@ -419,7 +431,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"content_type\": \"application/json\",\n"
             + "      \"max_tokens\": 7,\n"
             + "      \"temperature\": 0,\n"
-            + "      \"model\": \"gpt-3.5-turbo\"\n"
+            + "      \"model\": \"gpt-4o-mini\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -487,7 +499,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "      \"endpoint\": \"api.openai.com\",\n"
             + "      \"auth\": \"API_Key\",\n"
             + "      \"content_type\": \"application/json\",\n"
-            + "      \"model\": \"gpt-4\"\n"
+            + "      \"model\": \"gpt-4o-mini\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
             + "      \"openAI_key\": \""
@@ -683,13 +695,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "\"\n"
             + "  }\n"
             + "}";
+        Map predictResponse;
         try {
             response = predictRemoteModel(modelId, predictInput);
-            responseMap = parseResponseToMap(response);
-            verifyResponse.accept(responseMap);
+            predictResponse = parseResponseToMap(response);
         } catch (Exception e) {
+            // Only the predict call belongs inside this try. verifyResponse used to run here too, so an assertion
+            // failure in it was caught and replaced by an NPE on the null verifyException, hiding the real cause.
+            assertNotNull("predict failed unexpectedly: " + e, verifyException);
             verifyException.accept(e);
+            return;
         }
+        assertNotNull("predict succeeded but no response verifier was supplied", verifyResponse);
+        verifyResponse.accept(predictResponse);
     }
 
     public static Response createConnector(String input) throws IOException {
@@ -814,7 +832,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "    \"content_type\": \"application/json\",\n"
                     + "    \"max_tokens\": 7,\n"
                     + "    \"temperature\": 0,\n"
-                    + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                    + "    \"model\": \"gpt-4o-mini\",\n"
                     + "    \"skip_validating_missing_parameters\": \"true\"\n"
                     + "  },\n"
                     + "  \"credential\": {\n"
@@ -826,11 +844,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "      {"
                     + "      \"action_type\": \"predict\",\n"
                     + "      \"method\": \"POST\",\n"
-                    + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                    + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
                     + "       \"headers\": {\n"
                     + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
                     + "       },\n"
-                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
                     + "      }\n"
                     + "  ]\n"
                     + "}";
@@ -851,7 +869,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "    \"content_type\": \"application/json\",\n"
                     + "    \"max_tokens\": 7,\n"
                     + "    \"temperature\": 0,\n"
-                    + "    \"model\": \"gpt-3.5-turbo-instruct\",\n"
+                    + "    \"model\": \"gpt-4o-mini\",\n"
                     + "    \"skip_validating_missing_parameters\": \"false\"\n"
                     + "  },\n"
                     + "  \"credential\": {\n"
@@ -863,11 +881,11 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                     + "      {"
                     + "      \"action_type\": \"predict\",\n"
                     + "      \"method\": \"POST\",\n"
-                    + "      \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+                    + "      \"url\": \"https://${parameters.endpoint}/v1/chat/completions\",\n"
                     + "       \"headers\": {\n"
                     + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
                     + "       },\n"
-                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\",  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
+                    + "       \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\": \\\"user\\\", \\\"content\\\": \\\"${parameters.prompt}\\\"}],  \\\"max_tokens\\\": ${parameters.max_tokens},  \\\"temperature\\\": ${parameters.temperature} }\"\n"
                     + "      }\n"
                     + "  ]\n"
                     + "}";

@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lease.Releasable;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -150,6 +151,16 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         }
 
         return channel -> {
+            // The channel is only a StreamingRestChannel when the node is configured for HTTP streaming
+            // (http.type=reactor-netty4 plus the arrow-flight-rpc prerequisites). Casting unconditionally
+            // surfaced as a 500 ClassCastException naming internal channel classes, which told the operator
+            // nothing about the missing configuration. Mirrors the check in RestMLExecuteStreamAction.
+            if (!(channel instanceof StreamingRestChannel)) {
+                final ActionRequestValidationException validationError = new ActionRequestValidationException();
+                validationError.addValidationError("Unable to initiate request / response streaming over non-streaming channel");
+                channel.sendResponse(new BytesRestResponse(channel, validationError));
+                return;
+            }
             StreamingRestChannel streamingChannel = (StreamingRestChannel) channel;
 
             // Set streaming headers

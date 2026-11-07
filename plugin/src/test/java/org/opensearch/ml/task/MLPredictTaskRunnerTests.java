@@ -72,11 +72,13 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
+import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -796,5 +798,162 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         // Test other exceptions - should track
         assertTrue(taskRunner.shouldTrackRemoteFailure(new RuntimeException("Runtime error")));
         assertTrue(taskRunner.shouldTrackRemoteFailure(new IOException("IO error")));
+    }
+
+    // ---- Partially deployed models: serve from the nodes that have the model unless the model can auto-deploy ----
+
+    private static final String[] PARTIAL_WORKERS = new String[] { "node1", "node2" };
+    private static final String[] PARTIAL_TARGETS = new String[] { "node1", "node2", "node3" };
+
+    private MLPredictionTaskRequest textDocsRequest(FunctionName functionName) {
+        TextDocsInputDataSet textDocsInputDataSet = new TextDocsInputDataSet(List.of("hello", "world"), null);
+        return MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(functionName).inputDataset(textDocsInputDataSet).build())
+            .build();
+    }
+
+    private void stubWorkers(FunctionName functionName, String[] workers, String[] targets) {
+        when(mlModelManager.getWorkerNodes(anyString(), eq(functionName), eq(true))).thenReturn(workers);
+        when(mlModelManager.getTargetWorkerNodes(anyString())).thenReturn(targets);
+    }
+
+    private String[] capturedDispatchNodes() {
+        ArgumentCaptor<String[]> nodes = ArgumentCaptor.forClass(String[].class);
+        verify(mlTaskDispatcher).dispatchPredictTask(nodes.capture(), any());
+        return nodes.getValue();
+    }
+
+    private void stubGetModel(MLModel model) {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(model);
+            return null;
+        }).when(mlModelManager).getModel(any(), any(), any());
+    }
+
+    private MLModel remoteModel(Boolean isAutoDeployEnabled) {
+        return MLModel
+            .builder()
+            .name("remote")
+            .algorithm(FunctionName.REMOTE)
+            .deploySetting(isAutoDeployEnabled == null ? null : MLDeploySetting.builder().isAutoDeployEnabled(isAutoDeployEnabled).build())
+            .isHidden(false)
+            .build();
+    }
+
+    public void testDispatchTask_LocalModelPartiallyDeployed_dispatchesToWorkerNodes() {
+        stubWorkers(FunctionName.TEXT_EMBEDDING, PARTIAL_WORKERS, PARTIAL_TARGETS);
+
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsRequest(FunctionName.TEXT_EMBEDDING), transportService, listener);
+
+        assertArrayEquals(PARTIAL_WORKERS, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+        verify(mlModelManager, never()).getModel(any(), any(), any());
+        verify(client, never()).execute(any(), any(), any());
+    }
+
+    public void testDispatchTask_LocalModel17Of18_dispatchesToThe17() {
+        String[] targets = new String[18];
+        String[] workers = new String[17];
+        for (int i = 0; i < 18; i++) {
+            targets[i] = "node" + i;
+            if (i < 17) {
+                workers[i] = "node" + i;
+            }
+        }
+        stubWorkers(FunctionName.TEXT_EMBEDDING, workers, targets);
+
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsRequest(FunctionName.TEXT_EMBEDDING), transportService, listener);
+
+        assertArrayEquals(workers, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+    }
+
+    public void testDispatchTask_LocalModelNotDeployedAnywhere_stillRejected() {
+        stubWorkers(FunctionName.TEXT_EMBEDDING, new String[0], PARTIAL_TARGETS);
+
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsRequest(FunctionName.TEXT_EMBEDDING), transportService, listener);
+
+        ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(error.capture());
+        assertEquals("Model not ready yet. Please deploy the model first.", error.getValue().getMessage());
+        verify(mlTaskDispatcher, never()).dispatchPredictTask(any(), any());
+    }
+
+    public void testDispatchTask_LocalModelFullyDeployed_dispatchesToWorkerNodes() {
+        stubWorkers(FunctionName.TEXT_EMBEDDING, PARTIAL_TARGETS, PARTIAL_TARGETS);
+
+        taskRunner.dispatchTask(FunctionName.TEXT_EMBEDDING, textDocsRequest(FunctionName.TEXT_EMBEDDING), transportService, listener);
+
+        assertArrayEquals(PARTIAL_TARGETS, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+    }
+
+    public void testDispatchTask_RemoteModelPartiallyDeployed_autoDeployEnabled_stillAutoDeploys() {
+        stubWorkers(FunctionName.REMOTE, PARTIAL_WORKERS, PARTIAL_TARGETS);
+        MLModel model = remoteModel(null);
+        stubGetModel(model);
+        when(mlModelManager.addModelToAutoDeployCache("test_model", model)).thenReturn(model);
+        when(nodeHelper.getEligibleNodeIds(FunctionName.REMOTE)).thenReturn(PARTIAL_TARGETS);
+
+        taskRunner.dispatchTask(FunctionName.REMOTE, textDocsRequest(FunctionName.REMOTE), transportService, listener);
+
+        verify(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
+        assertArrayEquals(PARTIAL_TARGETS, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+    }
+
+    public void testDispatchTask_RemoteModelPartiallyDeployed_clusterAutoDeployDisabled_dispatchesToWorkerNodes() {
+        // taskRunner is a Mockito spy (a copy), so a dynamic settings update would not reach it; build a runner with the
+        // cluster-level auto deploy setting off instead.
+        Settings autoDeployOff = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), false).build();
+        MLPredictTaskRunner runner = new MLPredictTaskRunner(
+            threadPool,
+            clusterService,
+            client,
+            mlTaskManager,
+            mlStats,
+            mlInputDatasetHandler,
+            mlTaskDispatcher,
+            mlCircuitBreakerService,
+            xContentRegistry(),
+            mlModelManager,
+            nodeHelper,
+            mlEngine,
+            autoDeployOff
+        );
+        stubWorkers(FunctionName.REMOTE, PARTIAL_WORKERS, PARTIAL_TARGETS);
+
+        runner.dispatchTask(FunctionName.REMOTE, textDocsRequest(FunctionName.REMOTE), transportService, listener);
+
+        assertArrayEquals(PARTIAL_WORKERS, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+        verify(mlModelManager, never()).getModel(any(), any(), any());
+        verify(client, never()).execute(any(), any(), any());
+    }
+
+    public void testDispatchTask_RemoteModelPartiallyDeployed_modelAutoDeployDisabled_dispatchesToWorkerNodes() {
+        stubWorkers(FunctionName.REMOTE, PARTIAL_WORKERS, PARTIAL_TARGETS);
+        stubGetModel(remoteModel(false));
+
+        taskRunner.dispatchTask(FunctionName.REMOTE, textDocsRequest(FunctionName.REMOTE), transportService, listener);
+
+        assertArrayEquals(PARTIAL_WORKERS, capturedDispatchNodes());
+        verify(listener, never()).onFailure(any());
+        verify(client, never()).execute(any(), any(), any());
+    }
+
+    public void testDispatchTask_RemoteModelNotDeployed_modelAutoDeployDisabled_stillRejected() {
+        stubWorkers(FunctionName.REMOTE, new String[0], PARTIAL_TARGETS);
+        stubGetModel(remoteModel(false));
+
+        taskRunner.dispatchTask(FunctionName.REMOTE, textDocsRequest(FunctionName.REMOTE), transportService, listener);
+
+        ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(error.capture());
+        assertTrue(error.getValue().getMessage().startsWith("Auto deployment disabled for this model"));
+        verify(mlTaskDispatcher, never()).dispatchPredictTask(any(), any());
     }
 }

@@ -12,7 +12,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.openai.com",
-    "model": "gpt-3.5-turbo"
+    "model": "gpt-4o-mini"
   },
   "credential": {
     "openAI_key": "<PLEASE ADD YOUR OPENAI API KEY HERE>"
@@ -71,7 +71,7 @@ POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
             "id": "chatcmpl-7g0QJH6nuFW94l8tDkJzxm0ntaPNd",
             "object": "chat.completion",
             "created": 1690245759,
-            "model": "gpt-3.5-turbo-0613",
+            "model": "gpt-4o-mini",
             "choices": [
               {
                 "index": 0,

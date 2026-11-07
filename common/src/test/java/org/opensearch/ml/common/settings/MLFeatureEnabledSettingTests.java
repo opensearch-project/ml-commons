@@ -218,6 +218,42 @@ public class MLFeatureEnabledSettingTests {
     }
 
     @Test
+    public void testAgenticSearchTemplateDisabledByDefault() {
+        assertFalse(new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY).isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_search_template_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateDisabledWithMultiTenancy() {
+        // Templates are not yet tenant-scoped, so the feature stays off on a multi-tenant node even when enabled.
+        Settings settings = Settings
+            .builder()
+            .put("plugins.ml_commons.agentic_search_template_enabled", true)
+            .put("plugins.ml_commons.multi_tenancy_enabled", true)
+            .build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
+    public void testAgenticSearchTemplateDynamicUpdate_staysDisabledWithMultiTenancy() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.multi_tenancy_enabled", true).build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.agentic_search_template_enabled", true).build());
+
+        assertFalse(setting.isAgenticSearchTemplateEnabled());
+    }
+
+    @Test
     public void testMemoryRetentionDisabledByDefault() {
         Settings settings = Settings.EMPTY;
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);

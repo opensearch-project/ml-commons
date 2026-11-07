@@ -713,4 +713,77 @@ public class CertificateProcessorTest {
             exception.getMessage().contains("File paths are not supported")
         );
     }
+
+    @Test
+    public void testValidateCertificateConfig_NullConfig_NoException() {
+        // Connectors may carry no client_config at all; create/update call this before knowing that.
+        certificateProcessor.validateCertificateConfig(null, credentials);
+    }
+
+    @Test
+    public void testValidateCertificateConfig_EncryptedCredentials_ChecksKeyPresenceOnly() {
+        // Create validates before decryption, so only key presence may be inspected, never values.
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+        credentials.put(CLIENT_CERT_PEM_FIELD, "ciphertext-not-a-pem");
+        credentials.put(CLIENT_KEY_PEM_FIELD, "ciphertext-not-a-pem");
+
+        certificateProcessor.validateCertificateConfig(config, credentials);
+    }
+
+    @Test
+    public void testValidateMutualTlsSettings_NullOrDisabled_NoException() {
+        certificateProcessor.validateMutualTlsSettings(null);
+        certificateProcessor.validateMutualTlsSettings(ConnectorClientConfig.builder().mutualTlsEnabled(false).build());
+    }
+
+    @Test
+    public void testValidateMutualTlsSettings_SkipSslVerification_Throws() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).skipSslVerification(true).keystoreType("PEM").build();
+
+        MLValidationException exception = assertThrows(
+            "Combining mutual TLS with skipped SSL verification must be rejected",
+            MLValidationException.class,
+            () -> certificateProcessor.validateMutualTlsSettings(config)
+        );
+        assertTrue(exception.getMessage(), exception.getMessage().contains("skip_ssl_verification"));
+    }
+
+    @Test
+    public void testValidateMutualTlsSettings_MissingCredentials_NoException() {
+        // The difference from validateCertificateConfig: connector update sees a connector whose
+        // credentials have been stripped, so absent certificates must not be treated as invalid.
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+
+        certificateProcessor.validateMutualTlsSettings(config);
+    }
+
+    @Test
+    public void testValidateCertificateConfig_BlankPemValues_Throws() {
+        // Present but empty is as broken as absent -- an unset shell variable produces exactly this,
+        // and it used to pass create and then fail on every request.
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PEM").build();
+        credentials.put(CLIENT_CERT_PEM_FIELD, "");
+        credentials.put(CLIENT_KEY_PEM_FIELD, "   ");
+
+        MLValidationException exception = assertThrows(
+            "Blank PEM credentials must be rejected",
+            MLValidationException.class,
+            () -> certificateProcessor.validateCertificateConfig(config, credentials)
+        );
+        assertTrue(exception.getMessage(), exception.getMessage().contains(CLIENT_CERT_PEM_FIELD));
+    }
+
+    @Test
+    public void testValidateCertificateConfig_BlankPkcs12Value_Throws() {
+        config = ConnectorClientConfig.builder().mutualTlsEnabled(true).keystoreType("PKCS12").build();
+        credentials.put(CLIENT_CERT_PKCS12_FIELD, "");
+
+        MLValidationException exception = assertThrows(
+            "A blank PKCS12 keystore must be rejected",
+            MLValidationException.class,
+            () -> certificateProcessor.validateCertificateConfig(config, credentials)
+        );
+        assertTrue(exception.getMessage(), exception.getMessage().contains(CLIENT_CERT_PKCS12_FIELD));
+    }
+
 }

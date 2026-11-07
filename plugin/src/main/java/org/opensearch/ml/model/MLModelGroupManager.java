@@ -88,12 +88,24 @@ public class MLModelGroupManager {
                         && modelGroups.getHits().getTotalHits().value() != 0) {
                         for (SearchHit documentFields : modelGroups.getHits()) {
                             String id = documentFields.getId();
-                            wrappedListener
-                                .onFailure(
-                                    new IllegalArgumentException(
-                                        "The name you provided is already being used by a model group with ID: " + id + "."
-                                    )
-                                );
+                            if (input.getModelGroupId() != null && input.getModelGroupId().equals(id)) {
+                                // The name check runs before the create-only put. An idempotent re-register of the
+                                // same custom id must surface the same 409 as connectors, models, agents, and
+                                // memory containers. A name owned by a different id stays a 400.
+                                // The message matches MLResourceIdUtils.toDocumentAlreadyExistsException. That helper
+                                // only rewrites VersionConflictEngineException, which this path has not reached.
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException("model group id '" + id + "' already exists", RestStatus.CONFLICT)
+                                    );
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "The name you provided is already being used by a model group with ID: " + id + "."
+                                        )
+                                    );
+                            }
                         }
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();

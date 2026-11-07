@@ -7,14 +7,48 @@ automatically; no `Authorization` header is added by you.
 Streaming requires the `_llm_interface` parameter set to `gemini/v1beta/generatecontent`, and
 predictions are issued against the streaming predict endpoint.
 
-## 1. Add Vertex AI endpoint to trusted URLs
+## 1. Enable the connector and streaming, and check trusted endpoints
+
+The `google_cloud` connector and the streaming API are both opt-in. Creating the connector fails
+with `403` until the first is enabled, and `_predict/stream` fails until the second is. From 3.10
+the Vertex AI host is already covered by the default
+`plugins.ml_commons.trusted_connector_endpoints_regex`, so these are all that are needed:
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
+        "plugins.ml_commons.stream_enabled": true
+    }
+}
+```
+
+**Streaming prerequisites.** `plugins.ml_commons.stream_enabled` is necessary but not sufficient.
+The `_predict/stream` call in step 4 also needs cluster-level setup that this blueprint does not
+cover: the `transport-reactor-netty4`, `arrow-base` and `arrow-flight-rpc` plugins, which ship with
+OpenSearch but are not installed by default, plus `http.type` and
+`opensearch.experimental.feature.transport.stream.enabled` in `opensearch.yml`. Those two settings
+are static, so `_cluster/settings` rejects them and a node restart is required. See
+[Predict Stream API prerequisites](https://docs.opensearch.org/latest/ml-commons-plugin/api/train-predict/predict-stream/#prerequisites).
+
+On 3.9 and earlier, or if that regex setting has been overridden, a Vertex AI pattern is
+needed too. It is a list setting and a `PUT` replaces it, so read it first and send every
+pattern back, otherwise the other providers in the cluster stop working:
+
+```json
+GET /_cluster/settings?include_defaults=true&filter_path=**.trusted_connector_endpoints_regex
+```
+
+```json
+PUT /_cluster/settings
+{
+    "persistent": {
+        "plugins.ml_commons.connector.vertexai_enabled": true,
+        "plugins.ml_commons.stream_enabled": true,
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://.*-aiplatform\\.googleapis\\.com/.*$"
+            "REPLACE THIS LINE WITH EVERY PATTERN FROM THE RESPONSE ABOVE",
+            "^https://([a-z0-9][a-z0-9-]*-)?aiplatform\\.googleapis\\.com/.*$"
         ]
     }
 }

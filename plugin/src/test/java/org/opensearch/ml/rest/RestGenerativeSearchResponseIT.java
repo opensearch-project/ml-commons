@@ -38,7 +38,7 @@ public class RestGenerativeSearchResponseIT extends MLCommonsRestTestCase {
               "protocol": "http",
               "parameters": {
                 "endpoint": "api.openai.com",
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "temperature": 0
               },
               "credential": {
@@ -65,7 +65,7 @@ public class RestGenerativeSearchResponseIT extends MLCommonsRestTestCase {
         }
 
         // Create OpenAI model
-        String openaiModelName = "openAI-gpt-3.5-turbo";
+        String openaiModelName = "openAI-gpt-4o-mini";
         modelId = registerRemoteModel(openaiConnectorEntity, openaiModelName, false);
 
         // Create RAG pipeline
@@ -117,7 +117,7 @@ public class RestGenerativeSearchResponseIT extends MLCommonsRestTestCase {
               },
               "ext": {
                 "generative_qa_parameters": {
-                  "llm_model": "gpt-3.5-turbo",
+                  "llm_model": "gpt-4o-mini",
                   "llm_question": "What's the population of NYC metro area in 2023",
                   "context_size": 5,
                   "message_size": 5,
@@ -168,7 +168,7 @@ public class RestGenerativeSearchResponseIT extends MLCommonsRestTestCase {
               "id": "%s",
               "params": {
                 "query_text": "What's the population of NYC metro area in 2023",
-                "llm_model": "gpt-3.5-turbo",
+                "llm_model": "gpt-4o-mini",
                 "llm_question": "What's the population of NYC metro area in 2023",
                 "context_size": 5,
                 "message_size": 5,

@@ -53,7 +53,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    \"protocol\": \"http\",\n"
         + "    \"parameters\": {\n"
         + "        \"endpoint\": \"api.openai.com\",\n"
-        + "        \"model\": \"gpt-3.5-turbo\",\n"
+        + "        \"model\": \"gpt-4o-mini\",\n"
         + "        \"temperature\": 0\n"
         + "    },\n"
         + "    \"credential\": {\n"
@@ -464,8 +464,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  }\n"
         + "}";
 
-    private static final String OPENAI_MODEL = "gpt-3.5-turbo";
-    private static final String OPENAI_40_MODEL = "gpt-4o-mini";
+    private static final String OPENAI_MODEL = "gpt-4o-mini";
     private static final String BEDROCK_ANTHROPIC_CLAUDE = "bedrock/anthropic-claude";
     private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_SONNET_4_5 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_SONNET_4_5;
     private static final String BEDROCK_CONVERSE_ANTHROPIC_CLAUDE_HAIKU_4_5 = "bedrock-converse/" + BEDROCK_ANTHROPIC_CLAUDE_HAIKU_4_5;
@@ -621,7 +620,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "what is this image";
         requestParameters.systemPrompt = "You are great at answering questions";
         requestParameters.userInstructions = "Follow my instructions as best you can";
@@ -647,7 +646,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "what is this image";
         requestParameters.systemPrompt = "You are great at answering questions";
         requestParameters.userInstructions = "Follow my instructions as best you can";
@@ -1002,7 +1001,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         SearchRequestParameters requestParameters = new SearchRequestParameters();
         requestParameters.source = "text";
         requestParameters.match = "president";
-        requestParameters.llmModel = OPENAI_40_MODEL;
+        requestParameters.llmModel = OPENAI_MODEL;
         requestParameters.llmQuestion = "describe the image and answer the question: can you picture lincoln enjoying himself there";
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;

@@ -300,6 +300,7 @@ import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
+import org.opensearch.ml.engine.tools.SearchTemplateFillTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
@@ -731,7 +732,10 @@ public class MachineLearningPlugin extends Plugin
                 client.threadPool().executor(ThreadPool.Names.GENERIC)
             );
 
-        encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        EncryptorImpl encryptorImpl = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        // Drop cached master keys when .plugins-ml-config is replaced (e.g. restored from a snapshot).
+        clusterService.addListener(encryptorImpl);
+        encryptor = encryptorImpl;
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -886,6 +890,7 @@ public class MachineLearningPlugin extends Plugin
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
         QueryPlanningTool.Factory.getInstance().init(client);
+        SearchTemplateFillTool.Factory.getInstance().init(client, agenticSearchTemplateService, mlFeatureEnabledSetting);
         WriteToScratchPadTool.Factory.getInstance().init();
         ReadFromScratchPadTool.Factory.getInstance().init();
 
@@ -900,6 +905,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
         toolFactories.put(QueryPlanningTool.TYPE, QueryPlanningTool.Factory.getInstance());
+        toolFactories.put(SearchTemplateFillTool.TYPE, SearchTemplateFillTool.Factory.getInstance());
         toolFactories.put(WriteToScratchPadTool.TYPE, WriteToScratchPadTool.Factory.getInstance());
         toolFactories.put(ReadFromScratchPadTool.TYPE, ReadFromScratchPadTool.Factory.getInstance());
         if (externalToolFactories != null) {

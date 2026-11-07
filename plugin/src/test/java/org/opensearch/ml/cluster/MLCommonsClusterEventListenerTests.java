@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.cluster;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -499,5 +501,37 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         IndexRoutingTable indexRoutingTable = mock(IndexRoutingTable.class);
         when(routingTable.index(ML_JOBS_INDEX)).thenReturn(indexRoutingTable);
         when(indexRoutingTable.allPrimaryShardsActive()).thenReturn(true);
+    }
+
+    public void testClusterChanged_NodesRemovedAndAddedInSameUpdate_bothHandled() {
+        DiscoveryNode newNode = createDataNode("new1", Version.CURRENT);
+        DiscoveryNode oldNode = createDataNode("old1", Version.CURRENT);
+        setupClusterState(false, newNode);
+        DiscoveryNodes.Delta delta = mock(DiscoveryNodes.Delta.class);
+        when(delta.removed()).thenReturn(true);
+        when(delta.added()).thenReturn(true);
+        when(delta.removedNodes()).thenReturn(java.util.List.of(oldNode));
+        when(delta.addedNodes()).thenReturn(java.util.List.of(newNode));
+        when(event.nodesDelta()).thenReturn(delta);
+        when(clusterState.getNodes()).thenReturn(DiscoveryNodes.builder().add(newNode).build());
+
+        listener.clusterChanged(event);
+
+        verify(mlModelManager).removeWorkerNodes(java.util.Set.of(oldNode.getId()), false);
+        verify(mlModelAutoReDeployer).buildAutoReloadArrangement(eq(java.util.List.of(newNode.getId())), any());
+    }
+
+    public void testClusterChanged_OnlyNodesRemoved_noAutoRedeploy() {
+        DiscoveryNode oldNode = createDataNode("old1", Version.CURRENT);
+        setupClusterState(false, createDataNode("n1", Version.CURRENT));
+        DiscoveryNodes.Delta delta = mock(DiscoveryNodes.Delta.class);
+        when(delta.removed()).thenReturn(true);
+        when(delta.removedNodes()).thenReturn(java.util.List.of(oldNode));
+        when(event.nodesDelta()).thenReturn(delta);
+
+        listener.clusterChanged(event);
+
+        verify(mlModelManager).removeWorkerNodes(java.util.Set.of(oldNode.getId()), false);
+        verify(mlModelAutoReDeployer, never()).buildAutoReloadArrangement(any(), any());
     }
 }

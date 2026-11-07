@@ -37,6 +37,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.test.rest.FakeRestChannel;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
@@ -119,6 +120,30 @@ public class RestMLPredictionStreamActionTests {
 
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
         assertNotNull(restAction.prepareRequest(request, null));
+    }
+
+    @Test
+    public void testPrepareRequestNonStreamingChannelReturnsValidationError() throws Exception {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(modelManager.getOptionalModelFunctionName("test-model"))
+            .thenReturn(java.util.Optional.of(org.opensearch.ml.common.FunctionName.REMOTE));
+
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
+        // FakeRestChannel is a plain RestChannel, which is what a node that is not configured for HTTP
+        // streaming supplies. The other tests here only assert prepareRequest returns a consumer; the cast
+        // happens inside that consumer, so it is only exercised by accepting a channel.
+        FakeRestChannel channel = new FakeRestChannel(request, true, 1);
+
+        restAction.handleRequest(request, channel, client);
+
+        assertEquals(RestStatus.BAD_REQUEST, channel.capturedResponse().status());
+        assertTrue(
+            channel
+                .capturedResponse()
+                .content()
+                .utf8ToString()
+                .contains("Unable to initiate request / response streaming over non-streaming channel")
+        );
     }
 
     @Test

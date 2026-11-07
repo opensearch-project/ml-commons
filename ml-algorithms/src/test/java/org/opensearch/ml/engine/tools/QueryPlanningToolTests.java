@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -784,6 +785,37 @@ public class QueryPlanningToolTests {
         // User prompt should be processed
         assertTrue(capturedParams.containsKey("user_prompt"));
         assertEquals("custom user prompt", capturedParams.get("user_prompt"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testDefaultUserPromptIncludesIndexName() {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test query");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+        // No query_planner_user_prompt - should use the default user prompt
+
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        tool.run(parameters, listener);
+
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool).run(captor.capture(), any());
+
+        Map<String, String> capturedParams = captor.getValue();
+        String renderedUserPrompt = new StringSubstitutor(capturedParams, "${parameters.", "}").replace(capturedParams.get("user_prompt"));
+        assertTrue(renderedUserPrompt.contains("Index: testIndex\n"));
     }
 
     @Test
