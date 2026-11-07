@@ -42,10 +42,12 @@ import org.opensearch.ml.common.input.execute.agent.AgentInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
+import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
 import org.opensearch.ml.common.input.execute.agent.ToolCall;
+import org.opensearch.ml.common.input.execute.agent.VideoContent;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -295,33 +297,58 @@ public class AGUIInputConverter {
     }
 
     /**
-     * Parses AG-UI BinaryInputContent for images (data field only).
+     * Parses AG-UI BinaryInputContent for images, videos, and documents.
+     * Only base64-encoded data is supported; URL-based content is not yet supported.
      */
     private static ContentBlock parseBinaryContent(JsonObject binaryObj) {
-        if (!binaryObj.has("mimeType") || !binaryObj.has("data")) {
+        if (!binaryObj.has("mimeType")) {
+            return null;
+        }
+        if (!binaryObj.has("data")) {
+            log.debug("AG-UI BinaryInputContent with url is not yet supported, skipping");
             return null;
         }
 
         String mimeType = binaryObj.get("mimeType").getAsString();
-
-        // Only handle images
-        if (!mimeType.startsWith("image/")) {
-            return null;
-        }
-
         String format = extractFormat(mimeType);
         String data = binaryObj.get("data").getAsString();
-
-        ImageContent imageContent = new ImageContent();
-        imageContent.setType(SourceType.BASE64);
-        imageContent.setFormat(format);
-        imageContent.setData(data);
+        String prefix = mimeType.substring(0, Math.max(0, mimeType.indexOf('/')));
 
         ContentBlock block = new ContentBlock();
-        block.setType(ContentType.IMAGE);
-        block.setImage(imageContent);
+        switch (prefix) {
+            case "image":
+                block.setType(ContentType.IMAGE);
+                block.setImage(new ImageContent(SourceType.BASE64, format, data));
+                return block;
+            case "video":
+                block.setType(ContentType.VIDEO);
+                block.setVideo(new VideoContent(SourceType.BASE64, format, data));
+                return block;
+            case "text":
+            case "application":
+                block.setType(ContentType.DOCUMENT);
+                block.setDocument(new DocumentContent(SourceType.BASE64, format, data));
+                return block;
+            default:
+                return null;
+        }
+    }
 
-        return block;
+    /**
+     * Reconstructs the full MIME type from a document format suffix.
+     */
+    private static String reconstructDocumentMimeType(String format) {
+        switch (format) {
+            case "plain":
+            case "csv":
+            case "markdown":
+            case "html":
+            case "xml":
+            case "tab-separated-values":
+                return "text/" + format;
+            default:
+                return "application/" + format;
+        }
     }
 
     /**
@@ -370,6 +397,14 @@ public class AGUIInputConverter {
                             contentMap.put("type", "binary");
                             contentMap.put("mimeType", "image/" + block.getImage().getFormat());
                             contentMap.put("data", block.getImage().getData());
+                        } else if (block.getType() == ContentType.VIDEO && block.getVideo() != null) {
+                            contentMap.put("type", "binary");
+                            contentMap.put("mimeType", "video/" + block.getVideo().getFormat());
+                            contentMap.put("data", block.getVideo().getData());
+                        } else if (block.getType() == ContentType.DOCUMENT && block.getDocument() != null) {
+                            contentMap.put("type", "binary");
+                            contentMap.put("mimeType", reconstructDocumentMimeType(block.getDocument().getFormat()));
+                            contentMap.put("data", block.getDocument().getData());
                         }
                         if (!contentMap.isEmpty()) {
                             contentArray.add(contentMap);
