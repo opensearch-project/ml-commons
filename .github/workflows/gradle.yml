@@ -1,0 +1,41 @@
+name: Publish zip
+
+on:
+  push:
+    branches: [ "scheduledJob" ]
+  pull_request:
+    branches: [ "scheduledJob" ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: 'scheduledJob'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed to create releases and upload assets
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch || 'scheduledJob' }}
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+    - name: Build with Gradle Wrapper
+      run: ./gradlew assemble
+
+    - name: Upload plugin distributions
+      uses: softprops/action-gh-release@v2
+      with:
+        files: plugin/build/distributions/*.zip
+        tag_name: ${{ github.event.inputs.branch }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
