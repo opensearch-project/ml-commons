@@ -936,9 +936,27 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         assertEquals(FACTS_EXTRACTION_OPENAI_RESPONSE_FORMAT_JSON, captor.getValue().get("_response_format_json"));
     }
 
+    public void testGetStructuredOutputParameters_OpenAILabelInAttackerHost_ReturnsEmptyMap() {
+        // openai.attacker.com has "openai" as an exact host label. Previously this would have
+        // matched via hostHasSegment; now host.equals("api.openai.com") closes that vector.
+        Connector connector = mock(Connector.class);
+        ConnectorAction attackerAction = mockPredictAction(true, "https://openai.attacker.com/api/chat");
+        when(connector.getActions()).thenReturn(Arrays.asList(attackerAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
     public void testGetStructuredOutputParameters_SubstringInHostLabel_ReturnsEmptyMap() {
-        // "my-openai-proxy" is a single host label — it does not equal the "openai" token,
-        // so token-based matching must not mis-route it.
+        // "my-openai-proxy" is a single host label — it does not equal "api.openai.com",
+        // so it must not be mis-routed.
         Connector connector = mock(Connector.class);
         ConnectorAction proxyAction = mockPredictAction(true, "https://my-openai-proxy.internal/api/chat");
         when(connector.getActions()).thenReturn(Arrays.asList(proxyAction));
@@ -1095,6 +1113,63 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         ConnectorAction executeAction = mock(ConnectorAction.class);
         when(executeAction.getActionType()).thenReturn(ConnectorAction.ActionType.EXECUTE);
         when(connector.getActions()).thenReturn(Arrays.asList(executeAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_CohereV2Embed_ReturnsEmptyMap() {
+        // Cohere /v2/embed is not a chat endpoint; the json_schema structured-output
+        // constraint is only valid for /v2/chat. Matching on "v2" alone would incorrectly
+        // route embedding requests, so both "v2" and "chat" path segments are required.
+        Connector connector = mock(Connector.class);
+        ConnectorAction cohereEmbedAction = mockPredictAction(true, "https://api.cohere.com/v2/embed");
+        when(connector.getActions()).thenReturn(Arrays.asList(cohereEmbedAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_CohereV2Rerank_ReturnsEmptyMap() {
+        Connector connector = mock(Connector.class);
+        ConnectorAction cohereRerankAction = mockPredictAction(true, "https://api.cohere.com/v2/rerank");
+        when(connector.getActions()).thenReturn(Arrays.asList(cohereRerankAction));
+        MLModel model = mock(MLModel.class);
+        when(model.getConnector()).thenReturn(connector);
+        stubModelWithEmbeddedConnector(model);
+
+        ActionListener<Map<String, String>> listener = mock(ActionListener.class);
+        helper.getStructuredOutputParameters("m1", listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().isEmpty());
+    }
+
+    public void testGetStructuredOutputParameters_ProviderTokenInUserinfo_ReturnsEmptyMap() {
+        // URL_PARTS captures the full authority (userinfo + host) in group 1. A provider token
+        // that appears only in the userinfo (e.g. "openai" in "user:openai@attacker.example.com")
+        // must not trigger a match. After splitting group 1 on '.', the userinfo segment is
+        // "user:openai@attacker" — which does not equal the bare token "openai" — so the host
+        // confusion attack is blocked. This test pins that behaviour so a future regex change
+        // does not accidentally introduce a host-confusion vulnerability.
+        Connector connector = mock(Connector.class);
+        ConnectorAction action = mockPredictAction(true, "https://user:openai@attacker.example.com/path");
+        when(connector.getActions()).thenReturn(Arrays.asList(action));
         MLModel model = mock(MLModel.class);
         when(model.getConnector()).thenReturn(connector);
         stubModelWithEmbeddedConnector(model);
