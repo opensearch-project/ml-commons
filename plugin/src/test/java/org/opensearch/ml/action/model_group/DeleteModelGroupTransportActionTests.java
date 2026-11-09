@@ -37,6 +37,8 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
@@ -237,6 +239,25 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to delete data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_AccessIsValidatedForTheCallingUser() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alice|IT|ml_full_access");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(7);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(modelAccessControlHelper).validateModelGroupAccess(userCaptor.capture(), any(), any(), any(), any(), any(), any(), any());
+        assertNotNull("access must be checked for the caller, not a null user", userCaptor.getValue());
+        assertEquals("alice", userCaptor.getValue().getName());
+        // The caller's context is restored for the response.
+        assertEquals("alice|IT|ml_full_access", threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
     }
 
     @Test

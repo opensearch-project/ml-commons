@@ -93,6 +93,9 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             return;
         }
 
+        // Read the caller before stashing the thread context: stashContext() clears the security user, and a
+        // null user is treated as "access control disabled" by ModelAccessControlHelper.
+        User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
 
@@ -100,13 +103,12 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
                 checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
             } else {
-                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+                validateAndDeleteModelGroup(user, modelGroupId, tenantId, wrappedListener);
             }
         }
     }
 
-    private void validateAndDeleteModelGroup(String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
-        User user = RestActionUtils.getUserContext(client);
+    private void validateAndDeleteModelGroup(User user, String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
         modelAccessControlHelper
             .validateModelGroupAccess(
                 user,
