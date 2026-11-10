@@ -38,13 +38,28 @@ public class StreamingHandlerFactory {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
+        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, parameters, StreamingAddressPolicy.DEFAULT);
+    }
+
+    /**
+     * @param addressPolicy applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
+     *                      validates addresses itself
+     */
+    public static StreamingHandler createHandler(
+        String llmInterface,
+        Connector connector,
+        SdkAsyncHttpClient httpClient,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters,
+        StreamingAddressPolicy addressPolicy
+    ) {
         switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
             case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -72,8 +87,9 @@ public class StreamingHandlerFactory {
         String llmInterface,
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
-        Map<String, String> parameters
+        Map<String, String> parameters,
+        StreamingAddressPolicy addressPolicy
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
     }
 }
