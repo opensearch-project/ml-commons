@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -29,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
@@ -243,21 +245,31 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_AccessIsValidatedForTheCallingUser() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alice|IT|ml_full_access");
+        String caller = "alice|IT|ml_full_access";
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, caller);
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
 
-        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+        AtomicReference<String> userSeenByListener = new AtomicReference<>();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        ActionListener<DeleteResponse> listener = ActionListener.wrap(r -> fail("delete must be denied"), e -> {
+            // The response listener must run with the caller's context restored.
+            userSeenByListener.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            failure.set(e);
+        });
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, listener);
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(modelAccessControlHelper).validateModelGroupAccess(userCaptor.capture(), any(), any(), any(), any(), any(), any(), any());
         assertNotNull("access must be checked for the caller, not a null user", userCaptor.getValue());
         assertEquals("alice", userCaptor.getValue().getName());
-        // The caller's context is restored for the response.
-        assertEquals("alice|IT|ml_full_access", threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+        assertTrue(failure.get() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) failure.get()).status());
+        assertEquals(caller, userSeenByListener.get());
     }
 
     @Test
@@ -272,6 +284,8 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("User doesn't have privilege to delete this model group", argumentCaptor.getValue().getMessage());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     @Test

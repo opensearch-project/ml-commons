@@ -29,7 +29,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -128,7 +127,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     private void handleAccessValidation(boolean hasAccess, String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
         if (!hasAccess) {
-            listener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
+            listener
+                .onFailure(new OpenSearchStatusException("User doesn't have privilege to delete this model group", RestStatus.FORBIDDEN));
             return;
         }
         checkForAssociatedModels(modelGroupId, tenantId, listener);
