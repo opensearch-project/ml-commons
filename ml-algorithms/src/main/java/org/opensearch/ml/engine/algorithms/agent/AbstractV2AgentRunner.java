@@ -388,28 +388,27 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         // Delegate to ModelProvider - it knows its own response format
         // First extract the message portion from the full response
         String messageJson = modelProvider.extractMessageFromResponse(dataAsMap);
+        Message message = messageJson == null ? null : modelProvider.parseToUnifiedMessage(messageJson);
+        if (message != null) {
+            return message;
+        }
+        // Providers return null for a message with no text, no tool calls and no tool result: memory loading
+        // relies on that to skip such messages. For a live reply, it's an empty reply only if the provider
+        // confirms the response has nothing in it; otherwise the response is in a shape we can't read.
         String provider = modelProvider.getClass().getSimpleName();
+        if (modelProvider.isEmptyReply(dataAsMap)) {
+            throw new EmptyModelResponseException(provider, modelProvider.extractFinishReason(dataAsMap));
+        }
         if (messageJson == null) {
-            // A finish reason without a message (e.g. a token limit spent entirely on thinking) is an empty reply.
-            String finishReason = modelProvider.extractFinishReason(dataAsMap);
-            if (finishReason != null) {
-                throw new EmptyModelResponseException(provider, finishReason);
-            }
             throw new IllegalStateException(
                 "ModelProvider failed to extract message from response. Provider: "
                     + provider
                     + ". This may indicate an unexpected response format."
             );
         }
-
-        // Then parse the message to unified format. Providers return null for a message with no text,
-        // no tool calls and no tool result: memory loading relies on that to skip such messages, but
-        // for a live reply it means the model answered with nothing.
-        Message message = modelProvider.parseToUnifiedMessage(messageJson);
-        if (message != null) {
-            return message;
-        }
-        throw new EmptyModelResponseException(provider, modelProvider.extractFinishReason(dataAsMap));
+        throw new IllegalStateException(
+            "ModelProvider failed to parse message JSON. Provider: " + provider + ". This may indicate an unexpected message format."
+        );
     }
 
     /**

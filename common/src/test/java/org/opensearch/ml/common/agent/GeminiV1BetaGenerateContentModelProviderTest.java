@@ -928,4 +928,28 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         assertEquals("SAFETY", provider.extractFinishReason(response));
         assertNull(provider.extractMessageFromResponse(response));
     }
+
+    @Test
+    public void testIsEmptyReply_NoContentOnlyThoughtsOrABlockedPrompt() {
+        assertTrue(provider.isEmptyReply(Map.of("candidates", List.of(Map.of("finishReason", "MAX_TOKENS")))));
+        assertTrue(
+            provider.isEmptyReply(Map.of("candidates", List.of(Map.of("finishReason", "STOP", "content", Map.of("role", "model")))))
+        );
+        List<Object> thoughtOnly = List.of(Map.of("text", "thinking...", "thought", true), Map.of("text", " "));
+        Map<String, Object> thoughts = Map.of("finishReason", "MAX_TOKENS", "content", Map.of("role", "model", "parts", thoughtOnly));
+        assertTrue(provider.isEmptyReply(Map.of("candidates", List.of(thoughts))));
+        assertTrue(provider.isEmptyReply(Map.of("promptFeedback", Map.of("blockReason", "SAFETY"))));
+    }
+
+    @Test
+    public void testIsEmptyReply_FalseForAnswerPartsOrAnUnknownShape() {
+        List<Object> functionCall = List.of(Map.of("functionCall", Map.of("name", "search", "args", Map.of())));
+        for (Object parts : List.of(List.of(Map.of("text", "hi")), functionCall, List.of(Map.of("inlineData", Map.of())))) {
+            Map<String, Object> candidate = Map.of("finishReason", "STOP", "content", Map.of("role", "model", "parts", parts));
+            assertFalse(parts.toString(), provider.isEmptyReply(Map.of("candidates", List.of(candidate))));
+        }
+        assertFalse(provider.isEmptyReply(null));
+        assertFalse(provider.isEmptyReply(Map.of("candidates", List.of())));
+        assertFalse(provider.isEmptyReply(Map.of("candidates", List.of(Map.of("index", 0)))));
+    }
 }

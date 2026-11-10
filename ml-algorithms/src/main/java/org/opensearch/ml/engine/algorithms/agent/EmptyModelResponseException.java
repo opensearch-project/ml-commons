@@ -20,12 +20,29 @@ import lombok.Getter;
  * depends on why the model stopped. A transient empty reply (a normal stop with nothing in it, seen
  * intermittently with some models) usually succeeds on a second attempt. An empty reply caused by
  * the output token limit or a content filter fails the same way again, so it is reported at once.
+ *
+ * The status is 400 when the request has to change (a token limit, a full context window, a blocked
+ * request or output), and 502 otherwise, since the provider returned an unusable reply.
  */
 @Getter
 public class EmptyModelResponseException extends OpenSearchStatusException {
 
-    /** A normal stop, or no reason given: the intermittent case a second attempt usually fixes. */
-    private static final Set<String> RETRYABLE_REASONS = Set.of("", "stop", "end_turn", "stop_sequence", "finish_reason_unspecified");
+    /**
+     * A normal stop, no reason given, or a malformed reply (Bedrock malformed_model_output and
+     * malformed_tool_use, Gemini MALFORMED_FUNCTION_CALL and OTHER): cases a second attempt usually fixes.
+     */
+    private static final Set<String> RETRYABLE_REASONS = Set
+        .of(
+            "",
+            "stop",
+            "end_turn",
+            "stop_sequence",
+            "finish_reason_unspecified",
+            "malformed_model_output",
+            "malformed_tool_use",
+            "malformed_function_call",
+            "other"
+        );
     /** Output limit reached before any text: OpenAI "length", Anthropic and Bedrock "max_tokens", Gemini "MAX_TOKENS". */
     private static final Set<String> TOKEN_LIMIT_REASONS = Set.of("length", "max_tokens");
     /** Bedrock Converse: the input already fills the model's context window. */
@@ -44,14 +61,15 @@ public class EmptyModelResponseException extends OpenSearchStatusException {
             "spii",
             "image_safety",
             "image_prohibited_content",
-            "image_recitation"
+            "image_recitation",
+            "block_reason_unspecified"
         );
 
     private final String provider;
     private final String finishReason;
 
     public EmptyModelResponseException(String provider, String finishReason) {
-        super(message(finishReason), RestStatus.BAD_GATEWAY);
+        super(message(finishReason), statusFor(finishReason));
         this.provider = provider;
         this.finishReason = finishReason;
     }
@@ -75,6 +93,15 @@ public class EmptyModelResponseException extends OpenSearchStatusException {
             text.append(". The provider's content filter or guardrail may have blocked the request or the output");
         }
         return text.append('.').toString();
+    }
+
+    /** 400 when only a change to the request can help, 502 for an unusable reply from the provider. */
+    private static RestStatus statusFor(String finishReason) {
+        String reason = normalized(finishReason);
+        boolean requestMustChange = TOKEN_LIMIT_REASONS.contains(reason)
+            || CONTEXT_WINDOW_REASON.equals(reason)
+            || BLOCKED_REASONS.contains(reason);
+        return requestMustChange ? RestStatus.BAD_REQUEST : RestStatus.BAD_GATEWAY;
     }
 
     private static String normalized(String finishReason) {

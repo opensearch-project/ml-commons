@@ -410,17 +410,47 @@ public class OpenaiV1ChatCompletionsModelProvider extends ModelProvider {
 
     /**
      * Extracts the finish reason from an OpenAI Chat Completions API response, read from choices[0].finish_reason
-     * (for example "stop" or "length").
+     * (for example "stop" or "length"). A refusal is reported as "refusal": OpenAI puts it in message.refusal
+     * and still sets finish_reason to "stop".
      *
      * @param responseData Map containing the OpenAI Chat Completions API response data
      * @return the finish reason, or null if not present
      */
     @Override
     public String extractFinishReason(Map<String, ?> responseData) {
+        Map<?, ?> choice = firstChoice(responseData);
+        if (choice == null) {
+            return null;
+        }
+        if (choice.get("message") instanceof Map<?, ?> message && message.get("refusal") instanceof String refusal && !refusal.isBlank()) {
+            return "refusal";
+        }
+        Object reason = choice.get("finish_reason");
+        return reason == null ? null : reason.toString();
+    }
+
+    /**
+     * A reply is empty when choices[0].message has no content (null, "" or an empty list) and no tool calls.
+     * A refusal has no content either, and is reported through its finish reason.
+     */
+    @Override
+    public boolean isEmptyReply(Map<String, ?> responseData) {
+        Map<?, ?> choice = firstChoice(responseData);
+        if (choice == null || !(choice.get("message") instanceof Map<?, ?> message)) {
+            return false;
+        }
+        Object content = message.get("content");
+        boolean noContent = content == null
+            || (content instanceof String text && text.isEmpty())
+            || (content instanceof List<?> parts && parts.isEmpty());
+        Object toolCalls = message.get("tool_calls");
+        return noContent && (toolCalls == null || (toolCalls instanceof List<?> calls && calls.isEmpty()));
+    }
+
+    private static Map<?, ?> firstChoice(Map<String, ?> responseData) {
         Object choicesObj = responseData == null ? null : responseData.get("choices");
         if (choicesObj instanceof List<?> choices && !choices.isEmpty() && choices.get(0) instanceof Map<?, ?> choice) {
-            Object reason = choice.get("finish_reason");
-            return reason == null ? null : reason.toString();
+            return choice;
         }
         return null;
     }

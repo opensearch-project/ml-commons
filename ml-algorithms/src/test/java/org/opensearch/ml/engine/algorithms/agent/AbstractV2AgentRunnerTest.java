@@ -661,22 +661,38 @@ public class AbstractV2AgentRunnerTest {
     }
 
     @Test
-    public void testExtractAssistantMessage_NoMessageButAFinishReasonIsAnEmptyReply() {
+    public void testExtractAssistantMessage_NoMessageIsAnEmptyReplyWhenTheProviderSaysSo() {
         Map<String, Object> dataMap = new HashMap<>();
         ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
 
         when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(null);
+        when(modelProvider.isEmptyReply(dataMap)).thenReturn(true);
         when(modelProvider.extractFinishReason(dataMap)).thenReturn("length");
 
         try {
             runner.extractAssistantMessage(output, modelProvider);
-            fail("Should throw EmptyModelResponseException when the response has a finish reason but no message");
+            fail("Should throw EmptyModelResponseException when the provider reports an empty reply");
         } catch (EmptyModelResponseException e) {
             assertEquals("length", e.getFinishReason());
             assertFalse(e.isRetryable());
         }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_NoMessageWithAFinishReasonIsStillAFormatError() {
+        // e.g. llm_response_exclude_path stripped the message: the provider doesn't call that an empty reply
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(null);
+        when(modelProvider.extractFinishReason(dataMap)).thenReturn("stop");
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> runner.extractAssistantMessage(output, modelProvider));
+        assertTrue(e.getMessage().contains("ModelProvider failed to extract message from response"));
     }
 
     @Test
@@ -690,6 +706,7 @@ public class AbstractV2AgentRunnerTest {
         String messageJson = "{\"role\":\"assistant\",\"content\":[]}";
         when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(messageJson);
         when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(null);
+        when(modelProvider.isEmptyReply(dataMap)).thenReturn(true);
 
         when(modelProvider.extractFinishReason(dataMap)).thenReturn("stop");
 
@@ -702,6 +719,22 @@ public class AbstractV2AgentRunnerTest {
             assertTrue(e.getMessage().startsWith("The model returned an empty response"));
             assertTrue(e.isRetryable());
         }
+    }
+
+    @Test
+    public void testExtractAssistantMessage_UnparseableMessageIsAFormatError() {
+        // e.g. an OpenAI-compatible server returning content as an array of parts
+        Map<String, Object> dataMap = new HashMap<>();
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        String messageJson = "{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}";
+        when(modelProvider.extractMessageFromResponse(dataMap)).thenReturn(messageJson);
+        when(modelProvider.parseToUnifiedMessage(messageJson)).thenReturn(null);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> runner.extractAssistantMessage(output, modelProvider));
+        assertTrue(e.getMessage().contains("ModelProvider failed to parse message JSON"));
     }
 
     // ==================== Tests for buildLLMParams ====================

@@ -443,6 +443,7 @@ public class MLChatAgentRunnerV2Test {
         full.setContent(List.of(block));
         when(functionCalling.handle(any(ModelTensorOutput.class), anyMap())).thenReturn(null);
         when(modelProvider.extractFinishReason(any())).thenReturn(finishReason);
+        when(modelProvider.isEmptyReply(any())).thenReturn(true);
         when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
@@ -531,6 +532,22 @@ public class MLChatAgentRunnerV2Test {
         verify(listener, timeout(5000)).onFailure(failure.capture());
         assertEquals("the same request would hit the same limit", 1, calls.get());
         assertTrue(failure.getValue().getMessage().contains("increase max_tokens"));
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) failure.getValue()).status());
+    }
+
+    @Test
+    public void testUnreadableReplyIsAFormatErrorNotRetried() {
+        // The provider can't parse the reply but says it isn't empty, e.g. content in a shape it doesn't handle.
+        AtomicInteger calls = mockLLMReplies("stop", true, false);
+        when(modelProvider.isEmptyReply(any())).thenReturn(false);
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runner.executeAgentLogic(mlAgent, agentParams(), createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(failure.capture());
+        assertEquals(1, calls.get());
+        assertTrue(failure.getValue().getMessage().contains("failed to parse message JSON"));
     }
 
     @Test

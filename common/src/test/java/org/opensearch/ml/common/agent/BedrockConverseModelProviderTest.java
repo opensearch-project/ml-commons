@@ -1381,4 +1381,28 @@ public class BedrockConverseModelProviderTest {
         assertNull(provider.extractFinishReason(null));
         assertNull(provider.extractFinishReason(Map.of("output", Map.of())));
     }
+
+    @Test
+    public void testIsEmptyReply_NoContentOrOnlyReasoning() {
+        Map<String, Object> reasoning = Map.of("reasoningContent", Map.of("reasoningText", Map.of("text", "thinking...")));
+        for (Object content : List.of(List.of(), List.of(reasoning))) {
+            Map<String, Object> response = Map
+                .of("stopReason", "max_tokens", "output", Map.of("message", Map.of("role", "assistant", "content", content)));
+            assertTrue(content.toString(), provider.isEmptyReply(response));
+        }
+        assertTrue(provider.isEmptyReply(Map.of("output", Map.of("message", Map.of("role", "assistant")))));
+    }
+
+    @Test
+    public void testIsEmptyReply_FalseForAnswerBlocksOrAMissingMessage() {
+        List<Object> toolUse = List.of(Map.of("toolUse", Map.of("toolUseId", "t1", "name", "search", "input", Map.of())));
+        List<Object> unknownBlock = List.of(Map.of("citationsContent", Map.of()));
+        for (Object content : List.of(List.of(Map.of("text", "hi")), toolUse, unknownBlock)) {
+            Map<String, Object> response = Map.of("stopReason", "end_turn", "output", Map.of("message", Map.of("content", content)));
+            assertFalse(content.toString(), provider.isEmptyReply(response));
+        }
+        assertFalse(provider.isEmptyReply(null));
+        // A missing output.message is not the usual shape (e.g. a post-process stripped it), so it's a format error
+        assertFalse(provider.isEmptyReply(Map.of("stopReason", "end_turn", "output", Map.of())));
+    }
 }

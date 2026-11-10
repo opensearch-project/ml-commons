@@ -117,6 +117,21 @@ public abstract class ModelProvider {
     }
 
     /**
+     * Whether a response is a reply with nothing in it: the provider's usual response shape, but no text
+     * and no tool calls (for example only reasoning, or no content at all after a token limit). The agent
+     * reports such a reply as empty, and may retry it. A response that can't be read for any other reason
+     * is reported as an unexpected format instead.
+     *
+     * The default is false, so every unreadable response is reported as an unexpected format.
+     *
+     * @param responseData the full LLM response data map
+     * @return true if the response is well formed but has no text and no tool calls
+     */
+    public boolean isEmptyReply(Map<String, ?> responseData) {
+        return false;
+    }
+
+    /**
      * Parses an provider-specific format response message JSON string into a unified Message object.
      *
      * @param json JSON string in the provider's native message format

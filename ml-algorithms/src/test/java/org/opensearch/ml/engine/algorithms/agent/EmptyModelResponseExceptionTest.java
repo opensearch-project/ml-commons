@@ -23,6 +23,14 @@ public class EmptyModelResponseExceptionTest {
     }
 
     @Test
+    public void testMalformedReplyIsRetryable() {
+        // Bedrock and Gemini report a badly formed reply this way; a second sample usually comes out fine.
+        for (String reason : new String[] { "malformed_model_output", "malformed_tool_use", "MALFORMED_FUNCTION_CALL", "OTHER" }) {
+            assertTrue(reason, new EmptyModelResponseException("P", reason).isRetryable());
+        }
+    }
+
+    @Test
     public void testTokenLimitIsNotRetryable() {
         // OpenAI "length", Anthropic/Bedrock "max_tokens", Gemini "MAX_TOKENS": the same request hits the same limit.
         for (String reason : new String[] { "length", "max_tokens", "MAX_TOKENS" }) {
@@ -40,14 +48,16 @@ public class EmptyModelResponseExceptionTest {
             "SAFETY",
             "RECITATION",
             "IMAGE_PROHIBITED_CONTENT",
-            "IMAGE_RECITATION" }) {
+            "IMAGE_RECITATION",
+            "BLOCK_REASON_UNSPECIFIED" }) {
             assertFalse(reason, new EmptyModelResponseException("P", reason).isRetryable());
+            assertTrue(reason, new EmptyModelResponseException("P", reason).getMessage().contains("content filter or guardrail"));
         }
     }
 
     @Test
     public void testOtherReasonsAreNotRetryable() {
-        for (String reason : new String[] { "model_context_window_exceeded", "LANGUAGE", "MALFORMED_FUNCTION_CALL", "something_new" }) {
+        for (String reason : new String[] { "model_context_window_exceeded", "LANGUAGE", "something_new" }) {
             assertFalse(reason, new EmptyModelResponseException("P", reason).isRetryable());
         }
     }
@@ -85,5 +95,16 @@ public class EmptyModelResponseExceptionTest {
         assertEquals(RestStatus.BAD_GATEWAY, e.status());
         assertEquals("OpenaiV1ChatCompletionsModelProvider", e.getProvider());
         assertEquals("stop", e.getFinishReason());
+    }
+
+    @Test
+    public void testIsABadRequestWhenTheRequestMustChange() {
+        // A token limit, a full context window or a block recur on the same request, so the client has to change it.
+        for (String reason : new String[] { "length", "MAX_TOKENS", "model_context_window_exceeded", "SAFETY", "refusal" }) {
+            assertEquals(reason, RestStatus.BAD_REQUEST, new EmptyModelResponseException("P", reason).status());
+        }
+        for (String reason : new String[] { null, "stop", "malformed_tool_use", "something_new" }) {
+            assertEquals(String.valueOf(reason), RestStatus.BAD_GATEWAY, new EmptyModelResponseException("P", reason).status());
+        }
     }
 }
