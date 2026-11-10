@@ -317,15 +317,8 @@ public class MLValidatableAsyncHttpClientTests {
         client.validate("http://10.0.0.1", HTTP, "10.0.0.1", 80, PRIVATE_IP_ENABLED);
     }
 
-    private static final String[] IPV6_PRIVATE = { "fd00::1", "fc00::1", "fec0::1", "::1" };
-    private static final String[] ALWAYS_BLOCKED = {
-        "fe80::1",
-        "fd00:ec2::254",
-        "fd00:ec2::253",
-        "169.254.169.254",
-        "169.254.1.1",
-        "::",
-        "0.0.0.0" };
+    private static final String[] IPV6_PRIVATE = { "fd00::1", "fc00::1", "fec0::1", "::1", "::" };
+    private static final String[] ALWAYS_BLOCKED = { "fe80::1", "fd00:ec2::254", "fd00:ec2::253", "169.254.169.254", "169.254.1.1" };
 
     private static String url(String ip) {
         return ip.indexOf(':') >= 0 ? "http://[" + ip + "]/" : "http://" + ip + "/";
@@ -371,6 +364,19 @@ public class MLValidatableAsyncHttpClientTests {
     }
 
     @Test
+    public void test_unspecifiedAddress_gatedLikeLoopback() throws Exception {
+        for (String ip : new String[] { "0.0.0.0", "::" }) {
+            IllegalArgumentException e = assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
+            );
+            assertEquals("Remote inference host name has private ip address: " + ip, e.getMessage());
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED);
+        }
+    }
+
+    @Test
     public void test_embeddedIpv4_classifiedByEmbeddedAddress() throws Exception {
         for (String ip : new String[] { "::10.0.0.1", "64:ff9b::10.0.0.1", "64:ff9b:1::10.0.0.1", "::ffff:127.0.0.1" }) {
             assertThrows(
@@ -389,6 +395,35 @@ public class MLValidatableAsyncHttpClientTests {
             assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
         }
         validatingHttpClient.validate(url("64:ff9b::203.0.113.1"), HTTP, "64:ff9b::203.0.113.1", 80, PRIVATE_IP_DISABLED);
+    }
+
+    @Test
+    public void test_ipv4MappedIpv6_classifiedByEmbeddedAddress() throws Exception {
+        // ::ffff:a.b.c.d carried by an Inet6Address. InetAddress.getByName normalises the mapped form to an
+        // Inet4Address, but an Inet6Address built directly keeps the 16 mapped bytes and must still be unwrapped.
+        byte[] prefix = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff };
+        java.net.InetAddress privateMapped = mappedIpv6(prefix, new byte[] { 10, 0, 0, 1 });
+        java.net.InetAddress metadataMapped = mappedIpv6(prefix, new byte[] { (byte) 169, (byte) 254, (byte) 169, (byte) 254 });
+        java.net.InetAddress publicMapped = mappedIpv6(prefix, new byte[] { (byte) 203, 0, (byte) 113, 1 });
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.PRIVATE,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { privateMapped })
+        );
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.BLOCKED,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { metadataMapped })
+        );
+        assertEquals(
+            MLValidatableAsyncHttpClient.AddressClass.PUBLIC,
+            MLValidatableAsyncHttpClient.classify(new java.net.InetAddress[] { publicMapped })
+        );
+    }
+
+    private static java.net.InetAddress mappedIpv6(byte[] prefix, byte[] ipv4) throws Exception {
+        byte[] bytes = new byte[16];
+        System.arraycopy(prefix, 0, bytes, 0, prefix.length);
+        System.arraycopy(ipv4, 0, bytes, 12, 4);
+        return java.net.Inet6Address.getByAddress(null, bytes, -1);
     }
 
     @Test

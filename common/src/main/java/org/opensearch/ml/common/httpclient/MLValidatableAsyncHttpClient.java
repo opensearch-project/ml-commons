@@ -146,9 +146,10 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
 
     /**
      * How a resolved address is treated. {@code BLOCKED} addresses are refused regardless of
-     * {@code connector.private_ip_enabled}: link-local ranges, the unspecified address and the EC2 instance-service
-     * prefix that carries the IPv6 metadata endpoint. {@code PRIVATE} addresses need that setting and, when one is
-     * configured, a match in {@code trusted_connector_private_endpoints_regex}.
+     * {@code connector.private_ip_enabled}: link-local ranges and the EC2 instance-service prefix that carries the
+     * IPv6 metadata endpoint. {@code PRIVATE} addresses need that setting and, when one is configured, a match in
+     * {@code trusted_connector_private_endpoints_regex}: RFC 1918, unique-local, loopback and the unspecified
+     * address (which reaches loopback on connect).
      */
     enum AddressClass {
         PUBLIC,
@@ -177,8 +178,9 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
             return AddressClass.BLOCKED;
         }
         AddressClass ipv6Class = classifyIpv6(bytes);
-        // ::a.b.c.d and the NAT64 prefixes carry an IPv4 address that the network may deliver to; the stricter of
-        // the two classifications wins. ::ffff:a.b.c.d never gets here: the JDK returns it as an Inet4Address.
+        // ::a.b.c.d, ::ffff:a.b.c.d and the NAT64 prefixes carry an IPv4 address that the network may deliver to;
+        // the stricter of the two classifications wins. getByName normalises ::ffff:a.b.c.d to an Inet4Address, but
+        // an Inet6Address built directly (e.g. Inet6Address.getByAddress) can still carry the mapped bytes.
         byte[] embedded = embeddedIpv4(bytes);
         if (embedded != null) {
             AddressClass ipv4Class = classifyIpv4(embedded);
@@ -194,7 +196,7 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         int first = bytes[0] & 0xff;
         int second = bytes[1] & 0xff;
         if (first == 0 && second == 0 && bytes[2] == 0 && bytes[3] == 0) {
-            return AddressClass.BLOCKED; // 0.0.0.0
+            return AddressClass.PRIVATE; // 0.0.0.0 reaches loopback on connect, so it is gated like loopback
         }
         if (first == 169 && second == 254) {
             return AddressClass.BLOCKED; // link-local, including the instance metadata service
@@ -216,7 +218,7 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
             }
         }
         if (leadingZero && bytes[15] == 0) {
-            return AddressClass.BLOCKED; // ::
+            return AddressClass.PRIVATE; // :: reaches loopback on connect, so it is gated like loopback
         }
         if (leadingZero && bytes[15] == 1) {
             return AddressClass.PRIVATE; // ::1
@@ -237,15 +239,24 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         return AddressClass.PUBLIC;
     }
 
-    /** The IPv4 address embedded in an IPv4-compatible (::a.b.c.d) or NAT64 (64:ff9b::/96, 64:ff9b:1::/48) address, or null. */
+    /**
+     * The IPv4 address embedded in an IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d) or NAT64
+     * (64:ff9b::/96, 64:ff9b:1::/48) address, or null.
+     */
     private static byte[] embeddedIpv4(byte[] bytes) {
-        boolean compatible = true;
-        for (int i = 0; i < 12; i++) {
+        boolean firstTenZero = true;
+        for (int i = 0; i < 10; i++) {
             if (bytes[i] != 0) {
-                compatible = false;
+                firstTenZero = false;
                 break;
             }
         }
+        if (firstTenZero && (bytes[10] & 0xff) == 0xff && (bytes[11] & 0xff) == 0xff) {
+            // ::ffff:a.b.c.d IPv4-mapped. getByName normalises this to an Inet4Address, but an Inet6Address built
+            // directly (e.g. Inet6Address.getByAddress) can still carry these bytes, so unwrap it here too.
+            return Arrays.copyOfRange(bytes, 12, 16);
+        }
+        boolean compatible = firstTenZero && bytes[10] == 0 && bytes[11] == 0;
         if (compatible) {
             boolean unspecifiedOrLoopback = bytes[12] == 0 && bytes[13] == 0 && bytes[14] == 0 && (bytes[15] == 0 || bytes[15] == 1);
             return unspecifiedOrLoopback ? null : Arrays.copyOfRange(bytes, 12, 16);
