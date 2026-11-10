@@ -10,12 +10,14 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 
+import org.opensearch.common.network.InetAddresses;
 import org.opensearch.ml.common.connector.Connector;
 
 import lombok.extern.log4j.Log4j2;
@@ -91,15 +93,17 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
     }
 
     private void validateIp(String endpoint, String hostName, boolean connectorPrivateIpEnabled) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(hostName);
+        validateAddresses(endpoint, hostName, InetAddress.getAllByName(hostName), connectorPrivateIpEnabled);
+    }
+
+    /** Checks every address {@code hostName} resolved to; any one of them can be the address the request connects to. */
+    void validateAddresses(String endpoint, String hostName, InetAddress[] addresses, boolean connectorPrivateIpEnabled) {
         AddressClass addressClass = classify(addresses);
 
         if (connectorRestrictedIpPatterns != null && !connectorRestrictedIpPatterns.isEmpty()) {
             boolean hasRestrictedAddress = Arrays
                 .stream(addresses)
-                .anyMatch(
-                    addr -> connectorRestrictedIpPatterns.stream().anyMatch(pattern -> pattern.matcher(addr.getHostAddress()).matches())
-                );
+                .anyMatch(addr -> matchesRestrictedPattern(addr, connectorRestrictedIpPatterns));
             if (hasRestrictedAddress) {
                 log.error("Remote inference host name has restricted ip address: {}", hostName);
                 throw new IllegalArgumentException("Remote inference host name has restricted ip address: " + hostName);
@@ -145,12 +149,22 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
     }
 
     /**
+     * Whether a restricted pattern matches the address or an IPv4 address it carries, each in the form
+     * {@link InetAddress#getHostAddress()} prints. A resolved AAAA record such as ::ffff:10.0.5.7 prints as
+     * 0:0:0:0:0:ffff:a00:507, so matching the printed IPv6 form alone would let it past a pattern written for 10.0.5.7.
+     */
+    static boolean matchesRestrictedPattern(InetAddress address, List<Pattern> patterns) {
+        return deliveryAddresses(address)
+            .stream()
+            .map(InetAddress::getHostAddress)
+            .anyMatch(text -> patterns.stream().anyMatch(pattern -> pattern.matcher(text).matches()));
+    }
+
+    /**
      * How a resolved address is treated. {@code BLOCKED} addresses are refused regardless of
-     * {@code connector.private_ip_enabled}: link-local ranges, the EC2 instance-service prefix that carries the IPv6
-     * metadata endpoint, and the Compute Engine IPv6 and Alibaba Cloud metadata addresses. {@code PRIVATE} addresses
-     * need that setting and, when one is configured, a match in {@code trusted_connector_private_endpoints_regex}:
-     * RFC 1918, unique-local, local-use NAT64, loopback and the unspecified address (which reaches loopback on
-     * connect).
+     * {@code connector.private_ip_enabled}; {@code PRIVATE} addresses need that setting and, when one is configured,
+     * a match in {@code trusted_connector_private_endpoints_regex}. The ranges are {@link #BLOCKED_SUBNETS} and
+     * {@link #PRIVATE_SUBNETS}.
      */
     enum AddressClass {
         PUBLIC,
@@ -158,155 +172,157 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         BLOCKED
     }
 
+    /**
+     * Link-local ranges, the EC2 instance-service prefix that carries the IPv6 metadata endpoint, and the Compute
+     * Engine IPv6 and Alibaba Cloud metadata addresses. Checked before {@link #PRIVATE_SUBNETS}, which contain some of
+     * them.
+     */
+    private static final List<Subnet> BLOCKED_SUBNETS = List
+        .of(
+            new Subnet("169.254.0.0/16"), // IPv4 link-local, including the instance metadata service
+            new Subnet("100.100.100.200/32"), // Alibaba Cloud instance metadata
+            new Subnet("fe80::/10"), // IPv6 link-local
+            new Subnet("fd00:ec2::/32"), // EC2 instance-service prefix, metadata at fd00:ec2::254
+            new Subnet("fd20:ce::254/128") // Compute Engine metadata on IPv6-only VMs
+        );
+
+    /**
+     * RFC 1918, loopback, the unspecified addresses (which reach loopback on connect), unique-local, deprecated site-local
+     * and local-use NAT64.
+     */
+    private static final List<Subnet> PRIVATE_SUBNETS = List
+        .of(
+            new Subnet("0.0.0.0/32"),
+            new Subnet("127.0.0.0/8"),
+            new Subnet("10.0.0.0/8"),
+            new Subnet("172.16.0.0/12"),
+            new Subnet("192.168.0.0/16"),
+            new Subnet("::/128"),
+            new Subnet("::1/128"),
+            new Subnet("fc00::/7"), // unique-local
+            new Subnet("fec0::/10"), // deprecated site-local
+            new Subnet("64:ff9b:1::/48") // local-use NAT64 (RFC 8215)
+        );
+
+    /**
+     * A CIDR block. An address only matches blocks of its own family: an IPv4 block never matches an IPv6 address, even
+     * one that carries an IPv4 address, which is why {@link #deliveryAddresses} unwraps those first.
+     */
+    private static final class Subnet {
+        private final byte[] network;
+        private final int prefixLength;
+
+        Subnet(String cidr) {
+            int slash = cidr.indexOf('/');
+            this.network = InetAddresses.forString(cidr.substring(0, slash)).getAddress();
+            this.prefixLength = Integer.parseInt(cidr.substring(slash + 1));
+            if (prefixLength < 0 || prefixLength > network.length * 8) {
+                throw new IllegalArgumentException("invalid prefix length in " + cidr);
+            }
+        }
+
+        boolean contains(InetAddress address) {
+            byte[] bytes = address.getAddress();
+            if (bytes.length != network.length) {
+                return false;
+            }
+            int fullBytes = prefixLength / 8;
+            for (int i = 0; i < fullBytes; i++) {
+                if (bytes[i] != network[i]) {
+                    return false;
+                }
+            }
+            int remainingBits = prefixLength % 8;
+            if (remainingBits == 0) {
+                return true;
+            }
+            int mask = (0xff << (8 - remainingBits)) & 0xff;
+            return ((bytes[fullBytes] ^ network[fullBytes]) & mask) == 0;
+        }
+    }
+
     /** The strictest class among the resolved addresses. */
     static AddressClass classify(InetAddress[] addresses) {
         AddressClass strictest = AddressClass.PUBLIC;
         for (InetAddress address : addresses) {
-            AddressClass current = classify(address);
-            if (current.ordinal() > strictest.ordinal()) {
-                strictest = current;
+            strictest = stricter(strictest, classify(address));
+        }
+        return strictest;
+    }
+
+    /** The strictest class among the address and the IPv4 addresses it carries (see {@link #deliveryAddresses}). */
+    static AddressClass classify(InetAddress address) {
+        AddressClass strictest = AddressClass.PUBLIC;
+        for (InetAddress candidate : deliveryAddresses(address)) {
+            if (BLOCKED_SUBNETS.stream().anyMatch(subnet -> subnet.contains(candidate))) {
+                strictest = stricter(strictest, AddressClass.BLOCKED);
+            } else if (PRIVATE_SUBNETS.stream().anyMatch(subnet -> subnet.contains(candidate))) {
+                strictest = stricter(strictest, AddressClass.PRIVATE);
             }
         }
         return strictest;
     }
 
-    static AddressClass classify(InetAddress address) {
+    private static AddressClass stricter(AddressClass a, AddressClass b) {
+        return a.ordinal() >= b.ordinal() ? a : b;
+    }
+
+    /**
+     * The address, followed by every IPv4 address a connection to it may be delivered to: the IPv4 address in an
+     * IPv4-mapped (::ffff:a.b.c.d) or IPv4-compatible (::a.b.c.d) address or in the well-known NAT64 prefix
+     * (64:ff9b::/96), and in the local-use NAT64 prefix (64:ff9b:1::/48) the IPv4 address under each prefix length
+     * RFC 6052 allows inside it (/48, /56, /64 and /96), since the operator's choice is not visible here. The IPv4 blocks
+     * in the subnet tables only match an {@link Inet4Address}, so these are unwrapped before matching. Tunnelling formats such
+     * as 6to4 and Teredo are not unwrapped: they carry the IPv6 packet to a tunnel endpoint instead of translating the
+     * connection to the IPv4 address.
+     */
+    static List<InetAddress> deliveryAddresses(InetAddress address) {
+        List<InetAddress> addresses = new ArrayList<>(5);
+        addresses.add(address);
         byte[] bytes = address.getAddress();
-        if (address instanceof Inet4Address) {
-            return classifyIpv4(bytes);
-        }
         if (bytes.length != 16) {
-            return AddressClass.BLOCKED;
+            return addresses;
         }
-        AddressClass ipv6Class = classifyIpv6(bytes);
-        // ::a.b.c.d, ::ffff:a.b.c.d and the NAT64 prefixes carry an IPv4 address that the network may deliver to;
-        // the stricter of the two classifications wins. getByName normalises ::ffff:a.b.c.d to an Inet4Address, but
-        // an Inet6Address built directly (e.g. Inet6Address.getByAddress) can still carry the mapped bytes.
-        byte[] embedded = embeddedIpv4(bytes);
-        if (embedded != null) {
-            AddressClass ipv4Class = classifyIpv4(embedded);
-            return ipv4Class.ordinal() > ipv6Class.ordinal() ? ipv4Class : ipv6Class;
+        if (allZero(bytes, 0, 10) && (bytes[10] & 0xff) == 0xff && (bytes[11] & 0xff) == 0xff) {
+            // ::ffff:a.b.c.d. getByName turns a literal into an Inet4Address, but a resolved AAAA record (or
+            // Inet6Address.getByAddress) keeps the mapped bytes in an Inet6Address.
+            addresses.add(ipv4(bytes, 12, 13, 14, 15));
+        } else if (allZero(bytes, 0, 12)) {
+            // ::a.b.c.d; :: and ::1 are not IPv4-compatible addresses
+            if (!allZero(bytes, 12, 15) || (bytes[15] != 0 && bytes[15] != 1)) {
+                addresses.add(ipv4(bytes, 12, 13, 14, 15));
+            }
+        } else if (isNat64Prefix(bytes) && allZero(bytes, 4, 12)) {
+            addresses.add(ipv4(bytes, 12, 13, 14, 15)); // 64:ff9b::/96
+        } else if (isNat64Prefix(bytes) && bytes[4] == 0x00 && bytes[5] == 0x01) {
+            // 64:ff9b:1::/48. RFC 6052 section 2.2 skips bits 64-71 (byte 8) in every layout but /96.
+            addresses.add(ipv4(bytes, 6, 7, 9, 10)); // /48
+            addresses.add(ipv4(bytes, 7, 9, 10, 11)); // /56
+            addresses.add(ipv4(bytes, 9, 10, 11, 12)); // /64
+            addresses.add(ipv4(bytes, 12, 13, 14, 15)); // /96
         }
-        return ipv6Class;
+        return addresses;
     }
 
-    private static AddressClass classifyIpv4(byte[] bytes) {
-        if (bytes.length != 4) {
-            return AddressClass.BLOCKED;
-        }
-        int first = bytes[0] & 0xff;
-        int second = bytes[1] & 0xff;
-        if (first == 0 && second == 0 && bytes[2] == 0 && bytes[3] == 0) {
-            return AddressClass.PRIVATE; // 0.0.0.0 reaches loopback on connect, so it is gated like loopback
-        }
-        if (first == 169 && second == 254) {
-            return AddressClass.BLOCKED; // link-local, including the instance metadata service
-        }
-        if (first == 100 && second == 100 && (bytes[2] & 0xff) == 100 && (bytes[3] & 0xff) == 200) {
-            return AddressClass.BLOCKED; // 100.100.100.200, Alibaba Cloud instance metadata
-        }
-        if (first == 127 || first == 10 || (first == 172 && second >= 16 && second <= 31) || (first == 192 && second == 168)) {
-            return AddressClass.PRIVATE;
-        }
-        return AddressClass.PUBLIC;
+    private static boolean isNat64Prefix(byte[] bytes) {
+        return bytes[0] == 0x00 && (bytes[1] & 0xff) == 0x64 && (bytes[2] & 0xff) == 0xff && (bytes[3] & 0xff) == 0x9b;
     }
 
-    private static AddressClass classifyIpv6(byte[] bytes) {
-        int first = bytes[0] & 0xff;
-        int second = bytes[1] & 0xff;
-        boolean leadingZero = true;
-        for (int i = 0; i < 15; i++) {
-            if (bytes[i] != 0) {
-                leadingZero = false;
-                break;
-            }
-        }
-        if (leadingZero && bytes[15] == 0) {
-            return AddressClass.PRIVATE; // :: reaches loopback on connect, so it is gated like loopback
-        }
-        if (leadingZero && bytes[15] == 1) {
-            return AddressClass.PRIVATE; // ::1
-        }
-        if (first == 0xfe && (second & 0xc0) == 0x80) {
-            return AddressClass.BLOCKED; // fe80::/10 link-local
-        }
-        if (first == 0xfe && (second & 0xc0) == 0xc0) {
-            return AddressClass.PRIVATE; // fec0::/10, deprecated site-local
-        }
-        if (first == 0x00
-            && second == 0x64
-            && (bytes[2] & 0xff) == 0xff
-            && (bytes[3] & 0xff) == 0x9b
-            && bytes[4] == 0x00
-            && bytes[5] == 0x01) {
-            // 64:ff9b:1::/48 is local-use NAT64 (RFC 8215). The operator may translate with any prefix length inside
-            // it, so the embedded IPv4 position is unknown; treat the whole range as private. The /96 layout is still
-            // decoded by embeddedIpv4, which raises it to BLOCKED for link-local and metadata targets.
-            return AddressClass.PRIVATE;
-        }
-        if ((first & 0xfe) == 0xfc) {
-            // fc00::/7 unique-local. fd00:ec2::/32 is the EC2 instance-service prefix (metadata at fd00:ec2::254);
-            // fd20:ce::254 is the Compute Engine metadata address on IPv6-only VMs.
-            if (first == 0xfd && second == 0x00 && (bytes[2] & 0xff) == 0x0e && (bytes[3] & 0xff) == 0xc2) {
-                return AddressClass.BLOCKED;
-            }
-            if (isGceIpv6Metadata(bytes)) {
-                return AddressClass.BLOCKED;
-            }
-            return AddressClass.PRIVATE;
-        }
-        return AddressClass.PUBLIC;
-    }
-
-    /** fd20:ce::254, the Compute Engine metadata address on IPv6-only VMs. */
-    private static boolean isGceIpv6Metadata(byte[] bytes) {
-        if ((bytes[0] & 0xff) != 0xfd || (bytes[1] & 0xff) != 0x20 || bytes[2] != 0x00 || (bytes[3] & 0xff) != 0xce) {
-            return false;
-        }
-        for (int i = 4; i < 14; i++) {
+    /** Whether {@code bytes[from]} up to, but not including, {@code bytes[to]} are all zero. */
+    private static boolean allZero(byte[] bytes, int from, int to) {
+        for (int i = from; i < to; i++) {
             if (bytes[i] != 0) {
                 return false;
             }
         }
-        return bytes[14] == 0x02 && (bytes[15] & 0xff) == 0x54;
+        return true;
     }
 
-    /**
-     * The IPv4 address embedded in an IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d) or NAT64
-     * (64:ff9b::/96, 64:ff9b:1::/48) address, or null.
-     */
-    private static byte[] embeddedIpv4(byte[] bytes) {
-        boolean firstTenZero = true;
-        for (int i = 0; i < 10; i++) {
-            if (bytes[i] != 0) {
-                firstTenZero = false;
-                break;
-            }
+    private static InetAddress ipv4(byte[] bytes, int first, int second, int third, int fourth) {
+        try {
+            return InetAddress.getByAddress(new byte[] { bytes[first], bytes[second], bytes[third], bytes[fourth] });
+        } catch (UnknownHostException e) {
+            throw new IllegalStateException("four bytes are always an IPv4 address", e);
         }
-        if (firstTenZero && (bytes[10] & 0xff) == 0xff && (bytes[11] & 0xff) == 0xff) {
-            // ::ffff:a.b.c.d IPv4-mapped. getByName normalises this to an Inet4Address, but an Inet6Address built
-            // directly (e.g. Inet6Address.getByAddress) can still carry these bytes, so unwrap it here too.
-            return Arrays.copyOfRange(bytes, 12, 16);
-        }
-        boolean compatible = firstTenZero && bytes[10] == 0 && bytes[11] == 0;
-        if (compatible) {
-            boolean unspecifiedOrLoopback = bytes[12] == 0 && bytes[13] == 0 && bytes[14] == 0 && (bytes[15] == 0 || bytes[15] == 1);
-            return unspecifiedOrLoopback ? null : Arrays.copyOfRange(bytes, 12, 16);
-        }
-        boolean nat64Prefix = bytes[0] == 0x00 && (bytes[1] & 0xff) == 0x64 && (bytes[2] & 0xff) == 0xff && (bytes[3] & 0xff) == 0x9b;
-        if (nat64Prefix) {
-            boolean wellKnown = true;
-            for (int i = 4; i < 12; i++) {
-                if (bytes[i] != 0) {
-                    wellKnown = false;
-                    break;
-                }
-            }
-            boolean localUse = bytes[4] == 0x00 && bytes[5] == 0x01;
-            if (wellKnown || localUse) {
-                return Arrays.copyOfRange(bytes, 12, 16);
-            }
-        }
-        return null;
     }
 }

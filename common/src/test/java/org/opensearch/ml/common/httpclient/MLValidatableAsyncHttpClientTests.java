@@ -6,8 +6,10 @@
 package org.opensearch.ml.common.httpclient;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import java.util.Arrays;
@@ -372,22 +374,202 @@ public class MLValidatableAsyncHttpClientTests {
 
     @Test
     public void test_localUseNat64_atLeastPrivateForAnyPrefixLength() throws Exception {
-        // 169.254.169.254 under a /64 local-use prefix (RFC 6052 layout): the /96 decode cannot see it,
-        // so the /48 itself must not be public.
-        String ip = "64:ff9b:1:0:a9:fea9:fe00:0";
-        IllegalArgumentException e = assertThrows(
-            IllegalArgumentException.class,
-            () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
-        );
-        assertEquals("Remote inference host name has private ip address: " + ip, e.getMessage());
-        // the /96 layout is still decoded and blocked for metadata targets
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> validatingHttpClient
-                .validate(url("64:ff9b:1::169.254.169.254"), HTTP, "64:ff9b:1::169.254.169.254", 80, PRIVATE_IP_ENABLED)
-        );
+        // 203.0.113.1 under the /48, /56, /64 and /96 local-use layouts: whatever the layout, the /48 itself is not public
+        for (String ip : new String[] {
+            "64:ff9b:1:cb00:71:100::",
+            "64:ff9b:1:cb:0:7101::",
+            "64:ff9b:1:0:cb:71:100:0",
+            "64:ff9b:1::cb00:7101" }) {
+            IllegalArgumentException e = assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
+            );
+            assertEquals("Remote inference host name has private ip address: " + ip, e.getMessage());
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED);
+        }
         // the well-known /96 prefix carrying a public address stays public
         validatingHttpClient.validate(url("64:ff9b::203.0.113.1"), HTTP, "64:ff9b::203.0.113.1", 80, PRIVATE_IP_DISABLED);
+    }
+
+    @Test
+    public void test_localUseNat64_metadataTargetsBlockedUnderEveryLayout() {
+        // RFC 6052 section 2.2 layouts inside 64:ff9b:1::/48, in the order /48, /56, /64, /96
+        String[] linkLocalMetadata = {
+            "64:ff9b:1:a9fe:a9:fe00::",
+            "64:ff9b:1:a9:fe:a9fe::",
+            "64:ff9b:1:0:a9:fea9:fe00:0",
+            "64:ff9b:1::a9fe:a9fe" };
+        String[] alibabaMetadata = {
+            "64:ff9b:1:6464:64:c800::",
+            "64:ff9b:1:64:64:64c8::",
+            "64:ff9b:1:0:64:6464:c800:0",
+            "64:ff9b:1::6464:64c8" };
+        for (String[] layouts : new String[][] { linkLocalMetadata, alibabaMetadata }) {
+            for (String ip : layouts) {
+                for (boolean enabled : new boolean[] { PRIVATE_IP_DISABLED, PRIVATE_IP_ENABLED }) {
+                    IllegalArgumentException e = assertThrows(
+                        ip,
+                        IllegalArgumentException.class,
+                        () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, enabled)
+                    );
+                    assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void test_subnetBoundaries() throws Exception {
+        String[] publicAddresses = {
+            "9.255.255.255",
+            "11.0.0.0",
+            "126.255.255.255",
+            "128.0.0.0",
+            "169.253.255.255",
+            "169.255.0.0",
+            "172.15.255.255",
+            "172.32.0.0",
+            "192.167.255.255",
+            "192.169.0.0",
+            "fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "fe00::",
+            "fe7f:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "64:ff9b:0:ffff:ffff:ffff:ffff:ffff",
+            "64:ff9b:2::",
+            "64:ff9b:101::",
+            "64:ff9b:101:a9fe::",
+            "0.0.0.1",
+            "::2",
+            "100.100.100.199",
+            "100.100.100.201",
+            "ff00::",
+            "ffc0::",
+            "ffff:ffff::",
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            // a block only matches its own family: these share leading bytes with 169.254/16, 10/8 and fe80::/10
+            "a9fe:a9fe::",
+            "a00:1::",
+            "254.128.0.1" };
+        for (String ip : publicAddresses) {
+            assertEquals(ip, MLValidatableAsyncHttpClient.AddressClass.PUBLIC, classify(ip));
+        }
+        String[] privateAddresses = {
+            "10.0.0.0",
+            "10.255.255.255",
+            "127.0.0.0",
+            "127.255.255.255",
+            "172.16.0.0",
+            "172.31.255.255",
+            "192.168.0.0",
+            "192.168.255.255",
+            "fc00::",
+            "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "fd00:ec1:ffff:ffff:ffff:ffff:ffff:ffff",
+            "fd00:ec3::",
+            "fec0::",
+            "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "64:ff9b:1::",
+            "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
+            "0.0.0.0",
+            "::",
+            "::1",
+            "fd20:ce::253",
+            "fd20:ce::255" };
+        for (String ip : privateAddresses) {
+            assertEquals(ip, MLValidatableAsyncHttpClient.AddressClass.PRIVATE, classify(ip));
+        }
+        String[] blockedAddresses = {
+            "169.254.0.0",
+            "169.254.255.255",
+            "fe80::",
+            "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+            "fd00:ec2::",
+            "fd00:ec2:ffff:ffff:ffff:ffff:ffff:ffff",
+            "fd20:ce::254",
+            "100.100.100.200" };
+        for (String ip : blockedAddresses) {
+            assertEquals(ip, MLValidatableAsyncHttpClient.AddressClass.BLOCKED, classify(ip));
+        }
+    }
+
+    @Test
+    public void test_deliveryAddresses_unwrapsOnlyTranslatedForms() throws Exception {
+        byte[] mapped = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff };
+        java.net.InetAddress target = java.net.InetAddress.getByName("10.0.5.7");
+        // translated or mapped forms: the address itself, then the IPv4 address it carries
+        for (java.net.InetAddress address : new java.net.InetAddress[] {
+            mappedIpv6(mapped, new byte[] { 10, 0, 5, 7 }),
+            java.net.InetAddress.getByName("::10.0.5.7"),
+            java.net.InetAddress.getByName("64:ff9b::10.0.5.7") }) {
+            assertEquals(address.toString(), Arrays.asList(address, target), MLValidatableAsyncHttpClient.deliveryAddresses(address));
+        }
+        // local-use NAT64: one IPv4 address per RFC 6052 layout, in the order /48, /56, /64, /96
+        java.net.InetAddress localUse = java.net.InetAddress.getByName("64:ff9b:1:0:a:5:700:0");
+        List<java.net.InetAddress> decoded = MLValidatableAsyncHttpClient.deliveryAddresses(localUse);
+        assertEquals(5, decoded.size());
+        assertEquals(localUse, decoded.get(0));
+        assertEquals(target, decoded.get(3));
+        // left alone: plain addresses, :: and ::1, near misses of each prefix, and tunnelling or SIIT formats
+        String[] untouched = {
+            "203.0.113.1",
+            "2001:db8::1",
+            "::",
+            "::1",
+            "::1:a9fe:a9fe",
+            "::1:ffff:a9fe:a9fe",
+            "64:ff9b::1:a9fe:a9fe",
+            "164:ff9b::a9fe:a9fe",
+            "64:ff9b:101:a9fe::",
+            "::ffff:0:a9fe:a9fe",
+            "2002:a9fe:a9fe::1",
+            "2001:0:a9fe:a9fe::1" };
+        for (String ip : untouched) {
+            java.net.InetAddress address = java.net.InetAddress.getByName(ip);
+            assertEquals(ip, List.of(address), MLValidatableAsyncHttpClient.deliveryAddresses(address));
+        }
+    }
+
+    private static MLValidatableAsyncHttpClient.AddressClass classify(String ip) throws Exception {
+        return MLValidatableAsyncHttpClient.classify(java.net.InetAddress.getAllByName(ip));
+    }
+
+    @Test
+    public void test_restrictedPattern_matchesEmbeddedIpv4() throws Exception {
+        List<Pattern> restricted = Collections.singletonList(Pattern.compile("10\\.0\\.5\\..*"));
+        MLValidatableAsyncHttpClient client = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            Collections.emptyList(),
+            restricted
+        );
+        // well-known NAT64, IPv4-compatible and local-use NAT64 (/48, /56, /64, /96 layouts) forms of 10.0.5.7
+        for (String ip : new String[] {
+            "64:ff9b::10.0.5.7",
+            "::10.0.5.7",
+            "64:ff9b:1:a00:5:700::",
+            "64:ff9b:1:a:0:507::",
+            "64:ff9b:1:0:a:5:700:0",
+            "64:ff9b:1::a00:507" }) {
+            IllegalArgumentException e = assertThrows(
+                ip,
+                IllegalArgumentException.class,
+                () -> client.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED)
+            );
+            assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
+        }
+        client.validate(url("64:ff9b::10.0.6.7"), HTTP, "64:ff9b::10.0.6.7", 80, PRIVATE_IP_ENABLED);
+        // A resolved AAAA record for ::ffff:10.0.5.7 is an Inet6Address that prints as 0:0:0:0:0:ffff:a00:507
+        byte[] mapped = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff };
+        java.net.InetAddress restrictedMapped = mappedIpv6(mapped, new byte[] { 10, 0, 5, 7 });
+        assertEquals("0:0:0:0:0:ffff:a00:507", restrictedMapped.getHostAddress());
+        assertTrue(MLValidatableAsyncHttpClient.matchesRestrictedPattern(restrictedMapped, restricted));
+        assertFalse(MLValidatableAsyncHttpClient.matchesRestrictedPattern(mappedIpv6(mapped, new byte[] { 10, 0, 6, 7 }), restricted));
+        // patterns written for the printed IPv6 form keep matching it
+        assertTrue(
+            MLValidatableAsyncHttpClient
+                .matchesRestrictedPattern(restrictedMapped, Collections.singletonList(Pattern.compile("0:0:0:0:0:ffff:.*")))
+        );
     }
 
     @Test
@@ -513,6 +695,83 @@ public class MLValidatableAsyncHttpClientTests {
             () -> client.validate("http://[fd00:1::5]/", HTTP, "fd00:1::5", 80, PRIVATE_IP_ENABLED)
         );
         assertEquals("Remote inference host name has restricted ip address: fd00:1::5", e.getMessage());
+        // before the private-IP gate
+        e = assertThrows(
+            IllegalArgumentException.class,
+            () -> client.validate("http://[fd00:1::5]/", HTTP, "fd00:1::5", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has restricted ip address: fd00:1::5", e.getMessage());
+        // and before the private-endpoint allowlist
+        MLValidatableAsyncHttpClient allowlisting = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            Collections.singletonList(Pattern.compile("^http://10\\.0\\.0\\.1/.*$")),
+            Collections.singletonList(Pattern.compile("fd00:1:.*"))
+        );
+        e = assertThrows(
+            IllegalArgumentException.class,
+            () -> allowlisting.validate("http://[fd00:1::5]/", HTTP, "fd00:1::5", 80, PRIVATE_IP_ENABLED)
+        );
+        assertEquals("Remote inference host name has restricted ip address: fd00:1::5", e.getMessage());
+    }
+
+    @Test
+    public void test_validateAddresses_checksEveryResolvedAddress() throws Exception {
+        // a host name can resolve to several addresses; the strictest one decides, and every one meets the patterns
+        java.net.InetAddress publicAddress = java.net.InetAddress.getByName("203.0.113.1");
+        byte[] mapped = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (byte) 0xff, (byte) 0xff };
+        java.net.InetAddress mappedMetadata = mappedIpv6(mapped, new byte[] { (byte) 169, (byte) 254, (byte) 169, (byte) 254 });
+        java.net.InetAddress mappedRestricted = mappedIpv6(mapped, new byte[] { 10, 0, 5, 7 });
+        java.net.InetAddress[][] refusedWithFlag = {
+            { publicAddress, java.net.InetAddress.getByName("169.254.169.254") },
+            { publicAddress, mappedMetadata } };
+        for (java.net.InetAddress[] addresses : refusedWithFlag) {
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> validatingHttpClient.validateAddresses("http://multi.example/", "multi.example", addresses, PRIVATE_IP_ENABLED)
+            );
+            assertEquals("Remote inference host name has restricted ip address: multi.example", e.getMessage());
+        }
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient
+                .validateAddresses(
+                    "http://multi.example/",
+                    "multi.example",
+                    new java.net.InetAddress[] { publicAddress, java.net.InetAddress.getByName("10.0.0.1") },
+                    PRIVATE_IP_DISABLED
+                )
+        );
+        assertEquals("Remote inference host name has private ip address: multi.example", e.getMessage());
+        MLValidatableAsyncHttpClient restricting = new MLValidatableAsyncHttpClient(
+            mock(SdkAsyncHttpClient.class),
+            PRIVATE_IP_ENABLED,
+            Collections.emptyList(),
+            Collections.singletonList(Pattern.compile("10\\.0\\.5\\..*"))
+        );
+        // the reported case end to end: an AAAA answer of ::ffff:10.0.5.7 next to a public address
+        for (java.net.InetAddress restricted : new java.net.InetAddress[] {
+            java.net.InetAddress.getByName("10.0.5.7"),
+            mappedRestricted }) {
+            e = assertThrows(
+                IllegalArgumentException.class,
+                () -> restricting
+                    .validateAddresses(
+                        "http://multi.example/",
+                        "multi.example",
+                        new java.net.InetAddress[] { publicAddress, restricted },
+                        PRIVATE_IP_ENABLED
+                    )
+            );
+            assertEquals("Remote inference host name has restricted ip address: multi.example", e.getMessage());
+        }
+        restricting
+            .validateAddresses(
+                "http://multi.example/",
+                "multi.example",
+                new java.net.InetAddress[] { publicAddress, java.net.InetAddress.getByName("10.0.6.7") },
+                PRIVATE_IP_ENABLED
+            );
     }
 
     private static MLValidatableAsyncHttpClient trustingPrivate(String... patterns) {
