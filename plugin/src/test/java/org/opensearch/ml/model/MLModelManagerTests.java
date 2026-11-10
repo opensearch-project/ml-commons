@@ -631,6 +631,72 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
+    public void testRegisterMLRemoteModel_EncryptFailure_FailsTaskAndListener() throws IOException {
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        Connector connector = mock(Connector.class);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> encryptListener = invocation.getArgument(2);
+            encryptListener.onFailure(new MLException("Master key not ready"));
+            return null;
+        }).when(connector).encrypt(any(), any(), any());
+        MLRegisterModelInput input = mockRemoteModelInput(true).toBuilder().connector(connector).build();
+        MLTask task = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mockModelGroupGet();
+
+        modelManager.registerMLRemoteModel(sdkClient, input, task, listener);
+
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertEquals("Master key not ready", exceptionCaptor.getValue().getMessage());
+        verify(mlTaskManager).updateMLTask(eq("pretrained"), any(), anyMap(), anyLong(), eq(true));
+    }
+
+    public void testRegisterMLRemoteModel_EncryptThrows_FailsTaskAndListener() throws IOException {
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        Connector connector = mock(Connector.class);
+        doThrow(new IllegalStateException("encrypt failed")).when(connector).encrypt(any(), any(), any());
+        MLRegisterModelInput input = mockRemoteModelInput(true).toBuilder().connector(connector).build();
+        MLTask task = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mockModelGroupGet();
+
+        modelManager.registerMLRemoteModel(sdkClient, input, task, listener);
+
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertEquals("encrypt failed", exceptionCaptor.getValue().getMessage());
+        verify(mlTaskManager).updateMLTask(eq("pretrained"), any(), anyMap(), anyLong(), eq(true));
+    }
+
+    public void testRegisterMLRemoteModel_InitModelIndexFalse_FailsTaskAndListener() throws IOException {
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        MLRegisterModelInput input = mockRemoteModelInput(true);
+        MLTask task = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, false);
+        mockModelGroupGet();
+
+        modelManager.registerMLRemoteModel(sdkClient, input, task, listener);
+
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertEquals("No response to create ML Model index", exceptionCaptor.getValue().getMessage());
+        verify(mlTaskManager).updateMLTask(eq("pretrained"), any(), anyMap(), anyLong(), eq(true));
+    }
+
+    private void mockModelGroupGet() throws IOException {
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGroupListener = invocation.getArgument(1);
+            getModelGroupListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+    }
+
     public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());

@@ -9,8 +9,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.lucene.search.TotalHits;
+import org.apache.lucene.search.join.ScoreMode;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -47,6 +50,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.InnerHitBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.CommonValue;
@@ -60,6 +64,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -108,7 +113,6 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ClusterService clusterService;
 
-    @Mock
     private FetchSourceContext fetchSourceContext;
 
     @Mock
@@ -138,11 +142,11 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         searchSourceBuilder = new SearchSourceBuilder();
+        // A real context: the request validator serializes the search source.
+        fetchSourceContext = new FetchSourceContext(false, new String[] {}, new String[] {});
         searchSourceBuilder.fetchSource(fetchSourceContext);
         searchRequest = new SearchRequest(new String[0], searchSourceBuilder);
         mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        when(fetchSourceContext.includes()).thenReturn(new String[] {});
-        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
 
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
 
@@ -498,5 +502,72 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             mock(SearchResponse.Clusters.class),
             null
         );
+    }
+
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchModelTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(mlSearchHandler, never()).search(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testDoExecute_AllowsDashboardsConnectorNameTermsAggregation() {
+        // Request sent by ml-commons-dashboards ConnectorService.getUniqueInternalConnectorNames
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .size(0)
+            .aggregation(AggregationBuilders.terms("unique_connector_names").field("connector.name.keyword").size(10000));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+        doNothing().when(mlSearchHandler).search(any(), any(), any(), any());
+
+        searchModelTransportAction.doExecute(null, request, listener);
+
+        verify(mlSearchHandler, times(1)).search(any(), any(), any(), any());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testDoExecute_RejectsConnectorCredentialField() {
+        SearchSourceBuilder source = new SearchSourceBuilder().docValueField("connector.credential.*");
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchModelTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(mlSearchHandler, never()).search(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testDoExecute_RejectsInnerHitsInNestedQuery() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .query(
+                QueryBuilders
+                    .nestedQuery("user", QueryBuilders.prefixQuery("user.name", ""), ScoreMode.None)
+                    .innerHit(new InnerHitBuilder().setExplain(true))
+            );
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchModelTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(mlSearchHandler, never()).search(any(), any(), any(), any());
     }
 }

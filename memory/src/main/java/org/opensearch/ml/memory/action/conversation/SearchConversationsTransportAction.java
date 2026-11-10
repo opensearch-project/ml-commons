@@ -29,6 +29,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -76,6 +78,9 @@ public class SearchConversationsTransportAction extends HandledTransportAction<M
             actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
+            if (!MLSearchRequestValidator.validate(mlSearchActionRequest, AggregationPolicy.QUERY_SCOPED, actionListener)) {
+                return;
+            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
                 ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
                 cmHandler.searchConversations(mlSearchActionRequest, internalListener);

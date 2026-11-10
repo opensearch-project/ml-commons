@@ -31,6 +31,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -49,6 +50,7 @@ import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -1289,5 +1291,74 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert - verify addOwnerIdFilter was NOT called for admin user
         verify(memoryContainerHelper, never()).addOwnerIdFilter(any(), any(SearchSourceBuilder.class));
         verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_AllowsQueryScopedTermsAggregation() {
+        threadContext
+            .putTransient(
+                org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT,
+                "regular_user|backend_role1|role1"
+            );
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .size(0)
+            .aggregation(AggregationBuilders.terms("by_strategy").field("strategy_type"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(source)
+            .memoryType(MemoryType.LONG_TERM)
+            .build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
+            .build();
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(container))).thenReturn(true);
+        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), requestCaptor.capture(), any());
+
+        transportSearchMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(memoryContainerHelper, times(1)).addContainerIdFilter(eq(memoryContainerId), eq(source));
+        verify(memoryContainerHelper, times(1)).addOwnerIdFilter(any(User.class), eq(source));
+        assertEquals(1, requestCaptor.getValue().searchSourceBuilder().aggregations().count());
+        verify(actionListener, times(1)).onResponse(mockSearchResponse);
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .searchSourceBuilder(source)
+            .memoryType(MemoryType.LONG_TERM)
+            .build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        transportSearchMemoriesAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(memoryContainerHelper, never()).getMemoryContainer(any(), any(), any());
+        verify(memoryContainerHelper, never()).searchData(any(), any(), any());
     }
 }
