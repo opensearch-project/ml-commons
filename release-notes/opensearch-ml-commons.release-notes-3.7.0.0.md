@@ -12,6 +12,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.7.0
 
 * Add private IP security controls and ReDoS protection for ML connectors ([#4818](https://github.com/opensearch-project/ml-commons/pull/4818))
 * Add structured output (constrained decoding) support for agentic memory fact extraction ([#4824](https://github.com/opensearch-project/ml-commons/pull/4824))
+* **Downgrade note**: rolling back to 3.6 silently clears `supports_structured_output` on connector actions; structured output injection falls back to prompt enforcement until the cluster is upgraded again ([#4824](https://github.com/opensearch-project/ml-commons/pull/4824))
 * Strengthen enforcement of `trusted_connector_endpoints_regex` across all outbound connector request paths ([#4826](https://github.com/opensearch-project/ml-commons/pull/4826))
 * Simplify USER_PREFERENCE extraction prompt to produce plain sentences, fixing silent JSON parse failures with smaller LLMs ([#4798](https://github.com/opensearch-project/ml-commons/pull/4798))
 
