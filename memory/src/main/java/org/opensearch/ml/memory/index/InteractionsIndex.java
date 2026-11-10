@@ -535,7 +535,9 @@ public class InteractionsIndex {
                     request.indices(INTERACTIONS_INDEX_NAME);
                     QueryBuilder originalQuery = request.source().query();
                     BoolQueryBuilder newQuery = new BoolQueryBuilder();
-                    newQuery.must(originalQuery);
+                    if (originalQuery != null) {
+                        newQuery.must(originalQuery);
+                    }
                     newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId));
                     request.source().query(newQuery);
                     client
