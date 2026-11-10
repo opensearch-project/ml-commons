@@ -24,6 +24,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -74,6 +76,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
 
         if (StringUtils.isBlank(input.getMemoryContainerId())) {
             actionListener.onFailure(new IllegalArgumentException("Memory container ID is required"));
+            return;
+        }
+
+        if (!MLSearchRequestValidator.validate(input.getSearchSourceBuilder(), AggregationPolicy.QUERY_SCOPED, actionListener)) {
             return;
         }
 

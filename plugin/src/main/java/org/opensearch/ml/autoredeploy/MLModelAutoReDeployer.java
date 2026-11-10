@@ -10,10 +10,13 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchAction;
@@ -70,7 +73,12 @@ public class MLModelAutoReDeployer {
     private final SearchRequestBuilderFactory searchRequestBuilderFactory;
 
     @Setter
-    private ActionListener<Boolean> startCronJobListener;
+    private volatile ActionListener<Boolean> startCronJobListener;
+
+    private volatile long lastQueueProgressMillis;
+
+    @VisibleForTesting
+    LongSupplier currentTimeMillis = System::currentTimeMillis;
 
     public MLModelAutoReDeployer(
         ClusterService clusterService,
@@ -90,9 +98,13 @@ public class MLModelAutoReDeployer {
         autoDeployMaxRetryTimes = MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.get(settings);
         allowCustomDeploymentPlan = MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
 
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> enableAutoReDeployModel = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> {
+            enableAutoReDeployModel = it;
+            if (!it) {
+                // nothing will take these from the queue any more
+                modelAutoRedeployArrangements.clear();
+            }
+        });
 
         clusterService
             .getClusterSettings()
@@ -156,6 +168,7 @@ public class MLModelAutoReDeployer {
             return;
         }
         ModelAutoRedeployArrangement modelAutoRedeployArrangement = modelAutoRedeployArrangements.poll();
+        lastQueueProgressMillis = currentTimeMillis.getAsLong();
         triggerModelRedeploy(modelAutoRedeployArrangement);
     }
 
@@ -181,6 +194,13 @@ public class MLModelAutoReDeployer {
                         if (notExist)
                             modelAutoRedeployArrangements.add(modelAutoRedeployArrangement);
                     });
+                lastQueueProgressMillis = currentTimeMillis.getAsLong();
+                // The sync up cron must not run before this query has read the deployed models: on a full cluster restart it
+                // would mark them DEPLOY_FAILED and they would never be picked up here. Once they are queued it is safe, and
+                // it must not wait for the redeploy tasks to finish: a task that never completes, or finishes below the
+                // success ratio, would otherwise leave a new cluster manager without the sync up cron (no routing table for
+                // new nodes, no model state refresh, no task timeout).
+                startCronjobAndClearListener();
                 redeployAModel();
             } else {
                 log.info("Could not find any models in the index, not performing auto reloading!");
@@ -325,7 +345,36 @@ public class MLModelAutoReDeployer {
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
     }
 
-    private void startCronjobAndClearListener() {
+    /**
+     * Models queued for auto redeploy on this node that have not been redeployed yet. Empty once the queue has made no
+     * progress for twice the task timeout: the chain advances only when a deploy task completes, so a task that timed out
+     * can leave the rest of the queue waiting for the next node join, and its models must not stay protected that long.
+     */
+    public Set<String> getQueuedModelIds() {
+        if (currentTimeMillis.getAsLong() - lastQueueProgressMillis > queueStalledAfterMillis()) {
+            return Set.of();
+        }
+        return modelAutoRedeployArrangements
+            .stream()
+            .map(ModelAutoRedeployArrangement::getSearchResponse)
+            .filter(Objects::nonNull)
+            .map(SearchHit::getId)
+            .collect(Collectors.toSet());
+    }
+
+    /**
+     * How long the queue may make no progress before its models stop being protected: twice the task timeout, and at least
+     * long enough for a timed-out head task to be noticed (tasks are timed out on a sync up round, so up to one timeout
+     * plus one interval after they start). Both settings are dynamic, so read them on every call.
+     */
+    private long queueStalledAfterMillis() {
+        long taskTimeoutMillis = clusterService.getClusterSettings().get(MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS) * 1000L;
+        long syncUpIntervalMillis = clusterService.getClusterSettings().get(MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS)
+            * 1000L;
+        return Math.max(2 * taskTimeoutMillis, taskTimeoutMillis + 2 * syncUpIntervalMillis);
+    }
+
+    private synchronized void startCronjobAndClearListener() {
         boolean managerNode = clusterService.localNode().isClusterManagerNode();
         if (managerNode && startCronJobListener != null) {
             startCronJobListener.onResponse(true);
