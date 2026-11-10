@@ -318,7 +318,14 @@ public class MLValidatableAsyncHttpClientTests {
     }
 
     private static final String[] IPV6_PRIVATE = { "fd00::1", "fc00::1", "fec0::1", "::1", "::" };
-    private static final String[] ALWAYS_BLOCKED = { "fe80::1", "fd00:ec2::254", "fd00:ec2::253", "169.254.169.254", "169.254.1.1" };
+    private static final String[] ALWAYS_BLOCKED = {
+        "fe80::1",
+        "fd00:ec2::254",
+        "fd00:ec2::253",
+        "169.254.169.254",
+        "169.254.1.1",
+        "fd20:ce::254",
+        "100.100.100.200" };
 
     private static String url(String ip) {
         return ip.indexOf(':') >= 0 ? "http://[" + ip + "]/" : "http://" + ip + "/";
@@ -360,6 +367,36 @@ public class MLValidatableAsyncHttpClientTests {
                 );
                 assertEquals("Remote inference host name has restricted ip address: " + ip, e.getMessage());
             }
+        }
+    }
+
+    @Test
+    public void test_localUseNat64_atLeastPrivateForAnyPrefixLength() throws Exception {
+        // 169.254.169.254 under a /64 local-use prefix (RFC 6052 layout): the /96 decode cannot see it,
+        // so the /48 itself must not be public.
+        String ip = "64:ff9b:1:0:a9:fea9:fe00:0";
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: " + ip, e.getMessage());
+        // the /96 layout is still decoded and blocked for metadata targets
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> validatingHttpClient
+                .validate(url("64:ff9b:1::169.254.169.254"), HTTP, "64:ff9b:1::169.254.169.254", 80, PRIVATE_IP_ENABLED)
+        );
+        // the well-known /96 prefix carrying a public address stays public
+        validatingHttpClient.validate(url("64:ff9b::203.0.113.1"), HTTP, "64:ff9b::203.0.113.1", 80, PRIVATE_IP_DISABLED);
+    }
+
+    @Test
+    public void test_neighbouringAddressesOfMetadataEndpointsNotBlocked() throws Exception {
+        for (String ip : new String[] { "fd20:ce::253", "fd20:ce:0:1::254" }) {
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_ENABLED);
+        }
+        for (String ip : new String[] { "100.100.100.199", "100.100.100.201" }) {
+            validatingHttpClient.validate(url(ip), HTTP, ip, 80, PRIVATE_IP_DISABLED);
         }
     }
 

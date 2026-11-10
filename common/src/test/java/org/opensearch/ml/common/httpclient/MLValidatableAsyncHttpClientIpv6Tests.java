@@ -25,7 +25,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpResponseHandler;
 
 /**
  * IPv6 classification of the connector private-IP check, through both {@code validate()} and the {@code execute()}
- * path that connector requests take. Cases contributed by an external report (2026-11-03).
+ * path that connector requests take. Cases contributed by Tony Piazza (@tonypiazza).
  */
 public class MLValidatableAsyncHttpClientIpv6Tests {
     private static final boolean PRIVATE_IP_DISABLED = false;

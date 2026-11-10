@@ -146,10 +146,11 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
 
     /**
      * How a resolved address is treated. {@code BLOCKED} addresses are refused regardless of
-     * {@code connector.private_ip_enabled}: link-local ranges and the EC2 instance-service prefix that carries the
-     * IPv6 metadata endpoint. {@code PRIVATE} addresses need that setting and, when one is configured, a match in
-     * {@code trusted_connector_private_endpoints_regex}: RFC 1918, unique-local, loopback and the unspecified
-     * address (which reaches loopback on connect).
+     * {@code connector.private_ip_enabled}: link-local ranges, the EC2 instance-service prefix that carries the IPv6
+     * metadata endpoint, and the Compute Engine IPv6 and Alibaba Cloud metadata addresses. {@code PRIVATE} addresses
+     * need that setting and, when one is configured, a match in {@code trusted_connector_private_endpoints_regex}:
+     * RFC 1918, unique-local, local-use NAT64, loopback and the unspecified address (which reaches loopback on
+     * connect).
      */
     enum AddressClass {
         PUBLIC,
@@ -201,6 +202,9 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         if (first == 169 && second == 254) {
             return AddressClass.BLOCKED; // link-local, including the instance metadata service
         }
+        if (first == 100 && second == 100 && (bytes[2] & 0xff) == 100 && (bytes[3] & 0xff) == 200) {
+            return AddressClass.BLOCKED; // 100.100.100.200, Alibaba Cloud instance metadata
+        }
         if (first == 127 || first == 10 || (first == 172 && second >= 16 && second <= 31) || (first == 192 && second == 168)) {
             return AddressClass.PRIVATE;
         }
@@ -229,14 +233,42 @@ public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
         if (first == 0xfe && (second & 0xc0) == 0xc0) {
             return AddressClass.PRIVATE; // fec0::/10, deprecated site-local
         }
+        if (first == 0x00
+            && second == 0x64
+            && (bytes[2] & 0xff) == 0xff
+            && (bytes[3] & 0xff) == 0x9b
+            && bytes[4] == 0x00
+            && bytes[5] == 0x01) {
+            // 64:ff9b:1::/48 is local-use NAT64 (RFC 8215). The operator may translate with any prefix length inside
+            // it, so the embedded IPv4 position is unknown; treat the whole range as private. The /96 layout is still
+            // decoded by embeddedIpv4, which raises it to BLOCKED for link-local and metadata targets.
+            return AddressClass.PRIVATE;
+        }
         if ((first & 0xfe) == 0xfc) {
-            // fc00::/7 unique-local. fd00:ec2::/32 is the EC2 instance-service prefix (metadata at fd00:ec2::254).
+            // fc00::/7 unique-local. fd00:ec2::/32 is the EC2 instance-service prefix (metadata at fd00:ec2::254);
+            // fd20:ce::254 is the Compute Engine metadata address on IPv6-only VMs.
             if (first == 0xfd && second == 0x00 && (bytes[2] & 0xff) == 0x0e && (bytes[3] & 0xff) == 0xc2) {
+                return AddressClass.BLOCKED;
+            }
+            if (isGceIpv6Metadata(bytes)) {
                 return AddressClass.BLOCKED;
             }
             return AddressClass.PRIVATE;
         }
         return AddressClass.PUBLIC;
+    }
+
+    /** fd20:ce::254, the Compute Engine metadata address on IPv6-only VMs. */
+    private static boolean isGceIpv6Metadata(byte[] bytes) {
+        if ((bytes[0] & 0xff) != 0xfd || (bytes[1] & 0xff) != 0x20 || bytes[2] != 0x00 || (bytes[3] & 0xff) != 0xce) {
+            return false;
+        }
+        for (int i = 4; i < 14; i++) {
+            if (bytes[i] != 0) {
+                return false;
+            }
+        }
+        return bytes[14] == 0x02 && (bytes[15] & 0xff) == 0x54;
     }
 
     /**
