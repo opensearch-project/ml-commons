@@ -47,6 +47,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.ResourceSharingClientAccessor;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -270,6 +271,8 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         assertTrue(failure.get() instanceof OpenSearchStatusException);
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) failure.get()).status());
         assertEquals(caller, userSeenByListener.get());
+        verify(client, never()).search(any(), any());
+        verify(client, never()).delete(any(), any());
     }
 
     @Test
@@ -300,6 +303,24 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_ModelGroupNotFoundDuringAccessValidation_Returns404() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(7);
+            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
+        verify(client, never()).search(any(), any());
+        verify(client, never()).delete(any(), any());
     }
 
     public void testDeleteModelGroup_IndexNotFoundException() {
