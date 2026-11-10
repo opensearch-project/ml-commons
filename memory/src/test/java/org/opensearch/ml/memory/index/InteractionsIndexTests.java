@@ -25,6 +25,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -64,12 +65,15 @@ import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
@@ -739,6 +743,33 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Test Failure"));
+    }
+
+    public void testSearch_AggregationWithoutQuery_KeepsConversationFilter() {
+        setupGrantAccess();
+        setupRefreshSuccess();
+        SearchRequest request = new SearchRequest()
+            .source(new SearchSourceBuilder().size(0).aggregation(AggregationBuilders.terms("by_origin").field("origin")));
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(mock(SearchResponse.class));
+            return null;
+        }).when(client).search(requestCaptor.capture(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<SearchResponse> searchListener = mock(ActionListener.class);
+
+        interactionsIndex.searchInteractions("test_cid", request, searchListener);
+
+        verify(searchListener, times(1)).onResponse(any());
+        verify(searchListener, never()).onFailure(any());
+        SearchSourceBuilder sent = requestCaptor.getValue().source();
+        BoolQueryBuilder query = (BoolQueryBuilder) sent.query();
+        assertEquals(
+            List.of(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, "test_cid")),
+            query.must()
+        );
+        assertEquals(1, sent.aggregations().count());
     }
 
     public void testSearch_RefreshFails_ThenFail() {

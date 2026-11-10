@@ -353,7 +353,9 @@ public class ConversationMetaIndex {
         request.indices(META_INDEX_NAME);
         QueryBuilder originalQuery = request.source().query();
         BoolQueryBuilder newQuery = new BoolQueryBuilder();
-        newQuery.must(originalQuery);
+        if (originalQuery != null) {
+            newQuery.must(originalQuery);
+        }
         String userStr = getUserStrFromThreadContext();
         if (userStr != null) {
             String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();

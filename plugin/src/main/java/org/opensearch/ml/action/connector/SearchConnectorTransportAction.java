@@ -29,6 +29,8 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator;
+import org.opensearch.ml.common.utils.MLSearchRequestValidator.AggregationPolicy;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -73,6 +75,10 @@ public class SearchConnectorTransportAction extends HandledTransportAction<MLSea
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
+        if (!MLSearchRequestValidator
+            .validate(request, AggregationPolicy.REJECT, MLSearchRequestValidator.CONNECTOR_PROTECTED_FIELDS, actionListener)) {
+            return;
+        }
         request.indices(CommonValue.ML_CONNECTOR_INDEX);
 
         String tenantId = request.getTenantId();
