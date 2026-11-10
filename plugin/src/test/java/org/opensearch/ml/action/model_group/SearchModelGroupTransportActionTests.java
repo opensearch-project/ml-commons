@@ -48,6 +48,7 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -73,7 +74,6 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     ActionFilters actionFilters;
 
     SearchSourceBuilder searchSourceBuilder;
-    @Mock
     FetchSourceContext fetchSourceContext;
 
     @Mock
@@ -115,9 +115,9 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         searchSourceBuilder = new SearchSourceBuilder();
+        // A real context: the request validator serializes the search source.
+        fetchSourceContext = new FetchSourceContext(false, new String[] {}, new String[] {});
         searchSourceBuilder.fetchSource(fetchSourceContext);
-        when(fetchSourceContext.includes()).thenReturn(new String[] {});
-        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
 
         // By default, do not skip access control
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
@@ -374,5 +374,21 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         assertEquals("original", threadContext.getHeader(key));
         verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchModelGroupTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(sdkClient, never()).searchDataObjectAsync(any());
     }
 }

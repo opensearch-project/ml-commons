@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +32,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.query.InnerHitBuilder;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -38,8 +40,10 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.collapse.CollapseBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.tasks.Task;
@@ -68,7 +72,6 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
 
     SearchSourceBuilder searchSourceBuilder;
 
-    @Mock
     FetchSourceContext fetchSourceContext;
 
     @Mock
@@ -107,11 +110,11 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         searchSourceBuilder = new SearchSourceBuilder();
+        // A real context: the request validator serializes the search source.
+        fetchSourceContext = new FetchSourceContext(false, new String[] {}, new String[] {});
         searchSourceBuilder.fetchSource(fetchSourceContext);
         searchRequest = new SearchRequest(new String[0], searchSourceBuilder);
         mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
-        when(fetchSourceContext.includes()).thenReturn(new String[] {});
-        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
 
         when(connectorAccessControlHelper.addUserBackendRolesFilter(any(), any(SearchSourceBuilder.class))).thenReturn(searchSourceBuilder);
 
@@ -204,4 +207,49 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
+    @Test
+    public void testDoExecute_RejectsGlobalAggregation() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchConnectorTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).search(any(), any());
+        verify(connectorAccessControlHelper, never()).addUserBackendRolesFilter(any(), any(SearchSourceBuilder.class));
+    }
+
+    @Test
+    public void testDoExecute_RejectsReadingCredentialThroughFields() {
+        SearchSourceBuilder source = new SearchSourceBuilder().fetchField("credential.*");
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchConnectorTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).search(any(), any());
+    }
+
+    @Test
+    public void testDoExecute_RejectsCollapseInnerHits() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .collapse(new CollapseBuilder("protocol").setInnerHits(new InnerHitBuilder("x")));
+        MLSearchActionRequest request = new MLSearchActionRequest(new SearchRequest().source(source), null);
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        searchConnectorTransportAction.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(client, never()).search(any(), any());
+    }
 }

@@ -20,6 +20,7 @@ package org.opensearch.ml.memory.action.conversation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,6 +34,8 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.service.ClusterService;
@@ -40,10 +43,14 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.MemoryTestUtil;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
+import org.opensearch.search.aggregations.AggregationBuilders;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -120,4 +127,50 @@ public class SearchInteractionsTransportActionsTests extends OpenSearchTestCase 
         assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE);
     }
 
+    public void testQueryScopedTermsAggregation_ThenSucceed() {
+        SearchSourceBuilder source = new SearchSourceBuilder().aggregation(AggregationBuilders.terms("by_origin").field("origin"));
+        SearchInteractionsRequest request = new SearchInteractionsRequest("test_cid", new SearchRequest().source(source));
+        SearchResponse response = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(response);
+            return null;
+        }).when(cmHandler).searchInteractions(any(), any(), any());
+
+        action.doExecute(null, request, actionListener);
+
+        verify(cmHandler, times(1)).searchInteractions(any(), any(), any());
+        verify(actionListener, times(1)).onResponse(response);
+    }
+
+    public void testGlobalAggregation_ThenFail() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .aggregation(AggregationBuilders.global("all").subAggregation(AggregationBuilders.topHits("docs").size(100)));
+        SearchInteractionsRequest request = new SearchInteractionsRequest("test_cid", new SearchRequest().source(source));
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(cmHandler, never()).searchInteractions(any(), any(), any());
+    }
+
+    public void testExplain_ThenFail() {
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .query(QueryBuilders.prefixQuery("name", "").rewrite("constant_score_boolean"))
+            .explain(true);
+        SearchInteractionsRequest request = new SearchInteractionsRequest("test_cid", new SearchRequest().source(source));
+        ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(null, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        verify(cmHandler, never()).searchInteractions(any(), any(), any());
+    }
 }
