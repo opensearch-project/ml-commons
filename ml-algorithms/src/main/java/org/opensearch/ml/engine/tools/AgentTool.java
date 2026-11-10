@@ -6,11 +6,15 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_MAX_CALL_DEPTH;
 
 import java.util.Map;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -36,6 +40,12 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(AgentTool.TYPE)
 public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
+
+    // Tracks AgentTool hops on the current chain to bound nested agent recursion.
+    public static final String AGENT_CALL_DEPTH_FIELD = "_agent_call_depth";
+    // Fallback when no ClusterService is wired (e.g. in unit tests that use init(Client)).
+    public static final int DEFAULT_MAX_AGENT_CALL_DEPTH = 1;
+
     private final Client client;
 
     @Setter
@@ -72,7 +82,25 @@ public class AgentTool implements Tool {
             if (agentId == null || agentId.isBlank()) {
                 throw new IllegalArgumentException("Agent ID not registered in tool");
             }
+
+            int maxDepth = Factory.getInstance().getMaxCallDepth();
+            int currentDepth = readDepth(parameters);
+            if (currentDepth >= maxDepth) {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "AgentTool nested call depth exceeded the maximum ("
+                                + maxDepth
+                                + "). Check that your agent's tools do not transitively reference the agent itself.",
+                            RestStatus.BAD_REQUEST
+                        )
+                    );
+                return;
+            }
+
             Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
+            // Propagate incremented depth to the nested agent so subsequent hops can see it.
+            extractedParameters.put(AGENT_CALL_DEPTH_FIELD, String.valueOf(currentDepth + 1));
             String tenantId = parameters.get(TENANT_ID_FIELD);
             AgentMLInput agentMLInput = AgentMLInput
                 .AgentMLInputBuilder()
@@ -92,6 +120,24 @@ public class AgentTool implements Tool {
         } catch (Exception e) {
             log.error("Failed to run AgentTool with agent: {}", agentId, e);
             listener.onFailure(e);
+        }
+    }
+
+    private static int readDepth(Map<String, String> parameters) {
+        if (parameters == null) {
+            return 0;
+        }
+        String raw = parameters.get(AGENT_CALL_DEPTH_FIELD);
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        try {
+            int depth = Integer.parseInt(raw);
+            // Defensive: a negative value would let an attacker reset the counter.
+            return Math.max(depth, 0);
+        } catch (NumberFormatException e) {
+            log.warn("Ignoring non-numeric {} value: {}", AGENT_CALL_DEPTH_FIELD, raw);
+            return 0;
         }
     }
 
@@ -122,6 +168,8 @@ public class AgentTool implements Tool {
 
     public static class Factory implements Tool.Factory<AgentTool> {
         private Client client;
+        // volatile so a setting update on any thread is visible to executor threads reading depth.
+        private volatile int maxCallDepth = DEFAULT_MAX_AGENT_CALL_DEPTH;
 
         private static Factory INSTANCE;
 
@@ -140,6 +188,25 @@ public class AgentTool implements Tool {
 
         public void init(Client client) {
             this.client = client;
+        }
+
+        public void init(Client client, ClusterService clusterService) {
+            this.client = client;
+            if (clusterService != null) {
+                this.maxCallDepth = ML_COMMONS_AGENT_MAX_CALL_DEPTH.get(clusterService.getSettings());
+                clusterService
+                    .getClusterSettings()
+                    .addSettingsUpdateConsumer(ML_COMMONS_AGENT_MAX_CALL_DEPTH, it -> this.maxCallDepth = it);
+            }
+        }
+
+        public int getMaxCallDepth() {
+            return maxCallDepth;
+        }
+
+        @VisibleForTesting
+        void setMaxCallDepth(int maxCallDepth) {
+            this.maxCallDepth = maxCallDepth;
         }
 
         @Override
