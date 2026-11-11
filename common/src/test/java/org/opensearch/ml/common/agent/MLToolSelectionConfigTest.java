@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -13,7 +14,9 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -30,6 +33,10 @@ import org.opensearch.search.SearchModule;
 public class MLToolSelectionConfigTest {
 
     private MLToolSelectionConfig parse(String jsonStr) throws IOException {
+        return parse(jsonStr, null);
+    }
+
+    private MLToolSelectionConfig parse(String jsonStr, Set<String> nullFields) throws IOException {
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -38,7 +45,25 @@ public class MLToolSelectionConfigTest {
                 jsonStr
             );
         parser.nextToken();
-        return MLToolSelectionConfig.parse(parser);
+        return MLToolSelectionConfig.parse(parser, nullFields);
+    }
+
+    @Test
+    public void testParseRecordsKnownFieldsGivenAsNull() throws IOException {
+        Set<String> nullFields = new HashSet<>();
+        MLToolSelectionConfig config = parse("{\"top_k\":null,\"embedding_model_id\":null,\"enabled\":true,\"unknown\":null}", nullFields);
+
+        assertEquals(Set.of("top_k", "embedding_model_id"), nullFields);
+        assertNull(config.getTopK());
+        assertEquals(Boolean.TRUE, config.getEnabled());
+    }
+
+    @Test
+    public void testToMapHasOnlyTheSetFieldsAndIsEmptyWithNone() {
+        MLToolSelectionConfig config = MLToolSelectionConfig.builder().topK(3).pinnedTools(List.of("a")).build();
+        assertEquals(List.of("pinned_tools", "top_k"), new ArrayList<>(config.toMap().keySet()));
+        assertFalse(config.isEmpty());
+        assertTrue(MLToolSelectionConfig.builder().build().isEmpty());
     }
 
     @Test

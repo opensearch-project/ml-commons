@@ -10,9 +10,10 @@ import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.action.ActionRequest;
@@ -174,11 +175,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         Map<String, Tool> promptToolsMap = toolsMap;
         Map<String, Tool> executionToolsMap = toolsMap;
         try {
-            ToolSelectionSettings toolSelectionSettings = ToolSelectionSettings.resolve(clusterService, mlAgent);
-            ToolSelectionResult plan = dynamicToolSelector.plan(toolsMap, toolSelectionSettings);
-            logSelection(agentId, plan);
-            if (plan.isApplied()) {
-                promptToolsMap = pinnedToolsPlusSearch(mlAgent, toolsMap, plan, toolSelectionSettings, messages);
+            promptToolsMap = selectPromptTools(mlAgent, toolsMap, messages, agentId);
+            if (promptToolsMap != toolsMap) {
                 executionToolsMap = new HashMap<>(toolsMap);
                 executionToolsMap.put(SearchToolsTool.NAME, promptToolsMap.get(SearchToolsTool.NAME));
             }
@@ -206,9 +204,43 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
     }
 
     /**
-     * Build the tool map the LLM is shown: pinned tools in configured order, the tools the
-     * conversation history already called, then search_tools. Mutable because SearchToolsTool
-     * appends its matches to it. Also starts the cache warm-up.
+     * The tools the LLM is shown in this run: {@code toolsMap} itself when tool search doesn't apply,
+     * otherwise a new map with search_tools in it.
+     */
+    Map<String, Tool> selectPromptTools(MLAgent mlAgent, Map<String, Tool> toolsMap, List<Message> messages, String agentId) {
+        ToolSelectionSettings toolSelectionSettings = ToolSelectionSettings.resolve(clusterService, mlAgent);
+        ToolSelectionResult plan = dynamicToolSelector.plan(toolsMap, toolSelectionSettings);
+        logSelection(agentId, plan);
+        if (plan.isApplied()) {
+            return pinnedToolsPlusSearch(mlAgent, toolsMap, plan, toolSelectionSettings, messages);
+        }
+        if (toolsMap.containsKey(SearchToolsTool.NAME) || !toolsCalledInHistory(messages).contains(SearchToolsTool.NAME)) {
+            return toolsMap;
+        }
+        // An earlier run used tool search: keep its search_tools calls defined. Every tool is visible
+        // here, so a search adds nothing.
+        Map<String, Tool> promptToolsMap = new LinkedHashMap<>(toolsMap);
+        promptToolsMap
+            .put(
+                SearchToolsTool.NAME,
+                new SearchToolsTool(
+                    dynamicToolSelector,
+                    toolSelectionSettings,
+                    mlAgent.getTenantId(),
+                    toolsMap,
+                    promptToolsMap,
+                    client.threadPool()
+                )
+            );
+        return promptToolsMap;
+    }
+
+    /**
+     * Build the tool map the LLM is shown: pinned tools in configured order, every tool the
+     * conversation history already called (sorted by name, outside the dynamic cap), then
+     * search_tools. The same set always renders in the same order, so the prompt prefix stays
+     * cacheable from turn to turn. Mutable because SearchToolsTool appends its matches to it.
+     * Also starts the cache warm-up.
      */
     Map<String, Tool> pinnedToolsPlusSearch(
         MLAgent mlAgent,
@@ -221,8 +253,10 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         for (String name : plan.getPinnedToolNames()) {
             promptToolsMap.put(name, toolsMap.get(name));
         }
-        for (String name : toolsCalledInHistory(history, toolsMap, toolSelectionSettings.getMaxDynamicTools())) {
-            promptToolsMap.putIfAbsent(name, toolsMap.get(name));
+        for (String name : toolsCalledInHistory(history)) {
+            if (toolsMap.containsKey(name)) {
+                promptToolsMap.putIfAbsent(name, toolsMap.get(name));
+            }
         }
         Map<String, Tool> hidden = new LinkedHashMap<>(toolsMap);
         hidden.keySet().removeAll(promptToolsMap.keySet());
@@ -241,28 +275,44 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
     }
 
     /**
-     * Configured tools called earlier in the conversation, most recent first, up to {@code limit}.
-     * Shown again so the history's tool calls always refer to tools in the request.
+     * Names of the tools called earlier in the conversation, sorted. Shown again, whatever the dynamic
+     * cap, so the history's tool calls always refer to tools in the request; sorted so the same set
+     * always renders in the same order.
      */
-    static List<String> toolsCalledInHistory(List<Message> history, Map<String, Tool> toolsMap, int limit) {
-        LinkedHashSet<String> names = new LinkedHashSet<>();
+    static SortedSet<String> toolsCalledInHistory(List<Message> history) {
+        SortedSet<String> names = new TreeSet<>();
         if (history == null) {
-            return new ArrayList<>(names);
+            return names;
         }
-        for (int i = history.size() - 1; i >= 0 && names.size() < limit; i--) {
-            List<ToolCall> toolCalls = history.get(i) == null ? null : history.get(i).getToolCalls();
+        for (Message message : history) {
+            List<ToolCall> toolCalls = message == null ? null : message.getToolCalls();
             if (toolCalls == null) {
                 continue;
             }
-            for (int j = toolCalls.size() - 1; j >= 0 && names.size() < limit; j--) {
-                ToolCall.ToolFunction function = toolCalls.get(j) == null ? null : toolCalls.get(j).getFunction();
-                String name = function == null ? null : function.getName();
-                if (name != null && toolsMap.containsKey(name) && !SearchToolsTool.NAME.equals(name)) {
-                    names.add(name);
+            for (ToolCall toolCall : toolCalls) {
+                ToolCall.ToolFunction function = toolCall == null ? null : toolCall.getFunction();
+                if (function != null && function.getName() != null) {
+                    names.add(function.getName());
                 }
             }
         }
-        return new ArrayList<>(names);
+        return names;
+    }
+
+    /**
+     * True when every tool call in the turn is search_tools and the run has a free search turn left:
+     * such a turn doesn't use one of the run's iterations.
+     */
+    static boolean isFreeSearchTurn(Map<String, Tool> promptToolsMap, List<Map<String, String>> toolCalls) {
+        if (!(promptToolsMap.get(SearchToolsTool.NAME) instanceof SearchToolsTool searchTool)) {
+            return false;
+        }
+        for (Map<String, String> toolCall : toolCalls) {
+            if (!SearchToolsTool.NAME.equals(toolCall.get("tool_name"))) {
+                return false;
+            }
+        }
+        return searchTool.takeFreeSearchTurn();
     }
 
     /** Lets {@link SearchToolsTool} adopt a hidden tool the model called directly. */
@@ -412,7 +462,11 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                         log.warn("Failed to extract message JSON for persistence. agentId={}", agentId, e);
                     }
 
-                    if (currentIteration >= maxIterations - 1) {
+                    boolean freeSearchTurn = isFreeSearchTurn(promptToolsMap, toolCalls);
+                    if (freeSearchTurn) {
+                        // Searching for tools doesn't use one of the run's iterations; the number of such turns is bounded.
+                        iteration.decrementAndGet();
+                    } else if (currentIteration >= maxIterations - 1) {
                         // Max iterations reached
                         // Parse tool interaction JSON strings to Messages for persistence
                         List<Message> toolInteractionMessages = toolInteractionJsonList.isEmpty()

@@ -116,9 +116,9 @@ public class SearchToolsToolTest {
     }
 
     @Test
-    public void testDescriptionWithNothingHiddenListsNothing() {
+    public void testDescriptionWithNothingHiddenSaysSearchAddsNothing() {
         String description = SearchToolsTool.describe(List.of());
-        assertTrue(description.contains("0 more are available"));
+        assertTrue(description.contains("All of your tools are already visible"));
         assertFalse(description.contains("including"));
     }
 
@@ -231,7 +231,7 @@ public class SearchToolsToolTest {
     }
 
     @Test
-    public void testTimeoutTellsTheModelSearchIsUnavailableAndIgnoresALateResult() {
+    public void testTimeoutTellsTheModelToTryAgainAndIgnoresALateResult() {
         AtomicReference<ActionListener<List<String>>> pending = new AtomicReference<>();
         doAnswer(invocation -> {
             pending.set(invocation.getArgument(4));
@@ -243,7 +243,8 @@ public class SearchToolsToolTest {
         assertNotNull("a timeout must be scheduled", scheduledTimeout.get());
 
         scheduledTimeout.get().run();
-        assertEquals(SearchToolsTool.UNAVAILABLE_MESSAGE, result.get());
+        // A timeout is usually a cold embedding cache that fills shortly after, so the model may retry.
+        assertEquals(SearchToolsTool.TIMED_OUT_MESSAGE, result.get());
 
         // The embedding call finishing after the deadline must not change the tool list.
         pending.get().onResponse(List.of("tool5"));
@@ -322,11 +323,21 @@ public class SearchToolsToolTest {
     }
 
     @Test
-    public void testDirectCallsCountTowardTheCap() {
+    public void testDirectCallsAreAppendedPastTheCapButCountTowardIt() {
+        // The call stays in the history, so its tool must keep a definition whatever the cap.
         cappedAt(1);
         assertTrue(searchTool.adoptDirectCall("tool6"));
-        assertFalse("over the cap the tool still runs, but isn't appended", searchTool.adoptDirectCall("tool7"));
+        assertTrue(searchTool.adoptDirectCall("tool7"));
+        assertTrue(promptTools.containsKey("tool7"));
         assertEquals(SearchToolsTool.LIMIT_MESSAGE, run("{\"query\":\"x\"}"));
+    }
+
+    @Test
+    public void testFreeSearchTurnsAreBounded() {
+        for (int i = 0; i < SearchToolsTool.FREE_SEARCH_TURNS; i++) {
+            assertTrue(searchTool.takeFreeSearchTurn());
+        }
+        assertFalse(searchTool.takeFreeSearchTurn());
     }
 
     @Test

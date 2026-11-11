@@ -31,6 +31,12 @@ public class ToolDescriptorTest {
     }
 
     @Test
+    public void testCacheKeyIsUnchangedByTheHashHelper() {
+        // SHA-256 of the length-prefixed fields "1:m", "0:" and "1:d"; cached vectors stay valid across the change.
+        assertEquals("9cbbd73010cadb24b2c31991bcba5d8ec193bceb93561e6f43b8c3ef13b0bcc8", ToolDescriptor.of("t", "d").cacheKey("m", null));
+    }
+
+    @Test
     public void testCacheKeyChangesWithTheModel() {
         ToolDescriptor descriptor = ToolDescriptor.of("SearchIndexTool", "Use this to search an index.");
         assertNotEquals(descriptor.cacheKey("model-1", null), descriptor.cacheKey("model-2", null));

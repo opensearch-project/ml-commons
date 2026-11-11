@@ -30,7 +30,8 @@ public class RestMLDynamicToolSelectionIT extends RestBaseAgentToolsIT {
 
     private static final String AGENT_WITH_TOOL_SELECTION = "{\n"
         + "  \"name\": \"tool-selection-it-agent\",\n"
-        + "  \"type\": \"flow\",\n"
+        + "  \"type\": \"conversational_v2\",\n"
+        + "  \"memory\": { \"type\": \"agentic_memory\" },\n"
         + "  \"description\": \"agent used by RestMLDynamicToolSelectionIT\",\n"
         + "  \"tool_selection\": { \"enabled\": true, \"pinned_tools\": [\"list_index\"], \"top_k\": 3, \"min_pool_size\": 20,"
         + " \"max_dynamic_tools\": 8, \"embedding_model_id\": \"agent-embedding-model\" },\n"
@@ -132,10 +133,44 @@ public class RestMLDynamicToolSelectionIT extends RestBaseAgentToolsIT {
     }
 
     @Test
+    public void testAgentUpdateCanResetToolSelectionToTheDefaults() throws Exception {
+        String agentId = createAgent(AGENT_WITH_TOOL_SELECTION);
+        String path = "/_plugins/_ml/agents/" + agentId;
+
+        // A null field goes back to the default; the stored document must lose it, not keep the old value.
+        TestHelper.makeRequest(client(), "PUT", path, null, "{ \"tool_selection\": { \"embedding_model_id\": null } }", null);
+        Map<String, Object> toolSelection = (Map<String, Object>) parseResponseToMap(
+            TestHelper.makeRequest(client(), "GET", path, null, "", null)
+        ).get("tool_selection");
+        assertNull(toolSelection.get("embedding_model_id"));
+        assertEquals(3, ((Number) toolSelection.get("top_k")).intValue());
+
+        TestHelper.makeRequest(client(), "PUT", path, null, "{ \"tool_selection\": null }", null);
+        assertNull(parseResponseToMap(TestHelper.makeRequest(client(), "GET", path, null, "", null)).get("tool_selection"));
+    }
+
+    @Test
+    public void testToolSelectionIsRejectedOnOtherAgentTypes() throws Exception {
+        String body = "{\n"
+            + "  \"name\": \"tool-selection-flow-agent\",\n"
+            + "  \"type\": \"flow\",\n"
+            + "  \"tool_selection\": { \"enabled\": true },\n"
+            + "  \"tools\": [ { \"type\": \"ListIndexTool\", \"name\": \"list_index\" } ]\n"
+            + "}";
+        try {
+            createAgent(body);
+            fail("Expected tool_selection on a flow agent to be rejected at registration");
+        } catch (ResponseException e) {
+            assertEquals(RestStatus.BAD_REQUEST.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+        }
+    }
+
+    @Test
     public void testAgentWithPartialToolSelectionOmitsUnsetFields() throws Exception {
         String body = "{\n"
             + "  \"name\": \"tool-selection-partial-agent\",\n"
-            + "  \"type\": \"flow\",\n"
+            + "  \"type\": \"conversational_v2\",\n"
+            + "  \"memory\": { \"type\": \"agentic_memory\" },\n"
             + "  \"tool_selection\": { \"top_k\": 3 },\n"
             + "  \"tools\": [ { \"type\": \"ListIndexTool\", \"name\": \"list_index\" } ]\n"
             + "}";
@@ -181,7 +216,8 @@ public class RestMLDynamicToolSelectionIT extends RestBaseAgentToolsIT {
     private void assertAgentRejected(String toolSelectionJson) throws IOException, ParseException {
         String body = "{\n"
             + "  \"name\": \"tool-selection-invalid-agent\",\n"
-            + "  \"type\": \"flow\",\n"
+            + "  \"type\": \"conversational_v2\",\n"
+            + "  \"memory\": { \"type\": \"agentic_memory\" },\n"
             + "  \"tool_selection\": "
             + toolSelectionJson
             + ",\n"

@@ -107,10 +107,13 @@ public class ToolEmbeddingStore {
             return;
         }
 
-        // Tools with identical descriptions share a key and cost one embedding.
+        // Each key is hashed once per call. Tools with identical descriptions share a key and cost one embedding.
+        List<String> cacheKeys = new ArrayList<>(descriptors.size());
         Map<String, ToolDescriptor> byCacheKey = new LinkedHashMap<>();
         for (ToolDescriptor descriptor : descriptors) {
-            byCacheKey.putIfAbsent(descriptor.cacheKey(embeddingModelId, tenantId), descriptor);
+            String cacheKey = descriptor.cacheKey(embeddingModelId, tenantId);
+            cacheKeys.add(cacheKey);
+            byCacheKey.putIfAbsent(cacheKey, descriptor);
         }
 
         EmbeddingCache.Claim claim = cache.claim(byCacheKey.keySet());
@@ -145,7 +148,7 @@ public class ToolEmbeddingStore {
                 if (error != null) {
                     log.warn("Some tool descriptions could not be embedded; searching the rest", unwrap(error));
                 }
-                listener.onResponse(toToolNameMap(descriptors, byKey, embeddingModelId, tenantId));
+                listener.onResponse(toToolNameMap(descriptors, cacheKeys, byKey));
             } catch (Exception e) {
                 listener.onFailure(e);
             }
@@ -244,17 +247,17 @@ public class ToolEmbeddingStore {
         return cause instanceof Exception ? (Exception) cause : new RuntimeException(cause);
     }
 
-    private Map<String, float[]> toToolNameMap(
+    /** {@code cacheKeys} holds each descriptor's key, at the same position. */
+    private static Map<String, float[]> toToolNameMap(
         List<ToolDescriptor> descriptors,
-        Map<String, float[]> byKey,
-        String embeddingModelId,
-        String tenantId
+        List<String> cacheKeys,
+        Map<String, float[]> byKey
     ) {
         Map<String, float[]> byToolName = new LinkedHashMap<>();
-        for (ToolDescriptor descriptor : descriptors) {
-            float[] vector = byKey.get(descriptor.cacheKey(embeddingModelId, tenantId));
+        for (int i = 0; i < descriptors.size(); i++) {
+            float[] vector = byKey.get(cacheKeys.get(i));
             if (vector != null) {
-                byToolName.put(descriptor.getName(), vector);
+                byToolName.put(descriptors.get(i).getName(), vector);
             }
         }
         return byToolName;

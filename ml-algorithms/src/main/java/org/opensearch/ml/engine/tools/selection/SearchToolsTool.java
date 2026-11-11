@@ -33,7 +33,8 @@ import lombok.extern.log4j.Log4j2;
  * it appends matches to {@code promptTools}, the live map rendered into every LLM request.
  *
  * Tools are appended, never replaced, so the prompt prefix stays stable for provider-side prompt
- * caches. At most {@code max_dynamic_tools} are appended per run, counting direct-call adoptions.
+ * caches. Searches append at most {@code max_dynamic_tools} per run, counting direct-call adoptions;
+ * a tool the model called directly is always appended, so its call never lacks a definition.
  * Every outcome, including a timeout or embedding failure, is returned to the model as a tool
  * result; search must never fail an agent request.
  */
@@ -49,6 +50,8 @@ public class SearchToolsTool implements Tool {
         + "\"required\":[\"query\"],\"additionalProperties\":false}";
 
     static final String UNAVAILABLE_MESSAGE = "Tool search is unavailable right now. Continue with the tools you already have.";
+    /** Usually a cold embedding cache, which fills shortly after, so the model is told to try again. */
+    static final String TIMED_OUT_MESSAGE = "Tool search timed out. Try again in a moment, or continue with the tools you already have.";
     static final String NO_QUERY_MESSAGE = "Provide a short description of what you need to do in the 'query' field.";
     static final String NOTHING_LEFT_MESSAGE = "All available tools are already loaded. Continue with the tools you have.";
     static final String NO_MATCH_MESSAGE = "No matching tools found. Try different wording, or continue with the tools you have.";
@@ -58,6 +61,11 @@ public class SearchToolsTool implements Tool {
     private static final int RESULT_DESCRIPTION_CHARS = 200;
     /** Upper bound on hidden tool names spelled out in this tool's own description. */
     static final int MAX_LISTED_NAMES = 100;
+    /**
+     * Turns that only call this tool and don't use one of the run's iterations, so searching doesn't
+     * crowd out the tool calls the task needs. Bounded so a model that keeps searching still stops.
+     */
+    public static final int FREE_SEARCH_TURNS = 3;
 
     private final DynamicToolSelector selector;
     private final ToolSelectionSettings settings;
@@ -67,6 +75,7 @@ public class SearchToolsTool implements Tool {
     /** Pinned tools and this tool; they don't count toward the cap. */
     private final Set<String> startingTools;
     private final ThreadPool threadPool;
+    private int freeSearchTurnsLeft = FREE_SEARCH_TURNS;
 
     @Getter
     @Setter
@@ -121,6 +130,9 @@ public class SearchToolsTool implements Tool {
      * prompt caches stay valid.
      */
     static String describe(List<String> hiddenNames) {
+        if (hiddenNames.isEmpty()) {
+            return "Find more tools. All of your tools are already visible, so a search adds nothing; continue with the tools you have.";
+        }
         StringBuilder text = new StringBuilder();
         text
             .append(
@@ -131,12 +143,10 @@ public class SearchToolsTool implements Tool {
                         hiddenNames.size()
                     )
             );
-        if (!hiddenNames.isEmpty()) {
-            int listed = Math.min(hiddenNames.size(), MAX_LISTED_NAMES);
-            text.append(", including: ").append(String.join(", ", hiddenNames.subList(0, listed)));
-            if (listed < hiddenNames.size()) {
-                text.append(" and ").append(hiddenNames.size() - listed).append(" more");
-            }
+        int listed = Math.min(hiddenNames.size(), MAX_LISTED_NAMES);
+        text.append(", including: ").append(String.join(", ", hiddenNames.subList(0, listed)));
+        if (listed < hiddenNames.size()) {
+            text.append(" and ").append(hiddenNames.size() - listed).append(" more");
         }
         text
             .append(
@@ -173,9 +183,10 @@ public class SearchToolsTool implements Tool {
             long latencyMillis = (System.nanoTime() - startNanos) / 1_000_000L;
             if (e instanceof OpenSearchTimeoutException) {
                 log.warn("tool_selection search timed_out=true latency_ms={} timeout={}", latencyMillis, settings.getSearchTimeout());
-            } else {
-                log.warn("tool_selection search failed=true latency_ms={}", latencyMillis, e);
+                listener.onResponse((T) TIMED_OUT_MESSAGE);
+                return;
             }
+            log.warn("tool_selection search failed=true latency_ms={}", latencyMillis, e);
             listener.onResponse((T) UNAVAILABLE_MESSAGE);
         });
 
@@ -211,8 +222,9 @@ public class SearchToolsTool implements Tool {
     }
 
     /**
-     * Appends a hidden tool the model called directly, so its schema is shown from the next step.
-     * Counts against the cap. The call itself runs regardless; hiding is not access control.
+     * Appends a hidden tool the model called directly, so its schema is shown from the next step and the
+     * call in the history always has a definition. Always appended, even past the cap, but it counts
+     * against the cap for later searches. The call itself runs regardless; hiding is not access control.
      *
      * @return true if the tool was appended
      */
@@ -220,12 +232,22 @@ public class SearchToolsTool implements Tool {
         if (toolName == null || promptTools.containsKey(toolName) || !poolTools.containsKey(toolName)) {
             return false;
         }
-        boolean adopted = remainingCapacity() > 0;
-        if (adopted) {
-            promptTools.put(toolName, poolTools.get(toolName));
+        promptTools.put(toolName, poolTools.get(toolName));
+        log.info("tool_selection direct_call tool={} adopted=true", toolName);
+        return true;
+    }
+
+    /**
+     * Uses up one of the run's free search turns, see {@link #FREE_SEARCH_TURNS}.
+     *
+     * @return true if a free turn was left
+     */
+    public boolean takeFreeSearchTurn() {
+        if (freeSearchTurnsLeft <= 0) {
+            return false;
         }
-        log.info("tool_selection direct_call tool={} adopted={}", toolName, adopted);
-        return adopted;
+        freeSearchTurnsLeft--;
+        return true;
     }
 
     /** How many more tools may be appended in this run. */

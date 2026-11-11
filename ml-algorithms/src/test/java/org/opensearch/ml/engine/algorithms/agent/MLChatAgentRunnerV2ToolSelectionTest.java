@@ -136,7 +136,7 @@ public class MLChatAgentRunnerV2ToolSelectionTest {
     }
 
     @Test
-    public void testHistoryToolsAreUnknownOrSearchToolsIgnoredAndLimited() {
+    public void testToolsCalledInHistoryAreAllNamesSorted() {
         List<Message> history = List
             .of(
                 assistantCalling("msearch", "stats"),
@@ -144,13 +144,82 @@ public class MLChatAgentRunnerV2ToolSelectionTest {
                 assistantCalling("mapping")
             );
 
-        assertEquals(List.of("mapping", "stats"), MLChatAgentRunnerV2.toolsCalledInHistory(history, pool(), 2));
-        assertEquals(List.of(), MLChatAgentRunnerV2.toolsCalledInHistory(null, pool(), 2));
+        assertEquals(
+            List.of("mapping", "msearch", "not_configured", SearchToolsTool.NAME, "stats"),
+            new ArrayList<>(MLChatAgentRunnerV2.toolsCalledInHistory(history))
+        );
+        assertTrue(MLChatAgentRunnerV2.toolsCalledInHistory(null).isEmpty());
     }
 
     @Test
-    public void testHistoryToolsDoNotCountTowardTheCap() {
-        agent = MLAgent
+    public void testEveryHistoryToolIsShownWhateverTheCapAndUnknownOnesAreSkipped() {
+        // A pinned tool called in history must not take a slot, and the cap must not drop older calls.
+        agent = agentWithCap(1);
+        List<Message> history = List
+            .of(assistantCalling("stats"), assistantCalling("explain", "not_configured"), assistantCalling("msearch", "mapping"));
+
+        Map<String, Tool> promptTools = buildPromptTools(pool(), history);
+
+        assertEquals(
+            List.of("explain", "search", "mapping", "msearch", "stats", SearchToolsTool.NAME),
+            new ArrayList<>(promptTools.keySet())
+        );
+    }
+
+    @Test
+    public void testTheSameHistoryToolsAlwaysRenderInTheSameOrder() {
+        // Provider prompt caches match on the exact prefix, and tools come first in it.
+        Map<String, Tool> earlier = buildPromptTools(pool(), List.of(assistantCalling("stats"), assistantCalling("mapping")));
+        Map<String, Tool> later = buildPromptTools(pool(), List.of(assistantCalling("mapping"), assistantCalling("stats")));
+
+        assertEquals(new ArrayList<>(earlier.keySet()), new ArrayList<>(later.keySet()));
+    }
+
+    @Test
+    public void testSearchToolsStaysDefinedWhenAnEarlierRunUsedItButSearchNoLongerApplies() {
+        agent = agent.toBuilder().toolSelection(MLToolSelectionConfig.builder().enabled(false).build()).build();
+        Map<String, Tool> tools = pool();
+
+        Map<String, Tool> promptTools = runner.selectPromptTools(agent, tools, List.of(assistantCalling(SearchToolsTool.NAME)), "a");
+
+        assertEquals(6, promptTools.size());
+        assertTrue(promptTools.keySet().containsAll(tools.keySet()));
+        assertTrue(promptTools.get(SearchToolsTool.NAME).getDescription().contains("All of your tools are already visible"));
+        assertEquals("the agent's own tool map is untouched", 5, tools.size());
+    }
+
+    @Test
+    public void testWithoutToolSearchOrEarlierSearchesTheAgentsToolMapIsUsedAsIs() {
+        agent = agent.toBuilder().toolSelection(MLToolSelectionConfig.builder().enabled(false).build()).build();
+        Map<String, Tool> tools = pool();
+
+        assertSame(tools, runner.selectPromptTools(agent, tools, List.of(assistantCalling("stats")), "a"));
+    }
+
+    @Test
+    public void testSelectPromptToolsAppliesTheSearchPlan() {
+        Map<String, Tool> promptTools = runner.selectPromptTools(agent, pool(), List.of(), "a");
+
+        assertEquals(List.of("explain", "search", SearchToolsTool.NAME), new ArrayList<>(promptTools.keySet()));
+    }
+
+    @Test
+    public void testSearchOnlyTurnsDoNotUseAnIterationUpToTheBound() {
+        Map<String, Tool> promptTools = buildPromptTools(pool());
+        List<Map<String, String>> searchOnly = List.of(Map.of("tool_name", SearchToolsTool.NAME));
+
+        List<Map<String, String>> searchAndCall = List.of(Map.of("tool_name", SearchToolsTool.NAME), Map.of("tool_name", "search"));
+
+        assertFalse("a turn that also calls another tool counts", MLChatAgentRunnerV2.isFreeSearchTurn(promptTools, searchAndCall));
+        for (int i = 0; i < SearchToolsTool.FREE_SEARCH_TURNS; i++) {
+            assertTrue(MLChatAgentRunnerV2.isFreeSearchTurn(promptTools, searchOnly));
+        }
+        assertFalse("free search turns are bounded", MLChatAgentRunnerV2.isFreeSearchTurn(promptTools, searchOnly));
+        assertFalse("no tool search, no free turn", MLChatAgentRunnerV2.isFreeSearchTurn(pool(), searchOnly));
+    }
+
+    private MLAgent agentWithCap(int maxDynamicTools) {
+        return MLAgent
             .builder()
             .name("agent")
             .type(MLAgentType.CONVERSATIONAL.name())
@@ -161,10 +230,15 @@ public class MLChatAgentRunnerV2ToolSelectionTest {
                     .enabled(true)
                     .pinnedTools(List.of("explain", "search"))
                     .minPoolSize(3)
-                    .maxDynamicTools(1)
+                    .maxDynamicTools(maxDynamicTools)
                     .build()
             )
             .build();
+    }
+
+    @Test
+    public void testHistoryToolsDoNotCountTowardTheCap() {
+        agent = agentWithCap(1);
         Map<String, Tool> promptTools = buildPromptTools(pool(), List.of(assistantCalling("mapping")));
         SearchToolsTool searchTool = (SearchToolsTool) promptTools.get(SearchToolsTool.NAME);
 

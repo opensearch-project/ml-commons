@@ -9,7 +9,10 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -40,6 +43,8 @@ public class MLToolSelectionConfig implements ToXContentObject, Writeable {
     public static final String MIN_POOL_SIZE_FIELD = "min_pool_size";
     public static final String MAX_DYNAMIC_TOOLS_FIELD = "max_dynamic_tools";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
+    public static final Set<String> FIELDS = Set
+        .of(ENABLED_FIELD, PINNED_TOOLS_FIELD, TOP_K_FIELD, MIN_POOL_SIZE_FIELD, MAX_DYNAMIC_TOOLS_FIELD, EMBEDDING_MODEL_ID_FIELD);
 
     static final int MAX_TOP_K = 50;
     static final int MAX_MIN_POOL_SIZE = 10000;
@@ -124,30 +129,41 @@ public class MLToolSelectionConfig implements ToXContentObject, Writeable {
     /** Unset fields are omitted rather than written as null. */
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        builder.startObject();
-        if (enabled != null) {
-            builder.field(ENABLED_FIELD, enabled);
+        return builder.map(toMap());
+    }
+
+    /** The set fields, in a fixed order; unset fields are left out. */
+    public Map<String, Object> toMap() {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        putIfSet(fields, ENABLED_FIELD, enabled);
+        putIfSet(fields, PINNED_TOOLS_FIELD, pinnedTools);
+        putIfSet(fields, TOP_K_FIELD, topK);
+        putIfSet(fields, MIN_POOL_SIZE_FIELD, minPoolSize);
+        putIfSet(fields, MAX_DYNAMIC_TOOLS_FIELD, maxDynamicTools);
+        putIfSet(fields, EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
+        return fields;
+    }
+
+    private static void putIfSet(Map<String, Object> fields, String name, Object value) {
+        if (value != null) {
+            fields.put(name, value);
         }
-        if (pinnedTools != null) {
-            builder.field(PINNED_TOOLS_FIELD, pinnedTools);
-        }
-        if (topK != null) {
-            builder.field(TOP_K_FIELD, topK);
-        }
-        if (minPoolSize != null) {
-            builder.field(MIN_POOL_SIZE_FIELD, minPoolSize);
-        }
-        if (maxDynamicTools != null) {
-            builder.field(MAX_DYNAMIC_TOOLS_FIELD, maxDynamicTools);
-        }
-        if (embeddingModelId != null) {
-            builder.field(EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
-        }
-        builder.endObject();
-        return builder;
+    }
+
+    /** True when no field is set, which behaves exactly like having no configuration. */
+    public boolean isEmpty() {
+        return toMap().isEmpty();
     }
 
     public static MLToolSelectionConfig parse(XContentParser parser) throws IOException {
+        return parse(parser, null);
+    }
+
+    /**
+     * @param nullFields when not null, receives the known fields given as an explicit null, so an update
+     *                   can tell "reset to the default" from "leave unchanged"
+     */
+    public static MLToolSelectionConfig parse(XContentParser parser, Set<String> nullFields) throws IOException {
         Boolean enabled = null;
         List<String> pinnedTools = null;
         Integer topK = null;
@@ -161,6 +177,9 @@ public class MLToolSelectionConfig implements ToXContentObject, Writeable {
             parser.nextToken();
             // An explicit null means the same as leaving the field out: use the default.
             if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                if (nullFields != null && FIELDS.contains(fieldName)) {
+                    nullFields.add(fieldName);
+                }
                 continue;
             }
             switch (fieldName) {

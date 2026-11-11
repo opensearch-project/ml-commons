@@ -6,9 +6,8 @@
 package org.opensearch.ml.engine.tools.selection;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
+
+import org.opensearch.common.hash.MessageDigests;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -46,17 +45,7 @@ public final class ToolDescriptor {
      */
     public String cacheKey(String embeddingModelId, String tenantId) {
         String material = lengthPrefixed(embeddingModelId) + lengthPrefixed(tenantId) + lengthPrefixed(embeddingText());
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(digest.length * 2);
-            for (byte b : digest) {
-                hex.append(String.format(Locale.ROOT, "%02x", b));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException e) {
-            // Every conformant JVM is required to provide SHA-256, so this is unreachable.
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        return MessageDigests.toHexString(MessageDigests.sha256().digest(material.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String lengthPrefixed(String value) {
