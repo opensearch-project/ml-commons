@@ -491,6 +491,40 @@ public class AnthropicMessagesModelProvider extends ModelProvider {
         return StringUtils.toJson(message);
     }
 
+    /**
+     * The reason the model stopped, read from the top-level stop_reason (for example "end_turn",
+     * "max_tokens" or "refusal").
+     *
+     * @param responseData Map containing the Anthropic Messages API response data
+     * @return the stop reason, or null if not present
+     */
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object reason = responseData == null ? null : responseData.get("stop_reason");
+        return reason == null ? null : reason.toString();
+    }
+
+    /**
+     * A reply is empty when its content holds only thinking blocks or blank text (for example a token limit
+     * spent on thinking). A missing content list, or a block of another kind, is not an empty reply.
+     */
+    public boolean isEmptyReply(Map<String, ?> responseData) {
+        if (responseData == null || !(responseData.get("content") instanceof List<?> blocks)) {
+            return false;
+        }
+        for (Object block : blocks) {
+            if (!(block instanceof Map<?, ?> blockMap)) {
+                return false;
+            }
+            Object type = blockMap.get("type");
+            boolean thinking = "thinking".equals(type) || "redacted_thinking".equals(type);
+            boolean blankText = "text".equals(type) && isBlank(blockMap.get("text"));
+            if (!thinking && !blankText) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public Message parseToUnifiedMessage(String json) {

@@ -651,6 +651,37 @@ public class AnthropicMessagesModelProviderTest {
         assertEquals(parse(response), parse(body));
     }
 
+    @Test
+    public void testExtractFinishReason() {
+        assertEquals("max_tokens", provider.extractFinishReason(Map.of("stop_reason", "max_tokens", "content", List.of())));
+        assertNull(provider.extractFinishReason(null));
+        assertNull(provider.extractFinishReason(Map.of("content", List.of())));
+    }
+
+    @Test
+    public void testIsEmptyReply_OnlyThinkingOrBlankText() {
+        Map<String, Object> thinking = Map.of("type", "thinking", "thinking", "Let me think...", "signature", "sig");
+        Map<String, Object> redacted = Map.of("type", "redacted_thinking", "data", "abc");
+        Map<String, Object> blankText = Map.of("type", "text", "text", " ");
+        for (List<Object> content : List.<List<Object>>of(List.of(), List.of(thinking), List.of(redacted, blankText))) {
+            Map<String, Object> response = Map.of("role", "assistant", "content", content, "stop_reason", "max_tokens");
+            assertTrue(content.toString(), provider.isEmptyReply(response));
+            assertNull(provider.parseToUnifiedMessage(provider.extractMessageFromResponse(response)));
+        }
+    }
+
+    @Test
+    public void testIsEmptyReply_FalseForAnswerBlocksOrAMissingContent() {
+        Map<String, Object> text = Map.of("type", "text", "text", "hi");
+        Map<String, Object> toolUse = Map.of("type", "tool_use", "id", "toolu_1", "name", "search", "input", Map.of());
+        Map<String, Object> unknown = Map.of("type", "server_tool_use", "id", "srvtoolu_1");
+        for (Object block : List.of(text, toolUse, unknown)) {
+            assertFalse(block.toString(), provider.isEmptyReply(Map.of("content", List.of(block), "stop_reason", "end_turn")));
+        }
+        assertFalse(provider.isEmptyReply(null));
+        assertFalse(provider.isEmptyReply(Map.of("stop_reason", "end_turn")));
+    }
+
     // ==================== Helpers ====================
 
     private Map<String, String> headers(Map<String, String> modelParameters) {
