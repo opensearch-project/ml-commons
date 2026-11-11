@@ -517,6 +517,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .modelId("anthropic.claude-v2")
             .modelParameters(modelParameters)
             .credential(credential)
+            .clientConfig(org.opensearch.ml.common.connector.ConnectorClientConfig.builder().readTimeout(120).build())
             .build();
 
         Map<String, String> agentParameters = new HashMap<>();
@@ -568,8 +569,15 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertNotNull(response);
         assertEquals("AGENT_ID", response.getAgentId());
 
-        // Verify model registration was called
-        verify(client, times(1)).execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), any(), any());
+        // Verify model registration was called, with client_config applied to the auto-created connector
+        ArgumentCaptor<org.opensearch.ml.common.transport.register.MLRegisterModelRequest> modelRequestCaptor = ArgumentCaptor
+            .forClass(org.opensearch.ml.common.transport.register.MLRegisterModelRequest.class);
+        verify(client, times(1))
+            .execute(eq(org.opensearch.ml.common.transport.register.MLRegisterModelAction.INSTANCE), modelRequestCaptor.capture(), any());
+        assertEquals(
+            Integer.valueOf(120),
+            modelRequestCaptor.getValue().getRegisterModelInput().getConnector().getConnectorClientConfig().getReadTimeout()
+        );
 
         // Verify agent was indexed with the created model ID in LLMSpec
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
@@ -581,6 +589,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertTrue("Agent source should contain created model_id", source.contains("\"model_id\":\"created_model_id\""));
         assertTrue("Agent source should contain _llm_interface", source.contains("\"_llm_interface\":\"bedrock/converse/claude\""));
         assertFalse("Agent source should not contain credential", source.contains("access_key"));
+        assertFalse("Agent source should not contain client_config, it lives on the connector", source.contains("client_config"));
     }
 
     @Test

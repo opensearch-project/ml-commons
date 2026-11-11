@@ -207,18 +207,21 @@ public class MLAgentModelSpec implements ToXContentObject {
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
+            if (SUPPORTED_CLIENT_CONFIG_FIELDS.contains(fieldName) && parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                throw new IllegalArgumentException("client_config." + fieldName + " must not be null");
+            }
             switch (fieldName) {
                 case ConnectorClientConfig.CONNECTION_TIMEOUT_FIELD:
-                    config.connectionTimeout(positive(fieldName, parser.intValue()));
+                    config.connectionTimeout(positive(fieldName, intValue(parser, fieldName)));
                     break;
                 case ConnectorClientConfig.READ_TIMEOUT_FIELD:
-                    config.readTimeout(positive(fieldName, parser.intValue()));
+                    config.readTimeout(positive(fieldName, intValue(parser, fieldName)));
                     break;
                 case ConnectorClientConfig.MAX_CONNECTION_FIELD:
-                    config.maxConnections(positive(fieldName, parser.intValue()));
+                    config.maxConnections(positive(fieldName, intValue(parser, fieldName)));
                     break;
                 case ConnectorClientConfig.MAX_RETRY_TIMES_FIELD:
-                    int retries = parser.intValue();
+                    int retries = intValue(parser, fieldName);
                     // -1 means "retry until retry_timeout_seconds", as on standalone connectors.
                     if (retries < -1) {
                         throw new IllegalArgumentException("client_config.max_retry_times must be -1 or greater");
@@ -226,10 +229,10 @@ public class MLAgentModelSpec implements ToXContentObject {
                     config.maxRetryTimes(retries);
                     break;
                 case ConnectorClientConfig.RETRY_BACKOFF_MILLIS_FIELD:
-                    config.retryBackoffMillis(positive(fieldName, parser.intValue()));
+                    config.retryBackoffMillis(positive(fieldName, intValue(parser, fieldName)));
                     break;
                 case ConnectorClientConfig.RETRY_TIMEOUT_SECONDS_FIELD:
-                    config.retryTimeoutSeconds(positive(fieldName, parser.intValue()));
+                    config.retryTimeoutSeconds(positive(fieldName, intValue(parser, fieldName)));
                     break;
                 case ConnectorClientConfig.RETRY_BACKOFF_POLICY_FIELD:
                     config.retryBackoffPolicy(RetryBackoffPolicy.from(parser.text()));
@@ -245,6 +248,14 @@ public class MLAgentModelSpec implements ToXContentObject {
             }
         }
         return config.build();
+    }
+
+    /** Reads a whole number, rejecting strings and fractions that intValue() would otherwise coerce (1.9 to 1). */
+    private static int intValue(XContentParser parser, String field) throws IOException {
+        if (parser.currentToken() != XContentParser.Token.VALUE_NUMBER || parser.numberType() != XContentParser.NumberType.INT) {
+            throw new IllegalArgumentException("client_config." + field + " must be an integer");
+        }
+        return parser.intValue();
     }
 
     private static int positive(String field, int value) {
