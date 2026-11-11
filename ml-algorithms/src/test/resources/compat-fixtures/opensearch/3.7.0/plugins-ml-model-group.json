@@ -1,0 +1,24 @@
+[
+  {
+    "_id": "4QRYEKEBP8ECMCIeUKud",
+    "_source": {
+      "access": "public",
+      "created_time": 1791275585554,
+      "description": "fixture",
+      "last_updated_time": 1791275585864,
+      "latest_version": 1,
+      "name": "compat-titan-embed"
+    }
+  },
+  {
+    "_id": "5gRYEKEBP8ECMCIeUqtN",
+    "_source": {
+      "access": "public",
+      "created_time": 1791275586125,
+      "description": "fixture",
+      "last_updated_time": 1791275586172,
+      "latest_version": 1,
+      "name": "compat-openai-chat"
+    }
+  }
+]

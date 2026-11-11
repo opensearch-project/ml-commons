@@ -1,0 +1,3 @@
+# Known compatibility failures, one per line, tab-separated:
+# fixture-set<TAB>index<TAB>doc-id<TAB>stage<TAB>expected message substring
+# Every entry must reference a tracking issue in the comment above it.
