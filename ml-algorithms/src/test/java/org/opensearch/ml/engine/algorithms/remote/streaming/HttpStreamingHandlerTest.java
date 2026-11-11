@@ -82,4 +82,47 @@ public class HttpStreamingHandlerTest {
 
         listener.onEvent(mockEventSource, null, null, jsonData);
     }
+
+    @Test
+    public void testClient_connectsDirectlyWithoutRedirects() {
+        okhttp3.OkHttpClient client = handler.okHttpClient();
+        org.junit.Assert.assertEquals(java.net.Proxy.NO_PROXY, client.proxy());
+        org.junit.Assert.assertFalse(client.followRedirects());
+        org.junit.Assert.assertFalse(client.followSslRedirects());
+    }
+
+    @Test
+    public void testStartStream_privateDestinationRejectedByDefaultPolicy() {
+        when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn("http://10.0.0.1/v1/chat/completions");
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+
+        handler.startStream("PREDICT", new java.util.HashMap<>(), "{\"messages\":[]}", listener);
+
+        org.mockito.ArgumentCaptor<Exception> failure = org.mockito.ArgumentCaptor.forClass(Exception.class);
+        org.mockito.Mockito.verify(listener).onFailure(failure.capture());
+        Throwable cause = failure.getValue().getCause();
+        assertTrue(String.valueOf(cause), cause instanceof IllegalArgumentException && cause.getMessage().contains("private ip address"));
+    }
+
+    @Test
+    public void testStartStream_restrictedPatternAppliesWithPrivateIpEnabled() {
+        when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn("http://10.0.0.9/v1/chat/completions");
+        StreamingAddressPolicy policy = new StreamingAddressPolicy(
+            true,
+            null,
+            java.util.List.of(java.util.regex.Pattern.compile("10\\.0\\.0\\.9"))
+        );
+        HttpStreamingHandler restricted = new HttpStreamingHandler(LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, mockConnector, mockConfig, null, policy);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+
+        restricted.startStream("PREDICT", new java.util.HashMap<>(), "{\"messages\":[]}", listener);
+
+        org.mockito.ArgumentCaptor<Exception> failure = org.mockito.ArgumentCaptor.forClass(Exception.class);
+        org.mockito.Mockito.verify(listener).onFailure(failure.capture());
+        assertTrue(String.valueOf(failure.getValue().getCause()), failure.getValue().getCause().getMessage().contains("restricted ip address"));
+    }
 }
