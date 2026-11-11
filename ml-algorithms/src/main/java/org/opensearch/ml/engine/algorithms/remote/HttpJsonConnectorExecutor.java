@@ -37,6 +37,7 @@ import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingAddressPolicy;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
@@ -189,7 +190,14 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             validateLLMInterface(llmInterface);
 
             StreamingHandler handler = StreamingHandlerFactory
-                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig(), parameters);
+                .createHandler(
+                    llmInterface,
+                    connector,
+                    null,
+                    super.getConnectorClientConfig(),
+                    parameters,
+                    new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
+                );
             handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);

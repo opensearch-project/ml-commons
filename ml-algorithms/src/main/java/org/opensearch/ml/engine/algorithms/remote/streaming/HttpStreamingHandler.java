@@ -14,6 +14,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.io.IOException;
+import java.net.Proxy;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -34,6 +35,7 @@ import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -42,9 +44,11 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -60,6 +64,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     private OkHttpClient okHttpClient;
     private String llmInterface;
     private Map<String, String> parameters;
+    private final StreamingAddressPolicy addressPolicy;
 
     public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
         this(llmInterface, connector, connectorClientConfig, null);
@@ -71,7 +76,18 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
+        this(llmInterface, connector, connectorClientConfig, parameters, StreamingAddressPolicy.DEFAULT);
+    }
+
+    public HttpStreamingHandler(
+        String llmInterface,
+        Connector connector,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters,
+        StreamingAddressPolicy addressPolicy
+    ) {
         this.connector = connector;
+        this.addressPolicy = addressPolicy == null ? StreamingAddressPolicy.DEFAULT : addressPolicy;
         this.llmInterface = llmInterface;
         this.parameters = parameters;
 
@@ -97,10 +113,14 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                // Connect directly and only to the validated destination: no JVM proxy, no redirects.
                 this.okHttpClient = new OkHttpClient.Builder()
                     .connectTimeout(connectionTimeout)
                     .readTimeout(readTimeout)
                     .retryOnConnectionFailure(true)
+                    .proxy(Proxy.NO_PROXY)
+                    .followRedirects(false)
+                    .followSslRedirects(false)
                     .build();
                 return null;
             });
@@ -120,6 +140,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             log.info("Creating SSE connection for streaming request");
             EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
             Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
+            validateDestination(request.url());
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 EventSources.createFactory(okHttpClient).newEventSource(request, listener);
@@ -130,6 +151,25 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             log.error("Failed to start HTTP streaming", e);
             handleError(e, actionListener);
         }
+    }
+
+    /** The same address policy the non-streaming client applies, on the URL this client will connect to. */
+    private void validateDestination(HttpUrl url) {
+        MLHttpClientFactory
+            .validateConnectorEndpoint(
+                url.toString(),
+                url.scheme(),
+                url.host(),
+                url.port(),
+                addressPolicy.isPrivateIpEnabled(),
+                addressPolicy.getTrustedPrivateEndpoints(),
+                addressPolicy.getRestrictedIpPatterns()
+            );
+    }
+
+    @VisibleForTesting
+    OkHttpClient okHttpClient() {
+        return okHttpClient;
     }
 
     @Override

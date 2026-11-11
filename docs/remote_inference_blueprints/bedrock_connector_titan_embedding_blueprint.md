@@ -67,7 +67,7 @@ POST /_plugins/_ml/connectors/_create
       ...
       "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"embeddingTypes\": [\"float\"] }",
       "pre_process_function": "connector.pre_process.bedrock.embedding",
-      "post_process_function": "onnector.post_process.bedrock_v2.embedding.float"
+      "post_process_function": "connector.post_process.bedrock_v2.embedding.float"
     }
   ]
 }
@@ -78,6 +78,9 @@ For BedRock v2 embedding API, there are several build-in post_process_function t
 
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html) 
+
+If you create the connector in an Amazon OpenSearch Serverless collection, the role's trust policy must allow the `ml.opensearchservice.amazonaws.com` service principal, and the caller that creates the connector needs `iam:PassRole` on the role.
+Refer to [Configure Machine Learning on Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-configure-machine-learning.html).
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -260,6 +263,14 @@ POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
   }
 }
 ```
+or, to send text input through the connector's `pre_process_function`, specify the algorithm:
+```json
+POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict?algorithm=text_embedding
+{
+  "text_docs": ["What is the meaning of life?"]
+}
+```
+Without `algorithm`, a remote model reads only `parameters`, so `text_docs` is ignored and the request fails with `Some parameter placeholder not filled in payload: inputText`.
 
 Sample response of Titan Text Embedding V1:
 ```json
