@@ -1483,7 +1483,7 @@ public class MLModelManager {
                 setupRateLimiter(modelId, deployOwner, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, deployOwner, tenantId, mlModel.getGuardrails());
                 setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner);
+                redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount, deployOwner);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -1677,7 +1677,7 @@ public class MLModelManager {
                 setupRateLimiter(modelId, deployOwner, eligibleNodeCount, mlModel.getRateLimiter());
                 setupMLGuard(modelId, deployOwner, mlModel.getTenantId(), mlModel.getGuardrails());
                 setupModelInterface(modelId, deployOwner, mlModel.getModelInterface());
-                deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner);
+                redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount, deployOwner);
                 // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
@@ -2275,22 +2275,25 @@ public class MLModelManager {
      * @param mlModel ml model
      */
     public void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
-        deployControllerWithDeployingModel(mlModel, eligibleNodeCount, (DeployAttempt) null);
-    }
-
-    /**
-     * {@link #deployControllerWithDeployingModel(MLModel, Integer)} on behalf of a deploy attempt: the user rate
-     * limiters it loads are written only into the cache entry that attempt created or joined.
-     */
-    private void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount, DeployAttempt deployOwner) {
-        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
-            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
-        }
         if (mlModel.getModelState() != MLModelState.DEPLOYING) {
             throw new OpenSearchStatusException(
                 "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),
                 RestStatus.CONFLICT
             );
+        }
+        redeployModelControllerWhileDeploying(mlModel, eligibleNodeCount, null);
+    }
+
+    /**
+     * Loads the model controller (user level rate limits) while this node deploys the model, on behalf of a deploy attempt:
+     * the user rate limiters it loads are written only into the cache entry that attempt created or joined. Deliberately
+     * does not check the model state in the model index: that document is shared by every node and is rewritten
+     * concurrently by the sync up job and by other deploy tasks (for example to PARTIALLY_DEPLOYED while new nodes are
+     * still joining), so checking it here failed this node's deploy for no reason of its own.
+     */
+    private void redeployModelControllerWhileDeploying(MLModel mlModel, Integer eligibleNodeCount, DeployAttempt deployOwner) {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
         }
         deployControllerWithDeployingModel(mlModel, eligibleNodeCount, deployOwner, ActionListener.wrap(response -> {
             if (response.startsWith("Successfully")) {
