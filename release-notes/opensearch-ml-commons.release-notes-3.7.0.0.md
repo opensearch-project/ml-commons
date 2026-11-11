@@ -14,6 +14,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.7.0
 * Add structured output (constrained decoding) support for agentic memory fact extraction ([#4824](https://github.com/opensearch-project/ml-commons/pull/4824))
 * Strengthen enforcement of `trusted_connector_endpoints_regex` across all outbound connector request paths ([#4826](https://github.com/opensearch-project/ml-commons/pull/4826))
 * Simplify USER_PREFERENCE extraction prompt to produce plain sentences, fixing silent JSON parse failures with smaller LLMs ([#4798](https://github.com/opensearch-project/ml-commons/pull/4798))
+* Add index mapping guidance to executor system prompt ([#4821](https://github.com/opensearch-project/ml-commons/pull/4821))
+* Bound AgentTool recursion depth to prevent self-referencing chains ([#4836](https://github.com/opensearch-project/ml-commons/pull/4836))
 
 ### Bug Fixes
 
@@ -22,6 +24,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.7.0
 * Fix tool output JSON escape issue when replacing placeholders in connector request bodies ([#4794](https://github.com/opensearch-project/ml-commons/pull/4794))
 * Propagate stream errors properly to callers instead of swallowing them ([#4792](https://github.com/opensearch-project/ml-commons/pull/4792))
 * Fix `model_parameters` being silently ignored in inferenceConfig and incorrect SourceType error message in V2 agents ([#4833](https://github.com/opensearch-project/ml-commons/pull/4833))
+* Fix MCP agent execution hang after MCP SDK 1.1.1 bump ([#4816](https://github.com/opensearch-project/ml-commons/pull/4816))
 
 ### Infrastructure
 
