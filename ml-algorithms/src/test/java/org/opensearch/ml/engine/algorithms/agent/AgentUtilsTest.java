@@ -4151,7 +4151,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
             assertTrue(result.allConnectorsFailed());
             assertTrue(result.getToolSpecs().isEmpty());
-            assertEquals("ConnectException: Connection refused", result.getFailedConnectors().get("c1"));
+            assertEquals("ConnectException: Connection refused", result.getFailedConnectors().get("c1").toString());
         }
     }
 
@@ -4226,7 +4226,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant"));
 
         assertTrue(result.allConnectorsFailed());
-        assertTrue(result.getFailedConnectors().get("c1").contains("Failed to get connector"));
+        assertTrue(result.getFailedConnectors().get("c1").toString().contains("Failed to get connector"));
     }
 
     @Test
@@ -4281,5 +4281,75 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Test
     public void testRootCauseMessage_Null() {
         assertEquals("unknown error", AgentUtils.rootCauseMessage(null));
+    }
+
+    @Test
+    public void testRootCauseMessage_CauseCycleEnds() {
+        // initCause only rejects a self-cause, so a chain can loop through two exceptions
+        RuntimeException a = new RuntimeException("a");
+        IllegalStateException b = new IllegalStateException("b");
+        a.initCause(b);
+        b.initCause(a);
+        assertEquals("IllegalStateException: b", AgentUtils.rootCauseMessage(a));
+    }
+
+    @Test
+    public void testRootCauseMessage_AnonymousExceptionUsesItsFullName() {
+        RuntimeException anonymous = new RuntimeException("boom") {
+        };
+        assertEquals(anonymous.getClass().getName() + ": boom", AgentUtils.rootCauseMessage(anonymous));
+    }
+
+    @Test
+    public void testMcpConnectorFailure_KeepsTheStatus() {
+        AgentUtils.McpConnectorFailure notFound = AgentUtils.McpConnectorFailure
+            .of(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+        assertEquals(RestStatus.NOT_FOUND, notFound.getStatus());
+        assertTrue(notFound.isClientError());
+        assertEquals("OpenSearchStatusException", notFound.getType());
+        assertEquals("Failed to find connector", notFound.getMessage());
+
+        // An invalid tool_filters regex is the agent's configuration too
+        AgentUtils.McpConnectorFailure badFilter = AgentUtils.McpConnectorFailure
+            .of(new java.util.regex.PatternSyntaxException("Unclosed group", "(", 1));
+        assertEquals(RestStatus.BAD_REQUEST, badFilter.getStatus());
+
+        AgentUtils.McpConnectorFailure unreachable = AgentUtils.McpConnectorFailure
+            .of(new RuntimeException("Client failed to initialize", new java.net.ConnectException("Connection refused")));
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, unreachable.getStatus());
+        assertFalse(unreachable.isClientError());
+        assertEquals("ConnectException: Connection refused", unreachable.toString());
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_NullOrEmptyConnectorListIsAnEmptyResult() {
+        // Before: "[]" never completed the listener and "null" threw a NullPointerException
+        for (String config : List.of("[]", "null")) {
+            AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
+            assertEquals(config, 0, result.getConfiguredConnectors());
+            assertTrue(config, result.getToolSpecs().isEmpty());
+            assertFalse(config, result.allConnectorsFailed());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecsWithFailures_DeletedConnectorKeepsItsNotFoundStatus() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new OpenSearchStatusException("Failed to find connector:c1", RestStatus.NOT_FOUND));
+                return stage;
+            });
+            return stage;
+        });
+
+        AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant"));
+
+        assertTrue(result.allConnectorsFailed());
+        assertEquals(RestStatus.NOT_FOUND, result.getFailedConnectors().get("c1").getStatus());
     }
 }
