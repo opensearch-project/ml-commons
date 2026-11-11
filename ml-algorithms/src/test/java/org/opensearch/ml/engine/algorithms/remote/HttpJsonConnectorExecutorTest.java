@@ -1042,4 +1042,42 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         Throwable cause = failure.getValue() instanceof IllegalArgumentException ? failure.getValue() : failure.getValue().getCause();
         assertTrue(String.valueOf(cause), cause instanceof IllegalArgumentException && cause.getMessage().contains("not matching"));
     }
+
+    @Test
+    public void invokeRemoteServiceStream_privateDestinationFollowsPrivateIpSetting() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://10.0.0.1/v1/chat/completions")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector.builder().name("c").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_interface", "openai/v1/chat/completions");
+
+        HttpJsonConnectorExecutor off = new HttpJsonConnectorExecutor(connector);
+        off.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://10\\.0\\.0\\.1/.*$"));
+        off.setConnectorPrivateIpEnabled(false);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> l1 = mock(StreamPredictActionListener.class);
+        off.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(params), "{\"input\": \"x\"}", new ExecutionContext(0), l1);
+        ArgumentCaptor<Exception> f1 = ArgumentCaptor.forClass(Exception.class);
+        verify(l1, times(1)).onFailure(f1.capture());
+        assertTrue(String.valueOf(f1.getValue().getCause()), f1.getValue().getCause().getMessage().contains("private ip address"));
+
+        HttpJsonConnectorExecutor on = new HttpJsonConnectorExecutor(connector);
+        on.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://10\\.0\\.0\\.1/.*$"));
+        on.setConnectorPrivateIpEnabled(true);
+        on.setConnectorTrustedPrivateEndpoints(Arrays.asList(java.util.regex.Pattern.compile("^http://10\\.0\\.0\\.2/.*$")));
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> l2 = mock(StreamPredictActionListener.class);
+        on.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(params), "{\"input\": \"x\"}", new ExecutionContext(0), l2);
+        ArgumentCaptor<Exception> f2 = ArgumentCaptor.forClass(Exception.class);
+        verify(l2, times(1)).onFailure(f2.capture());
+        assertTrue(
+            String.valueOf(f2.getValue().getCause()),
+            f2.getValue().getCause().getMessage().contains("trusted connector private endpoint")
+        );
+    }
 }

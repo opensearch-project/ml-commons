@@ -42,6 +42,9 @@ Go to IAM console, create IAM role `my_invoke_bedrock_role` with:
     ]
 }
 ```
+
+Note: This tutorial uses an Amazon OpenSearch Service domain. For an Amazon OpenSearch Serverless collection, use `ml.opensearchservice.amazonaws.com` as the service principal. The domain-specific steps (the `es:ESHttpPost` permission on the domain ARN, Dashboards role mapping, and `service = 'es'` request signing) are different for collections; see [Configure Machine Learning on Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-configure-machine-learning.html) for the other differences.
+
 - Permission
 ```
 {
