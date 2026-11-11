@@ -573,6 +573,30 @@ public class MLAgentModelSpecTest {
     }
 
     @Test
+    public void testParse_ClientConfigRejectsNullFieldsByName() {
+        for (String field : MLAgentModelSpec.SUPPORTED_CLIENT_CONFIG_FIELDS) {
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> parseSpec(withClientConfig("{\"" + field + "\":null}"))
+            );
+            assertEquals("client_config." + field + " must not be null", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testParse_ClientConfigRejectsNonIntegerValues() {
+        // intValue() would coerce these: 1.9 to 1, 0.5 to 0 (then "must be greater than 0"), "30" to 30.
+        for (String value : new String[] { "1.9", "0.5", "\"30\"", "true", "3000000000" }) {
+            IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> parseSpec(withClientConfig("{\"read_timeout\":" + value + "}"))
+            );
+            assertEquals(value, "client_config.read_timeout must be an integer", e.getMessage());
+        }
+        assertThrows(IllegalArgumentException.class, () -> parseSpec(withClientConfig("{\"max_retry_times\":1.5}")));
+    }
+
+    @Test
     public void testToXContent_ClientConfigWritesOnlySetFields() throws IOException {
         MLAgentModelSpec spec = MLAgentModelSpec
             .builder()
