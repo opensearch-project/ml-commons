@@ -58,6 +58,9 @@ POST /_plugins/_ml/connectors/_create
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
+If you create the connector in an Amazon OpenSearch Serverless collection, the role's trust policy must allow the `ml.opensearchservice.amazonaws.com` service principal, and the caller that creates the connector needs `iam:PassRole` on the role.
+Refer to [Configure Machine Learning on Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-configure-machine-learning.html).
+
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -157,6 +160,13 @@ POST /_plugins/_ml/_predict/text_embedding/KSj-wZABNrAVdFa937iS
     "text_docs":[ "上海", "today is sunny"],
     "return_number": true,
     "target_response": ["sentence_embedding"]
+}
+```
+or, equivalently, specify the algorithm as a query parameter. Use this form on Amazon OpenSearch Serverless, where `/_plugins/_ml/_predict/{algorithm}/{model_id}` is not available:
+```json
+POST /_plugins/_ml/models/KSj-wZABNrAVdFa937iS/_predict?algorithm=text_embedding
+{
+    "text_docs":[ "上海", "today is sunny"]
 }
 ```
 
