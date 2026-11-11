@@ -49,15 +49,16 @@ public class McpToolUpdateInput extends McpToolBaseInput {
         Instant lastUpdateTime = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            ensureExpectedToken(XContentParser.Token.FIELD_NAME, parser.currentToken(), parser);
             String fieldName = parser.currentName();
             parser.nextToken();
 
             switch (fieldName) {
                 case NAME_FIELD:
-                    name = parser.text();
+                    name = parser.textOrNull();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case PARAMS_FIELD:
                     params = parser.map();
