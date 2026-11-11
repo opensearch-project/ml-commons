@@ -44,6 +44,8 @@ import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INT
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -276,14 +278,57 @@ public class AgentUtils {
 
     /** Keys under which JSON Schema keeps shared definitions; "defs" is how "$defs" arrives from some MCP servers. */
     private static final List<String> SCHEMA_DEFINITION_KEYS = List.of("$defs", "defs", "definitions");
-    /** Keywords Gemini function declarations reject; additionalProperties is removed only at schema positions. */
-    private static final List<String> GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = List.of("$schema", "$id", "$comment", "additionalProperties");
+    /** The Schema fields Gemini function declarations accept; any other field fails the whole request. */
+    private static final Set<String> GEMINI_SCHEMA_FIELDS = Set
+        .of(
+            "type",
+            "format",
+            "title",
+            "description",
+            "nullable",
+            "enum",
+            "items",
+            "minItems",
+            "maxItems",
+            "properties",
+            "required",
+            "minProperties",
+            "maxProperties",
+            "minimum",
+            "maximum",
+            "minLength",
+            "maxLength",
+            "pattern",
+            "example",
+            "anyOf",
+            "propertyOrdering",
+            "default"
+        );
     private static final int MAX_SCHEMA_REF_DEPTH = 10;
+    /** Bounds the schema objects inlined from references, so definitions that fan out can't grow exponentially. */
+    private static final int MAX_INLINED_SCHEMA_OBJECTS = 1000;
+
+    /** State for cleaning one tool schema: the original document, to resolve pointers, and the work done so far. */
+    private static final class GeminiSchemaContext {
+        private final JsonObject root;
+        private final Map<String, JsonObject> cleanedDefinitions = new HashMap<>();
+        private final Map<String, Integer> definitionSizes = new HashMap<>();
+        private final Set<String> expanding = new HashSet<>();
+        private int inlineBudget = MAX_INLINED_SCHEMA_OBJECTS;
+
+        private GeminiSchemaContext(JsonObject root) {
+            this.root = root;
+            // The root itself is being expanded: a "#" reference back to it is a cycle.
+            expanding.add("#");
+        }
+    }
 
     /**
-     * Reduces a tool's JSON input schema to what Gemini function declarations accept. "$ref" is
-     * rejected, so references are inlined; an unresolvable or recursive one becomes a plain object
-     * schema. Rejected keywords are removed only at schema positions, never from property names.
+     * Reduces a tool's JSON input schema to what Gemini function declarations accept. Only the fields of
+     * Gemini's Schema are kept, at schema positions (never property names): "oneOf" becomes "anyOf", a
+     * string "const" becomes a one-value "enum", and "allOf" is merged into its schema. "$ref" is
+     * rejected, so references are inlined by their full JSON pointer; an unresolvable or recursive one,
+     * or one past the inlining budget, becomes a plain object schema.
      * Falls back to {@link #removeAdditionalPropertiesFromSchema} if the schema isn't a JSON object.
      */
     public static String cleanSchemaForGemini(String schema) {
@@ -296,102 +341,213 @@ public class AgentUtils {
         } catch (Exception e) {
             return removeAdditionalPropertiesFromSchema(schema);
         }
-        Map<String, JsonObject> definitions = new HashMap<>();
-        for (String key : SCHEMA_DEFINITION_KEYS) {
-            if (root.has(key) && root.get(key).isJsonObject()) {
-                JsonObject defs = root.remove(key).getAsJsonObject();
-                for (String name : defs.keySet()) {
-                    if (defs.get(name).isJsonObject()) {
-                        definitions.putIfAbsent(name, defs.get(name).getAsJsonObject());
+        return gson.toJson(cleanGeminiSchemaNode(root, new GeminiSchemaContext(root)));
+    }
+
+    private static JsonObject cleanGeminiSchemaNode(JsonObject node, GeminiSchemaContext context) {
+        if (node.has("$ref")) {
+            JsonObject siblings = node.deepCopy();
+            JsonObject resolved = resolveSchemaRef(siblings.remove("$ref"), context);
+            // Keys next to "$ref" (typically a description) refine the referenced schema.
+            for (Map.Entry<String, com.google.gson.JsonElement> entry : cleanGeminiSchemaNode(siblings, context).entrySet()) {
+                resolved.add(entry.getKey(), entry.getValue());
+            }
+            return resolved;
+        }
+        JsonObject cleaned = new JsonObject();
+        com.google.gson.JsonArray anyOf = new com.google.gson.JsonArray();
+        List<JsonObject> allOf = new ArrayList<>();
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : node.entrySet()) {
+            String key = entry.getKey();
+            com.google.gson.JsonElement value = entry.getValue();
+            switch (key) {
+                case "properties" -> cleaned
+                    .add(key, value.isJsonObject() ? cleanGeminiProperties(value.getAsJsonObject(), context) : value);
+                case "items" -> cleaned.add(key, cleanGeminiSchemaElement(value, context));
+                // Gemini has no oneOf; anyOf is the closest it accepts.
+                case "anyOf", "oneOf" -> {
+                    com.google.gson.JsonElement options = cleanGeminiSchemaElement(value, context);
+                    if (options.isJsonArray()) {
+                        anyOf.addAll(options.getAsJsonArray());
+                    }
+                }
+                case "allOf" -> {
+                    if (value.isJsonArray()) {
+                        for (com.google.gson.JsonElement part : value.getAsJsonArray()) {
+                            if (part.isJsonObject()) {
+                                allOf.add(cleanGeminiSchemaNode(part.getAsJsonObject(), context));
+                            }
+                        }
+                    }
+                }
+                case "const" -> {
+                    // Gemini's enum lists string values only; other constants just keep their type.
+                    if (!node.has("enum") && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+                        com.google.gson.JsonArray single = new com.google.gson.JsonArray();
+                        single.add(value);
+                        cleaned.add("enum", single);
+                        if (!node.has("type")) {
+                            cleaned.addProperty("type", "string");
+                        }
+                    }
+                }
+                default -> {
+                    if (GEMINI_SCHEMA_FIELDS.contains(key)) {
+                        cleaned.add(key, value);
                     }
                 }
             }
         }
-        return gson.toJson(cleanGeminiSchemaNode(root, definitions, new HashSet<>()));
+        if (!anyOf.isEmpty()) {
+            cleaned.add("anyOf", anyOf);
+        }
+        for (JsonObject part : allOf) {
+            mergeGeminiSchema(cleaned, part);
+        }
+        return cleaned;
     }
 
-    private static JsonObject cleanGeminiSchemaNode(JsonObject node, Map<String, JsonObject> definitions, Set<String> expanding) {
-        JsonObject schema = node.deepCopy();
-        if (schema.has("$ref")) {
-            JsonObject resolved = resolveSchemaRef(schema.remove("$ref"), definitions, expanding);
-            // Keys next to "$ref" (typically a description) refine the referenced schema.
-            for (String key : schema.keySet()) {
-                resolved.add(key, schema.get(key));
-            }
-            schema = resolved;
+    private static JsonObject cleanGeminiProperties(JsonObject properties, GeminiSchemaContext context) {
+        JsonObject cleaned = new JsonObject();
+        for (String name : properties.keySet()) {
+            com.google.gson.JsonElement property = properties.get(name);
+            cleaned.add(name, property.isJsonObject() ? cleanGeminiSchemaNode(property.getAsJsonObject(), context) : property);
         }
-        for (String keyword : GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS) {
-            schema.remove(keyword);
-        }
-        for (String key : SCHEMA_DEFINITION_KEYS) {
-            schema.remove(key);
-        }
-        if (schema.has("properties") && schema.get("properties").isJsonObject()) {
-            JsonObject properties = schema.getAsJsonObject("properties");
-            JsonObject cleaned = new JsonObject();
-            for (String name : properties.keySet()) {
-                com.google.gson.JsonElement property = properties.get(name);
-                cleaned
-                    .add(
-                        name,
-                        property.isJsonObject() ? cleanGeminiSchemaNode(property.getAsJsonObject(), definitions, expanding) : property
-                    );
-            }
-            schema.add("properties", cleaned);
-        }
-        if (schema.has("items")) {
-            schema.add("items", cleanGeminiSchemaElement(schema.get("items"), definitions, expanding));
-        }
-        for (String combinator : List.of("anyOf", "oneOf", "allOf")) {
-            if (schema.has(combinator)) {
-                schema.add(combinator, cleanGeminiSchemaElement(schema.get(combinator), definitions, expanding));
-            }
-        }
-        if (schema.has("not") && schema.get("not").isJsonObject()) {
-            schema.add("not", cleanGeminiSchemaNode(schema.getAsJsonObject("not"), definitions, expanding));
-        }
-        return schema;
+        return cleaned;
     }
 
-    private static com.google.gson.JsonElement cleanGeminiSchemaElement(
-        com.google.gson.JsonElement element,
-        Map<String, JsonObject> definitions,
-        Set<String> expanding
-    ) {
+    private static com.google.gson.JsonElement cleanGeminiSchemaElement(com.google.gson.JsonElement element, GeminiSchemaContext context) {
         if (element.isJsonObject()) {
-            return cleanGeminiSchemaNode(element.getAsJsonObject(), definitions, expanding);
+            return cleanGeminiSchemaNode(element.getAsJsonObject(), context);
         }
         if (element.isJsonArray()) {
             com.google.gson.JsonArray cleaned = new com.google.gson.JsonArray();
             for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
-                cleaned.add(item.isJsonObject() ? cleanGeminiSchemaNode(item.getAsJsonObject(), definitions, expanding) : item);
+                cleaned.add(item.isJsonObject() ? cleanGeminiSchemaNode(item.getAsJsonObject(), context) : item);
             }
             return cleaned;
         }
         return element;
     }
 
-    private static JsonObject resolveSchemaRef(
-        com.google.gson.JsonElement ref,
-        Map<String, JsonObject> definitions,
-        Set<String> expanding
-    ) {
-        String target = ref.isJsonPrimitive() ? ref.getAsString() : "";
-        String name = target.substring(target.lastIndexOf('/') + 1);
-        JsonObject definition = target.startsWith("#/") ? definitions.get(name) : null;
-        // A definition already being expanded is a cycle; expanding it again would grow without bound.
-        if (definition == null || expanding.contains(name) || expanding.size() >= MAX_SCHEMA_REF_DEPTH) {
-            log.debug("Replacing unresolvable or recursive schema reference [{}] with an object schema for Gemini", target);
-            JsonObject fallback = new JsonObject();
-            fallback.addProperty("type", "object");
-            return fallback;
+    /** Merges an allOf part into its schema: properties and required add up, other fields fill gaps. */
+    private static void mergeGeminiSchema(JsonObject target, JsonObject part) {
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : part.entrySet()) {
+            String key = entry.getKey();
+            com.google.gson.JsonElement value = entry.getValue();
+            if ("properties".equals(key) && value.isJsonObject() && target.has(key) && target.get(key).isJsonObject()) {
+                JsonObject properties = target.getAsJsonObject(key);
+                for (String name : value.getAsJsonObject().keySet()) {
+                    if (!properties.has(name)) {
+                        properties.add(name, value.getAsJsonObject().get(name));
+                    }
+                }
+            } else if ("required".equals(key) && value.isJsonArray() && target.has(key) && target.get(key).isJsonArray()) {
+                // A copy: the array can still be the one in the original document
+                com.google.gson.JsonArray required = target.getAsJsonArray(key).deepCopy();
+                for (com.google.gson.JsonElement name : value.getAsJsonArray()) {
+                    if (!required.contains(name)) {
+                        required.add(name);
+                    }
+                }
+                target.add(key, required);
+            } else if (!target.has(key)) {
+                target.add(key, value);
+            }
         }
-        expanding.add(name);
-        try {
-            return cleanGeminiSchemaNode(definition, definitions, expanding);
-        } finally {
-            expanding.remove(name);
+    }
+
+    private static JsonObject resolveSchemaRef(com.google.gson.JsonElement ref, GeminiSchemaContext context) {
+        String pointer = ref != null && ref.isJsonPrimitive() ? ref.getAsString() : "";
+        JsonObject cleaned = context.cleanedDefinitions.get(pointer);
+        if (cleaned == null) {
+            JsonObject target = pointer.startsWith("#") ? resolveJsonPointer(context.root, pointer) : null;
+            // A pointer already being expanded is a cycle; expanding it again would grow without bound.
+            if (target == null || context.expanding.contains(pointer) || context.expanding.size() > MAX_SCHEMA_REF_DEPTH) {
+                return objectSchemaFor(pointer);
+            }
+            context.expanding.add(pointer);
+            try {
+                cleaned = cleanGeminiSchemaNode(target, context);
+            } finally {
+                context.expanding.remove(pointer);
+            }
+            context.cleanedDefinitions.put(pointer, cleaned);
+            context.definitionSizes.put(pointer, countSchemaObjects(cleaned));
         }
+        int size = context.definitionSizes.get(pointer);
+        if (size > context.inlineBudget) {
+            return objectSchemaFor(pointer);
+        }
+        context.inlineBudget -= size;
+        return cleaned.deepCopy();
+    }
+
+    private static JsonObject objectSchemaFor(String pointer) {
+        log.debug("Replacing unresolvable, recursive or oversized schema reference [{}] with an object schema for Gemini", pointer);
+        JsonObject fallback = new JsonObject();
+        fallback.addProperty("type", "object");
+        return fallback;
+    }
+
+    /**
+     * Resolves a local JSON pointer such as "#/$defs/Item" or "#/properties/a/$defs/B" in the schema
+     * document. A definition block also matches under its other names ("$defs", "defs", "definitions").
+     */
+    private static JsonObject resolveJsonPointer(JsonObject root, String pointer) {
+        if (!pointer.startsWith("#/")) {
+            return null;
+        }
+        com.google.gson.JsonElement current = root;
+        for (String rawSegment : pointer.substring(2).split("/", -1)) {
+            String segment = decodePointerSegment(rawSegment);
+            if (current.isJsonObject()) {
+                JsonObject object = current.getAsJsonObject();
+                com.google.gson.JsonElement next = object.get(segment);
+                if (next == null && SCHEMA_DEFINITION_KEYS.contains(segment)) {
+                    next = SCHEMA_DEFINITION_KEYS.stream().filter(object::has).findFirst().map(object::get).orElse(null);
+                }
+                current = next;
+            } else if (current.isJsonArray()
+                && segment.matches("\\d{1,9}")
+                && Integer.parseInt(segment) < current.getAsJsonArray().size()) {
+                current = current.getAsJsonArray().get(Integer.parseInt(segment));
+            } else {
+                current = null;
+            }
+            if (current == null) {
+                return null;
+            }
+        }
+        return current.isJsonObject() ? current.getAsJsonObject() : null;
+    }
+
+    /** Undoes URI percent-encoding (as in "%24defs"), then JSON pointer escaping ("~1" for "/", "~0" for "~"). */
+    private static String decodePointerSegment(String segment) {
+        String decoded = segment;
+        if (segment.indexOf('%') >= 0) {
+            try {
+                decoded = URLDecoder.decode(segment.replace("+", "%2B"), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                decoded = segment;
+            }
+        }
+        return decoded.replace("~1", "/").replace("~0", "~");
+    }
+
+    private static int countSchemaObjects(com.google.gson.JsonElement element) {
+        int count = 0;
+        if (element.isJsonObject()) {
+            count++;
+            for (Map.Entry<String, com.google.gson.JsonElement> entry : element.getAsJsonObject().entrySet()) {
+                count += countSchemaObjects(entry.getValue());
+            }
+        } else if (element.isJsonArray()) {
+            for (com.google.gson.JsonElement item : element.getAsJsonArray()) {
+                count += countSchemaObjects(item);
+            }
+        }
+        return count;
     }
 
     /**

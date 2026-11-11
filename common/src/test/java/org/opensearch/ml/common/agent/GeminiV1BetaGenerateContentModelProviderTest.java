@@ -1118,4 +1118,24 @@ public class GeminiV1BetaGenerateContentModelProviderTest {
         );
         assertTrue(e.getMessage().contains("no tool_call_id"));
     }
+
+    @Test
+    public void testMapMessages_BlankAssistantTextNextToToolCallsIsLeftOut() {
+        // AG-UI history sends content "" alongside tool calls; Gemini rejects an empty text part.
+        Message assistant = text("assistant", "");
+        assistant.setToolCalls(List.of(new ToolCall("a", "function", new ToolCall.ToolFunction("a", "{}"))));
+        List<Message> messages = List.of(text("user", "go"), assistant, toolResult("a", "done"));
+
+        String body = provider.mapMessages(messages, MLAgentType.CONVERSATIONAL).get("body");
+
+        assertFalse(body.contains("\"text\":\"\""));
+        assertTrue(body.contains("{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"a\",\"args\":{}}}]}"));
+    }
+
+    @Test
+    public void testMapMessages_MessageWithOnlyBlankTextIsLeftOut() {
+        String body = provider.mapMessages(List.of(text("user", "hi"), text("assistant", " ")), MLAgentType.CONVERSATIONAL).get("body");
+
+        assertEquals("{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}", body);
+    }
 }

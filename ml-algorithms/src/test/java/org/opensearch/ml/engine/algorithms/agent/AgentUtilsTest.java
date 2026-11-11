@@ -4224,4 +4224,84 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertEquals("", AgentUtils.cleanSchemaForGemini(""));
         assertEquals("not json", AgentUtils.cleanSchemaForGemini("not json"));
     }
+
+    @Test
+    public void testCleanSchemaForGemini_KeepsOnlyGeminiSchemaFields() {
+        // As Pydantic emits them: oneOf for a union, const for a Literal, allOf around a described reference.
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"mode\":{\"const\":\"fast\",\"description\":\"Mode.\"},"
+            + "\"value\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\",\"exclusiveMinimum\":0}]},"
+            + "\"range\":{\"allOf\":[{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"integer\"}},\"required\":[\"from\"]}],"
+            + "\"properties\":{\"to\":{\"type\":\"integer\"}},\"required\":[\"to\"]},"
+            + "\"other\":{\"type\":\"string\",\"not\":{\"const\":\"x\"},\"examples\":[\"a\"],\"readOnly\":true},"
+            + "\"const\":{\"type\":\"boolean\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "string", "enum", List.of("fast"), "description", "Mode."), properties.get("mode"));
+        Map<String, Object> value = (Map<String, Object>) properties.get("value");
+        assertEquals(List.of(Map.of("type", "string"), Map.of("type", "integer")), value.get("anyOf"));
+        assertFalse(value.containsKey("oneOf"));
+        Map<String, Object> range = (Map<String, Object>) properties.get("range");
+        assertEquals(Set.of("from", "to"), ((Map<String, Object>) range.get("properties")).keySet());
+        assertEquals(List.of("to", "from"), range.get("required"));
+        assertFalse(range.containsKey("allOf"));
+        assertEquals(Map.of("type", "string"), properties.get("other"));
+        // A property named like a keyword is a property, not a keyword
+        assertEquals(Map.of("type", "boolean"), properties.get("const"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ResolvesTheFullPointer() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"$ref\":\"#/definitions/Item\"},\"b\":{\"$ref\":\"#/$defs/Item\"},"
+            + "\"x\":{\"type\":\"boolean\"},\"y\":{\"$ref\":\"#/properties/x\"}},"
+            + "\"$defs\":{\"Item\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"}},"
+            + "\"definitions\":{\"Item\":{\"type\":\"integer\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "integer"), properties.get("a"));
+        assertEquals(Map.of("type", "string"), properties.get("b"));
+        assertEquals(Map.of("type", "boolean"), properties.get("y"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ResolvesNestedDefinitions() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"type\":\"object\",\"$defs\":{\"B\":{\"type\":\"number\"}}},"
+            + "\"b\":{\"$ref\":\"#/properties/a/$defs/B\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "number"), properties.get("b"));
+        assertEquals(Map.of("type", "object"), properties.get("a"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_FanOutDefinitionsStayBounded() {
+        // D0 -> {x: D1, y: D1, z: D1}, D1 -> {x: D2, ...}: inlining every use would make 3^8 copies of the leaf.
+        StringBuilder defs = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            String next = "{\"$ref\":\"#/$defs/D" + (i + 1) + "\"}";
+            defs
+                .append("\"D")
+                .append(i)
+                .append("\":{\"type\":\"object\",\"properties\":{\"x\":")
+                .append(next)
+                .append(",\"y\":")
+                .append(next)
+                .append(",\"z\":")
+                .append(next)
+                .append("}},");
+        }
+        defs.append("\"D8\":{\"type\":\"string\"}");
+        String schema = "{\"$ref\":\"#/$defs/D0\",\"$defs\":{" + defs + "}}";
+
+        String cleaned = AgentUtils.cleanSchemaForGemini(schema);
+
+        assertFalse(cleaned.contains("$ref"));
+        assertTrue("length " + cleaned.length(), cleaned.length() < 100_000);
+        assertEquals("object", cleanedForGemini(schema).get("type"));
+    }
 }

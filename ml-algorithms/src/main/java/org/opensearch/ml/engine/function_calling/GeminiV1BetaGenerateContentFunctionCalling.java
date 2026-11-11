@@ -114,6 +114,11 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
             return output;
         }
         for (Object call : functionCalls) {
+            // The provider's parser skips a call without a name too, so tool results stay aligned with their calls.
+            if (!(call instanceof Map<?, ?> callMap) || !(callMap.get(NAME) instanceof String name) || name.isBlank()) {
+                log.warn("Skipping a Gemini functionCall that has no function name");
+                continue;
+            }
             String toolName = JsonPath.read(call, NAME);
             String toolInput = StringUtils.toJson(JsonPath.read(call, INPUT));
             String toolCallId = JsonPath.read(call, ID_PATH);

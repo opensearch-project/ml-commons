@@ -204,23 +204,21 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     /**
      * Builds content array from content blocks using templates for Gemini generateContent API.
-     * Supports text, image, document, and video content types.
+     * Supports text, image, document, and video content types. Blank text is left out: Gemini rejects
+     * an empty text part, which AG-UI history produces for an assistant turn that only calls tools.
      */
     private String buildContentArrayFromBlocks(List<ContentBlock> blocks, MLAgentType type) {
         if (blocks == null || blocks.isEmpty()) {
             return "";
         }
 
-        StringBuilder contentArray = new StringBuilder();
-        boolean first = true;
+        List<String> parts = new ArrayList<>();
         for (ContentBlock block : blocks) {
-            if (!first) {
-                contentArray.append(",");
-            }
-            first = false;
-
             switch (block.getType()) {
                 case TEXT:
+                    if (type != MLAgentType.PLAN_EXECUTE_AND_REFLECT && (block.getText() == null || block.getText().isBlank())) {
+                        break;
+                    }
                     Map<String, Object> textParams = new HashMap<>();
                     // ToDo: Remove workaround after PER supports messages format
                     if (type == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
@@ -229,7 +227,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                         textParams.put("content_text", StringEscapeUtils.escapeJson(block.getText()));
                     }
                     StringSubstitutor textSubstitutor = new StringSubstitutor(textParams, "${parameters.", "}");
-                    contentArray.append(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
+                    parts.add(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
                     break;
                 case IMAGE:
                     ImageContent image = block.getImage();
@@ -239,7 +237,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     // Map SourceType to Gemini API source type
                     String imageTemplate = mapImageSourceTypeToGemini(image.getType());
                     StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
-                    contentArray.append(imageSubstitutor.replace(imageTemplate));
+                    parts.add(imageSubstitutor.replace(imageTemplate));
                     break;
                 case DOCUMENT:
                     DocumentContent document = block.getDocument();
@@ -247,7 +245,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     docParams.put("doc_format", document.getFormat());
                     docParams.put("doc_data", StringEscapeUtils.escapeJson(document.getData()));
                     StringSubstitutor docSubstitutor = new StringSubstitutor(docParams, "${parameters.", "}");
-                    contentArray.append(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
+                    parts.add(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
                     break;
                 case VIDEO:
                     VideoContent video = block.getVideo();
@@ -255,7 +253,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     videoParams.put("video_format", video.getFormat());
                     videoParams.put("video_data", StringEscapeUtils.escapeJson(video.getData()));
                     StringSubstitutor videoSubstitutor = new StringSubstitutor(videoParams, "${parameters.", "}");
-                    contentArray.append(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
+                    parts.add(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
                     break;
                 default:
                     // Skip unsupported content types
@@ -263,7 +261,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
             }
         }
 
-        return contentArray.toString();
+        return String.join(",", parts);
     }
 
     /**
@@ -302,6 +300,10 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     parts.append(StringUtils.toJson(functionCallPart(toolCall)));
                 }
                 contentArray = parts.toString();
+            }
+            if (contentArray.isEmpty()) {
+                // Gemini rejects a content with no parts, e.g. a turn whose only text was blank.
+                continue;
             }
             Map<String, Object> msgParams = new HashMap<>();
             msgParams.put("msg_role", USER_ROLE.equals(message.getRole()) ? USER_ROLE : MODEL_ROLE);

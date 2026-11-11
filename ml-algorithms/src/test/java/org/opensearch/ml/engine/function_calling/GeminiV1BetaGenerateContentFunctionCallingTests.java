@@ -69,6 +69,29 @@ public class GeminiV1BetaGenerateContentFunctionCallingTests {
     }
 
     @Test
+    public void handleSkipsACallWithoutAName() {
+        // The provider's parser skips such a call too, so results stay matched to the right calls.
+        List<Object> parts = List
+            .of(
+                ImmutableMap.of("functionCall", ImmutableMap.of(NAME, "", INPUT, Map.of())),
+                ImmutableMap.of("functionCall", ImmutableMap.of(INPUT, Map.of())),
+                ImmutableMap.of("functionCall", tool)
+            );
+        Map<String, Object> candidate = ImmutableMap
+            .of("content", ImmutableMap.of("role", "model", "parts", parts), "finishReason", "STOP");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("candidates", List.of(candidate))).build();
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(tensor)).build()))
+            .build();
+
+        List<Map<String, String>> toolCalls = functionCalling.handle(output, new HashMap<>());
+
+        Assert.assertEquals(1, toolCalls.size());
+        Assert.assertEquals(tool.get(NAME), toolCalls.get(0).get("tool_name"));
+    }
+
+    @Test
     public void supply() {
         Map<String, Object> toolResultMap = ImmutableMap.of("text", "test result for gemini generateContent");
         List<LLMMessage> messages = functionCalling
