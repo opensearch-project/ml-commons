@@ -1981,6 +1981,57 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testGetMcpToolSpecs_ErrorInGetMcpToolSpecsDoesNotHang() throws Exception {
+        // Regression test for the MCP SDK 1.1.1 hang: ServiceConfigurationError is an Error (not an
+        // Exception), so a naive catch(Exception) would have let it escape and leave the async
+        // counter in getMcpToolSpecs stranded, hanging the agent forever.
+        stubGetConnector();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new java.util.ServiceConfigurationError("boom"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_OneConnectorFailsOthersSucceed() throws Exception {
+        // Regression test: one connector throwing an Error must not strand the AtomicInteger
+        // counter and prevent the listener from firing for the remaining connectors.
+        stubGetConnector();
+
+        List<MLToolSpec> goodTools = List.of(buildTool("good1"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new java.util.ServiceConfigurationError("boom")).thenReturn(goodTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"bad\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"good\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
+            // Listener fires exactly once with just the good connector's tools.
+            verify(listener).onResponse(goodTools);
+        }
+    }
+
+    @Test
     public void testGetMcpToolSpecs_ExceptionInGetConnector() throws Exception {
         // Mock getConnector to throw an exception
         threadContext = new ThreadContext(Settings.builder().build());

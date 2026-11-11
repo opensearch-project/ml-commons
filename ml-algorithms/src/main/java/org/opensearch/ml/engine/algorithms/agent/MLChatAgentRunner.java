@@ -1685,23 +1685,27 @@ public class MLChatAgentRunner implements MLAgentRunner {
         getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
             // Add MCP tools to backend tools
             backendToolSpecs.addAll(mcpTools);
-
-            // Create backend tools map
-            Map<String, Tool> backendToolsMap = new HashMap<>();
-            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
-
-            // Create unified tool list for function calling (frontend + backend)
-            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
+            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
-
-            Map<String, Tool> backendToolsMap = new HashMap<>();
-            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
-
-            processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
+            log.warn("Failed to load MCP tools, continuing with backend tools only", e);
+            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
         }));
+    }
+
+    private void buildAndProcessUnifiedTools(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        FunctionCalling functionCalling,
+        List<Map<String, Object>> frontendTools,
+        List<MLToolSpec> backendToolSpecs
+    ) {
+        Map<String, Tool> backendToolsMap = new HashMap<>();
+        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+        createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
+        processUnifiedToolsWithBackend(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolsMap, toolSpecMap);
     }
 
     /**

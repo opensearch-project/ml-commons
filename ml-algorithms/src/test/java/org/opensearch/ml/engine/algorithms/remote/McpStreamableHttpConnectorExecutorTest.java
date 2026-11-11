@@ -51,6 +51,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         /* ---------- stub the fluent builder chain ------------------------ */
         when(builder.requestTimeout(any())).thenReturn(builder);
         when(builder.capabilities(any())).thenReturn(builder);
+        when(builder.jsonSchemaValidator(any())).thenReturn(builder);
         when(builder.build()).thenReturn(mcpClient);
     }
 
