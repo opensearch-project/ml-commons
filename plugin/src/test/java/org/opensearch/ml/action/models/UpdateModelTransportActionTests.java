@@ -723,6 +723,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateModelWithGetModelFailurePropagated() {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener
+                .onFailure(
+                    new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model")
+                );
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Space type must be provided in additional_config for remote text embedding model",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
     public void testUpdateModelWithFunctionNameFieldNotFound() {
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
