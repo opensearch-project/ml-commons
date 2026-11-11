@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -342,6 +343,48 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertNotNull(response);
         assertEquals("AGENT_ID", response.getAgentId());
         verify(client, times(2)).index(any(), any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_PlanExecuteAndReflect_NullParameters() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .llm(new LLMSpec("test-model-id", new HashMap<>()))
+            .build();
+        assertNull(mlAgent.getParameters());
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        verify(actionListener, never()).onFailure(any());
+        assertEquals("AGENT_ID", argumentCaptor.getValue().getAgentId());
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client, times(2)).index(indexRequestCaptor.capture(), any());
+        Map<String, Object> executorSource = indexRequestCaptor.getAllValues().get(0).sourceAsMap();
+        assertEquals(MLAgentType.CONVERSATIONAL.name(), executorSource.get("type"));
+        assertNull(executorSource.get("parameters"));
+        Map<String, Object> parentSource = indexRequestCaptor.getAllValues().get(1).sourceAsMap();
+        assertEquals(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name(), parentSource.get("type"));
+        assertEquals(Map.of(EXECUTOR_AGENT_ID_FIELD, "AGENT_ID"), parentSource.get("parameters"));
     }
 
     @Test
