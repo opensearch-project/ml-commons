@@ -763,8 +763,8 @@ public class MLModel implements ToXContentObject {
                     } else if (FunctionName.TEXT_EMBEDDING.name().equals(algorithmName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     } else if (FunctionName.REMOTE.name().equals(algorithmName)) {
-                        // Stored documents may predate the space_type requirement (issue #4999);
-                        // registration-time validation lives in MLRegisterModelInput / MLRegisterModelMetaInput.
+                        // Stored documents may predate the space_type requirement (issue #4999). Documents
+                        // with additional_config (3.1+) are still validated; see RemoteModelConfig.
                         modelConfig = RemoteModelConfig.parse(parser, false);
                     } else {
                         modelConfig = BaseModelConfig.parse(parser);
