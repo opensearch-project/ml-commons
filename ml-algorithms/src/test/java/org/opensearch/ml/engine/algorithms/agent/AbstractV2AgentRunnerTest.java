@@ -216,23 +216,25 @@ public class AbstractV2AgentRunnerTest {
         params.put("max_iteration", "10");
 
         // Act
-        int result = runner.getMaxIterations(params);
+        int result = runner.getMaxIterations(params, mlAgent);
 
         // Assert
         assertEquals(10, result);
     }
 
     @Test
-    public void testGetMaxIterations_InvalidValue_UsesDefault() {
+    public void testGetMaxIterations_NonNumericValue_ThrowsException() {
         // Arrange
         Map<String, String> params = new HashMap<>();
         params.put("max_iteration", "invalid");
 
-        // Act
-        int result = runner.getMaxIterations(params);
-
-        // Assert
-        assertEquals(3, result); // TestV2AgentRunner default
+        // Act & Assert
+        try {
+            runner.getMaxIterations(params, mlAgent);
+            fail("Should throw IllegalArgumentException for non numeric max_iteration");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid max_iteration value: invalid. max_iteration must be an integer between 1 and 100.", e.getMessage());
+        }
     }
 
     @Test
@@ -241,10 +243,123 @@ public class AbstractV2AgentRunnerTest {
         Map<String, String> params = new HashMap<>();
 
         // Act
-        int result = runner.getMaxIterations(params);
+        int result = runner.getMaxIterations(params, mlAgent);
 
         // Assert
         assertEquals(3, result);
+    }
+
+    @Test
+    public void testGetMaxIterations_EmptyValue_UsesDefault() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", "");
+
+        // Act
+        int result = runner.getMaxIterations(params, mlAgent);
+
+        // Assert
+        assertEquals(3, result);
+    }
+
+    @Test
+    public void testGetMaxIterations_AtUpperBound() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", String.valueOf(AbstractV2AgentRunner.MAX_ITERATION_UPPER_BOUND));
+
+        // Act
+        int result = runner.getMaxIterations(params, mlAgent);
+
+        // Assert
+        assertEquals(AbstractV2AgentRunner.MAX_ITERATION_UPPER_BOUND, result);
+    }
+
+    @Test
+    public void testGetMaxIterations_AboveUpperBound_ThrowsException() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", "101");
+
+        // Act & Assert
+        try {
+            runner.getMaxIterations(params, mlAgent);
+            fail("Should throw IllegalArgumentException for max_iteration above the upper bound");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid max_iteration value: 101. max_iteration must be an integer between 1 and 100.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetMaxIterations_Zero_ThrowsException() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", "0");
+
+        // Act & Assert
+        try {
+            runner.getMaxIterations(params, mlAgent);
+            fail("Should throw IllegalArgumentException for zero max_iteration");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid max_iteration value: 0. max_iteration must be an integer between 1 and 100.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetMaxIterations_Negative_ThrowsException() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", "-1");
+
+        // Act & Assert
+        try {
+            runner.getMaxIterations(params, mlAgent);
+            fail("Should throw IllegalArgumentException for negative max_iteration");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid max_iteration value: -1. max_iteration must be an integer between 1 and 100.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetMaxIterations_FromAgentParameters() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        when(mlAgent.getParameters()).thenReturn(Map.of("max_iteration", "7"));
+
+        // Act
+        int result = runner.getMaxIterations(params, mlAgent);
+
+        // Assert
+        assertEquals(7, result);
+    }
+
+    @Test
+    public void testGetMaxIterations_ParamsTakePrecedenceOverAgentParameters() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        params.put("max_iteration", "4");
+        when(mlAgent.getParameters()).thenReturn(Map.of("max_iteration", "9"));
+
+        // Act
+        int result = runner.getMaxIterations(params, mlAgent);
+
+        // Assert
+        assertEquals(4, result);
+    }
+
+    @Test
+    public void testGetMaxIterations_InvalidAgentParameter_ThrowsException() {
+        // Arrange
+        Map<String, String> params = new HashMap<>();
+        when(mlAgent.getParameters()).thenReturn(Map.of("max_iteration", "5000"));
+
+        // Act & Assert
+        try {
+            runner.getMaxIterations(params, mlAgent);
+            fail("Should throw IllegalArgumentException for agent level max_iteration above the upper bound");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Invalid max_iteration value: 5000. max_iteration must be an integer between 1 and 100.", e.getMessage());
+        }
     }
 
     // ==================== Tests for getSystemPrompt ====================
