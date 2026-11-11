@@ -77,7 +77,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
             + conversation.getCreatedTime()
             + "\"updated_time\":\""
             + conversation.getUpdatedTime()
-            + "\",\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
+            + "\",\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2,\"next_page_token\":\"Mg\"}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);
