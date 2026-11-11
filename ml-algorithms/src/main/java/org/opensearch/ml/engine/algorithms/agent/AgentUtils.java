@@ -181,6 +181,9 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
     public static final String TOOL_DESCRIPTIONS_FIELD = "tool_descriptions";
+    // Connector problems ml-commons finds itself. Their messages name only the connector id, so an agent run can return them.
+    static final String CONNECTOR_NOT_FOUND_MESSAGE = "Failed to find connector";
+    static final String NOT_AN_MCP_CONNECTOR_MESSAGE = " is not of type McpConnector or McpStreamableHttpConnector";
     public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
     public static final String AGENT_TYPE_PARAM = "agent_type";
 
@@ -963,6 +966,16 @@ public class AgentUtils {
             return status.getStatus() >= 400 && status.getStatus() < 500;
         }
 
+        /**
+         * True when ml-commons raised the failure itself because the connector is missing or isn't an MCP connector.
+         * Those messages name only the connector id, so they can be returned, unlike causes from the remote MCP call.
+         */
+        public boolean isMessageReturnable() {
+            return OpenSearchStatusException.class.getSimpleName().equals(type)
+                && message != null
+                && (message.startsWith(CONNECTOR_NOT_FOUND_MESSAGE) || message.endsWith(NOT_AN_MCP_CONNECTOR_MESSAGE));
+        }
+
         /** "ExceptionType: message", or the type alone when there is no message. */
         @Override
         public String toString() {
@@ -1308,7 +1321,7 @@ public class AgentUtils {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
-                    String errorMessage = "Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector";
+                    String errorMessage = "Connector with ID " + connectorId + NOT_AN_MCP_CONNECTOR_MESSAGE;
                     log.error(errorMessage);
                     if (isPropagatingFailures) {
                         toolListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.BAD_REQUEST));
@@ -1391,7 +1404,7 @@ public class AgentUtils {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
                         log.error("Failed to get connector index", cause);
-                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                        listener.onFailure(new OpenSearchStatusException(CONNECTOR_NOT_FOUND_MESSAGE, RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML connector {}", connectorId, cause);
                         listener.onFailure(cause);
@@ -1415,7 +1428,9 @@ public class AgentUtils {
                             }
                         } else {
                             listener
-                                .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+                                .onFailure(
+                                    new OpenSearchStatusException(CONNECTOR_NOT_FOUND_MESSAGE + ":" + connectorId, RestStatus.NOT_FOUND)
+                                );
                         }
                     } catch (Exception e) {
                         listener.onFailure(e);

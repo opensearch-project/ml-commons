@@ -186,7 +186,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                     agentId,
                     failures
                 );
-            // Only exception types and statuses reach the caller: the messages can name internal hosts. The log above has them.
+            // A missing or non-MCP connector keeps its message, which names only the connector id. Causes from the
+            // remote MCP call are reduced to their type and status: they can name internal hosts. The log above has them.
             return new OpenSearchStatusException(
                 "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: "
                     + describeFailures(failed, false),
@@ -216,7 +217,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
     /**
      * "id (cause)" per failed connector, sorted by id.
      *
-     * @param withMessages true for the full "ExceptionType: message" cause, false for the exception type and status only
+     * @param withMessages true for the full "ExceptionType: message" cause, false for what the caller may see: the
+     *                     message of a missing or non-MCP connector, else the exception type (and status for a 4xx)
      */
     private static String describeFailures(Map<String, AgentUtils.McpConnectorFailure> failedConnectors, boolean withMessages) {
         return new TreeMap<>(failedConnectors)
@@ -229,6 +231,9 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
     private static String describeFailure(AgentUtils.McpConnectorFailure failure, boolean withMessage) {
         if (withMessage) {
             return failure.toString();
+        }
+        if (failure.isMessageReturnable()) {
+            return failure.getMessage() + ", " + failure.getStatus().getStatus();
         }
         return failure.isClientError() ? failure.getType() + ", " + failure.getStatus().getStatus() : failure.getType();
     }

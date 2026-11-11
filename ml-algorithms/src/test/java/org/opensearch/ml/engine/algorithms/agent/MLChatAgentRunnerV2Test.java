@@ -622,8 +622,8 @@ public class MLChatAgentRunnerV2Test {
         // A deleted connector is the agent's configuration, not a down server: no 502.
         Exception notFound = runner.mcpLoadFailure(mcpResult(1, Map.of("c1", misconfigured(RestStatus.NOT_FOUND)), List.of()), true, "a");
         assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) notFound).status());
-        assertTrue(notFound.getMessage().endsWith("Failed connectors: c1 (OpenSearchStatusException, 404)"));
-        assertFalse(notFound.getMessage().contains("Failed to find connector"));
+        // ml-commons' own message names only the connector id, so it's returned
+        assertTrue(notFound.getMessage().endsWith("Failed connectors: c1 (Failed to find connector, 404)"));
 
         Map<String, AgentUtils.McpConnectorFailure> mixedConfig = Map
             .of("c1", misconfigured(RestStatus.NOT_FOUND), "c2", misconfigured(RestStatus.BAD_REQUEST));
@@ -634,5 +634,24 @@ public class MLChatAgentRunnerV2Test {
             .of("c1", misconfigured(RestStatus.NOT_FOUND), "c2", down("ConnectException"));
         Exception badGateway = runner.mcpLoadFailure(mcpResult(2, oneServerDown, List.of()), true, "a");
         assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) badGateway).status());
+    }
+
+    @Test
+    public void testMcpLoadFailure_OwnConnectorErrorsKeepTheirMessageRemoteOnesDont() {
+        String notMcp = "Connector with ID c1" + AgentUtils.NOT_AN_MCP_CONNECTOR_MESSAGE;
+        Map<String, AgentUtils.McpConnectorFailure> failed = Map
+            .of(
+                "c1",
+                new AgentUtils.McpConnectorFailure("OpenSearchStatusException", notMcp, RestStatus.BAD_REQUEST),
+                // A 4xx from the remote MCP server: its message can name internal hosts
+                "c2",
+                new AgentUtils.McpConnectorFailure("OpenSearchStatusException", "401 from mcp.internal.example", RestStatus.UNAUTHORIZED)
+            );
+
+        Exception failure = runner.mcpLoadFailure(mcpResult(2, failed, List.of()), true, "a");
+
+        assertTrue(failure.getMessage().contains("c1 (" + notMcp + ", 400)"));
+        assertTrue(failure.getMessage().contains("c2 (OpenSearchStatusException, 401)"));
+        assertFalse(failure.getMessage().contains("mcp.internal.example"));
     }
 }

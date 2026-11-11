@@ -4308,6 +4308,18 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertTrue(notFound.isClientError());
         assertEquals("OpenSearchStatusException", notFound.getType());
         assertEquals("Failed to find connector", notFound.getMessage());
+        assertTrue(notFound.isMessageReturnable());
+        assertTrue(
+            AgentUtils.McpConnectorFailure
+                .of(new OpenSearchStatusException("Connector with ID c1" + AgentUtils.NOT_AN_MCP_CONNECTOR_MESSAGE, RestStatus.BAD_REQUEST))
+                .isMessageReturnable()
+        );
+        // Any other message, even on a status exception, may come from the remote MCP call
+        assertFalse(
+            AgentUtils.McpConnectorFailure
+                .of(new OpenSearchStatusException("401 from mcp.internal.example", RestStatus.UNAUTHORIZED))
+                .isMessageReturnable()
+        );
 
         // An invalid tool_filters regex is the agent's configuration too
         AgentUtils.McpConnectorFailure badFilter = AgentUtils.McpConnectorFailure
@@ -4318,6 +4330,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             .of(new RuntimeException("Client failed to initialize", new java.net.ConnectException("Connection refused")));
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, unreachable.getStatus());
         assertFalse(unreachable.isClientError());
+        assertFalse(unreachable.isMessageReturnable());
         assertEquals("ConnectException: Connection refused", unreachable.toString());
     }
 
