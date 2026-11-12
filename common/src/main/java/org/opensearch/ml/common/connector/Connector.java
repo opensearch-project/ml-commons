@@ -321,7 +321,9 @@ public interface Connector extends ToXContentObject, Writeable {
             uri = new URI(resolvedUrl);
         } catch (URISyntaxException e) {
             logRejectedUrl(resolvedUrl);
-            throw new IllegalArgumentException("Connector URL is not a valid URI", e);
+            // The exception repeats the whole URL, which can carry secrets, so neither its message nor the exception
+            // itself is kept: callers log the full cause chain and error responses render it.
+            throw new IllegalArgumentException("Connector URL is not a valid URI: " + RejectedConnectorUrlLog.describeSyntaxError(e));
         }
         String scheme = uri.getScheme();
         if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
