@@ -29,7 +29,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -93,6 +93,9 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             return;
         }
 
+        // Read the caller before stashing the thread context: stashContext() clears the security user, and a
+        // null user is treated as "access control disabled" by ModelAccessControlHelper.
+        User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
 
@@ -100,13 +103,12 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
                 checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
             } else {
-                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+                validateAndDeleteModelGroup(user, modelGroupId, tenantId, wrappedListener);
             }
         }
     }
 
-    private void validateAndDeleteModelGroup(String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
-        User user = RestActionUtils.getUserContext(client);
+    private void validateAndDeleteModelGroup(User user, String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
         modelAccessControlHelper
             .validateModelGroupAccess(
                 user,
@@ -126,7 +128,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     private void handleAccessValidation(boolean hasAccess, String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
         if (!hasAccess) {
-            listener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
+            listener
+                .onFailure(new OpenSearchStatusException("User doesn't have privilege to delete this model group", RestStatus.FORBIDDEN));
             return;
         }
         checkForAssociatedModels(modelGroupId, tenantId, listener);
@@ -202,6 +205,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     }
 
     private void handleValidationError(Exception error, String modelGroupId, ActionListener<DeleteResponse> listener) {
+        // The access check looks the model group up, so a missing group surfaces here. Return 404, as the get and
+        // update model group actions do for a missing model group, instead of passing the exception through as a 500.
+        if (ExceptionsHelper.unwrap(error, MLResourceNotFoundException.class) != null) {
+            log.debug("Model group {} not found while validating access", modelGroupId);
+            listener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
+            return;
+        }
         log.error("Failed to validate Access for Model Group {}", modelGroupId, error);
         listener.onFailure(error);
     }
