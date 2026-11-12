@@ -37,6 +37,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -91,9 +92,19 @@ public class McpToolsHelper {
                 .inputSchema(new JacksonMcpJsonMapper(JsonMapper.shared()), schema)
                 .build(),
             (ctx, request) -> Mono.create(sink -> {
-                ActionListener<String> actionListener = ActionListener
+                // Tools may respond with non-String outputs (e.g. SearchIndexTool returns ModelTensorOutput when
+                // return_raw_response is true), so serialize the output instead of assuming it is a String.
+                ActionListener<Object> actionListener = ActionListener
                     .wrap(
-                        r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false, null, Map.of())),
+                        r -> sink
+                            .success(
+                                new McpSchema.CallToolResult(
+                                    List.of(new McpSchema.TextContent(ToolUtils.parseResponse(r))),
+                                    false,
+                                    null,
+                                    Map.of()
+                                )
+                            ),
                         e -> {
                             log.error("Failed to execute tool, tool name: {}", toolName, e);
                             sink.error(e);
