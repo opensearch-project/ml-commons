@@ -12,7 +12,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.10.0
 
 ### Enhancements
 
-* Parse connector endpoint URLs before matching the allowlist and tighten default AWS patterns ([#5192](https://github.com/opensearch-project/ml-commons/pull/5192))
+* Parse connector endpoint URLs before matching the allowlist and tighten default AWS patterns; also reported by Tony Piazza (@tonypiazza) ([#5192](https://github.com/opensearch-project/ml-commons/pull/5192))
 * Address review feedback on connector endpoint validation: accept predict-time placeholders, sanitize rejected-URL log output, and update AWS default patterns ([#5196](https://github.com/opensearch-project/ml-commons/pull/5196))
 * Apply the connector address policy to OpenAI- and Gemini-style HTTP streaming requests ([#5207](https://github.com/opensearch-project/ml-commons/pull/5207))
 * Classify IPv6 unique-local, link-local, NAT64, and metadata addresses in the connector private-IP check ([#5208](https://github.com/opensearch-project/ml-commons/pull/5208))
