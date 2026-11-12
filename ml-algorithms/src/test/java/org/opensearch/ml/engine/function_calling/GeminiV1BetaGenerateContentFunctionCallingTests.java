@@ -92,6 +92,26 @@ public class GeminiV1BetaGenerateContentFunctionCallingTests {
     }
 
     @Test
+    public void handleACallWithoutArgsUsesEmptyArgs() {
+        // Gemini omits args for a function without parameters
+        List<Object> parts = List.of(ImmutableMap.of("functionCall", ImmutableMap.of(NAME, "list_indices")));
+        Map<String, Object> candidate = ImmutableMap
+            .of("content", ImmutableMap.of("role", "model", "parts", parts), "finishReason", "STOP");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("candidates", List.of(candidate))).build();
+        ModelTensorOutput output = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(tensor)).build()))
+            .build();
+
+        List<Map<String, String>> toolCalls = functionCalling.handle(output, new HashMap<>());
+
+        Assert.assertEquals(1, toolCalls.size());
+        Assert.assertEquals("list_indices", toolCalls.get(0).get("tool_name"));
+        Assert.assertEquals("{}", toolCalls.get(0).get("tool_input"));
+        Assert.assertEquals("list_indices", toolCalls.get(0).get("tool_call_id"));
+    }
+
+    @Test
     public void supply() {
         Map<String, Object> toolResultMap = ImmutableMap.of("text", "test result for gemini generateContent");
         List<LLMMessage> messages = functionCalling

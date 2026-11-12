@@ -4335,4 +4335,99 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertTrue("length " + cleaned.length(), cleaned.length() < 100_000);
         assertEquals("object", cleanedForGemini(schema).get("type"));
     }
+
+    @Test
+    public void testCleanSchemaForGemini_LargeDefinitionsUnderTheBudgetAreKeptAtTheRoot() {
+        // Root $ref Req, whose 3 properties each reference Big (292 objects): 879 objects in all, under the budget.
+        // Charging Big's copies again inside Req's size used to collapse the whole schema to {type: object}.
+        StringBuilder bigProperties = new StringBuilder();
+        for (int i = 0; i < 290; i++) {
+            bigProperties.append(i == 0 ? "" : ",").append("\"f").append(i).append("\":{\"type\":\"string\"}");
+        }
+        String schema = "{\"$ref\":\"#/$defs/Req\",\"$defs\":{"
+            + "\"Big\":{\"type\":\"object\",\"properties\":{"
+            + bigProperties
+            + "}},"
+            + "\"Req\":{\"type\":\"object\",\"properties\":{"
+            + "\"p1\":{\"$ref\":\"#/$defs/Big\"},\"p2\":{\"$ref\":\"#/$defs/Big\"},\"p3\":{\"$ref\":\"#/$defs/Big\"}}}}}";
+
+        Map<String, Object> cleaned = cleanedForGemini(schema);
+
+        assertEquals("object", cleaned.get("type"));
+        Map<String, Object> properties = (Map<String, Object>) cleaned.get("properties");
+        for (String name : List.of("p1", "p2", "p3")) {
+            Map<String, Object> big = (Map<String, Object>) properties.get(name);
+            assertEquals(name, 290, ((Map<String, Object>) big.get("properties")).size());
+        }
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_MutualRecursionResolvesEachReferenceFresh() {
+        // B is first cleaned inside A, where A is cut; root.b must not reuse that shallower B.
+        String schema = "{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/A\"},\"b\":{\"$ref\":\"#/$defs/B\"}},"
+            + "\"$defs\":{"
+            + "\"A\":{\"type\":\"object\",\"properties\":{\"b\":{\"$ref\":\"#/$defs/B\"}}},"
+            + "\"B\":{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/A\"}}}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        Map<String, Object> bA = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) properties.get("b")).get("properties"))
+            .get("a");
+        assertEquals(Map.of("type", "object"), ((Map<String, Object>) bA.get("properties")).get("b"));
+        Map<String, Object> aB = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) properties.get("a")).get("properties"))
+            .get("b");
+        assertEquals(Map.of("type", "object"), ((Map<String, Object>) aB.get("properties")).get("a"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_DepthCutIsNotReusedAtAShallowerReference() {
+        // D1 -> D2 -> ... -> D12: from the root, D11 is past the depth limit, but a root-level $ref D10 is shallow.
+        StringBuilder defs = new StringBuilder();
+        for (int i = 1; i < 12; i++) {
+            defs.append("\"D").append(i).append("\":{\"type\":\"object\",\"properties\":{\"next\":{\"$ref\":\"#/$defs/D");
+            defs.append(i + 1).append("\"}}},");
+        }
+        defs.append("\"D12\":{\"type\":\"object\",\"properties\":{\"leaf\":{\"type\":\"string\"}}}");
+        String schema = "{\"type\":\"object\",\"properties\":{\"chain\":{\"$ref\":\"#/$defs/D1\"},\"shallow\":{\"$ref\":\"#/$defs/D10\"}},"
+            + "\"$defs\":{"
+            + defs
+            + "}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        Map<String, Object> node = (Map<String, Object>) properties.get("shallow");
+        for (int i = 0; i < 2; i++) {
+            node = (Map<String, Object>) ((Map<String, Object>) node.get("properties")).get("next");
+        }
+        assertEquals(Map.of("type", "string"), ((Map<String, Object>) node.get("properties")).get("leaf"));
+        Map<String, Object> chain = (Map<String, Object>) properties.get("chain");
+        for (int i = 0; i < 10; i++) {
+            chain = (Map<String, Object>) ((Map<String, Object>) chain.get("properties")).get("next");
+        }
+        assertEquals("D11 is past the depth limit from the root", Map.of("type", "object"), chain);
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_TypeListsEnumsAndConstsGeminiAccepts() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"type\":[\"string\",\"null\"]},"
+            + "\"b\":{\"type\":[\"null\",\"integer\"]},"
+            + "\"c\":{\"type\":[\"string\",\"integer\"]},"
+            + "\"d\":{\"type\":\"string\",\"enum\":[1,2]},"
+            + "\"e\":{\"type\":\"integer\",\"enum\":[1,2],\"description\":\"Level.\"},"
+            + "\"f\":{\"enum\":[\"x\",null]},"
+            + "\"g\":{\"const\":5},"
+            + "\"h\":{\"const\":true}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "string", "nullable", true), properties.get("a"));
+        assertEquals(Map.of("type", "integer", "nullable", true), properties.get("b"));
+        assertEquals("a union of types leaves the type open", Map.of(), properties.get("c"));
+        assertEquals(Map.of("type", "string", "enum", List.of("1", "2")), properties.get("d"));
+        assertEquals(Map.of("type", "integer", "description", "Level. Allowed values: 1, 2."), properties.get("e"));
+        assertEquals(Map.of("enum", List.of("x"), "nullable", true), properties.get("f"));
+        assertEquals(Map.of("type", "integer", "description", "Allowed values: 5."), properties.get("g"));
+        assertEquals(Map.of("type", "boolean", "description", "Allowed values: true."), properties.get("h"));
+    }
 }

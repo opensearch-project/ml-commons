@@ -322,6 +322,8 @@ public class AgentUtils {
         private final Map<String, Integer> definitionSizes = new HashMap<>();
         private final Set<String> expanding = new HashSet<>();
         private int inlineBudget = MAX_INLINED_SCHEMA_OBJECTS;
+        /** References replaced by an object schema because of a cycle, the depth limit or the budget. */
+        private int cuts;
 
         private GeminiSchemaContext(JsonObject root) {
             this.root = root;
@@ -333,9 +335,11 @@ public class AgentUtils {
     /**
      * Reduces a tool's JSON input schema to what Gemini function declarations accept. Only the fields of
      * Gemini's Schema are kept, at schema positions (never property names): "oneOf" becomes "anyOf", a
-     * string "const" becomes a one-value "enum", and "allOf" is merged into its schema. "$ref" is
-     * rejected, so references are inlined by their full JSON pointer; an unresolvable or recursive one,
-     * or one past the inlining budget, becomes a plain object schema.
+     * string "const" becomes a one-value "enum", "allOf" is merged into its schema, a type list such as
+     * ["string", "null"] becomes a single type and "nullable", and an enum of non-string values is noted in
+     * the description. "$ref" is rejected, so references are inlined by their full JSON pointer; an
+     * unresolvable or recursive one, or one past the inlining budget, becomes a plain object schema. The
+     * schema's own top-level reference is always inlined, so a tool never loses all of its parameters.
      * Falls back to {@link #removeAdditionalPropertiesFromSchema} if the schema isn't a JSON object.
      */
     public static String cleanSchemaForGemini(String schema) {
@@ -354,7 +358,7 @@ public class AgentUtils {
     private static JsonObject cleanGeminiSchemaNode(JsonObject node, GeminiSchemaContext context) {
         if (node.has("$ref")) {
             JsonObject siblings = node.deepCopy();
-            JsonObject resolved = resolveSchemaRef(siblings.remove("$ref"), context);
+            JsonObject resolved = resolveSchemaRef(siblings.remove("$ref"), context, node == context.root);
             // Keys next to "$ref" (typically a description) refine the referenced schema.
             for (Map.Entry<String, com.google.gson.JsonElement> entry : cleanGeminiSchemaNode(siblings, context).entrySet()) {
                 resolved.add(entry.getKey(), entry.getValue());
@@ -364,6 +368,8 @@ public class AgentUtils {
         JsonObject cleaned = new JsonObject();
         com.google.gson.JsonArray anyOf = new com.google.gson.JsonArray();
         List<JsonObject> allOf = new ArrayList<>();
+        com.google.gson.JsonElement enumValues = null;
+        com.google.gson.JsonElement constValue = null;
         for (Map.Entry<String, com.google.gson.JsonElement> entry : node.entrySet()) {
             String key = entry.getKey();
             com.google.gson.JsonElement value = entry.getValue();
@@ -387,23 +393,21 @@ public class AgentUtils {
                         }
                     }
                 }
-                case "const" -> {
-                    // Gemini's enum lists string values only; other constants just keep their type.
-                    if (!node.has("enum") && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
-                        com.google.gson.JsonArray single = new com.google.gson.JsonArray();
-                        single.add(value);
-                        cleaned.add("enum", single);
-                        if (!node.has("type")) {
-                            cleaned.addProperty("type", "string");
-                        }
-                    }
-                }
+                case "type" -> addGeminiType(cleaned, value);
+                case "enum" -> enumValues = value;
+                case "const" -> constValue = value;
                 default -> {
                     if (GEMINI_SCHEMA_FIELDS.contains(key)) {
                         cleaned.add(key, value);
                     }
                 }
             }
+        }
+        // After the loop, so the type and description are already in place
+        if (enumValues != null) {
+            addGeminiEnum(cleaned, enumValues);
+        } else if (constValue != null) {
+            addGeminiConst(cleaned, constValue);
         }
         if (!anyOf.isEmpty()) {
             cleaned.add("anyOf", anyOf);
@@ -412,6 +416,104 @@ public class AgentUtils {
             mergeGeminiSchema(cleaned, part);
         }
         return cleaned;
+    }
+
+    /** Gemini's type is a single value: ["X", "null"] becomes X and nullable, and a union of types leaves it open. */
+    private static void addGeminiType(JsonObject cleaned, com.google.gson.JsonElement type) {
+        if (!type.isJsonArray()) {
+            cleaned.add("type", type);
+            return;
+        }
+        List<com.google.gson.JsonElement> types = new ArrayList<>();
+        boolean nullable = false;
+        for (com.google.gson.JsonElement item : type.getAsJsonArray()) {
+            if (item.isJsonPrimitive() && "null".equals(item.getAsString())) {
+                nullable = true;
+            } else {
+                types.add(item);
+            }
+        }
+        if (types.size() == 1) {
+            cleaned.add("type", types.get(0));
+        }
+        if (nullable) {
+            cleaned.addProperty("nullable", true);
+        }
+    }
+
+    /**
+     * Gemini's enum lists string values. A null value makes the schema nullable. Other values are kept as
+     * strings for a string schema; for any other schema the enum is dropped and its values go in the description.
+     */
+    private static void addGeminiEnum(JsonObject cleaned, com.google.gson.JsonElement values) {
+        if (!values.isJsonArray()) {
+            return;
+        }
+        com.google.gson.JsonArray nonNull = new com.google.gson.JsonArray();
+        boolean allStrings = true;
+        boolean allPrimitives = true;
+        for (com.google.gson.JsonElement value : values.getAsJsonArray()) {
+            if (value.isJsonNull()) {
+                cleaned.addProperty("nullable", true);
+                continue;
+            }
+            nonNull.add(value);
+            allStrings &= value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
+            allPrimitives &= value.isJsonPrimitive();
+        }
+        if (nonNull.isEmpty()) {
+            return;
+        }
+        if (allStrings) {
+            cleaned.add("enum", nonNull);
+        } else if (allPrimitives && isGeminiStringSchema(cleaned)) {
+            com.google.gson.JsonArray strings = new com.google.gson.JsonArray();
+            nonNull.forEach(value -> strings.add(value.getAsString()));
+            cleaned.add("enum", strings);
+        } else {
+            addAllowedValuesToDescription(cleaned, nonNull);
+        }
+    }
+
+    /**
+     * A string const becomes a one-value enum. Any other const keeps or infers its type, and its value goes in
+     * the description, since Gemini's enum takes strings only.
+     */
+    private static void addGeminiConst(JsonObject cleaned, com.google.gson.JsonElement value) {
+        if (!value.isJsonPrimitive()) {
+            return;
+        }
+        com.google.gson.JsonPrimitive primitive = value.getAsJsonPrimitive();
+        if (primitive.isString()) {
+            com.google.gson.JsonArray single = new com.google.gson.JsonArray();
+            single.add(primitive);
+            cleaned.add("enum", single);
+            if (!cleaned.has("type")) {
+                cleaned.addProperty("type", "string");
+            }
+            return;
+        }
+        if (!cleaned.has("type")) {
+            boolean whole = primitive.isNumber() && primitive.getAsBigDecimal().stripTrailingZeros().scale() <= 0;
+            cleaned.addProperty("type", primitive.isBoolean() ? "boolean" : whole ? "integer" : "number");
+        }
+        com.google.gson.JsonArray single = new com.google.gson.JsonArray();
+        single.add(primitive);
+        addAllowedValuesToDescription(cleaned, single);
+    }
+
+    private static boolean isGeminiStringSchema(JsonObject cleaned) {
+        com.google.gson.JsonElement type = cleaned.get("type");
+        return type != null && type.isJsonPrimitive() && "string".equals(type.getAsString());
+    }
+
+    private static void addAllowedValuesToDescription(JsonObject cleaned, com.google.gson.JsonArray values) {
+        List<String> shown = new ArrayList<>();
+        values.forEach(value -> shown.add(value.isJsonPrimitive() ? value.getAsString() : value.toString()));
+        String note = "Allowed values: " + String.join(", ", shown) + ".";
+        com.google.gson.JsonElement description = cleaned.get("description");
+        String text = description != null && description.isJsonPrimitive() ? description.getAsString() : "";
+        cleaned.addProperty("description", text.isBlank() ? note : text + " " + note);
     }
 
     private static JsonObject cleanGeminiProperties(JsonObject properties, GeminiSchemaContext context) {
@@ -464,34 +566,76 @@ public class AgentUtils {
         }
     }
 
-    private static JsonObject resolveSchemaRef(com.google.gson.JsonElement ref, GeminiSchemaContext context) {
+    /**
+     * Inlines a reference. Each schema object it adds is charged to the inlining budget once: a definition
+     * cleaned for the first time is charged only for its own objects, since the references inside it were
+     * charged as they were inlined. A definition whose cleaning hit a cut isn't reused: the same reference
+     * reached elsewhere, for example less deep, may resolve in full.
+     *
+     * @param atRoot true for the schema's own top-level reference, which the budget never cuts
+     */
+    private static JsonObject resolveSchemaRef(com.google.gson.JsonElement ref, GeminiSchemaContext context, boolean atRoot) {
         String pointer = ref != null && ref.isJsonPrimitive() ? ref.getAsString() : "";
-        JsonObject cleaned = context.cleanedDefinitions.get(pointer);
-        if (cleaned == null) {
-            JsonObject target = pointer.startsWith("#") ? resolveJsonPointer(context.root, pointer) : null;
-            // A pointer already being expanded is a cycle; expanding it again would grow without bound.
-            if (target == null || context.expanding.contains(pointer) || context.expanding.size() > MAX_SCHEMA_REF_DEPTH) {
-                return objectSchemaFor(pointer);
+        JsonObject cached = context.cleanedDefinitions.get(pointer);
+        if (cached != null) {
+            int size = context.definitionSizes.get(pointer);
+            if (size > context.inlineBudget && !atRoot) {
+                return cutSchemaRef(pointer, context, "the inlining budget is used up");
             }
-            context.expanding.add(pointer);
-            try {
-                cleaned = cleanGeminiSchemaNode(target, context);
-            } finally {
-                context.expanding.remove(pointer);
-            }
-            context.cleanedDefinitions.put(pointer, cleaned);
-            context.definitionSizes.put(pointer, countSchemaObjects(cleaned));
+            context.inlineBudget -= size;
+            return cached.deepCopy();
         }
-        int size = context.definitionSizes.get(pointer);
-        if (size > context.inlineBudget) {
-            return objectSchemaFor(pointer);
+        JsonObject target = pointer.startsWith("#") ? resolveJsonPointer(context.root, pointer) : null;
+        if (target == null) {
+            log.debug("Replacing unresolvable schema reference [{}] with an object schema for Gemini", pointer);
+            return objectSchema();
         }
-        context.inlineBudget -= size;
+        // A pointer already being expanded is a cycle; expanding it again would grow without bound.
+        if (context.expanding.contains(pointer)) {
+            return cutSchemaRef(pointer, context, null);
+        }
+        if (context.expanding.size() > MAX_SCHEMA_REF_DEPTH) {
+            return cutSchemaRef(pointer, context, "references are nested more than " + MAX_SCHEMA_REF_DEPTH + " deep");
+        }
+        if (context.inlineBudget <= 0 && !atRoot) {
+            return cutSchemaRef(pointer, context, "the inlining budget is used up");
+        }
+        int budgetBefore = context.inlineBudget;
+        int cutsBefore = context.cuts;
+        JsonObject cleaned;
+        context.expanding.add(pointer);
+        try {
+            cleaned = cleanGeminiSchemaNode(target, context);
+        } finally {
+            context.expanding.remove(pointer);
+        }
+        int size = countSchemaObjects(cleaned);
+        int chargedForNestedReferences = budgetBefore - context.inlineBudget;
+        context.inlineBudget -= size - chargedForNestedReferences;
+        if (context.cuts != cutsBefore) {
+            return cleaned;
+        }
+        context.cleanedDefinitions.put(pointer, cleaned);
+        context.definitionSizes.put(pointer, size);
         return cleaned.deepCopy();
     }
 
-    private static JsonObject objectSchemaFor(String pointer) {
-        log.debug("Replacing unresolvable, recursive or oversized schema reference [{}] with an object schema for Gemini", pointer);
+    /**
+     * Replaces a reference with an object schema because of a cycle, the depth limit or the budget.
+     *
+     * @param reason why detail is lost, logged as a warning; null for a cycle, which is expected for recursive types
+     */
+    private static JsonObject cutSchemaRef(String pointer, GeminiSchemaContext context, String reason) {
+        context.cuts++;
+        if (reason == null) {
+            log.debug("Replacing recursive schema reference [{}] with an object schema for Gemini", pointer);
+        } else {
+            log.warn("Replacing schema reference [{}] with an object schema for Gemini: {}", pointer, reason);
+        }
+        return objectSchema();
+    }
+
+    private static JsonObject objectSchema() {
         JsonObject fallback = new JsonObject();
         fallback.addProperty("type", "object");
         return fallback;

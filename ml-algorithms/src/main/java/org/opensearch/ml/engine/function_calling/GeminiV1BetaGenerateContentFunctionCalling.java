@@ -120,7 +120,9 @@ public class GeminiV1BetaGenerateContentFunctionCalling implements FunctionCalli
                 continue;
             }
             String toolName = JsonPath.read(call, NAME);
-            String toolInput = StringUtils.toJson(JsonPath.read(call, INPUT));
+            // Gemini omits args for a function without parameters; the provider's parser reads that as {} too.
+            Object args = callMap.get(INPUT);
+            String toolInput = args == null ? "{}" : StringUtils.toJson(args);
             String toolCallId = JsonPath.read(call, ID_PATH);
             output.add(Map.of("tool_name", toolName, "tool_input", toolInput, "tool_call_id", toolCallId));
         }
