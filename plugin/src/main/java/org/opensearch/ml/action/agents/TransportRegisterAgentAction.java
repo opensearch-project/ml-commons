@@ -219,11 +219,14 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
+        // parameters is optional on register (an empty map also arrives as null), so treat a missing block as empty
+        Map<String, String> agentParameters = mlAgent.getParameters() == null ? Map.of() : mlAgent.getParameters();
+
         // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have an executor agent id, create an executor (reAct) agent
         if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
-            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD)) {
+            && !agentParameters.containsKey(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD)) {
             createConversationAgent(mlAgent, tenantId, ActionListener.wrap(conversationAgentId -> {
-                Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
+                Map<String, String> parameters = new HashMap<>(agentParameters);
                 parameters.put(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
                 registerAgentToIndex(
