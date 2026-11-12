@@ -231,7 +231,30 @@ public class ConnectorTest {
         );
         expectMessage(connector, "ftp://api.openai.com/v1", allow, "Connector URL scheme must be http or https");
         expectMessage(connector, "https://evil_host/a", allow, "Connector URL has no host");
-        expectMessage(connector, "https://host/path with space", allow, "Connector URL is not a valid URI");
+        expectMessage(
+            connector,
+            "https://host/path with space",
+            allow,
+            "Connector URL is not a valid URI: Illegal character in path at index 17"
+        );
+    }
+
+    @Test
+    public void validateResolvedEndpoint_invalidUri_keepsTheUrlOutOfTheException() {
+        HttpConnector connector = createHttpConnector();
+        // A space is illegal in the query, so the URL fails to parse; the token must not reach the exception
+        String url = "https://api.example.com/v1/chat?api_key=sk-test-secret-123 x";
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> connector.validateResolvedEndpoint(url, Arrays.asList("^https://.*$"))
+        );
+        assertEquals("Connector URL is not a valid URI: Illegal character in query at index " + url.indexOf(' '), e.getMessage());
+        assertNull(e.getCause());
+        // what a caller's log.error(message, e) prints, the whole cause chain included
+        java.io.StringWriter printed = new java.io.StringWriter();
+        e.printStackTrace(new java.io.PrintWriter(printed));
+        assertFalse(printed.toString(), printed.toString().contains("sk-test-secret-123"));
+        assertFalse(printed.toString(), printed.toString().contains("api.example.com"));
     }
 
     @Test
