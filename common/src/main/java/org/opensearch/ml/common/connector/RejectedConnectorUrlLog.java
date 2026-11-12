@@ -66,6 +66,14 @@ final class RejectedConnectorUrlLog {
         UNPINNED_ORIGIN_WARNED.clear();
     }
 
+    /**
+     * The reason and position of a URI syntax error, without the input: {@link URISyntaxException#getMessage()} repeats
+     * the whole URL.
+     */
+    static String describeSyntaxError(URISyntaxException e) {
+        return e.getIndex() >= 0 ? e.getReason() + " at index " + e.getIndex() : e.getReason();
+    }
+
     /** "scheme://host (length N)" when the URL parses with a scheme and host, otherwise "unparseable (length N)". */
     static String describe(String resolvedUrl) {
         if (resolvedUrl == null) {
