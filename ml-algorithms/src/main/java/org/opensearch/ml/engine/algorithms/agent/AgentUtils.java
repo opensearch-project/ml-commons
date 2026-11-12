@@ -911,6 +911,11 @@ public class AgentUtils {
         Type listType = new TypeToken<List<Map<String, Object>>>() {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
+        // An empty list would leave the countdown below at zero with nothing to complete the listener
+        if (mcpConnectorConfigs == null || mcpConnectorConfigs.isEmpty()) {
+            finalListener.onResponse(Collections.emptyList());
+            return;
+        }
 
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
