@@ -149,13 +149,14 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
             }
 
             // This runs inside the MCP loader's callback: a throw that escaped would go back to the loader,
-            // which can't complete the run, so the request would hang.
+            // which can't complete the run, so the request would hang. Throwable, not Exception: an Error
+            // (e.g. NoClassDefFoundError from a tool factory) would escape the same way.
             private void runLoop(AgentUtils.McpToolLoadResult result) {
                 try {
                     startLoop.accept(result);
-                } catch (Exception e) {
-                    log.error("Failed to run the agent loop. agentId={}", agentId, e);
-                    runListener.onFailure(e);
+                } catch (Throwable t) {
+                    log.error("Failed to run the agent loop. agentId={}", agentId, t);
+                    runListener.onFailure(t instanceof Exception e ? e : new RuntimeException("Failed to run the agent loop", t));
                 }
             }
         });
@@ -169,7 +170,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
     /**
      * Some connectors failing is tolerated, as before. If every connector failed and the agent has
      * no other tools, the run fails instead of letting the model answer with no tools: with the failures'
-     * own 4xx status when each is a client or configuration error (such as a deleted connector), else 502.
+     * shared 4xx status when each is a client or configuration error (such as a deleted connector), 400 if
+     * their 4xx statuses differ, else 502.
      *
      * @return the exception to fail the run with, or null to continue
      */

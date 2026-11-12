@@ -601,6 +601,23 @@ public class MLChatAgentRunnerV2Test {
     }
 
     @Test
+    public void testErrorFromTheLoopFailsTheRunInsteadOfHanging() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        MLChatAgentRunnerV2 spyRunner = runnerWithMcpResult(mcpResult(2, Map.of("c1", down("ConnectException")), List.of()));
+        NoClassDefFoundError error = new NoClassDefFoundError("SomeToolClass");
+        doThrow(error).when(spyRunner).mcpLoadFailure(any(), anyBoolean(), any());
+
+        spyRunner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        assertSame(error, failure.getValue().getCause());
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    @Test
     public void testToolThatCannotBeCreatedIsNotAnotherTool() {
         // The configured tool's type has no factory, so the run would otherwise go on with no tools at all.
         when(mlAgent.getTools()).thenReturn(List.of(MLToolSpec.builder().type("NoSuchTool").name("missing").build()));
