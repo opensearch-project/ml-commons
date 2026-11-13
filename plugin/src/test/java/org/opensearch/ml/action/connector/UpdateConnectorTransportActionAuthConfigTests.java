@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
@@ -73,7 +74,9 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
@@ -255,6 +258,11 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
         return http(authConfig, parameters(), new HashMap<>(Map.of(SECRET_KEY, STORED_CIPHERTEXT)));
     }
 
+    /** An update that supplies a credential and leaves everything else alone. */
+    private static MLCreateConnectorInput credentialOnly(Map<String, String> credential) {
+        return MLCreateConnectorInput.builder().updateConnector(true).parameters(new HashMap<>()).credential(credential).build();
+    }
+
     private void initAnswers(boolean answer) {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -290,6 +298,16 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
         verify(actionListener, never()).onResponse(any());
         assertEquals(message, captor.getValue().getMessage());
         verify(spied, never()).update(any());
+        verify(mlEngine, never()).encrypt(any(), any(), any());
+        verify(sdkClient, never()).updateDataObjectAsync(any(UpdateDataObjectRequest.class));
+    }
+
+    /** Asserts the update was rejected with {@code message} before encryption and any write. */
+    private void assertRejectedBeforeEncryption(String message) {
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        verify(actionListener, never()).onResponse(any());
+        assertEquals(message, captor.getValue().getMessage());
         verify(mlEngine, never()).encrypt(any(), any(), any());
         verify(sdkClient, never()).updateDataObjectAsync(any(UpdateDataObjectRequest.class));
     }
@@ -410,6 +428,64 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
     public void testAuthOnlyUpdateAddingOauth2_flagOff_isForbidden() {
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
         assertRejectedBeforeUpdate(http(OAuth2AuthConfig.NONE), authUpdate(oauth2(), null), ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+    }
+
+    @Test
+    public void testOauth2WithCredential_overNone_isWritten() throws IOException {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStored(http(OAuth2AuthConfig.NONE));
+        stubRequest(authUpdate(oauth2(), Map.of(SECRET_KEY, "p")));
+
+        execute();
+
+        assertSucceeded();
+        assertEquals(documentOf(oauth2()), writtenDocument().get("auth_config"));
+    }
+
+    @Test
+    public void testTokenUrlOutsideTheAllowlist_onAnAuthUpdate_isRejected() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStored(http(OAuth2AuthConfig.NONE));
+        stubRequest(authUpdate(oauth2().toBuilder().tokenUrl("https://login.example.com/t").build(), Map.of(SECRET_KEY, "p")));
+
+        execute();
+
+        assertRejectedBeforeEncryption(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
+    }
+
+    @Test
+    public void testKeyView_isTheStoredKeysUnlessTheRequestSuppliesACredential() throws Exception {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        OAuth2AuthConfig storedOnly = oauth2().toBuilder().clientSecret("${credential.stored_only}").build();
+        String missingKey = AuthConfigValidator.missingCredentialKeyMessage("stored_only");
+        // The stored keys apply when the request has no credential; a request credential replaces them, whether the
+        // request touches auth_config or not. The keys are checked on the updated connector, before encryption and the
+        // write. A stored configuration that passes validation is never grandfathered, so the credential-only update
+        // is rejected without the warning.
+        MLCreateConnectorInput[] requests = {
+            authUpdate(storedOnly, new HashMap<>()),
+            authUpdate(storedOnly, Map.of("new_key", "p")),
+            credentialOnly(Map.of("other", "p")) };
+        String[] rejections = { null, missingKey, missingKey };
+        for (int i = 0; i < requests.length; i++) {
+            clearInvocations(actionListener, sdkClient, mlEngine);
+            stubStored(http(storedOnly, parameters(), new HashMap<>(Map.of("stored_only", STORED_CIPHERTEXT))));
+            stubRequest(requests[i]);
+
+            expectLog(
+                UpdateConnectorTransportAction.class,
+                Level.WARN,
+                this::execute,
+                new String[0],
+                new String[] { KEPT_FAILING_CONFIGURATION_LOG }
+            );
+
+            if (rejections[i] == null) {
+                assertSucceeded();
+            } else {
+                assertRejectedBeforeEncryption(rejections[i]);
+            }
+        }
     }
 
     @Test

@@ -33,8 +33,10 @@ import static org.opensearch.ml.utils.AuthConfigTestFixtures.expectLog;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.fullOauth2;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.http;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2Referencing;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oldNodeCluster;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.parameters;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.ttl;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -79,7 +81,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -254,13 +256,17 @@ public class UpdateModelTransportActionAuthConfigTests extends OpenSearchTestCas
     }
 
     private void stubStoredModel(Connector inline, String connectorId) {
+        stubStoredModel(inline, connectorId, FunctionName.REMOTE);
+    }
+
+    private void stubStoredModel(Connector inline, String connectorId, FunctionName algorithm) {
         MLModel model = MLModel
             .builder()
             .name("test_name")
             .modelId(MODEL_ID)
             .modelGroupId(MODEL_GROUP_ID)
             .modelState(MLModelState.REGISTERED)
-            .algorithm(FunctionName.REMOTE)
+            .algorithm(algorithm)
             .connector(inline)
             .connectorId(connectorId)
             .build();
@@ -426,17 +432,19 @@ public class UpdateModelTransportActionAuthConfigTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testSuppliedOauth2_isForbiddenWithTheFlagOffAndUnsupportedWithItOn() {
-        // These checks run before the model is read, so the stored inline configuration does not come into it.
-        stubStoredModel(connector(fullOauth2()), null);
+    public void testSuppliedOauth2_isForbiddenWithTheFlagOffAndWrittenWithItOn() throws IOException {
+        // Over a stored inline configuration too: the flag is read before the model is.
+        stubStoredModel(connector(oauth2()), null);
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
         assertSuppliedRejectedBeforeTheModelIsRead(connector(oauth2()), RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+
+        clearInvocations(actionListener, sdkClient);
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
-        assertSuppliedRejectedBeforeTheModelIsRead(
-            connector(oauth2()),
-            RestStatus.BAD_REQUEST,
-            ConnectorProtocolValidator.typeNotSupportedMessage(ConnectorAuthType.OAUTH2)
-        );
+        initAnswers(true);
+        action.doExecute(task, supplied(connector(oauth2())), actionListener);
+
+        assertSucceeded();
+        assertEquals(documentOf(oauth2()), writtenConnector().get("auth_config"));
     }
 
     @Test
@@ -446,6 +454,16 @@ public class UpdateModelTransportActionAuthConfigTests extends OpenSearchTestCas
             connector(OAuth2AuthConfig.NONE),
             RestStatus.BAD_REQUEST,
             ConnectorProtocolValidator.versionGuardMessage(OLD_VERSION)
+        );
+    }
+
+    @Test
+    public void testSuppliedReferencingAMissingCredentialKey_isRejected() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        assertSuppliedRejectedBeforeTheModelIsRead(
+            connector(oauth2Referencing("missing")),
+            RestStatus.BAD_REQUEST,
+            AuthConfigValidator.missingCredentialKeyMessage("missing")
         );
     }
 
@@ -465,10 +483,47 @@ public class UpdateModelTransportActionAuthConfigTests extends OpenSearchTestCas
     }
 
     @Test
+    public void testSuppliedOverAStoredConfiguration_mayNotChangeAProtectedField() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStoredModel(connector(oauth2()), null);
+        assertEquals(
+            ConnectorProtocolValidator.suppliedConnectorChangesMessage("client_id"),
+            suppliedRejected(connector(oauth2().toBuilder().clientId("other").build()))
+        );
+    }
+
+    @Test
+    public void testSuppliedOverAStoredConfiguration_mayNotChangeTheReferencedKeys() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStoredModel(connector(oauth2()), null);
+        OAuth2AuthConfig otherKey = oauth2().toBuilder().clientSecret("${credential.other}").build();
+        assertEquals(
+            ConnectorProtocolValidator.SUPPLIED_CONNECTOR_CHANGES_REFERENCED_KEYS_MESSAGE,
+            suppliedRejected(http(otherKey, parameters(), Map.of("other", STORED_CIPHERTEXT)))
+        );
+    }
+
+    @Test
+    public void testSuppliedSupersetChangingOnlyTokenResponse_isWritten() throws IOException {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStoredModel(connector(oauth2().toBuilder().tokenResponse(ttl(600)).build()), null);
+        initAnswers(true);
+        OAuth2AuthConfig superset = oauth2().toBuilder().tokenResponse(ttl(1200)).build();
+
+        action.doExecute(task, supplied(connector(superset)), actionListener);
+
+        assertSucceeded();
+        assertEquals(documentOf(superset), writtenConnector().get("auth_config"));
+    }
+
+    @Test
     public void testSuppliedOverAModelWithoutAStoredConfiguration_comparesWithTheNoneBaselineAndRefreshesTheMapping() throws IOException {
         // A model registered with connector_id, and one whose inline connector holds no configuration.
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
         for (Connector inline : new Connector[] { null, connector(null) }) {
             stubStoredModel(inline, inline == null ? "test_connector_id" : null);
+            assertEquals(ConnectorProtocolValidator.suppliedConnectorChangesMessage("token_url"), suppliedRejected(connector(oauth2())));
+
             clearInvocations(actionListener, sdkClient, mlIndicesHandler);
             action.doExecute(task, supplied(connector(OAuth2AuthConfig.NONE)), actionListener);
             assertSucceeded();
@@ -477,6 +532,38 @@ public class UpdateModelTransportActionAuthConfigTests extends OpenSearchTestCas
             inOrder.verify(sdkClient).updateDataObjectAsync(any(UpdateDataObjectRequest.class));
             assertEquals(NONE_DOCUMENT, writtenConnector().get("auth_config"));
         }
+    }
+
+    @Test
+    public void testSuppliedOnTheStandaloneConnectorSwitch_isChecked() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStoredModel(null, "old_connector_id");
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId(MODEL_ID)
+                    .connectorId("new_connector_id")
+                    .updatedConnector(connector(oauth2()))
+                    .build()
+            )
+            .build();
+
+        action.doExecute(task, request, actionListener);
+
+        assertEquals(ConnectorProtocolValidator.suppliedConnectorChangesMessage("token_url"), failure().getMessage());
+        verify(connectorAccessControlHelper, never()).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void testSuppliedOnATextEmbeddingModel_isChecked() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        stubStoredModel(null, null, FunctionName.TEXT_EMBEDDING);
+
+        action.doExecute(task, supplied(connector(oauth2())), actionListener);
+
+        assertEquals(ConnectorProtocolValidator.suppliedConnectorChangesMessage("token_url"), failure().getMessage());
     }
 
     @Test

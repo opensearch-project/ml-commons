@@ -74,7 +74,7 @@ public final class AuthConfigTestFixtures {
             + "\"scope\":[],\"audience\":[],\"token_request_params\":[],\"token_response\":[]}"
     );
 
-    /** An oauth2 configuration that passes the parse; every write site rejects it as an active type. */
+    /** An oauth2 configuration that passes every write check with the default token endpoint patterns. */
     public static OAuth2AuthConfig oauth2() {
         return oauth2Builder()
             .tokenUrl(TOKEN_URL)
@@ -85,8 +85,7 @@ public final class AuthConfigTestFixtures {
     }
 
     /**
-     * {@link #oauth2()} with every optional member set. The update and supplied-connector tests store it; they build
-     * it in code, since no request can write an active type in this version.
+     * {@link #oauth2()} with every optional member set; the update and supplied-connector tests store it.
      */
     public static OAuth2AuthConfig fullOauth2() {
         return oauth2()
@@ -108,8 +107,8 @@ public final class AuthConfigTestFixtures {
     }
 
     /**
-     * {@link #oauth2()} with credential {@code key} as its only reference. It stands for a stored configuration that
-     * fails validation, which no write of this release leaves behind.
+     * {@link #oauth2()} with credential {@code key} as its only reference. With a key the connector credential lacks, it
+     * is refused at every write site, and in the update tests it stands for a stored configuration that fails validation.
      */
     public static OAuth2AuthConfig oauth2Referencing(String key) {
         return oauth2().toBuilder().clientSecret("${credential." + key + "}").build();
