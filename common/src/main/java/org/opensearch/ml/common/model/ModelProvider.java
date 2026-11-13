@@ -113,6 +113,19 @@ public abstract class ModelProvider {
     public abstract Message parseToUnifiedMessage(String json);
 
     /**
+     * Parses a provider-specific message into one or more unified messages. Override when one
+     * message can carry several tool results, as Gemini's can. Defaults to
+     * {@link #parseToUnifiedMessage}.
+     *
+     * @param json JSON string in the provider's native message format
+     * @return the parsed messages; empty if the message has no content
+     */
+    public List<Message> parseToUnifiedMessages(String json) {
+        Message message = parseToUnifiedMessage(json);
+        return message == null ? List.of() : List.of(message);
+    }
+
+    /**
      * Maps standardized AgentInput to provider-specific request body parameters.
      * This is the main entry point that delegates to the specific mapping methods.
      *

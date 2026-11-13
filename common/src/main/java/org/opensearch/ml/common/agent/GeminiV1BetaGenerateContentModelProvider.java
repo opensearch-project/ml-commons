@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.agent;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,14 +23,20 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
+import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.DocumentContent;
 import org.opensearch.ml.common.input.execute.agent.ImageContent;
 import org.opensearch.ml.common.input.execute.agent.Message;
 import org.opensearch.ml.common.input.execute.agent.SourceType;
+import org.opensearch.ml.common.input.execute.agent.ToolCall;
 import org.opensearch.ml.common.input.execute.agent.VideoContent;
 import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
+
+import lombok.extern.log4j.Log4j2;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Model provider for Google Gemini generateContent API (v1beta).
@@ -50,6 +58,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
  * All parameters consistently use the ${parameters.} prefix for uniformity.
  */
 // todo: refactor the processing so providers have to only provide the constants
+@Log4j2
 public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     private static final String REQUEST_BODY_TEMPLATE =
@@ -78,6 +87,12 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         "{\"fileData\":{\"mimeType\":\"video/${parameters.video_format}\",\"fileUri\":\"${parameters.video_data}\"}}";
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"parts\":[${parameters.msg_content_array}]}";
+
+    private static final String USER_ROLE = "user";
+    private static final String MODEL_ROLE = "model";
+    private static final String ASSISTANT_ROLE = "assistant";
+    private static final String TOOL_ROLE = "tool";
+    static final String THOUGHT_SIGNATURE_FIELD = "thoughtSignature";
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -189,23 +204,21 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
 
     /**
      * Builds content array from content blocks using templates for Gemini generateContent API.
-     * Supports text, image, document, and video content types.
+     * Supports text, image, document, and video content types. Blank text is left out: Gemini rejects
+     * an empty text part, which AG-UI history produces for an assistant turn that only calls tools.
      */
     private String buildContentArrayFromBlocks(List<ContentBlock> blocks, MLAgentType type) {
         if (blocks == null || blocks.isEmpty()) {
             return "";
         }
 
-        StringBuilder contentArray = new StringBuilder();
-        boolean first = true;
+        List<String> parts = new ArrayList<>();
         for (ContentBlock block : blocks) {
-            if (!first) {
-                contentArray.append(",");
-            }
-            first = false;
-
             switch (block.getType()) {
                 case TEXT:
+                    if (type != MLAgentType.PLAN_EXECUTE_AND_REFLECT && (block.getText() == null || block.getText().isBlank())) {
+                        break;
+                    }
                     Map<String, Object> textParams = new HashMap<>();
                     // ToDo: Remove workaround after PER supports messages format
                     if (type == MLAgentType.PLAN_EXECUTE_AND_REFLECT) {
@@ -214,7 +227,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                         textParams.put("content_text", StringEscapeUtils.escapeJson(block.getText()));
                     }
                     StringSubstitutor textSubstitutor = new StringSubstitutor(textParams, "${parameters.", "}");
-                    contentArray.append(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
+                    parts.add(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
                     break;
                 case IMAGE:
                     ImageContent image = block.getImage();
@@ -224,7 +237,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     // Map SourceType to Gemini API source type
                     String imageTemplate = mapImageSourceTypeToGemini(image.getType());
                     StringSubstitutor imageSubstitutor = new StringSubstitutor(imageParams, "${parameters.", "}");
-                    contentArray.append(imageSubstitutor.replace(imageTemplate));
+                    parts.add(imageSubstitutor.replace(imageTemplate));
                     break;
                 case DOCUMENT:
                     DocumentContent document = block.getDocument();
@@ -232,7 +245,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     docParams.put("doc_format", document.getFormat());
                     docParams.put("doc_data", StringEscapeUtils.escapeJson(document.getData()));
                     StringSubstitutor docSubstitutor = new StringSubstitutor(docParams, "${parameters.", "}");
-                    contentArray.append(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
+                    parts.add(docSubstitutor.replace(DOCUMENT_CONTENT_TEMPLATE));
                     break;
                 case VIDEO:
                     VideoContent video = block.getVideo();
@@ -240,7 +253,7 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                     videoParams.put("video_format", video.getFormat());
                     videoParams.put("video_data", StringEscapeUtils.escapeJson(video.getData()));
                     StringSubstitutor videoSubstitutor = new StringSubstitutor(videoParams, "${parameters.", "}");
-                    contentArray.append(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
+                    parts.add(videoSubstitutor.replace(VIDEO_CONTENT_TEMPLATE));
                     break;
                 default:
                     // Skip unsupported content types
@@ -248,37 +261,140 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
             }
         }
 
-        return contentArray.toString();
+        return String.join(",", parts);
     }
 
     /**
-     * Builds messages array using templates for Gemini generateContent API.
-     * Converts messages to conversation history format.
+     * Builds the Gemini {@code contents} array from unified messages.
+     *
+     * "assistant" maps to "model"; "tool" maps to "user", with consecutive tool messages merged into
+     * one content as Gemini expects for parallel calls. Each functionCall part keeps its thought
+     * signature: Gemini thinking models reject a follow-up request that drops it.
      */
     private String buildMessagesArray(List<Message> messages, MLAgentType type) {
         if (messages == null || messages.isEmpty()) {
             return "";
         }
 
-        StringBuilder messagesArray = new StringBuilder();
-        boolean first = true;
+        List<String> contents = new ArrayList<>();
+        List<Map<String, Object>> pendingToolResults = new ArrayList<>();
+        List<ToolCall> lastToolCalls = List.of();
         for (Message message : messages) {
-            if (!first) {
-                messagesArray.append(",");
+            if (TOOL_ROLE.equals(message.getRole())) {
+                String name = functionNameFor(message.getToolCallId(), lastToolCalls, pendingToolResults.size());
+                pendingToolResults.add(functionResponsePart(message, name));
+                continue;
             }
-            first = false;
+            flushToolResults(pendingToolResults, contents);
+            if (ASSISTANT_ROLE.equals(message.getRole())) {
+                lastToolCalls = message.getToolCalls() == null ? List.of() : message.getToolCalls();
+            }
 
             String contentArray = buildContentArrayFromBlocks(message.getContent(), type);
+            if (ASSISTANT_ROLE.equals(message.getRole()) && message.getToolCalls() != null) {
+                StringBuilder parts = new StringBuilder(contentArray);
+                for (ToolCall toolCall : message.getToolCalls()) {
+                    if (parts.length() > 0) {
+                        parts.append(",");
+                    }
+                    parts.append(StringUtils.toJson(functionCallPart(toolCall)));
+                }
+                contentArray = parts.toString();
+            }
+            if (contentArray.isEmpty()) {
+                // Gemini rejects a content with no parts, e.g. a turn whose only text was blank.
+                continue;
+            }
             Map<String, Object> msgParams = new HashMap<>();
-            // Map role: Gemini uses "user" and "model" (not "assistant")
-            String geminiRole = "user".equals(message.getRole()) ? "user" : "model";
-            msgParams.put("msg_role", geminiRole);
+            msgParams.put("msg_role", USER_ROLE.equals(message.getRole()) ? USER_ROLE : MODEL_ROLE);
             msgParams.put("msg_content_array", contentArray);
             StringSubstitutor msgSubstitutor = new StringSubstitutor(msgParams, "${parameters.", "}");
-            messagesArray.append(msgSubstitutor.replace(MESSAGE_TEMPLATE));
+            contents.add(msgSubstitutor.replace(MESSAGE_TEMPLATE));
         }
+        flushToolResults(pendingToolResults, contents);
+        return String.join(",", contents);
+    }
 
-        return messagesArray.toString();
+    private static void flushToolResults(List<Map<String, Object>> pendingToolResults, List<String> contents) {
+        if (pendingToolResults.isEmpty()) {
+            return;
+        }
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("role", USER_ROLE);
+        content.put("parts", new ArrayList<>(pendingToolResults));
+        contents.add(StringUtils.toJson(content));
+        pendingToolResults.clear();
+    }
+
+    private static Map<String, Object> functionCallPart(ToolCall toolCall) {
+        Map<String, Object> functionCall = new LinkedHashMap<>();
+        functionCall.put("name", toolCall.getFunction() == null ? null : toolCall.getFunction().getName());
+        functionCall.put("args", parseArguments(toolCall.getFunction() == null ? null : toolCall.getFunction().getArguments()));
+        Map<String, Object> part = new LinkedHashMap<>();
+        part.put("functionCall", functionCall);
+        if (toolCall.getThoughtSignature() != null) {
+            part.put(THOUGHT_SIGNATURE_FIELD, toolCall.getThoughtSignature());
+        }
+        return part;
+    }
+
+    /**
+     * Gemini wants functionCall.args as an object. Kept as a Jackson tree, the mapper that serializes
+     * the request, so values go back exactly as the model sent them.
+     */
+    private static JsonNode parseArguments(String arguments) {
+        if (arguments == null || arguments.isBlank()) {
+            return StringUtils.MAPPER.createObjectNode();
+        }
+        // The arguments can hold user data, so only their length is logged.
+        try {
+            JsonNode parsed = StringUtils.MAPPER.readTree(arguments);
+            if (parsed != null && parsed.isObject()) {
+                return parsed;
+            }
+            log.warn("Tool call arguments are not a JSON object; sending empty args to Gemini. length={}", arguments.length());
+        } catch (Exception e) {
+            log.warn("Tool call arguments are not valid JSON; sending empty args to Gemini. length={}", arguments.length());
+        }
+        return StringUtils.MAPPER.createObjectNode();
+    }
+
+    /**
+     * Gemini matches a functionResponse to its call by function name. The name comes from the
+     * assistant call with the same id, else from the call at the same position (results follow
+     * their calls in order), else the id itself, which is the function name in Gemini history.
+     */
+    static String functionNameFor(String toolCallId, List<ToolCall> lastToolCalls, int position) {
+        for (ToolCall call : lastToolCalls) {
+            if (call != null && call.getFunction() != null && toolCallId != null && toolCallId.equals(call.getId())) {
+                return call.getFunction().getName();
+            }
+        }
+        if ((toolCallId == null || toolCallId.isBlank()) && position < lastToolCalls.size()) {
+            ToolCall call = lastToolCalls.get(position);
+            if (call != null && call.getFunction() != null && call.getFunction().getName() != null) {
+                return call.getFunction().getName();
+            }
+        }
+        if (toolCallId == null || toolCallId.isBlank()) {
+            throw new IllegalArgumentException("A tool result message has no tool_call_id and no matching tool call to answer");
+        }
+        return toolCallId;
+    }
+
+    private static Map<String, Object> functionResponsePart(Message toolResult, String name) {
+        String text = toolResult.getContent() == null
+            ? ""
+            : toolResult
+                .getContent()
+                .stream()
+                .filter(block -> block.getType() == ContentType.TEXT && block.getText() != null)
+                .map(ContentBlock::getText)
+                .collect(Collectors.joining("\n"));
+        Map<String, Object> functionResponse = new LinkedHashMap<>();
+        functionResponse.put("name", name);
+        functionResponse.put("response", Map.of("text", text));
+        return Map.of("functionResponse", functionResponse);
     }
 
     /**
@@ -325,9 +441,98 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         return null;
     }
 
+    /**
+     * Parses one Gemini content ({@code {"role": ..., "parts": [...]}}) into a unified message.
+     *
+     * Thought summaries ({@code "thought": true}) are skipped. Use {@link #parseToUnifiedMessages}
+     * for a turn holding several functionResponse parts. Gemini calls have no id, so the function
+     * name is the call id, matching GeminiV1BetaGenerateContentFunctionCalling.
+     *
+     * @return the message, or null if the content has no text, tool call or tool result
+     */
     @Override
     public Message parseToUnifiedMessage(String json) {
-        throw new UnsupportedOperationException("parseToUnifiedMessage is not yet supported for Gemini model provider");
+        List<Message> messages = parseToUnifiedMessages(json);
+        return messages.isEmpty() ? null : messages.get(0);
+    }
+
+    @Override
+    public List<Message> parseToUnifiedMessages(String json) {
+        Map<String, Object> content = StringUtils.fromJson(json, "response");
+        if (content == null || !(content.get("parts") instanceof List<?> parts)) {
+            return List.of();
+        }
+
+        List<ContentBlock> textBlocks = new ArrayList<>();
+        List<ToolCall> toolCalls = new ArrayList<>();
+        List<Message> toolResults = new ArrayList<>();
+        for (Object partObj : parts) {
+            if (!(partObj instanceof Map<?, ?> part)) {
+                continue;
+            }
+            if (part.get("functionCall") instanceof Map<?, ?> functionCall) {
+                // The name is both the call id and the function to run, so a call without one can't be used.
+                if (!(functionCall.get("name") instanceof String name) || name.isBlank()) {
+                    log.warn("Skipping a Gemini functionCall part that has no function name");
+                    continue;
+                }
+                Object args = functionCall.get("args");
+                String arguments = args == null ? "{}" : StringUtils.toJson(args);
+                Object signature = part.get(THOUGHT_SIGNATURE_FIELD);
+                toolCalls
+                    .add(
+                        new ToolCall(
+                            name,
+                            "function",
+                            new ToolCall.ToolFunction(name, arguments),
+                            signature == null ? null : signature.toString()
+                        )
+                    );
+            } else if (part.get("functionResponse") instanceof Map<?, ?> functionResponse) {
+                toolResults.add(toolResultMessage(functionResponse));
+            } else if (part.get("text") instanceof String text && !text.isEmpty() && !Boolean.TRUE.equals(part.get("thought"))) {
+                ContentBlock block = new ContentBlock();
+                block.setType(ContentType.TEXT);
+                block.setText(text);
+                textBlocks.add(block);
+            }
+        }
+
+        if (!toolResults.isEmpty()) {
+            return toolResults;
+        }
+        if (textBlocks.isEmpty() && toolCalls.isEmpty()) {
+            return List.of();
+        }
+        Message message = new Message();
+        message.setRole(ASSISTANT_ROLE);
+        message.setContent(textBlocks.isEmpty() ? null : textBlocks);
+        if (!toolCalls.isEmpty()) {
+            message.setToolCalls(toolCalls);
+        }
+        return List.of(message);
+    }
+
+    private static Message toolResultMessage(Map<?, ?> functionResponse) {
+        Object response = functionResponse.get("response");
+        String text;
+        if (response instanceof Map<?, ?> responseMap
+            && responseMap.size() == 1
+            && responseMap.get("text") instanceof String responseText) {
+            text = responseText;
+        } else {
+            text = response == null ? "" : StringUtils.toJson(response);
+        }
+        ContentBlock block = new ContentBlock();
+        block.setType(ContentType.TEXT);
+        block.setText(text);
+        Message message = new Message();
+        message.setRole(TOOL_ROLE);
+        if (functionResponse.get("name") instanceof String name && !name.isBlank()) {
+            message.setToolCallId(name);
+        }
+        message.setContent(List.of(block));
+        return message;
     }
 
 }

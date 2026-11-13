@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agui;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
@@ -579,6 +580,37 @@ public class AGUIInputConverterTest {
         assertEquals("call-123", convertedMessages.get(0).getToolCalls().get(0).getId());
         assertEquals("get_weather", convertedMessages.get(0).getToolCalls().get(0).getFunction().getName());
         assertEquals("{\"location\":\"NYC\"}", convertedMessages.get(0).getToolCalls().get(0).getFunction().getArguments());
+        assertNull(convertedMessages.get(0).getToolCalls().get(0).getThoughtSignature());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_ToolCallKeepsItsThoughtSignature() {
+        String aguiInputJson = """
+            {
+              "threadId": "thread-123",
+              "runId": "run-456",
+              "tools": [],
+              "messages": [
+                {
+                  "role": "assistant",
+                  "toolCalls": [
+                    {
+                      "id": "get_weather",
+                      "type": "function",
+                      "function": {"name": "get_weather", "arguments": "{}"},
+                      "thoughtSignature": "sig-abc"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInputJson, "agent-id", null, false);
+
+        @SuppressWarnings("unchecked")
+        List<Message> convertedMessages = (List<Message>) result.getAgentInput().getInput();
+        assertEquals("sig-abc", convertedMessages.get(0).getToolCalls().get(0).getThoughtSignature());
     }
 
     @Test

@@ -207,7 +207,8 @@ public class AGUIInputConverter {
     }
 
     /**
-     * Parses AG-UI tool calls array into ToolCall objects.
+     * Parses AG-UI tool calls array into ToolCall objects. An optional "thoughtSignature" on a tool call
+     * is kept, as with agent input messages: Gemini thinking models reject replayed calls without it.
      */
     private static List<ToolCall> parseToolCalls(JsonArray toolCallsArray) {
         List<ToolCall> toolCalls = new ArrayList<>();
@@ -229,7 +230,7 @@ public class AGUIInputConverter {
 
                 if (name != null && arguments != null) {
                     ToolCall.ToolFunction function = new ToolCall.ToolFunction(name, arguments);
-                    ToolCall toolCall = new ToolCall(id, type, function);
+                    ToolCall toolCall = new ToolCall(id, type, function, getStringField(toolCallObj, "thoughtSignature"));
                     toolCalls.add(toolCall);
                 }
             }
