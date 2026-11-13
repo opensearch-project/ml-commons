@@ -5,21 +5,31 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
+import java.net.InetAddress;
+import java.net.Proxy;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 
+import okhttp3.OkHttpClient;
 import okhttp3.sse.EventSource;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -92,7 +102,7 @@ public class HttpStreamingHandlerTest {
     }
 
     @Test
-    public void testStartStream_privateDestinationRejectedByDefaultPolicy() {
+    public void testStartStream_privateDestinationRejectedByDefault() {
         when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
             .thenReturn("http://10.0.0.1/v1/chat/completions");
         @SuppressWarnings("unchecked")
@@ -110,12 +120,14 @@ public class HttpStreamingHandlerTest {
     public void testStartStream_restrictedPatternAppliesWithPrivateIpEnabled() {
         when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
             .thenReturn("http://10.0.0.9/v1/chat/completions");
-        StreamingAddressPolicy policy = new StreamingAddressPolicy(
-            true,
+        ConnectorAddressValidator validator = new ConnectorAddressValidator(true, null, List.of(Pattern.compile("10\\.0\\.0\\.9")));
+        HttpStreamingHandler restricted = new HttpStreamingHandler(
+            LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS,
+            mockConnector,
+            mockConfig,
             null,
-            java.util.List.of(java.util.regex.Pattern.compile("10\\.0\\.0\\.9"))
+            validator
         );
-        HttpStreamingHandler restricted = new HttpStreamingHandler(LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, mockConnector, mockConfig, null, policy);
         @SuppressWarnings("unchecked")
         StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
 
@@ -124,5 +136,35 @@ public class HttpStreamingHandlerTest {
         org.mockito.ArgumentCaptor<Exception> failure = org.mockito.ArgumentCaptor.forClass(Exception.class);
         org.mockito.Mockito.verify(listener).onFailure(failure.capture());
         assertTrue(String.valueOf(failure.getValue().getCause()), failure.getValue().getCause().getMessage().contains("restricted ip address"));
+    }
+
+    @Test
+    public void testClientFor_connectsOnlyToTheValidatedAddresses() throws Exception {
+        InetAddress validated = InetAddress.getByName("203.0.113.1");
+
+        OkHttpClient client = handler.clientFor(new InetAddress[] { validated });
+
+        assertEquals(List.of(validated), client.dns().lookup("api.example"));
+        // everything else is the handler's client: direct, no redirects, its timeouts, its connection pool
+        assertEquals(Proxy.NO_PROXY, client.proxy());
+        assertFalse(client.followRedirects());
+        assertFalse(client.followSslRedirects());
+        assertEquals(30_000, client.connectTimeoutMillis());
+        assertEquals(30_000, client.readTimeoutMillis());
+        assertSame(handler.okHttpClient().connectionPool(), client.connectionPool());
+    }
+
+    @Test
+    public void testResolvedAddresses_equalOnlyForTheSameAddresses() throws Exception {
+        InetAddress a = InetAddress.getByName("203.0.113.1");
+        InetAddress b = InetAddress.getByName("203.0.113.2");
+
+        HttpStreamingHandler.ResolvedAddresses first = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { a, b });
+        HttpStreamingHandler.ResolvedAddresses same = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { a, b });
+        HttpStreamingHandler.ResolvedAddresses other = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { b });
+
+        assertEquals(first, same);
+        assertEquals(first.hashCode(), same.hashCode());
+        assertNotEquals(first, other);
     }
 }
