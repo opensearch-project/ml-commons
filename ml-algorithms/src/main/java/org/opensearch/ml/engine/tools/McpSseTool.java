@@ -61,7 +61,7 @@ public class McpSseTool implements WithModelTool {
         try {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get("input");
-            Map<String, Object> inputArgs = StringUtils.fromJson(input, "input");
+            Map<String, Object> inputArgs = StringUtils.fromJson(input == null || input.isBlank() ? "{}" : input, "input");
             McpSchema.CallToolResult result = mcpSyncClient.callTool(new McpSchema.CallToolRequest(this.name, inputArgs));
             String resultJson = StringUtils.toJson(result.content());
             listener.onResponse((T) resultJson);
