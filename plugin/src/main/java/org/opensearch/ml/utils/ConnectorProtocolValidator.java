@@ -27,7 +27,6 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
-import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
 import org.opensearch.ml.common.connector.auth.CredentialReference;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -383,11 +382,6 @@ public class ConnectorProtocolValidator {
             + oldest;
     }
 
-    /** The message for a configuration of a type that attaches credentials, which no release accepts yet. */
-    public static String typeNotSupportedMessage(ConnectorAuthType type) {
-        return "auth_config type [" + type.getValue() + "] is not supported in this version";
-    }
-
     /** The message for a request that carries {@code auth_config} without a credential and changes protected {@code field}. */
     public static String credentialRequiredMessage(String field) {
         return "Changing auth_config." + field + " requires credential in the same update";
@@ -401,7 +395,7 @@ public class ConnectorProtocolValidator {
     /**
      * Write-time checks of the {@code auth_config} of a connector that is created, registered inline, or supplied whole
      * by a transport caller. In order: the protocol takes {@code auth_config}, every node of the cluster supports it,
-     * the feature flag is on for a type that attaches credentials, and no such type is accepted in this version.
+     * and the feature flag is on for a type that attaches credentials.
      * <p>
      * A request without {@code auth_config} is not judged, and neither the flag nor the cluster state is read. A
      * configuration without a protocol is rejected like one on a protocol that does not take {@code auth_config};
@@ -429,8 +423,6 @@ public class ConnectorProtocolValidator {
         requireEveryNodeSupportsConnectorAuth(clusterState);
         if (authConfig.getType().isActive()) {
             requireConnectorAuthEnabled(mlFeatureEnabledSetting);
-            // No type that attaches credentials is accepted in this version.
-            throw new IllegalArgumentException(typeNotSupportedMessage(authConfig.getType()));
         }
     }
 
@@ -446,11 +438,11 @@ public class ConnectorProtocolValidator {
      * <p>
      * A request that neither carries {@code auth_config} nor changes the protocol is not judged. The resulting
      * configuration is the request's when it carries one and the stored one otherwise; a connector that ends up
-     * without one is not judged further. The checks then run in the {@link #validateAuth} order, with the
-     * protected-field check before the active-type rejection: a request that carries {@code auth_config} without a
-     * credential may not change a protected field or the referenced credential keys, or switch to a type that attaches
-     * credentials. The flag and the protected-field check apply only to a request that carries {@code auth_config};
-     * the version guard applies to every request that is judged, an identical re-send included.
+     * without one is not judged further. The checks then run in the {@link #validateAuth} order, followed by the
+     * protected-field check: a request that carries {@code auth_config} without a credential may not change a
+     * protected field or the referenced credential keys, or switch to a type that attaches credentials. The flag and
+     * the protected-field check apply only to a request that carries {@code auth_config}; the version guard applies to
+     * every request that is judged, an identical re-send included.
      *
      * @param stored the connector as fetched; never null
      * @param updatedProtocol the protocol the request sets, or null
@@ -490,10 +482,6 @@ public class ConnectorProtocolValidator {
                         : credentialRequiredMessage(changed.get())
                 );
             }
-        }
-        if (resulting.getType().isActive()) {
-            // No type that attaches credentials is accepted in this version.
-            throw new IllegalArgumentException(typeNotSupportedMessage(resulting.getType()));
         }
     }
 

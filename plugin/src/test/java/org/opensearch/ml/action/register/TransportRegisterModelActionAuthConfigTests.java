@@ -21,10 +21,12 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CON
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.http;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2Referencing;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oldNodeCluster;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.parameters;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -59,8 +61,9 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -164,6 +167,7 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
         when(clusterService.state()).thenReturn(clusterState(Version.CURRENT));
         when(clusterService.localNode()).thenReturn(localNode);
         when(localNode.getId()).thenReturn("node-1");
+        when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
         action = spy(
             new TransportRegisterModelAction(
                 transportService,
@@ -245,20 +249,23 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
         }
     }
 
-    public void testActiveType_isForbiddenWithTheFlagOffAndUnsupportedWithItOnBothBranches() {
+    public void testActiveType_isForbiddenWithTheFlagOffAndAcceptedWithItOnBothBranches() {
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
         for (String connectorId : BRANCHES) {
             assertRejected(inline(oauth2()), connectorId, RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
         }
+
+        clearInvocations(actionListener, mlModelManager, connectorAccessControlHelper);
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
-        for (String connectorId : BRANCHES) {
-            assertRejected(
-                inline(oauth2()),
-                connectorId,
-                RestStatus.BAD_REQUEST,
-                ConnectorProtocolValidator.typeNotSupportedMessage(ConnectorAuthType.OAUTH2)
-            );
-        }
+        register(inline(oauth2()), null);
+        verify(actionListener, never()).onFailure(any());
+        ArgumentCaptor<MLRegisterModelInput> handed = ArgumentCaptor.forClass(MLRegisterModelInput.class);
+        verify(mlModelManager).registerMLRemoteModel(eq(sdkClient), handed.capture(), isA(MLTask.class), eq(actionListener));
+        assertEquals(oauth2(), handed.getValue().getConnector().getAuthConfig());
+
+        register(inline(oauth2()), CONNECTOR_ID);
+        verify(connectorAccessControlHelper).validateConnectorAccess(any(), any(), eq(CONNECTOR_ID), any(), any(), any());
+        verify(actionListener, never()).onFailure(any());
     }
 
     public void testMixedCluster_noneIsRejectedOnBothBranches() {
@@ -269,6 +276,28 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
                 connectorId,
                 RestStatus.BAD_REQUEST,
                 ConnectorProtocolValidator.versionGuardMessage(OLD_VERSION)
+            );
+        }
+    }
+
+    public void testTokenUrlOutsideTheAllowlist_isRejectedOnBothBranchesAndForAHiddenModel() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        OAuth2AuthConfig outside = oauth2().toBuilder().tokenUrl("https://login.example.com/t").build();
+        for (String connectorId : BRANCHES) {
+            assertRejected(inline(outside), connectorId, RestStatus.BAD_REQUEST, TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
+        }
+        doReturn(true).when(action).isSuperAdminUserWrapper(any(), any());
+        assertRejected(inline(outside), null, RestStatus.BAD_REQUEST, TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
+    }
+
+    public void testReferenceToAMissingCredentialKey_isRejectedOnBothBranches() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        for (String connectorId : BRANCHES) {
+            assertRejected(
+                inline(oauth2Referencing("missing")),
+                connectorId,
+                RestStatus.BAD_REQUEST,
+                AuthConfigValidator.missingCredentialKeyMessage("missing")
             );
         }
     }

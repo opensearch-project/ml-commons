@@ -20,8 +20,10 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.ACTION_URL;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.SECRET_KEY;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.actions;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.documentOf;
@@ -59,8 +61,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
-import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -140,6 +142,7 @@ public class TransportCreateConnectorActionAuthConfigTests extends OpenSearchTes
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.state()).thenReturn(clusterState(Version.CURRENT));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
 
         action = new TransportCreateConnectorAction(
             transportService,
@@ -232,7 +235,7 @@ public class TransportCreateConnectorActionAuthConfigTests extends OpenSearchTes
         return documentOf(captor.getValue().dataObject());
     }
 
-    public void testActiveType_isForbiddenWithTheFlagOffAndUnsupportedWithItOn() throws IOException {
+    public void testActiveType_isForbiddenWithTheFlagOffAndCreatedWithItOn() throws IOException {
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
         execute(parse(withAuthConfig(oauth2())));
         assertRejected(RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
@@ -240,13 +243,31 @@ public class TransportCreateConnectorActionAuthConfigTests extends OpenSearchTes
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
         clearInvocations(actionListener);
         execute(parse(withAuthConfig(oauth2())));
-        assertRejected(RestStatus.BAD_REQUEST, ConnectorProtocolValidator.typeNotSupportedMessage(ConnectorAuthType.OAUTH2));
+        assertCreated();
+        JsonNode authConfig = writtenDocument().get("auth_config");
+        assertEquals(documentOf(oauth2()), authConfig);
+        assertEquals("${credential." + SECRET_KEY + "}", authConfig.get("client_secret").stringValue());
+    }
+
+    public void testTokenUrlOutsideTheAllowlist_isRejected() throws IOException {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        execute(parse(withAuthConfig(oauth2().toBuilder().tokenUrl("https://login.example.com/t").build())));
+        assertRejected(RestStatus.BAD_REQUEST, TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
     }
 
     public void testDryRun_runsTheChecksAndNeedsAProtocol() throws IOException {
+        String dryRun = "{\"dry_run\":true,\"protocol\":\"http\",\"auth_config\":" + documentOf(oauth2()) + "}";
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
+        execute(parse(dryRun));
+        assertRejected(RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+
+        clearInvocations(actionListener);
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
-        execute(parse("{\"dry_run\":true,\"protocol\":\"http\",\"auth_config\":" + documentOf(oauth2()) + "}"));
-        assertRejected(RestStatus.BAD_REQUEST, ConnectorProtocolValidator.typeNotSupportedMessage(ConnectorAuthType.OAUTH2));
+        execute(parse(dryRun));
+        ArgumentCaptor<MLCreateConnectorResponse> captor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        verify(actionListener, never()).onFailure(any());
+        assertEquals(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME, captor.getValue().getConnectorId());
 
         // Only a dry run may omit the protocol; a configuration still needs one, and is refused before any flag or state is read.
         clearInvocations(actionListener, clusterService, mlFeatureEnabledSetting);
