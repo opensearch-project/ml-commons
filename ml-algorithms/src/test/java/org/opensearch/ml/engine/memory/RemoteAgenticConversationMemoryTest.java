@@ -9,8 +9,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +27,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -34,17 +37,22 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.client.Client;
 
-public class RemoteAgenticConversationMemoryTest {
+public class RemoteAgenticConversationMemoryTest extends MLStaticMockBase {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -63,6 +71,9 @@ public class RemoteAgenticConversationMemoryTest {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    private AuthorizationProviderFactory authorizationProviderFactory;
 
     @Mock
     private Connector connector;
@@ -230,7 +241,7 @@ public class RemoteAgenticConversationMemoryTest {
     @Test
     public void testFactoryCreateWithNullMap() {
         RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
-        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
 
         ActionListener<RemoteAgenticConversationMemory> listener = mock(ActionListener.class);
         factory.create(null, listener);
@@ -241,7 +252,7 @@ public class RemoteAgenticConversationMemoryTest {
     @Test
     public void testFactoryCreateWithEmptyMap() {
         RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
-        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
 
         ActionListener<RemoteAgenticConversationMemory> listener = mock(ActionListener.class);
         factory.create(new HashMap<>(), listener);
@@ -252,7 +263,7 @@ public class RemoteAgenticConversationMemoryTest {
     @Test
     public void testFactoryCreateWithoutMemoryContainerId() {
         RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
-        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
 
         Map<String, Object> params = new HashMap<>();
         params.put("memory_id", "test_memory_id");
@@ -272,7 +283,7 @@ public class RemoteAgenticConversationMemoryTest {
     @Test
     public void testFactoryCreateWithoutEndpoint() {
         RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
-        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
 
         Map<String, Object> params = new HashMap<>();
         params.put("memory_id", "test_memory_id");
@@ -287,6 +298,52 @@ public class RemoteAgenticConversationMemoryTest {
         verify(listener).onFailure(captor.capture());
         assertTrue(captor.getValue() instanceof IllegalArgumentException);
         assertTrue(captor.getValue().getMessage().contains("Endpoint is required"));
+    }
+
+    @Test
+    public void testFactoryCreateSessionGivesTheExecutorTheAuthorizationProviderFactory() {
+        RemoteAgenticConversationMemory.Factory factory = new RemoteAgenticConversationMemory.Factory();
+        factory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
+        Map<String, Object> params = new HashMap<>();
+        params.put("memory_name", "Test Memory");
+        params.put("memory_container_id", "test_container_id");
+        params.put("endpoint", "https://example.com");
+        // No memory_id, so a session is created through an executor built for the inline connector.
+        RemoteConnectorExecutor executor = mock(RemoteConnectorExecutor.class);
+
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(eq("http"), any(Connector.class), eq(Connector.class))).thenReturn(executor);
+            factory.create(params, mock(ActionListener.class));
+        }
+
+        verify(executor).setAuthorizationProviderFactory(authorizationProviderFactory);
+        verify(executor).executeAction(eq("create_session"), any(MLInput.class), any());
+    }
+
+    @Test
+    public void testConstructorGivesTheExecutorTheAuthorizationProviderFactory() {
+        Connector connector = createMockConnector();
+        RemoteConnectorExecutor executor = mock(RemoteConnectorExecutor.class);
+
+        RemoteAgenticConversationMemory memory;
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class)).thenReturn(executor);
+            memory = new RemoteAgenticConversationMemory(
+                "test_conversation_id",
+                "test_memory_container_id",
+                "test_user",
+                connector,
+                scriptService,
+                clusterService,
+                client,
+                xContentRegistry,
+                mlFeatureEnabledSetting,
+                authorizationProviderFactory
+            );
+        }
+
+        assertSame(executor, memory.getExecutor());
+        verify(executor).setAuthorizationProviderFactory(authorizationProviderFactory);
     }
 
     @Test
@@ -313,7 +370,8 @@ public class RemoteAgenticConversationMemoryTest {
             clusterService,
             client,
             xContentRegistry,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            authorizationProviderFactory
         );
     }
 
@@ -327,7 +385,8 @@ public class RemoteAgenticConversationMemoryTest {
             clusterService,
             client,
             xContentRegistry,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            authorizationProviderFactory
         );
     }
 

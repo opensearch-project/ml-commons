@@ -63,12 +63,14 @@ import okhttp3.sse.EventSources;
 
 @Log4j2
 public class HttpStreamingHandler extends BaseStreamingHandler {
+    public static final String UNREADABLE_ERROR_BODY_MESSAGE = "SSE failure - unable to read error details";
 
     private final Connector connector;
     private OkHttpClient okHttpClient;
     private String llmInterface;
     private Map<String, String> parameters;
     private final ConnectorAddressValidator addressValidator;
+    private final Runnable onUnauthorized;
 
     public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
         this(llmInterface, connector, connectorClientConfig, null);
@@ -80,18 +82,23 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        this(llmInterface, connector, connectorClientConfig, parameters, ConnectorAddressValidator.DEFAULT);
+        this(llmInterface, connector, connectorClientConfig, parameters, ConnectorAddressValidator.DEFAULT, null);
     }
 
+    /**
+     * @param onUnauthorized run when the remote service answers 401, before the failure is reported; may be null
+     */
     public HttpStreamingHandler(
         String llmInterface,
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        ConnectorAddressValidator addressValidator
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
         this.connector = connector;
         this.addressValidator = addressValidator == null ? ConnectorAddressValidator.DEFAULT : addressValidator;
+        this.onUnauthorized = onUnauthorized;
         this.llmInterface = llmInterface;
         this.parameters = parameters;
 
@@ -278,16 +285,19 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 }
             } else if (response != null) {
                 // HTTP error (e.g., 400 Bad Request)
+                int statusCode = response.code();
+                RestStatus restStatus = RestStatus.fromCode(statusCode);
+                if (restStatus == null) {
+                    restStatus = RestStatus.INTERNAL_SERVER_ERROR;
+                }
+                if (restStatus == RestStatus.UNAUTHORIZED && onUnauthorized != null) {
+                    onUnauthorized.run();
+                }
                 try {
                     String errorBody = response.body() != null ? response.body().string() : "";
-                    int statusCode = response.code();
-                    RestStatus restStatus = RestStatus.fromCode(statusCode);
-                    if (restStatus == null) {
-                        restStatus = RestStatus.INTERNAL_SERVER_ERROR;
-                    }
                     streamActionListener.onFailure(new OpenSearchStatusException("Error from remote service: " + errorBody, restStatus));
                 } catch (IOException e) {
-                    streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
+                    streamActionListener.onFailure(new OpenSearchStatusException(UNREADABLE_ERROR_BODY_MESSAGE, restStatus));
                 }
             } else {
                 // Unknown failure

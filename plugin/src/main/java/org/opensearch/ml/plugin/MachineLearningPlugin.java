@@ -964,7 +964,8 @@ public class MachineLearningPlugin extends Plugin
         memoryFactoryMap.put(AgenticConversationMemory.TYPE, agenticConversationMemoryFactory);
 
         RemoteAgenticConversationMemory.Factory remoteAgenticConversationMemoryFactory = new RemoteAgenticConversationMemory.Factory();
-        remoteAgenticConversationMemoryFactory.init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting);
+        remoteAgenticConversationMemoryFactory
+            .init(scriptService, clusterService, client, xContentRegistry, mlFeatureEnabledSetting, authorizationProviderFactory);
         memoryFactoryMap.put(RemoteAgenticConversationMemory.TYPE, remoteAgenticConversationMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(

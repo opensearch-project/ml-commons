@@ -57,6 +57,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResp
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.SearchHit;
@@ -93,6 +94,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final AuthorizationProviderFactory authorizationProviderFactory;
 
     public RemoteAgenticConversationMemory(
         String memoryId,
@@ -103,7 +105,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         ClusterService clusterService,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        AuthorizationProviderFactory authorizationProviderFactory
     ) {
         this.conversationId = memoryId;
         this.memoryContainerId = memoryContainerId;
@@ -114,6 +117,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.authorizationProviderFactory = authorizationProviderFactory;
 
         // Initialize the executor for the connector
         this.executor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
@@ -124,6 +128,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         this.executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         this.executor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
         this.executor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
+        this.executor.setAuthorizationProviderFactory(authorizationProviderFactory);
 
         // Log creation for debugging/monitoring
         log
@@ -1149,19 +1154,22 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         private Client client;
         private NamedXContentRegistry xContentRegistry;
         private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+        private AuthorizationProviderFactory authorizationProviderFactory;
 
         public void init(
             ScriptService scriptService,
             ClusterService clusterService,
             Client client,
             NamedXContentRegistry xContentRegistry,
-            MLFeatureEnabledSetting mlFeatureEnabledSetting
+            MLFeatureEnabledSetting mlFeatureEnabledSetting,
+            AuthorizationProviderFactory authorizationProviderFactory
         ) {
             this.scriptService = scriptService;
             this.clusterService = clusterService;
             this.client = client;
             this.xContentRegistry = xContentRegistry;
             this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+            this.authorizationProviderFactory = authorizationProviderFactory;
         }
 
         @Override
@@ -1266,6 +1274,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
             executor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
             executor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
+            executor.setAuthorizationProviderFactory(authorizationProviderFactory);
 
             // Prepare parameters for the action
             Map<String, String> inputParams = new HashMap<>();
@@ -1332,7 +1341,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                         clusterService,
                         client,
                         xContentRegistry,
-                        mlFeatureEnabledSetting
+                        mlFeatureEnabledSetting,
+                        authorizationProviderFactory
                     )
                 );
         }
