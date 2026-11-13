@@ -27,6 +27,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.core.xcontent.XContentParserUtils;
+import org.opensearch.ml.action.agent.MLAgentRegistrationValidator;
 import org.opensearch.ml.action.agenticsearch.SearchTemplateFillToolValidator;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -159,12 +160,16 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         updateInput.setLastUpdateTime(now);
 
         MLAgent updatedAgent = updateInput.toMLAgent(originalAgent);
+        String toolSelectionError = MLAgentRegistrationValidator.validateToolSelection(updatedAgent);
+        if (toolSelectionError != null) {
+            throw new IllegalArgumentException(toolSelectionError);
+        }
 
         UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
-            .dataObject(updatedAgent)
+            .dataObject(updateInput.toUpdateDocument(updatedAgent))
             .build();
 
         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {

@@ -9,15 +9,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.junit.Before;
@@ -30,12 +35,14 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.MLToolSelectionConfig;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.search.SearchModule;
 
@@ -1081,5 +1088,181 @@ public class MLAgentUpdateInputTest {
             String mcpConnectorsJson = parsedInput.getParameters().get("mcp_connectors");
             assertTrue(mcpConnectorsJson.contains("connector-123"));
         });
+    }
+
+    private static MLAgent agentWithToolSelection(MLToolSelectionConfig toolSelection) {
+        return MLAgent
+            .builder()
+            .type(MLAgentType.FLOW.name())
+            .name("original-agent")
+            .description("original description")
+            .toolSelection(toolSelection)
+            .build();
+    }
+
+    @Test
+    public void testToolSelectionSurvivesAnUpdateThatDoesNotMentionIt() {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).pinnedTools(List.of("search")).build();
+        MLAgentUpdateInput input = MLAgentUpdateInput.builder().agentId("test-agent-id").description("new description").build();
+
+        MLAgent updated = input.toMLAgent(agentWithToolSelection(original));
+
+        assertEquals("new description", updated.getDescription());
+        assertEquals(original, updated.getToolSelection());
+    }
+
+    @Test
+    public void testUpdateChangesOnlyTheToolSelectionFieldsItSets() throws Exception {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).topK(5).pinnedTools(List.of("search")).build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"enabled\":false,\"top_k\":8}}", parsed -> {
+            MLToolSelectionConfig updated = parsed.toMLAgent(agentWithToolSelection(original)).getToolSelection();
+            assertEquals(Boolean.FALSE, updated.getEnabled());
+            assertEquals(Integer.valueOf(8), updated.getTopK());
+            assertEquals(List.of("search"), updated.getPinnedTools());
+        });
+    }
+
+    @Test
+    public void testUpdateCanAddToolSelectionToAnAgentWithout() {
+        MLToolSelectionConfig added = MLToolSelectionConfig.builder().enabled(true).build();
+        MLAgentUpdateInput input = MLAgentUpdateInput.builder().agentId("test-agent-id").toolSelection(added).build();
+        assertEquals(added, input.toMLAgent(agentWithToolSelection(null)).getToolSelection());
+    }
+
+    @Test
+    public void testNullResetsAToolSelectionFieldToTheDefault() throws Exception {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).topK(5).embeddingModelId("old-model").build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"embedding_model_id\":null,\"top_k\":7}}", parsed -> {
+            assertEquals(Set.of(MLToolSelectionConfig.EMBEDDING_MODEL_ID_FIELD), parsed.getToolSelectionResets());
+            MLToolSelectionConfig updated = parsed.toMLAgent(agentWithToolSelection(original)).getToolSelection();
+            assertNull(updated.getEmbeddingModelId());
+            assertEquals(Integer.valueOf(7), updated.getTopK());
+            assertEquals(Boolean.TRUE, updated.getEnabled());
+        });
+    }
+
+    @Test
+    public void testNullToolSelectionResetsTheWholeConfiguration() throws Exception {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).topK(5).build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":null}", parsed -> {
+            assertEquals(MLToolSelectionConfig.FIELDS, parsed.getToolSelectionResets());
+            assertNull(parsed.toMLAgent(agentWithToolSelection(original)).getToolSelection());
+        });
+    }
+
+    @Test
+    public void testResettingEverySetFieldLeavesNoConfiguration() throws Exception {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"enabled\":null}}", parsed -> {
+            assertNull(parsed.toMLAgent(agentWithToolSelection(original)).getToolSelection());
+        });
+    }
+
+    @Test
+    public void testNullOnAnUnknownToolSelectionFieldIsIgnored() throws Exception {
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"enabled\":false,\"not_a_field\":null}}", parsed -> {
+            assertTrue(parsed.getToolSelectionResets().isEmpty());
+            assertEquals(Boolean.FALSE, parsed.getToolSelection().getEnabled());
+        });
+    }
+
+    @Test
+    public void testUpdateDocumentIsTheAgentWhenNothingIsReset() {
+        MLAgentUpdateInput input = MLAgentUpdateInput.builder().agentId("a").description("d").build();
+        MLAgent updated = input.toMLAgent(agentWithToolSelection(null));
+        assertSame(updated, input.toUpdateDocument(updated));
+    }
+
+    @Test
+    public void testUpdateDocumentWritesResetFieldsAsExplicitNulls() throws Exception {
+        // Storage applies a partial update, which would keep any stored field the document leaves out.
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).topK(5).embeddingModelId("old-model").build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"embedding_model_id\":null}}", parsed -> {
+            String document = toJson(parsed.toUpdateDocument(parsed.toMLAgent(agentWithToolSelection(original))));
+            assertTrue(document, document.contains("\"tool_selection\":{\"enabled\":true,\"top_k\":5,\"embedding_model_id\":null}"));
+            assertTrue(document, document.contains("\"name\":\"original-agent\""));
+        });
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":null}", parsed -> {
+            String document = toJson(parsed.toUpdateDocument(parsed.toMLAgent(agentWithToolSelection(original))));
+            assertTrue(document, document.contains("\"tool_selection\":null"));
+        });
+    }
+
+    private static String toJson(ToXContentObject object) {
+        try {
+            return object.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString();
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    @Test
+    public void testToolSelectionResetsStreamAndAreWrittenToXContent() throws IOException {
+        MLAgentUpdateInput input = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .toolSelection(MLToolSelectionConfig.builder().topK(4).build())
+            .toolSelectionResets(Set.of(MLToolSelectionConfig.EMBEDDING_MODEL_ID_FIELD))
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_10_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_10_0);
+        assertEquals(Set.of(MLToolSelectionConfig.EMBEDDING_MODEL_ID_FIELD), new MLAgentUpdateInput(in).getToolSelectionResets());
+
+        assertTrue(serializationWithToXContent(input).contains("\"tool_selection\":{\"top_k\":4,\"embedding_model_id\":null}"));
+    }
+
+    @Test
+    public void testUpdateCanTurnToolSearchOffAndPinNothing() throws Exception {
+        MLToolSelectionConfig original = MLToolSelectionConfig.builder().enabled(true).pinnedTools(List.of("search")).build();
+        testParseFromJsonString("{\"agent_id\":\"a\",\"tool_selection\":{\"enabled\":false,\"pinned_tools\":[]}}", parsed -> {
+            MLToolSelectionConfig updated = parsed.toMLAgent(agentWithToolSelection(original)).getToolSelection();
+            assertEquals(Boolean.FALSE, updated.getEnabled());
+            assertEquals(List.of(), updated.getPinnedTools());
+        });
+    }
+
+    @Test
+    public void testToolSelectionStreamsFrom310AndIsAbsentBefore() throws IOException {
+        MLToolSelectionConfig toolSelection = MLToolSelectionConfig.builder().enabled(true).maxDynamicTools(4).build();
+        MLAgentUpdateInput input = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .name("agent")
+            .tenantId("tenant")
+            .toolSelection(toolSelection)
+            .build();
+
+        BytesStreamOutput current = new BytesStreamOutput();
+        current.setVersion(VERSION_3_10_0);
+        input.writeTo(current);
+        StreamInput currentIn = current.bytes().streamInput();
+        currentIn.setVersion(VERSION_3_10_0);
+        MLAgentUpdateInput read = new MLAgentUpdateInput(currentIn);
+        assertEquals(toolSelection, read.getToolSelection());
+        assertEquals("tenant", read.getTenantId());
+
+        BytesStreamOutput older = new BytesStreamOutput();
+        older.setVersion(VERSION_3_9_0);
+        input.writeTo(older);
+        StreamInput olderIn = older.bytes().streamInput();
+        olderIn.setVersion(VERSION_3_9_0);
+        MLAgentUpdateInput readOlder = new MLAgentUpdateInput(olderIn);
+        assertNull(readOlder.getToolSelection());
+        assertEquals("tenant", readOlder.getTenantId());
+        assertEquals(0, olderIn.available());
+    }
+
+    @Test
+    public void testToolSelectionIsWrittenToXContent() throws IOException {
+        MLAgentUpdateInput input = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .toolSelection(MLToolSelectionConfig.builder().enabled(true).build())
+            .build();
+        assertTrue(serializationWithToXContent(input).contains("\"tool_selection\":{\"enabled\":true}"));
     }
 }

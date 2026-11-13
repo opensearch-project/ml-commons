@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 5
+    "schema_version": 6
   },
   "properties": {
     "name": {
@@ -62,6 +62,29 @@
         "hooks": {
           "type": "object",
           "enabled": false
+        }
+      }
+    },
+    "tool_selection": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "pinned_tools": {
+          "type": "keyword"
+        },
+        "top_k": {
+          "type": "integer"
+        },
+        "min_pool_size": {
+          "type": "integer"
+        },
+        "max_dynamic_tools": {
+          "type": "integer"
+        },
+        "embedding_model_id": {
+          "type": "keyword"
         }
       }
     }

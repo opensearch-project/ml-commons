@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -37,6 +39,7 @@ import org.opensearch.ml.common.model.ModelProvider;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -81,6 +84,19 @@ public class MLChatAgentRunnerV2Test {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
+        // Real cluster settings, empty so tool search is off.
+        when(clusterService.getClusterSettings())
+            .thenReturn(
+                new ClusterSettings(
+                    settings,
+                    Set
+                        .of(
+                            MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_ENABLED,
+                            MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID,
+                            MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT
+                        )
+                )
+            );
         runner = new MLChatAgentRunnerV2(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
 
         // Setup basic agent configuration

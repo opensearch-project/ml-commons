@@ -49,6 +49,13 @@ public class MLAgentRegistrationValidator {
                 return;
             }
 
+            String toolSelectionError = validateToolSelection(agent);
+            if (toolSelectionError != null) {
+                log.error("Agent registration validation failed - tool selection error: {}", toolSelectionError);
+                listener.onFailure(new IllegalArgumentException(toolSelectionError));
+                return;
+            }
+
             // Validate context management configuration
             String configError = validateContextManagementConfiguration(agent);
             if (configError != null) {
@@ -123,6 +130,19 @@ public class MLAgentRegistrationValidator {
             log.error("Error during V2 agent memory validation", e);
             return "Failed to validate agent memory configuration: " + e.getMessage();
         }
+    }
+
+    /**
+     * Only V2 agents (CONVERSATIONAL_V2) read tool_selection; on any other type it would be silently ignored.
+     *
+     * @param agent the ML agent to validate
+     * @return validation error message if invalid, null if valid
+     */
+    public static String validateToolSelection(MLAgent agent) {
+        if (agent.getToolSelection() == null || MLAgentType.from(agent.getType()).isV2()) {
+            return null;
+        }
+        return "tool_selection is only supported for V2 agents (CONVERSATIONAL_V2). Found agent type: " + agent.getType();
     }
 
     /**

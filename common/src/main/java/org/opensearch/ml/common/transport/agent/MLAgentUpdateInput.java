@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
@@ -16,12 +17,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import org.opensearch.Version;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -31,6 +36,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.MLToolSelectionConfig;
 import org.opensearch.ml.common.agent.MLToolSpec;
 
 import lombok.Builder;
@@ -71,6 +77,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     private String appType;
     private Instant lastUpdateTime;
     private String tenantId;
+    private MLToolSelectionConfig toolSelection;
+    /** tool_selection fields given as null in the update: reset to the default. All of them for "tool_selection": null. */
+    private Set<String> toolSelectionResets;
 
     @Builder(toBuilder = true)
     public MLAgentUpdateInput(
@@ -87,7 +96,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Integer memoryWindowSize,
         String appType,
         Instant lastUpdateTime,
-        String tenantId
+        String tenantId,
+        MLToolSelectionConfig toolSelection,
+        Set<String> toolSelectionResets
     ) {
         this.agentId = agentId;
         this.name = name;
@@ -103,6 +114,8 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         this.appType = appType;
         this.lastUpdateTime = lastUpdateTime;
         this.tenantId = tenantId;
+        this.toolSelection = toolSelection;
+        this.toolSelectionResets = toolSelectionResets == null ? Set.of() : Set.copyOf(toolSelectionResets);
         validate();
     }
 
@@ -132,6 +145,13 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         lastUpdateTime = in.readOptionalInstant();
         appType = in.readOptionalString();
         tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+        toolSelectionResets = Set.of();
+        if (streamInputVersion.onOrAfter(VERSION_3_10_0)) {
+            if (in.readBoolean()) {
+                toolSelection = new MLToolSelectionConfig(in);
+            }
+            toolSelectionResets = Set.copyOf(in.readStringList());
+        }
     }
 
     @Override
@@ -185,6 +205,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (toolSelection != null || !toolSelectionResets.isEmpty()) {
+            builder.field(MLAgent.TOOL_SELECTION_FIELD, withResetsAsNull(toolSelection));
+        }
         builder.endObject();
         return builder;
     }
@@ -228,6 +251,13 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_10_0)) {
+            out.writeBoolean(toolSelection != null);
+            if (toolSelection != null) {
+                toolSelection.writeTo(out);
+            }
+            out.writeStringCollection(toolSelectionResets);
+        }
     }
 
     public static MLAgentUpdateInput parse(XContentParser parser) throws IOException {
@@ -245,6 +275,8 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         String appType = null;
         Instant lastUpdateTime = null;
         String tenantId = null;
+        MLToolSelectionConfig toolSelection = null;
+        Set<String> toolSelectionResets = new HashSet<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -321,6 +353,15 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case MLAgent.TOOL_SELECTION_FIELD:
+                    // A null resets to the default: the whole configuration, or the fields given as null.
+                    if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                        toolSelection = null;
+                        toolSelectionResets.addAll(MLToolSelectionConfig.FIELDS);
+                    } else {
+                        toolSelection = MLToolSelectionConfig.parse(parser, toolSelectionResets);
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -341,7 +382,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             memoryWindowSize,
             appType,
             lastUpdateTime,
-            tenantId
+            tenantId,
+            toolSelection,
+            toolSelectionResets
         );
     }
 
@@ -395,7 +438,66 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             .lastUpdateTime(lastUpdateTime)
             .appType(appType)
             .tenantId(tenantId)
+            .toolSelection(mergeToolSelection(originalAgent.getToolSelection()))
             .build();
+    }
+
+    /**
+     * Fields set in the update replace the stored ones, fields given as null go back to the default,
+     * and the rest are kept. No field left set means no configuration.
+     */
+    private MLToolSelectionConfig mergeToolSelection(MLToolSelectionConfig stored) {
+        if (toolSelection == null && toolSelectionResets.isEmpty()) {
+            return stored;
+        }
+        Map<String, Object> merged = stored == null ? new HashMap<>() : stored.toMap();
+        merged.keySet().removeAll(toolSelectionResets);
+        if (toolSelection != null) {
+            merged.putAll(toolSelection.toMap());
+        }
+        MLToolSelectionConfig result = MLToolSelectionConfig
+            .builder()
+            .enabled((Boolean) merged.get(MLToolSelectionConfig.ENABLED_FIELD))
+            .pinnedTools(stringList(merged.get(MLToolSelectionConfig.PINNED_TOOLS_FIELD)))
+            .topK((Integer) merged.get(MLToolSelectionConfig.TOP_K_FIELD))
+            .minPoolSize((Integer) merged.get(MLToolSelectionConfig.MIN_POOL_SIZE_FIELD))
+            .maxDynamicTools((Integer) merged.get(MLToolSelectionConfig.MAX_DYNAMIC_TOOLS_FIELD))
+            .embeddingModelId((String) merged.get(MLToolSelectionConfig.EMBEDDING_MODEL_ID_FIELD))
+            .build();
+        return result.isEmpty() ? null : result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> stringList(Object value) {
+        return (List<String>) value;
+    }
+
+    /** The configuration's set fields, plus null for each field this update resets. */
+    private Map<String, Object> withResetsAsNull(MLToolSelectionConfig config) {
+        Map<String, Object> fields = config == null ? new LinkedHashMap<>() : config.toMap();
+        for (String field : toolSelectionResets) {
+            fields.putIfAbsent(field, null);
+        }
+        return fields;
+    }
+
+    /**
+     * The document to write for {@code updatedAgent}. Storage applies it as a partial update, which keeps
+     * every stored field the document leaves out, so tool_selection fields reset by this update are
+     * written as explicit nulls.
+     */
+    public ToXContentObject toUpdateDocument(MLAgent updatedAgent) {
+        if (toolSelectionResets.isEmpty()) {
+            return updatedAgent;
+        }
+        return (builder, params) -> {
+            String agentJson = updatedAgent.toXContent(XContentFactory.jsonBuilder(), params).toString();
+            Map<String, Object> document = XContentHelper.convertToMap(XContentType.JSON.xContent(), agentJson, true);
+            MLToolSelectionConfig merged = updatedAgent.getToolSelection();
+            // No configuration left: null the whole block, which a partial update would otherwise keep.
+            document.put(MLAgent.TOOL_SELECTION_FIELD, merged == null ? null : withResetsAsNull(merged));
+            return builder.map(document);
+        };
     }
 
     private void validate() {
