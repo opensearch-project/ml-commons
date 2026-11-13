@@ -70,6 +70,7 @@ public class ConnectorActionTest {
     private static final String URL = "https://test.com";
     private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
     private static final String COHERE_URL = "https://api.cohere.ai/v1/embed";
+    private static final String VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
     private static final String BEDROCK_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke";
     private static final String SAGEMAKER_URL =
         "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/lmi-model-2023-06-24-01-35-32-275/invocations";
@@ -250,6 +251,38 @@ public class ConnectorActionTest {
         );
         action.validatePrePostProcessFunctions(Map.of());
         assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+    }
+
+    @Test
+    public void testValidatePrePostProcessFunctionsWithVoyageConnectorCorrectInBuiltFunctionsSuccess() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            null,
+            TEST_METHOD_HTTP,
+            VOYAGE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            MLPreProcessFunction.TEXT_DOCS_TO_VOYAGE_EMBEDDING_INPUT,
+            MLPostProcessFunction.VOYAGE_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+    }
+
+    @Test
+    public void testValidatePrePostProcessFunctionsWithVoyageConnectorWrongInBuiltFunctions() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            null,
+            TEST_METHOD_HTTP,
+            VOYAGE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertEquals(2, testAppender.getLogEvents().stream().filter(event -> event.getLevel() == Level.WARN).count());
     }
 
     @Test

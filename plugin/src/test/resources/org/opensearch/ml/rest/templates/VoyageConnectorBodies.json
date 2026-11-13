@@ -1,0 +1,26 @@
+{
+    "name": "Voyage AI Connector: %s",
+    "description": "The connector to Voyage AI",
+    "version": 1,
+    "protocol": "http",
+    "parameters": {
+      %s
+    },
+    "credential": {
+      "voyage_key": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://api.voyageai.com/v1/%s",
+        "headers": {
+          "content-type": "application/json",
+          "Authorization": "Bearer ${credential.voyage_key}"
+        },
+        "request_body": "%s",
+        "pre_process_function": "%s",
+        "post_process_function": "%s"
+      }
+    ]
+}
