@@ -17,9 +17,9 @@ See [Voyage AI's /v1/embeddings API docs](https://docs.voyageai.com/reference/em
 
 #### Request limits
 
-A single `/v1/embeddings` request accepts at most 1000 inputs. The total number of tokens in one request is also capped: 1M for `voyage-4-lite` and `voyage-3.5-lite`, 320K for `voyage-4` and `voyage-3.5`, and 120K for `voyage-4-large`, `voyage-3-large`, `voyage-code-3`, `voyage-finance-2` and `voyage-law-2`.
+A single `/v1/embeddings` request accepts at most 1000 inputs. The total number of tokens in one request is also capped: 1M for `voyage-4-lite` and `voyage-3.5-lite`, 320K for `voyage-4` and `voyage-3.5`, and 120K for `voyage-4-large`, `voyage-3-large`, `voyage-code-3`, `voyage-finance-2` and `voyage-law-2`. Voyage documents no cap for `voyage-code-4`.
 
-ML Commons splits the inputs of one call into requests by count only, using the `input_docs_processed_step_size` connector parameter (the blueprint sets it to 128). It does not count tokens. Lower the step size if your documents are long enough that 128 of them can exceed the token cap of your model; the Voyage API rejects a request over the cap with HTTP 400.
+When the inputs arrive as text documents (the `text_embedding` processor, or `text_docs` in the `_predict/TEXT_EMBEDDING` API), ML Commons splits them into requests by count only, using the `input_docs_processed_step_size` connector parameter (the blueprint sets it to 128). It does not count tokens, and the results come back in the order of the inputs. Lower the step size if your documents are long enough that 128 of them can exceed the token cap of your model; the Voyage API rejects a request over the cap with HTTP 400. If you send `parameters.input` directly to `_predict`, the whole list goes in one request, so keep it under the limits yourself.
 
 #### 1. Create a connector and model group
 
@@ -70,7 +70,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-`input_type` can only be `document` or `query`. Use `document` when you index text, and `query` for search queries.
+`input_type` can only be `document` or `query`. This connector embeds everything with the `input_type` you set in the parameters. Use `document` for the connector that indexes text. For search queries, create a second connector and model with `"input_type": "query"` and use that model id in your query-time embedding (for example in a `neural` query or a search request processor); the vectors from both are compatible.
 
 To use a smaller embedding, add `output_dimension` to the parameters and to the request body. It is only valid for the models that list other dimensions above; the other models return HTTP 400 for any value except 1024.
 
@@ -116,7 +116,7 @@ POST /_plugins/_ml/models/<MODEL_ID>/_deploy
 POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict
 {
   "parameters": {
-    "texts": ["Say this is a test"]
+    "input": ["Say this is a test"]
   }
 }
 ```

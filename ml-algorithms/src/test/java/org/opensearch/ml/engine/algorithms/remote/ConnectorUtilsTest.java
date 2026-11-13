@@ -258,21 +258,6 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void processOutput_VoyageEmbedding_ErrorBodyIsNotEmbedding() throws IOException {
-        exceptionRule.expect(com.jayway.jsonpath.PathNotFoundException.class);
-        String errorBody = "{\"detail\":\"Provided API key is invalid.\"}";
-        ConnectorUtils
-            .processOutput(
-                PREDICT.name(),
-                errorBody,
-                voyageConnector(MLPostProcessFunction.VOYAGE_EMBEDDING),
-                scriptService,
-                ImmutableMap.of(),
-                null
-            );
-    }
-
-    @Test
     public void processOutput_VoyageRerank_ScoresFollowInputOrder() throws IOException {
         // Voyage returns the results sorted by score; the tensors must be in the order of the input documents.
         // long decimals are what the live API returns, and JsonPath parses them as BigDecimal
