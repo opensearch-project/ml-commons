@@ -16,6 +16,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Proxy;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
@@ -135,7 +136,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
     @Override
     public void startStream(
-        String action,
+        URI endpoint,
+        Map<String, String> headers,
         Map<String, String> parameters,
         String payload,
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
@@ -143,7 +145,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         try {
             log.info("Creating SSE connection for streaming request");
             EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
-            Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
+            Request request = ConnectorUtils.buildOKHttpStreamingRequest(endpoint, headers, payload);
             InetAddress[] addresses = validateDestination(request.url());
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {

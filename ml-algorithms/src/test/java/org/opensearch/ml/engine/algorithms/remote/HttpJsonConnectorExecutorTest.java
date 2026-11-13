@@ -56,6 +56,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -1079,5 +1081,48 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             String.valueOf(f2.getValue().getCause()),
             f2.getValue().getCause().getMessage().contains("trusted connector private endpoint")
         );
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_passesTheCheckedUriAndTheConnectorHeaders() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/v1/${parameters.model}")
+            .headers(Map.of("x-model", "${parameters.model}"))
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("endpoint", "api.openai.com"))
+            .credential(Map.of("api_key", "test-key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt(PREDICT.name(), (keys, tenantId, l) -> l.onResponse(keys), null, ActionListener.wrap(r -> {}, e -> {}));
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        StreamingHandler handler = mock(StreamingHandler.class);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        Map<String, String> parameters = Map
+            .of("endpoint", "api.openai.com", "model", "gpt-4o", "_llm_interface", "openai/v1/chat/completions");
+        try (MockedStatic<StreamingHandlerFactory> factory = mockStatic(StreamingHandlerFactory.class)) {
+            factory.when(() -> StreamingHandlerFactory.createHandler(any(), any(), any(), any(), any(), any())).thenReturn(handler);
+
+            executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+        }
+
+        verify(handler)
+            .startStream(
+                org.mockito.ArgumentMatchers.eq(java.net.URI.create("https://api.openai.com/v1/gpt-4o")),
+                org.mockito.ArgumentMatchers.eq(Map.of("x-model", "gpt-4o")),
+                any(),
+                any(),
+                any()
+            );
     }
 }
