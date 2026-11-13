@@ -103,7 +103,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("no " + action + " action found");
         }
         RemoteInferenceInputDataSet inputData = processMLInput(action, mlInput, connector, parameters, scriptService);
-        escapeRemoteInferenceInputData(inputData);
+        escapeRemoteInferenceInputData(inputData, connector.getParameters());
         return inputData;
     }
 
@@ -179,33 +179,101 @@ public class ConnectorUtils {
         return mlInput;
     }
 
+    // Parameters that request templates interpolate inside a JSON string, so a value that happens to be a JSON
+    // object or array must still be escaped rather than spliced in raw - otherwise it ends the string early and
+    // either breaks the payload or injects structure into it. A connector that deliberately interpolates one of
+    // these in a raw JSON position can still opt out via no_escape_params, which is read from the connector's
+    // parameters as well as the request's.
+    //
+    // An entry has to meet two conditions: the key carries caller-supplied free text, which is what can plausibly
+    // arrive as a whole JSON document, and every request_body template under docs/ plus every built-in model
+    // provider template places it inside a JSON string. Only request_body templates count, because that is the
+    // only substitution this escaping feeds - a tool's "input" template is substituted by the agent framework
+    // instead, which is why question and query appear in raw positions there without being affected by this.
+    //
+    // Deliberately excluded because they do reach raw positions in request_body templates: inputs
+    // (sagemaker_connector_copali_blueprint.md:86 makes it the entire body), input, texts, messages, documents and
+    // the scalar knobs (dimensions, temperature, max_tokens, normalize, top_p, ...). That is also why the isJson
+    // shortcut below stays: those keys reach a raw position precisely because it waves them through, in 25+ places
+    // across docs/, and the V2 model providers rely on it for body. query is excluded for a different reason - its
+    // in-repo request_body uses are all string positions, but it is the natural name for a raw query DSL object
+    // and PPLTool templates already interpolate it raw, so the blast radius outside this repo is too wide.
+    //
+    // This is a mitigation, not a complete fix, for two reasons. The escaping runs before the template is known,
+    // so keys are all it can match on. And a key that is string-positioned in one template and raw in another
+    // cannot be served by either choice: inputs is exactly that - string-positioned in
+    // ml_inference_with_language_identification_ingest.md:155, raw in the copali blueprint - so it stays exposed.
+    // Closing that needs the decision to move to substitution time, where the position is known.
+    //
+    // Built over a HashSet rather than with Set.of: Set.of#contains throws on a null key, where the previous
+    // branch ordering reached HashSet#contains and returned false.
+    private static final Set<String> ALWAYS_ESCAPE_PARAMS = Collections
+        .unmodifiableSet(
+            new HashSet<>(
+                List
+                    .of(
+                        "system_prompt",
+                        "user_prompt",
+                        "prompt",
+                        "question",
+                        "system_instruction",
+                        "inputText",
+                        "text",
+                        "Text",
+                        "message",
+                        "context"
+                    )
+            )
+        );
+
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        escapeRemoteInferenceInputData(inputData, null);
+    }
+
+    /**
+     * @param connectorParameters the connector's own parameters, consulted for no_escape_params. The connector is
+     *                            where an operator declares which of its template positions are raw JSON, and those
+     *                            parameters are merged into the request only after escaping has run - so without
+     *                            this the opt-out would exist only for callers who repeat it on every request.
+     */
+    public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData, Map<String, String> connectorParameters) {
         if (inputData.getParameters() == null) {
             return;
         }
         Map<String, String> newParameters = new HashMap<>();
-        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();
-        if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
-            String[] keys = noEscapeParams.split(",");
-            for (String key : keys) {
-                noEscapParamSet.add(key.trim());
-            }
+        // Union rather than override: the connector declares its own raw positions, and a request adding one of its
+        // own must not silently switch those off.
+        addNoEscapeParams(inputData.getParameters().get(NO_ESCAPE_PARAMS), noEscapParamSet);
+        if (connectorParameters != null) {
+            addNoEscapeParams(connectorParameters.get(NO_ESCAPE_PARAMS), noEscapParamSet);
         }
         if (inputData.getParameters() != null) {
             inputData.getParameters().forEach((key, value) -> {
                 if (value == null) {
                     newParameters.put(key, null);
+                } else if (noEscapParamSet.contains(key)) {
+                    // the caller opted this parameter out of escaping
+                    newParameters.put(key, value);
+                } else if (ALWAYS_ESCAPE_PARAMS.contains(key)) {
+                    newParameters.put(key, escapeJson(value));
                 } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
-                } else if (!noEscapParamSet.contains(key)) {
-                    newParameters.put(key, escapeJson(value));
                 } else {
-                    newParameters.put(key, value);
+                    newParameters.put(key, escapeJson(value));
                 }
             });
             inputData.setParameters(newParameters);
+        }
+    }
+
+    private static void addNoEscapeParams(String noEscapeParams, Set<String> target) {
+        if (noEscapeParams == null || noEscapeParams.isEmpty()) {
+            return;
+        }
+        for (String key : noEscapeParams.split(",")) {
+            target.add(key.trim());
         }
     }
 
