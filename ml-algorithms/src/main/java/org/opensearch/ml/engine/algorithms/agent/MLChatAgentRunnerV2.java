@@ -8,7 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -90,8 +90,10 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         // Create tools once and reuse across all ReAct iterations (performance optimization)
         // Load ML tools first
         List<MLToolSpec> mlToolSpecs = AgentUtils.getMlToolSpecs(mlAgent, params);
-        Map<String, Tool> toolsMap = new HashMap<>();
-        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+        // Ordered maps keep the tools in their configured order, so the rendered tool definitions - the start of
+        // the prompt - are identical on every call, which prompt caching depends on.
+        Map<String, Tool> toolsMap = new LinkedHashMap<>();
+        Map<String, MLToolSpec> toolSpecMap = new LinkedHashMap<>();
 
         // Load MCP tools asynchronously, then create all tools
         AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
@@ -182,6 +184,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 List<String> toolNames = new ArrayList<>(toolsMap.keySet());
                 AgentUtils.addToolsToFunctionCalling(toolsMap, llmParams, toolNames, "");
             }
+            applyPromptCache(mlAgent, llmParams, messages, modelProvider);
 
             // Execute LLM call
             LLMSpec llmSpec = mlAgent.getLlm();

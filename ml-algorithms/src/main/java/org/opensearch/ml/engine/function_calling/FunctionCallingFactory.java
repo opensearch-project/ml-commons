@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.function_calling;
 
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_ANTHROPIC_V1_MESSAGES;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
@@ -29,6 +30,8 @@ public class FunctionCallingFactory {
                 return new BedrockConverseDeepseekR1FunctionCalling();
             case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
                 return new GeminiV1BetaGenerateContentFunctionCalling();
+            case LLM_INTERFACE_ANTHROPIC_V1_MESSAGES:
+                return new AnthropicMessagesFunctionCalling();
             default:
                 throw new IllegalArgumentException("Invalid _llm_interface");
         }
