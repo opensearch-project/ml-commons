@@ -17,6 +17,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 
 import java.net.InetAddress;
 import java.net.Proxy;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,12 +29,13 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLStaticMockBase;
 
 import okhttp3.OkHttpClient;
 import okhttp3.sse.EventSource;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
-public class HttpStreamingHandlerTest {
+public class HttpStreamingHandlerTest extends MLStaticMockBase {
 
     private HttpStreamingHandler handler;
     private Connector mockConnector;
@@ -103,12 +105,12 @@ public class HttpStreamingHandlerTest {
 
     @Test
     public void testStartStream_privateDestinationRejectedByDefault() {
-        when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-            .thenReturn("http://10.0.0.1/v1/chat/completions");
         @SuppressWarnings("unchecked")
-        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
 
-        handler.startStream("PREDICT", new java.util.HashMap<>(), "{\"messages\":[]}", listener);
+        handler.startStream(URI.create("http://10.0.0.1/v1/chat/completions"), Map.of(), new HashMap<>(), "{\"messages\":[]}", listener);
 
         org.mockito.ArgumentCaptor<Exception> failure = org.mockito.ArgumentCaptor.forClass(Exception.class);
         org.mockito.Mockito.verify(listener).onFailure(failure.capture());
@@ -118,8 +120,6 @@ public class HttpStreamingHandlerTest {
 
     @Test
     public void testStartStream_restrictedPatternAppliesWithPrivateIpEnabled() {
-        when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-            .thenReturn("http://10.0.0.9/v1/chat/completions");
         ConnectorAddressValidator validator = new ConnectorAddressValidator(true, null, List.of(Pattern.compile("10\\.0\\.0\\.9")));
         HttpStreamingHandler restricted = new HttpStreamingHandler(
             LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS,
@@ -129,13 +129,18 @@ public class HttpStreamingHandlerTest {
             validator
         );
         @SuppressWarnings("unchecked")
-        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
 
-        restricted.startStream("PREDICT", new java.util.HashMap<>(), "{\"messages\":[]}", listener);
+        restricted.startStream(URI.create("http://10.0.0.9/v1/chat/completions"), Map.of(), new HashMap<>(), "{\"messages\":[]}", listener);
 
         org.mockito.ArgumentCaptor<Exception> failure = org.mockito.ArgumentCaptor.forClass(Exception.class);
         org.mockito.Mockito.verify(listener).onFailure(failure.capture());
-        assertTrue(String.valueOf(failure.getValue().getCause()), failure.getValue().getCause().getMessage().contains("restricted ip address"));
+        assertTrue(
+            String.valueOf(failure.getValue().getCause()),
+            failure.getValue().getCause().getMessage().contains("restricted ip address")
+        );
     }
 
     @Test
@@ -166,5 +171,29 @@ public class HttpStreamingHandlerTest {
         assertEquals(first, same);
         assertEquals(first.hashCode(), same.hashCode());
         assertNotEquals(first, other);
+    }
+
+    @Test
+    public void testStartStream_buildsTheRequestFromTheGivenUriAndHeaders() {
+        URI endpoint = URI.create("http://10.0.0.1/v1/chat/completions");
+        Map<String, String> headers = Map.of("Authorization", "Bearer token-1");
+        String payload = "{\"messages\":[]}";
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
+        try (
+            org.mockito.MockedStatic<org.opensearch.ml.engine.algorithms.remote.ConnectorUtils> utils = mockStatic(
+                org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.class,
+                org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS)
+            )
+        ) {
+            handler.startStream(endpoint, headers, new HashMap<>(), payload, listener);
+
+            utils
+                .verify(
+                    () -> org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.buildOKHttpStreamingRequest(endpoint, headers, payload)
+                );
+        }
     }
 }

@@ -236,7 +236,15 @@ public interface Connector extends ToXContentObject, Writeable {
             + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
     }
 
-    default void validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
+    /**
+     * The URL of action resolved with the request parameters, after the checks of validateResolvedEndpoint. Build the
+     * request from the returned URI.
+     */
+    default URI resolveActionEndpoint(String action, Map<String, String> parameters, List<String> urlRegexes) {
+        return validateResolvedEndpoint(getActionEndpoint(action, parameters), urlRegexes);
+    }
+
+    default URI validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
         if (urlRegexes == null || urlRegexes.isEmpty()) {
             throw new IllegalArgumentException(
                 "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex."
@@ -281,7 +289,7 @@ public interface Connector extends ToXContentObject, Writeable {
             Pattern pattern = Pattern.compile(urlRegex);
             Matcher matcher = pattern.matcher(canonical);
             if (matcher.matches()) {
-                return;
+                return uri;
             }
         }
         logRejectedUrl(resolvedUrl);

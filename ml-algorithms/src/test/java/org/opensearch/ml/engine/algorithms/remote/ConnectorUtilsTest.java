@@ -10,8 +10,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
@@ -21,6 +19,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +57,8 @@ import okhttp3.Request;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 
 public class ConnectorUtilsTest {
+
+    private static final Map<String, String> JSON_HEADERS = Map.of("Content-Type", "application/json");
 
     @Mock
     ScriptService scriptService;
@@ -597,100 +598,17 @@ public class ConnectorUtilsTest {
         assertNull(inputData.getParameters());
     }
 
-    private static Connector userInfoConnector() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("https://api.example.com@evil.example/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        return HttpConnector.builder().name("test").protocol("http").version("1").actions(Arrays.asList(predictAction)).build();
-    }
-
-    @Test
-    public void buildSdkRequest_UserInfo_ThrowException() {
-        IllegalArgumentException e = org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> ConnectorUtils
-                    .buildSdkRequest(
-                        "PREDICT",
-                        userInfoConnector(),
-                        Collections.emptyMap(),
-                        "{}",
-                        software.amazon.awssdk.http.SdkHttpMethod.POST
-                    )
-            );
-        assertEquals("Connector URL must not contain user information", e.getMessage());
-    }
-
-    @Test
-    public void buildOKHttpStreamingRequest_UserInfo_ThrowException() {
-        Connector connector = spy(userInfoConnector());
-        when(connector.getDecryptedHeaders()).thenReturn(ImmutableMap.of());
-        IllegalArgumentException e = org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> ConnectorUtils
-                    .buildOKHttpStreamingRequest(PREDICT.name(), connector, ImmutableMap.of("input", "x"), "{\"input\": \"x\"}")
-            );
-        assertEquals("Connector URL must not contain user information", e.getMessage());
-    }
-
-    @Test
-    public void buildSdkRequest_InvalidEndpoint_ThrowException() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule
-            .expectMessage(
-                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration:"
-            );
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("invalid-endpoint")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        Connector connector = HttpConnector
-            .builder()
-            .name("test")
-            .protocol("http")
-            .version("1")
-            .actions(Arrays.asList(predictAction))
-            .build();
-        ConnectorUtils.buildSdkRequest("PREDICT", connector, Collections.emptyMap(), "{}", software.amazon.awssdk.http.SdkHttpMethod.POST);
-    }
-
     @Test
     public void testBuildOKHttpStreamingRequest_WithPayload() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .headers(ImmutableMap.of("Authorization", "Bearer token123"))
-            .build();
-
-        Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        connector = spy(connector);
-        when(connector.getDecryptedHeaders()).thenReturn(ImmutableMap.of("Authorization", "Bearer token123"));
-
-        Map<String, String> parameters = ImmutableMap.of("input", "test input");
+        URI endpoint = URI.create("http://test.com/mock");
         String payload = "{\"input\": \"test input\"}";
 
-        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils
+            .buildOKHttpStreamingRequest(endpoint, ImmutableMap.of("Authorization", "Bearer token123"), payload);
 
         assertEquals("POST", request.method());
-        assertEquals("http://test.com/mock", request.url().toString());
+        assertEquals(endpoint.toString(), request.url().toString());
+        assertEquals(4, request.headers().size());
         assertEquals("Bearer token123", request.header("Authorization"));
         assertEquals("", request.header("Accept-Encoding"));
         assertEquals("text/event-stream", request.header("Accept"));
@@ -703,51 +621,18 @@ public class ConnectorUtilsTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Content length is 0. Aborting request to remote model");
 
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-
-        Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        Map<String, String> parameters = new HashMap<>();
-        ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, null);
+        ConnectorUtils.buildOKHttpStreamingRequest(URI.create("http://test.com/mock"), ImmutableMap.of(), null);
     }
 
     @Test
     public void testBuildOKHttpStreamingRequest_NoHeaders() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-
-        Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .actions(Arrays.asList(predictAction))
-            .build();
-
-        Map<String, String> parameters = new HashMap<>();
+        URI endpoint = URI.create("http://test.com/mock");
         String payload = "{\"input\": \"test input\"}";
 
-        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils.buildOKHttpStreamingRequest(endpoint, null, payload);
 
         assertEquals("POST", request.method());
-        assertEquals("http://test.com/mock", request.url().toString());
+        assertEquals(endpoint.toString(), request.url().toString());
         assertNull(request.header("Authorization"));
         assertEquals("", request.header("Accept-Encoding"));
         assertEquals("text/event-stream", request.header("Accept"));
@@ -774,8 +659,9 @@ public class ConnectorUtilsTest {
 
         Map<String, String> parameters = ImmutableMap.of("model", "gpt-3.5", "input", "test input");
         String payload = "{\"input\": \"test input\"}";
+        URI endpoint = connector.resolveActionEndpoint(PREDICT.name(), parameters, List.of("^http://test\\.com/.*$"));
 
-        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils.buildOKHttpStreamingRequest(endpoint, null, payload);
 
         assertEquals("POST", request.method());
         assertEquals("http://test.com/mock/gpt-3.5", request.url().toString());
@@ -1206,21 +1092,25 @@ public class ConnectorUtilsTest {
 
     @Test
     public void buildSdkRequest_NovaModelCleansJson() throws IOException {
-        Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
         Map<String, String> parameters = Map.of("model", BEDROCK_NOVA_MODEL);
-        when(connector.getActionEndpoint("predict", parameters))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
-        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+        URI endpoint = URI.create("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
 
         String payloadWithNulls =
             "{\"singleEmbeddingParams\":{\"text\":{\"value\":\"hello\"},\"video\":{\"source\":{\"bytes\":null}},\"audio\":{\"source\":{\"bytes\":null}}}}";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, parameters, payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest(
+                "predict",
+                endpoint,
+                JSON_HEADERS,
+                parameters,
+                payloadWithNulls,
+                software.amazon.awssdk.http.SdkHttpMethod.POST
+            );
 
         // Verify request was created successfully
         assertNotNull(request);
+        assertEquals(endpoint, request.getUri());
         assertTrue(request.contentStreamProvider().isPresent());
 
         // Verify the payload was cleaned, null values removed
@@ -1231,18 +1121,15 @@ public class ConnectorUtilsTest {
 
     @Test
     public void testBuildSdkRequest_NovaMalformedJson() throws IOException {
-        Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
-        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+        URI endpoint = URI.create("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
 
         String malformedJson = "{ invalid json }";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, Map.of(), malformedJson, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest("predict", endpoint, JSON_HEADERS, Map.of(), malformedJson, software.amazon.awssdk.http.SdkHttpMethod.POST);
 
         assertNotNull(request);
+        assertEquals(endpoint, request.getUri());
         assertTrue(request.contentStreamProvider().isPresent());
 
         // Verify the payload was returned unchanged due to parsing exception
@@ -1252,18 +1139,22 @@ public class ConnectorUtilsTest {
 
     @Test
     public void testBuildSdkRequest_NovaMissingSingleEmbeddingParams() throws IOException {
-        Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
-        when(connector.getActionEndpoint("predict", Map.of()))
-            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
-        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+        URI endpoint = URI.create("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
 
         String jsonWithoutParams = "{\"taskType\":\"SINGLE_EMBEDDING\"}";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, Map.of(), jsonWithoutParams, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest(
+                "predict",
+                endpoint,
+                JSON_HEADERS,
+                Map.of(),
+                jsonWithoutParams,
+                software.amazon.awssdk.http.SdkHttpMethod.POST
+            );
 
         assertNotNull(request);
+        assertEquals(endpoint, request.getUri());
         assertTrue(request.contentStreamProvider().isPresent());
 
         // Verify the payload was returned unchanged since singleEmbeddingParams is null
@@ -1273,18 +1164,16 @@ public class ConnectorUtilsTest {
 
     @Test
     public void testBuildSdkRequest_NonNovaModelSkipsCleaning() throws IOException {
-        Connector connector = mock(Connector.class);
-        when(connector.getParameters()).thenReturn(Map.of("model", "gpt-3.5-turbo"));
-        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://api.openai.com/v1/chat/completions");
-        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+        URI endpoint = URI.create("https://api.openai.com/v1/chat/completions");
 
         String payloadWithNulls = "{\"video\":{\"source\":{\"bytes\":null}}}";
 
         SdkHttpFullRequest request = ConnectorUtils
-            .buildSdkRequest("predict", connector, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+            .buildSdkRequest("predict", endpoint, JSON_HEADERS, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
 
         // Verify request was created successfully
         assertNotNull(request);
+        assertEquals(endpoint, request.getUri());
         assertTrue(request.contentStreamProvider().isPresent());
 
         // Verify the payload was not cleaned, null values preserved
