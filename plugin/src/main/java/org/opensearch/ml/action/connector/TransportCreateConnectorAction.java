@@ -160,7 +160,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             // time, and then on every single request the connector serves.
             validateMutualTlsConfig(connector);
             // The credential is still plaintext here; it is encrypted just before the write.
-            AuthConfigValidator.validate(connector, AuthConfigValidator.keysOf(connector.getCredential()));
+            AuthConfigValidator
+                .validate(
+                    connector,
+                    AuthConfigValidator.keysOf(connector.getCredential()),
+                    mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                );
 
             User user = RestActionUtils.getUserContext(client);
             String connectorId = mlCreateConnectorInput.getConnectorId();

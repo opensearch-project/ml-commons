@@ -102,7 +102,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         .of(GRANT_TYPE_FIELD, CLIENT_ID_FIELD, CLIENT_SECRET_FIELD, "assertion", SCOPE_FIELD, AUDIENCE_FIELD);
     public static final String RESERVED_TOKEN_REQUEST_PARAM_PREFIX = "client_assertion";
 
-    private static final String HTTPS = "https";
+    static final String HTTPS = "https";
     private static final int DEFAULT_HTTPS_PORT = 443;
     private static final String PARAMETERS_PLACEHOLDER = "${parameters.";
     private static final String PARAMETERS_NOT_ALLOWED =

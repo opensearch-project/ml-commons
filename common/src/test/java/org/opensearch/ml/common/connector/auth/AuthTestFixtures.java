@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector.auth;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -15,6 +16,7 @@ import java.util.Map;
 
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -26,6 +28,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 
@@ -64,6 +67,11 @@ public final class AuthTestFixtures {
             + TOKEN_URL
             + "','client_auth_method':'client_secret_basic','client_id':'app','client_secret':'${credential.s}',"
             + "'audience':[],'token_request_params':{'x':[],'resource':'r'}}"
+    );
+
+    /** The token endpoint patterns of a node with default settings. */
+    public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
+        ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
     );
 
     /** The smallest oauth2 configuration the parse accepts, as a builder for variants. */
@@ -162,6 +170,16 @@ public final class AuthTestFixtures {
             .url(ACTION_URL)
             .requestBody("{}")
             .build();
+        return http(parameters, authConfig, List.of(predict), null);
+    }
+
+    /** {@link #http(OAuth2AuthConfig)} with the given parameters, actions and client config, each possibly null. */
+    public static HttpConnector http(
+        Map<String, String> parameters,
+        OAuth2AuthConfig authConfig,
+        List<ConnectorAction> actions,
+        ConnectorClientConfig clientConfig
+    ) {
         return HttpConnector
             .builder()
             .name("c")
@@ -169,7 +187,8 @@ public final class AuthTestFixtures {
             .protocol(ConnectorProtocols.HTTP)
             .parameters(parameters)
             .credential(Map.of("s", SECRET_LOOKING))
-            .actions(List.of(predict))
+            .actions(actions)
+            .connectorClientConfig(clientConfig)
             .authConfig(authConfig)
             .build();
     }
