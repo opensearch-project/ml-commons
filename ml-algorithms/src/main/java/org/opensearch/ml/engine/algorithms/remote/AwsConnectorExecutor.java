@@ -14,6 +14,7 @@ import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
+import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -114,23 +115,24 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
+            Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
 
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, POST);
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, GET);
                     break;
                 case "PUT":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, PUT);
                     break;
                 case "DELETE":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
@@ -178,8 +180,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The same checks as the non-streaming call; the Bedrock handler sends to the connector's region, not to this URI.
+            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
 
             String llmInterface = parameters.get(LLM_INTERFACE);
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
@@ -187,7 +189,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             validateLLMInterface(llmInterface);
 
             StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null, parameters);
-            handler.startStream(action, parameters, payload, actionListener);
+            // The Bedrock handler sends through the SDK client, which signs the request; it takes no request headers.
+            handler.startStream(endpoint, Map.of(), parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
             actionListener.onFailure(new MLException("Fail to execute streaming", e));

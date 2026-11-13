@@ -321,4 +321,53 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
             f2.getValue().getCause().getMessage().contains("trusted connector private endpoint")
         );
     }
+
+    @Test
+    public void invokeRemoteServiceStream_passesTheCheckedUriAndTheBearerHeader() throws Exception {
+        GoogleConnectorExecutor executor = new GoogleConnectorExecutor(storedLocationConnector());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://.*-aiplatform\\.googleapis\\.com/.*$"));
+        GoogleCredentialProvider credentialProvider = mock(GoogleCredentialProvider.class);
+        when(credentialProvider.getAccessToken()).thenReturn("token-1");
+        executor.setCredentialProvider(credentialProvider);
+        org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler handler = mock(
+            org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler.class
+        );
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
+        Map<String, String> parameters = Map.of("location", "us-central1", "_llm_interface", "gemini/v1beta/generateContent");
+        try (
+            MockedStatic<org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory> factory = mockStatic(
+                org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory.class
+            )
+        ) {
+            factory
+                .when(
+                    () -> org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory
+                        .createHandler(any(), any(), any(), any(), any(), any())
+                )
+                .thenReturn(handler);
+
+            executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"contents\":[]}", null, listener);
+        }
+
+        ArgumentCaptor<Map<String, String>> headers = ArgumentCaptor.forClass(Map.class);
+        verify(handler)
+            .startStream(
+                org.mockito.ArgumentMatchers
+                    .eq(
+                        java.net.URI
+                            .create(
+                                "https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1"
+                                    + "/publishers/google/models/gemini:generateContent"
+                            )
+                    ),
+                headers.capture(),
+                any(),
+                any(),
+                any()
+            );
+        assertEquals("Bearer token-1", headers.getValue().get("Authorization"));
+    }
 }

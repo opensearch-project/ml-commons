@@ -13,6 +13,7 @@ import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
+import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -133,8 +134,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist.
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
 
             // Resolve and validate the HTTP method up front, before minting a token.
             SdkHttpMethod method;
@@ -161,7 +162,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
             String token = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> credentialProvider().getAccessToken());
             connector.setAuthorizationValue("Bearer " + token);
 
-            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, method);
+            SdkHttpFullRequest request = ConnectorUtils
+                .buildSdkRequest(action, endpoint, connector.getHeadersWithRuntimeParameters(parameters), parameters, payload, method);
             ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
 
             ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
@@ -203,8 +205,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist.
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
 
             String llmInterface = parameters.get(LLM_INTERFACE);
             if (llmInterface == null) {
@@ -230,7 +232,7 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
                         connectorRestrictedIpPatterns
                     )
                 );
-            handler.startStream(action, parameters, payload, actionListener);
+            handler.startStream(endpoint, connector.getHeadersWithRuntimeParameters(parameters), parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute google_cloud streaming", e);
             actionListener.onFailure(new MLException("Fail to execute google_cloud streaming", e));
