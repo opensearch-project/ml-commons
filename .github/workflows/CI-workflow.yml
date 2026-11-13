@@ -1,22 +1,24 @@
 name: Build and Test ml-commons
-# This workflow is triggered on pull requests and push to any branches
+# Pull requests run on `pull_request`, so PR code never gets ML_ROLE or the model API keys
+# and needs no manual approval. Remote-model ITs skip themselves when the keys are absent.
+# Merge queue (`merge_group`) and `push` runs fetch the keys and run the full suite, so the
+# secret-using tests only ever run on reviewed code and still block a merge when they fail.
 on:
   push:
     branches:
       - 'main'
       - '[0-9]+.[0-9]+'
       - '[0-9]+.x'
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  Get-Require-Approval:
-    uses: ./.github/workflows/require-approval.yml
-
   Get-CI-Image-Tag:
     uses: opensearch-project/opensearch-build/.github/workflows/get-ci-image-tag.yml@main
     with:
@@ -39,7 +41,7 @@ jobs:
         run: ./gradlew spotlessCheck
 
   Build-ml-linux:
-    needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
+    needs: [Get-CI-Image-Tag, spotless]
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +49,7 @@ jobs:
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
+    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
     outputs:
       build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
@@ -66,6 +68,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        if: github.event_name != 'pull_request'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -77,13 +80,19 @@ jobs:
           
       - name: Build and Run Tests
         id: step-build-test-linux
+        env:
+          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
         run: |
           chown -R 1000:1000 `pwd`
-          su `id -un 1000` -c 'whoami && java -version && 
-                               export OPENAI_KEY=`aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text` &&
-                               export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
-                               echo "::add-mask::$OPENAI_KEY" &&
-                               echo "::add-mask::$COHERE_KEY" &&
+          su `id -un 1000` -c 'whoami && java -version &&
+                               if [ "$FETCH_MODEL_KEYS" = "true" ]; then
+                                 OPENAI_KEY=`aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text` && echo "::add-mask::$OPENAI_KEY" && export OPENAI_KEY &&
+                                 COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` && echo "::add-mask::$COHERE_KEY" && export COHERE_KEY;
+                               elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
+                                 echo "pull_request run: model API keys not loaded, remote-model ITs will skip";
+                               else
+                                 echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS" && exit 1;
+                               fi &&
                                echo "build and run tests" && ./gradlew build -x spotlessJava &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
                                echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava &&
@@ -111,7 +120,7 @@ jobs:
 
 
   Test-ml-linux-docker:
-    needs: [Get-Require-Approval, Build-ml-linux, spotless]
+    needs: [Build-ml-linux, spotless]
     strategy:
       fail-fast: false
       matrix:
@@ -119,11 +128,12 @@ jobs:
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
+    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        if: github.event_name != 'pull_request'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -187,12 +197,22 @@ jobs:
           sleep 90
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
+        env:
+          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
         run: |
           security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:${{ steps.genpass.outputs.password }} --insecure |grep opensearch-security|wc -l`
-          export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
-          export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
-          echo "::add-mask::$OPENAI_KEY"
-          echo "::add-mask::$COHERE_KEY"
+          if [ "$FETCH_MODEL_KEYS" = "true" ]; then
+            OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
+            echo "::add-mask::$OPENAI_KEY"
+            COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
+            echo "::add-mask::$COHERE_KEY"
+            export OPENAI_KEY COHERE_KEY
+          elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
+            echo "pull_request run: model API keys not loaded, remote-model ITs will skip"
+          else
+            echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS"
+            exit 1
+          fi
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
@@ -215,8 +235,8 @@ jobs:
         java: [21, 25]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
-    needs: [Get-Require-Approval, spotless]
-    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
+    needs: [spotless]
+    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
     runs-on: windows-latest
 
     steps:
@@ -226,6 +246,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        if: github.event_name != 'pull_request'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -238,11 +259,21 @@ jobs:
 
       - name: Build and Run Tests
         shell: bash
+        env:
+          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
         run: |
-          export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
-          export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
-          echo "::add-mask::$OPENAI_KEY"
-          echo "::add-mask::$COHERE_KEY"
+          if [ "$FETCH_MODEL_KEYS" = "true" ]; then
+            OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
+            echo "::add-mask::$OPENAI_KEY"
+            COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
+            echo "::add-mask::$COHERE_KEY"
+            export OPENAI_KEY COHERE_KEY
+          elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
+            echo "pull_request run: model API keys not loaded, remote-model ITs will skip"
+          else
+            echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS"
+            exit 1
+          fi
           ./gradlew.bat build -x spotlessJava
       - name: Publish to Maven Local
         run: |

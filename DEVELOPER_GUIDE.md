@@ -160,9 +160,9 @@ To debug code running in an integ test (which exercises the server from a separa
 The test runner JVM will start suspended and wait for a debugger to attach to `localhost:5005` before running the tests.
 
 ## GitHub CI/CD workflow Approval
-Effective October 2, 2024, maintainer approval will be required to run GitHub CI/CD workflow actions when pushing a pull request (PR).
+CI runs automatically on every pull request (PR) and no longer needs maintainer approval to run (GitHub may still ask a maintainer to approve the first run from a first-time contributor). PR runs have no access to the AWS role (used by the Bedrock tests) or the OpenAI and Cohere API keys, so integration tests that call a remote model skip themselves on PRs.
 
-This change is being implemented as part of our enhanced security measures. We appreciate your patience and cooperation.
+Those tests run with real credentials in the merge queue, after a maintainer has approved the PR and added it to the queue. If they fail, the PR is removed from the queue and is not merged. They also run on every push to `main` and the release branches.
 
 For a list of current maintainers, please refer to [MAINTAINERS.md](https://github.com/opensearch-project/ml-commons/blob/main/MAINTAINERS.md).
 
