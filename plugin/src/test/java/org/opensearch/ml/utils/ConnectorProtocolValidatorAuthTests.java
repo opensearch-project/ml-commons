@@ -46,7 +46,6 @@ import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.OAuth2AuthConfigBuilder;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -120,10 +119,6 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         return ConnectorProtocolValidator.versionGuardMessage(OLD_VERSION);
     }
 
-    private static String typeNotSupported() {
-        return ConnectorProtocolValidator.typeNotSupportedMessage(ConnectorAuthType.OAUTH2);
-    }
-
     private static String credentialRequired(String field) {
         return ConnectorProtocolValidator.credentialRequiredMessage(field);
     }
@@ -168,12 +163,12 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         verify(state, times(2)).get();
     }
 
-    public void testValidateAuth_activeType_isForbiddenWithTheFlagOffAndUnsupportedWithItOn() {
+    public void testValidateAuth_activeType_isForbiddenWithTheFlagOffAndPassesWithItOn() {
         when(setting.isConnectorAuthEnabled()).thenReturn(false);
         assertForbidden(() -> validateAuth(ConnectorProtocols.HTTP, oauth2()));
 
         when(setting.isConnectorAuthEnabled()).thenReturn(true);
-        assertEquals(typeNotSupported(), validateAuthFails(ConnectorProtocols.HTTP, oauth2()));
+        validateAuth(ConnectorProtocols.HTTP, oauth2());
     }
 
     public void testValidateAuth_configurationOnAProtocolWithoutAuthConfig_isRejected() {
@@ -210,7 +205,7 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         assertEquals(guardMessage(), validateAuthFails(ConnectorProtocols.HTTP, oauth2()));
         assertEquals(guardMessage(), validateAuthFails(ConnectorProtocols.HTTP, NONE));
         verify(setting, never()).isConnectorAuthEnabled();
-        // The flag before the type check.
+        // The flag last.
         when(state.get()).thenReturn(clusterState(Version.CURRENT));
         assertForbidden(() -> validateAuth(ConnectorProtocols.HTTP, oauth2()));
     }
@@ -244,7 +239,7 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         assertEquals(credentialRequired("token_url"), afterUpdateFails(http(NONE), null, oauth2(), null));
         // A connector without a configuration is the same baseline.
         assertEquals(credentialRequired("token_url"), afterUpdateFails(http(null), null, oauth2(), null));
-        assertEquals(typeNotSupported(), afterUpdateFails(http(NONE), null, oauth2(), CREDENTIAL));
+        afterUpdate(http(NONE), null, oauth2(), CREDENTIAL);
         // The flag comes before the credential requirement.
         when(setting.isConnectorAuthEnabled()).thenReturn(false);
         assertForbidden(() -> afterUpdate(http(NONE), null, oauth2(), null));
@@ -284,7 +279,7 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         OAuth2AuthConfig changeScope = scoped("b");
         assertEquals(credentialRequired("scope"), afterUpdateFails(stored, null, changeScope, new HashMap<>()));
         assertEquals(credentialRequired("scope"), afterUpdateFails(stored, null, changeScope, null));
-        assertEquals(typeNotSupported(), afterUpdateFails(stored, null, changeScope, CREDENTIAL));
+        afterUpdate(stored, null, changeScope, CREDENTIAL);
     }
 
     public void testAfterUpdate_protectedChange_namesTheField() {
@@ -295,8 +290,8 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
             ConnectorProtocolValidator.REFERENCED_KEYS_CREDENTIAL_REQUIRED_MESSAGE,
             afterUpdateFails(stored, null, fullOauth2().toBuilder().clientSecret("${credential.other}").build(), null)
         );
-        // token_response is not protected, so the request gets as far as the type check.
-        assertEquals(typeNotSupported(), afterUpdateFails(stored, null, fullOauth2().toBuilder().tokenResponse(ttl(1200)).build(), null));
+        // token_response is not protected.
+        afterUpdate(stored, null, fullOauth2().toBuilder().tokenResponse(ttl(1200)).build(), null);
     }
 
     public void testAfterUpdate_checkOrderInAMixedCluster() {
