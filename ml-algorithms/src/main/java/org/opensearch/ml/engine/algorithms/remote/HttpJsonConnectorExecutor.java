@@ -32,12 +32,12 @@ import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
-import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingAddressPolicy;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
@@ -196,7 +196,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     null,
                     super.getConnectorClientConfig(),
                     parameters,
-                    new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
+                    new ConnectorAddressValidator(
+                        connectorPrivateIpEnabled,
+                        connectorTrustedPrivateEndpoints,
+                        connectorRestrictedIpPatterns
+                    )
                 );
             handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {

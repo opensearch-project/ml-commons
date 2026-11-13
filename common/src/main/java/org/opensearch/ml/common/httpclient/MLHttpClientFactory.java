@@ -7,7 +7,6 @@ package org.opensearch.ml.common.httpclient;
 
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
-import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -125,35 +124,5 @@ public class MLHttpClientFactory {
                 connectorRestrictedIpPatterns
             );
         });
-    }
-
-    /**
-     * Applies the connector address policy that the non-streaming client enforces in
-     * {@link MLValidatableAsyncHttpClient#execute} to a request sent through another HTTP client: scheme and port,
-     * restricted IP patterns, private addresses only with {@code connectorPrivateIpEnabled}, and the trusted private
-     * endpoint patterns when configured.
-     *
-     * @throws IllegalArgumentException if the destination is not allowed
-     */
-    public static void validateConnectorEndpoint(
-        String url,
-        String scheme,
-        String host,
-        int port,
-        boolean connectorPrivateIpEnabled,
-        List<Pattern> connectorTrustedPrivateEndpoints,
-        List<Pattern> connectorRestrictedIpPatterns
-    ) {
-        MLValidatableAsyncHttpClient validator = new MLValidatableAsyncHttpClient(
-            null,
-            connectorPrivateIpEnabled,
-            connectorTrustedPrivateEndpoints == null ? Collections.emptyList() : connectorTrustedPrivateEndpoints,
-            connectorRestrictedIpPatterns == null ? Collections.emptyList() : connectorRestrictedIpPatterns
-        );
-        try {
-            validator.validate(url, scheme, host, port, connectorPrivateIpEnabled);
-        } catch (UnknownHostException e) {
-            throw new IllegalArgumentException("Remote inference host name could not be resolved: " + host, e);
-        }
     }
 }
