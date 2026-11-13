@@ -181,6 +181,20 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_VoyageRequestWithoutModel_FailsValidation() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Some parameter placeholder not filled in payload: model");
+        String requestBody =
+            "{ \"input\": ${parameters.input}, \"model\": \"${parameters.model}\", \"input_type\": \"${parameters.input_type}\" }";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "[\"hello\"]");
+        parameters.put("input_type", "document");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
     public void createPayload_InvalidJson() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
