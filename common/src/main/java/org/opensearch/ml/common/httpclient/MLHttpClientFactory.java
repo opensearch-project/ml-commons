@@ -144,14 +144,13 @@ public class MLHttpClientFactory {
         List<Pattern> connectorTrustedPrivateEndpoints,
         List<Pattern> connectorRestrictedIpPatterns
     ) {
-        MLValidatableAsyncHttpClient validator = new MLValidatableAsyncHttpClient(
-            null,
+        ConnectorAddressValidator validator = new ConnectorAddressValidator(
             connectorPrivateIpEnabled,
-            connectorTrustedPrivateEndpoints == null ? Collections.emptyList() : connectorTrustedPrivateEndpoints,
-            connectorRestrictedIpPatterns == null ? Collections.emptyList() : connectorRestrictedIpPatterns
+            connectorTrustedPrivateEndpoints,
+            connectorRestrictedIpPatterns
         );
         try {
-            validator.validate(url, scheme, host, port, connectorPrivateIpEnabled);
+            validator.validate(url, scheme, host, port);
         } catch (UnknownHostException e) {
             throw new IllegalArgumentException("Remote inference host name could not be resolved: " + host, e);
         }
