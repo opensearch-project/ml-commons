@@ -29,6 +29,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
@@ -104,7 +105,8 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_AG_UI_ENABLED,
                             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
                             ML_COMMONS_CONNECTOR_AUTH_ENABLED,
-                            ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX
+                            ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
+                            ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS
                         )
                 )
             );

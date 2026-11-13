@@ -825,6 +825,18 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    // The longest time a connector may use an OAuth2 access token from the node's cache, whatever lifetime the token
+    // endpoint reports. A lower value applies to tokens obtained after the change.
+    public static final Setting<Integer> ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.oauth2_token_cache_max_seconds",
+            3600,
+            60,
+            86400,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     /**
      * Operators may persist patterns that let the host position match path or query characters.
      * Rejecting those on restart would break the cluster, so this only warns.

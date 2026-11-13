@@ -46,6 +46,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
+import org.opensearch.ml.common.connector.auth.OAuth2Support;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -1507,6 +1508,14 @@ public class ConnectorUtilsTest {
 
         // Should not throw - tab is allowed
         ConnectorUtils.validateSubstitutedHeaders(headers);
+    }
+
+    @Test
+    public void testValidateSubstitutedHeaders_AcceptsTheLongestBearerToken() {
+        ConnectorUtils.validateSubstitutedHeaders(OAuth2Support.withBearer(null, "a".repeat(OAuth2Support.MAX_TOKEN_LENGTH)));
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        ConnectorUtils.validateSubstitutedHeaders(OAuth2Support.withBearer(null, "a".repeat(OAuth2Support.MAX_TOKEN_LENGTH + 1)));
     }
 
     @Test
