@@ -33,6 +33,9 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
@@ -495,6 +498,45 @@ public class ConnectorUtilsTest {
         IllegalArgumentException e = org.junit.Assert
             .assertThrows(IllegalArgumentException.class, () -> ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS));
         org.junit.Assert.assertTrue(e.getMessage().contains("/v1/"));
+    }
+
+    @Test
+    public void createConnectorAction_statusAndCancelUseTheBatchPredictHost() throws IOException {
+        String bedrockUrl = "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job";
+        Map<String, String> job = Map.of("id", "batch_1", "region", "us-west-2", "processedJobArn", "job-1");
+        for (ConnectorAction.ActionType type : List.of(BATCH_PREDICT_STATUS, CANCEL_BATCH_PREDICT)) {
+            URI openai = resolveDerivedAction(batchConnector("https://api.openai.com/v1/batches", Map.of()), type, job);
+            assertTrue(openai.toString(), openai.toString().startsWith("https://api.openai.com/v1/batches/batch_1"));
+
+            URI bedrock = resolveDerivedAction(batchConnector(bedrockUrl, Map.of("region", "us-east-1")), type, job);
+            assertEquals("bedrock.us-east-1.amazonaws.com", bedrock.getHost());
+
+            Connector regionNotStored = batchConnector(bedrockUrl, Map.of());
+            IllegalArgumentException notStored = org.junit.Assert
+                .assertThrows(IllegalArgumentException.class, () -> resolveDerivedAction(regionNotStored, type, job));
+            assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, notStored.getMessage());
+
+            Connector cycle = batchConnector(bedrockUrl, Map.of("region", "${parameters.zone}", "zone", "${parameters.region}"));
+            IllegalArgumentException cycleError = org.junit.Assert
+                .assertThrows(IllegalArgumentException.class, () -> ConnectorUtils.createConnectorAction(cycle, type));
+            assertEquals(Connector.URL_PARAMETER_CYCLE_MESSAGE, cycleError.getMessage());
+        }
+    }
+
+    /** A connector with one batch_predict action, read as batch status and cancel read it from the index. */
+    private static Connector batchConnector(String batchPredictUrl, Map<String, String> stored) throws IOException {
+        Map<String, Object> action = Map.of("action_type", "BATCH_PREDICT", "method", "POST", "url", batchPredictUrl, "request_body", "{}");
+        String json = gson
+            .toJson(Map.of("name", "test", "version", "1", "protocol", "http", "parameters", stored, "actions", List.of(action)));
+        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+        parser.nextToken();
+        return new HttpConnector("http", parser);
+    }
+
+    /** Adds the derived status or cancel action, as batch status and cancel do, and resolves it with the job's parameters. */
+    private static URI resolveDerivedAction(Connector connector, ConnectorAction.ActionType type, Map<String, String> job) {
+        connector.addAction(ConnectorUtils.createConnectorAction(connector, type));
+        return connector.resolveActionEndpoint(type.name(), job, List.of(".*"));
     }
 
     @Test
