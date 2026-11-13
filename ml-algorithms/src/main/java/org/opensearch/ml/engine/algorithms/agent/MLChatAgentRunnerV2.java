@@ -8,15 +8,22 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -80,6 +87,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         ActionListener<AgentLogicResult> listener
     ) {
         String agentId = params.get(AGENT_ID_LOG_FIELD);
+        // Completes the run at most once, whichever path reports first.
+        ActionListener<AgentLogicResult> runListener = ActionListener.notifyOnce(listener);
         int maxIterations = getMaxIterations(params);
         // Create mutable list for ReAct iterations (will append tool results)
         List<Message> messages = new ArrayList<>(conversationHistory);
@@ -93,13 +102,21 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         Map<String, Tool> toolsMap = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
 
-        // Load MCP tools asynchronously, then create all tools
-        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
-            mlToolSpecs.addAll(mcpTools);
+        // Load MCP tools asynchronously, then create all tools. The result is null if MCP loading itself failed.
+        Consumer<AgentUtils.McpToolLoadResult> startLoop = mcpResult -> {
+            if (mcpResult != null) {
+                mlToolSpecs.addAll(mcpResult.getToolSpecs());
+            }
             try {
                 AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
             } catch (Exception ex) {
                 log.warn("Failed to create some tools, continuing with available tools. agentId={}", agentId, ex);
+            }
+            // Checked once tools are created: a configured tool that couldn't be created isn't another tool.
+            Exception failure = mcpResult == null ? null : mcpLoadFailure(mcpResult, toolsMap.isEmpty(), agentId);
+            if (failure != null) {
+                runListener.onFailure(failure);
+                return;
             }
 
             // Execute first LLM call with pre-created tools
@@ -114,32 +131,113 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 accumulatedTokenUsage,
                 toolsMap,
                 toolInteractionJsonList,
-                listener
+                runListener
             );
-        }, e -> {
-            // Continue without MCP tools if they fail
-            log.warn("MCP tools failed to load, continuing with backend tools only. agentId={}", agentId, e);
-            try {
-                AgentUtils.createTools(toolFactories, params, mlToolSpecs, toolsMap, toolSpecMap, mlAgent);
-            } catch (Exception ex) {
-                log.warn("Failed to create some tools, continuing with available tools. agentId={}", agentId, ex);
+        };
+        // Not ActionListener.wrap: an exception from the loop would reach onFailure and call the LLM again.
+        loadMcpTools(mlAgent, new ActionListener<>() {
+            @Override
+            public void onResponse(AgentUtils.McpToolLoadResult result) {
+                runLoop(result);
             }
 
-            // Execute first LLM call with pre-created tools
-            executeLLMCall(
-                mlAgent,
-                params,
-                messages,
-                modelProvider,
-                functionCalling,
-                iteration,
-                maxIterations,
-                accumulatedTokenUsage,
-                toolsMap,
-                toolInteractionJsonList,
-                listener
+            @Override
+            public void onFailure(Exception e) {
+                // Not expected: per-connector failures arrive in the result. Kept as before.
+                log.warn("MCP tools failed to load, continuing with backend tools only. agentId={}", agentId, e);
+                runLoop(null);
+            }
+
+            // This runs inside the MCP loader's callback: a throw that escaped would go back to the loader,
+            // which can't complete the run, so the request would hang. Throwable, not Exception: an Error
+            // (e.g. NoClassDefFoundError from a tool factory) would escape the same way.
+            private void runLoop(AgentUtils.McpToolLoadResult result) {
+                try {
+                    startLoop.accept(result);
+                } catch (Throwable t) {
+                    log.error("Failed to run the agent loop. agentId={}", agentId, t);
+                    runListener.onFailure(t instanceof Exception e ? e : new RuntimeException("Failed to run the agent loop", t));
+                }
+            }
+        });
+    }
+
+    /** Loads the agent's MCP tools, reporting per-connector failures. Protected so tests can stub it. */
+    protected void loadMcpTools(MLAgent mlAgent, ActionListener<AgentUtils.McpToolLoadResult> listener) {
+        AgentUtils.getMcpToolSpecsWithFailures(mlAgent, client, sdkClient, encryptor, listener);
+    }
+
+    /**
+     * Some connectors failing is tolerated, as before. If every connector failed and the agent has
+     * no other tools, the run fails instead of letting the model answer with no tools: with the failures'
+     * shared 4xx status when each is a client or configuration error (such as a deleted connector), 400 if
+     * their 4xx statuses differ, else 502.
+     *
+     * @return the exception to fail the run with, or null to continue
+     */
+    Exception mcpLoadFailure(AgentUtils.McpToolLoadResult result, boolean noOtherTools, String agentId) {
+        Map<String, AgentUtils.McpConnectorFailure> failed = result.getFailedConnectors();
+        if (failed.isEmpty()) {
+            return null;
+        }
+        String failures = describeFailures(failed, true);
+        if (result.allConnectorsFailed() && noOtherTools) {
+            log
+                .error(
+                    "No MCP connector could be loaded and the agent has no other tools; failing the run. agentId={}, {}",
+                    agentId,
+                    failures
+                );
+            // A missing or non-MCP connector keeps its message, which names only the connector id. Causes from the
+            // remote MCP call are reduced to their type and status: they can name internal hosts. The log above has them.
+            return new OpenSearchStatusException(
+                "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: "
+                    + describeFailures(failed, false),
+                runFailureStatus(failed.values())
             );
-        }));
+        }
+        log
+            .warn(
+                "Some MCP connectors failed to load; continuing with the tools that did. agentId={}, failed {} of {}: {}",
+                agentId,
+                result.getFailedCount(),
+                result.getConfiguredConnectors(),
+                failures
+            );
+        return null;
+    }
+
+    /** The failures' status if they all share one 4xx status, 400 if they are all other 4xx, else 502. */
+    private static RestStatus runFailureStatus(Collection<AgentUtils.McpConnectorFailure> failures) {
+        if (!failures.stream().allMatch(AgentUtils.McpConnectorFailure::isClientError)) {
+            return RestStatus.BAD_GATEWAY;
+        }
+        Set<RestStatus> statuses = failures.stream().map(AgentUtils.McpConnectorFailure::getStatus).collect(Collectors.toSet());
+        return statuses.size() == 1 ? statuses.iterator().next() : RestStatus.BAD_REQUEST;
+    }
+
+    /**
+     * "id (cause)" per failed connector, sorted by id.
+     *
+     * @param withMessages true for the full "ExceptionType: message" cause, false for what the caller may see: the
+     *                     message of a missing or non-MCP connector, else the exception type (and status for a 4xx)
+     */
+    private static String describeFailures(Map<String, AgentUtils.McpConnectorFailure> failedConnectors, boolean withMessages) {
+        return new TreeMap<>(failedConnectors)
+            .entrySet()
+            .stream()
+            .map(entry -> entry.getKey() + " (" + describeFailure(entry.getValue(), withMessages) + ")")
+            .collect(Collectors.joining(", "));
+    }
+
+    private static String describeFailure(AgentUtils.McpConnectorFailure failure, boolean withMessage) {
+        if (withMessage) {
+            return failure.toString();
+        }
+        if (failure.isMessageReturnable()) {
+            return failure.getMessage() + ", " + failure.getStatus().getStatus();
+        }
+        return failure.isClientError() ? failure.getType() + ", " + failure.getStatus().getStatus() : failure.getType();
     }
 
     /**

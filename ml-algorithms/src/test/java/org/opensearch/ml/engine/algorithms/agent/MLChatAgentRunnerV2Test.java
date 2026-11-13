@@ -14,15 +14,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -421,5 +428,247 @@ public class MLChatAgentRunnerV2Test {
             }
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    // ==================== MCP connectors that fail to load ====================
+
+    private static AgentUtils.McpToolLoadResult mcpResult(
+        int configured,
+        Map<String, AgentUtils.McpConnectorFailure> failed,
+        List<MLToolSpec> tools
+    ) {
+        return new AgentUtils.McpToolLoadResult(tools, configured, failed.size(), failed);
+    }
+
+    /** A server-side failure, from "ExceptionType: message" or a bare exception type. */
+    private static AgentUtils.McpConnectorFailure down(String cause) {
+        int colon = cause.indexOf(": ");
+        return colon < 0
+            ? new AgentUtils.McpConnectorFailure(cause, null, RestStatus.INTERNAL_SERVER_ERROR)
+            : new AgentUtils.McpConnectorFailure(cause.substring(0, colon), cause.substring(colon + 2), RestStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /** A client or configuration failure with the given status. */
+    private static AgentUtils.McpConnectorFailure misconfigured(RestStatus status) {
+        return new AgentUtils.McpConnectorFailure("OpenSearchStatusException", "Failed to find connector", status);
+    }
+
+    @Test
+    public void testMcpLoadFailure_NoFailuresContinues() {
+        assertNull(runner.mcpLoadFailure(mcpResult(2, Map.of(), List.of()), true, "a"));
+    }
+
+    @Test
+    public void testMcpLoadFailure_AllFailedAndNoOtherToolsFailsTheRun() {
+        Exception e = runner
+            .mcpLoadFailure(
+                mcpResult(2, Map.of("c2", down("SocketTimeoutException"), "c1", down("ConnectException: Connection refused")), List.of()),
+                true,
+                "a"
+            );
+        assertTrue(e instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) e).status());
+        assertEquals(
+            "None of the agent's MCP connectors could be loaded, and it has no other tools. "
+                + "Failed connectors: c1 (ConnectException), c2 (SocketTimeoutException)",
+            e.getMessage()
+        );
+    }
+
+    @Test
+    public void testMcpLoadFailure_ExceptionMessagesAreLoggedButNotReturned() {
+        List<String> logged = new ArrayList<>();
+        AbstractAppender appender = new AbstractAppender("McpLoadFailureAppender", null, PatternLayout.createDefaultLayout(), false) {
+            @Override
+            public void append(LogEvent event) {
+                logged.add(event.getMessage().getFormattedMessage());
+            }
+        };
+        appender.start();
+        Logger logger = (Logger) LogManager.getLogger(MLChatAgentRunnerV2.class);
+        logger.addAppender(appender);
+        try {
+            Exception e = runner
+                .mcpLoadFailure(mcpResult(1, Map.of("c1", down("UnknownHostException: internal-host.example")), List.of()), true, "a");
+
+            assertTrue(e.getMessage().endsWith("Failed connectors: c1 (UnknownHostException)"));
+            assertFalse(e.getMessage().contains("internal-host.example"));
+            assertTrue(logged.stream().anyMatch(line -> line.contains("c1 (UnknownHostException: internal-host.example)")));
+        } finally {
+            logger.removeAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
+    public void testMcpLoadFailure_AllFailedButOtherToolsContinue() {
+        assertNull(runner.mcpLoadFailure(mcpResult(1, Map.of("c1", down("ConnectException")), List.of()), false, "a"));
+    }
+
+    @Test
+    public void testMcpLoadFailure_PartialFailureContinues() {
+        // ml-commons' long-standing design: one bad MCP server doesn't fail the agent.
+        assertNull(runner.mcpLoadFailure(mcpResult(2, Map.of("c1", down("ConnectException")), List.of()), true, "a"));
+    }
+
+    /** A spy of the runner whose MCP loading returns the given result. */
+    private MLChatAgentRunnerV2 runnerWithMcpResult(AgentUtils.McpToolLoadResult result) {
+        MLChatAgentRunnerV2 spyRunner = spy(runner);
+        doAnswer(invocation -> {
+            ActionListener<AgentUtils.McpToolLoadResult> listener = invocation.getArgument(1);
+            listener.onResponse(result);
+            return null;
+        }).when(spyRunner).loadMcpTools(any(), any());
+        return spyRunner;
+    }
+
+    @Test
+    public void testAllMcpConnectorsFailedFailsTheRunWithoutCallingTheModel() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(1, Map.of("c1", down("ConnectException: Connection refused")), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertTrue(failure.getValue().getMessage().contains("c1 (ConnectException)"));
+        assertFalse(failure.getValue().getMessage().contains("Connection refused"));
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+        verify(listener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testPartialMcpFailureStillRunsTheAgent() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        mockLLMResponseWithNoTools();
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(2, Map.of("c1", down("ConnectException")), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        verify(listener, timeout(5000)).onResponse(any());
+        verify(listener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testModelCallFailureDoesNotRunTheLoopTwice() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        when(modelProvider.mapMessages(anyList(), any())).thenThrow(new RuntimeException("boom"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(0, Map.of(), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        verify(listener, times(1)).onFailure(any());
+        verify(modelProvider, times(1)).mapMessages(anyList(), any());
+    }
+
+    @Test
+    public void testThrowingListenerIsNotCompletedTwice() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        when(modelProvider.mapMessages(anyList(), any())).thenThrow(new RuntimeException("boom"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        doThrow(new IllegalStateException("caller failed")).when(listener).onFailure(any());
+        MLChatAgentRunnerV2 spyRunner = runnerWithMcpResult(mcpResult(0, Map.of(), List.of()));
+
+        // The listener's own throw is logged, not sent back into the MCP loader that called the loop.
+        spyRunner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        verify(listener, times(1)).onFailure(any());
+        verify(listener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testThrowFromTheLoopFailsTheRunInsteadOfHanging() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        MLChatAgentRunnerV2 spyRunner = runnerWithMcpResult(mcpResult(2, Map.of("c1", down("ConnectException")), List.of()));
+        doThrow(new IllegalStateException("boom")).when(spyRunner).mcpLoadFailure(any(), anyBoolean(), any());
+
+        spyRunner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        assertEquals("boom", failure.getValue().getMessage());
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    @Test
+    public void testErrorFromTheLoopFailsTheRunInsteadOfHanging() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+        MLChatAgentRunnerV2 spyRunner = runnerWithMcpResult(mcpResult(2, Map.of("c1", down("ConnectException")), List.of()));
+        NoClassDefFoundError error = new NoClassDefFoundError("SomeToolClass");
+        doThrow(error).when(spyRunner).mcpLoadFailure(any(), anyBoolean(), any());
+
+        spyRunner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, times(1)).onFailure(failure.capture());
+        assertSame(error, failure.getValue().getCause());
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    @Test
+    public void testToolThatCannotBeCreatedIsNotAnotherTool() {
+        // The configured tool's type has no factory, so the run would otherwise go on with no tools at all.
+        when(mlAgent.getTools()).thenReturn(List.of(MLToolSpec.builder().type("NoSuchTool").name("missing").build()));
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        runnerWithMcpResult(mcpResult(1, Map.of("c1", down("ConnectException")), List.of()))
+            .executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertTrue(failure.getValue().getMessage().startsWith("None of the agent's MCP connectors could be loaded"));
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+    }
+
+    @Test
+    public void testMcpLoadFailure_ConfigErrorsKeepTheirStatus() {
+        // A deleted connector is the agent's configuration, not a down server: no 502.
+        Exception notFound = runner.mcpLoadFailure(mcpResult(1, Map.of("c1", misconfigured(RestStatus.NOT_FOUND)), List.of()), true, "a");
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) notFound).status());
+        // ml-commons' own message names only the connector id, so it's returned
+        assertTrue(notFound.getMessage().endsWith("Failed connectors: c1 (Failed to find connector, 404)"));
+
+        Map<String, AgentUtils.McpConnectorFailure> mixedConfig = Map
+            .of("c1", misconfigured(RestStatus.NOT_FOUND), "c2", misconfigured(RestStatus.BAD_REQUEST));
+        Exception badRequest = runner.mcpLoadFailure(mcpResult(2, mixedConfig, List.of()), true, "a");
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) badRequest).status());
+
+        Map<String, AgentUtils.McpConnectorFailure> oneServerDown = Map
+            .of("c1", misconfigured(RestStatus.NOT_FOUND), "c2", down("ConnectException"));
+        Exception badGateway = runner.mcpLoadFailure(mcpResult(2, oneServerDown, List.of()), true, "a");
+        assertEquals(RestStatus.BAD_GATEWAY, ((OpenSearchStatusException) badGateway).status());
+    }
+
+    @Test
+    public void testMcpLoadFailure_OwnConnectorErrorsKeepTheirMessageRemoteOnesDont() {
+        String notMcp = "Connector with ID c1" + AgentUtils.NOT_AN_MCP_CONNECTOR_MESSAGE;
+        Map<String, AgentUtils.McpConnectorFailure> failed = Map
+            .of(
+                "c1",
+                new AgentUtils.McpConnectorFailure("OpenSearchStatusException", notMcp, RestStatus.BAD_REQUEST),
+                // A 4xx from the remote MCP server: its message can name internal hosts
+                "c2",
+                new AgentUtils.McpConnectorFailure("OpenSearchStatusException", "401 from mcp.internal.example", RestStatus.UNAUTHORIZED)
+            );
+
+        Exception failure = runner.mcpLoadFailure(mcpResult(2, failed, List.of()), true, "a");
+
+        assertTrue(failure.getMessage().contains("c1 (" + notMcp + ", 400)"));
+        assertTrue(failure.getMessage().contains("c2 (OpenSearchStatusException, 401)"));
+        assertFalse(failure.getMessage().contains("mcp.internal.example"));
     }
 }
