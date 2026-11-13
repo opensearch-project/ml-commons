@@ -12,6 +12,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -228,6 +230,63 @@ public class DynamicBatchingQueueManagerTests {
 
         assertEquals("replaced queue is drained separately from the new request", 2, calls.get());
         assertEquals("the stranded caller receives its own response", ImmutableList.of("a"), resultNames(a.get()));
+        assertEquals(ImmutableList.of("b"), resultNames(b.get()));
+    }
+
+    @Test
+    public void replacingTheConfigStartsTheNewQueueBeforeDrainingTheOldOne() throws Exception {
+        CountDownLatch oldCallEntered = new CountDownLatch(1);
+        CountDownLatch releaseOldCall = new CountDownLatch(1);
+        Predictable blocking = new Predictable() {
+            @Override
+            public MLOutput predict(MLInput mlInput, MLModel model) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
+                oldCallEntered.countDown();
+                try {
+                    assertTrue(releaseOldCall.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                model(new AtomicInteger()).asyncPredict(mlInput, listener, channel);
+            }
+
+            @Override
+            public boolean isModelReady() {
+                return true;
+            }
+
+            @Override
+            public void close() {}
+        };
+        manager.enqueue("model-1", queued(100, 10_000L), textInput("a"), blocking, null, ActionListener.wrap(r -> {}, e -> {}));
+        Runnable oldTimer = scheduledFlush.get();
+
+        AtomicReference<MLTaskResponse> b = new AtomicReference<>();
+        Thread replacer = new Thread(
+            () -> manager
+                .enqueue(
+                    "model-1",
+                    queued(50, 10_000L),
+                    textInput("b"),
+                    model(new AtomicInteger()),
+                    null,
+                    ActionListener.wrap(b::set, e -> {})
+                )
+        );
+        replacer.start();
+        assertTrue(oldCallEntered.await(5, TimeUnit.SECONDS));
+
+        assertTrue("the new queue armed its timer before the old queue's call returned", scheduledFlush.get() != oldTimer);
+        verify(threadPool, times(2)).schedule(any(Runnable.class), any(TimeValue.class), anyString());
+
+        releaseOldCall.countDown();
+        replacer.join(5_000L);
+        assertFalse(replacer.isAlive());
+        scheduledFlush.get().run();
         assertEquals(ImmutableList.of("b"), resultNames(b.get()));
     }
 
