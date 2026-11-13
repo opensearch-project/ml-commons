@@ -19,12 +19,14 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.BaseModelConfig.FrameworkType;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -172,6 +174,8 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     @Test
@@ -230,6 +234,8 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
             "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
             argumentCaptor.getValue().getMessage()
         );
+        // A name clash is a request problem, so it stays a 400
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
     }
 
     @Test
