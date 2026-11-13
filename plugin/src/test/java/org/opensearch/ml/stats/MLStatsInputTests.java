@@ -11,10 +11,13 @@ import java.io.IOException;
 import java.util.EnumSet;
 
 import org.junit.Before;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
@@ -49,6 +52,49 @@ public class MLStatsInputTests extends OpenSearchTestCase {
         mlStatsInput.writeTo(output);
         MLStatsInput parsedMLStatsInput = new MLStatsInput(output.bytes().streamInput());
         verifyParsedMLStatsInput(parsedMLStatsInput);
+    }
+
+    private static MLStatsInput roundTrip(MLStatsInput input, Version version) throws IOException {
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(version);
+        input.writeTo(output);
+        StreamInput in = output.bytes().streamInput();
+        in.setVersion(version);
+        return new MLStatsInput(in);
+    }
+
+    public void testWriteTo_ConnectorAuthStatsReachOnlyNodesThatKnowThem() throws IOException {
+        verifyParsedMLStatsInput(roundTrip(mlStatsInput, Version.CURRENT));
+
+        MLStatsInput earlier = roundTrip(mlStatsInput, CommonValue.VERSION_3_9_0);
+        EnumSet<MLNodeLevelStat> known = EnumSet.allOf(MLNodeLevelStat.class);
+        known.removeAll(MLNodeLevelStat.CONNECTOR_AUTH_STATS);
+        assertEquals(known, earlier.getNodeLevelStats());
+        assertEquals(mlStatsInput.getTargetStatLevels(), earlier.getTargetStatLevels());
+        assertEquals(mlStatsInput.getClusterLevelStats(), earlier.getClusterLevelStats());
+        assertEquals(mlStatsInput.getActionLevelStats(), earlier.getActionLevelStats());
+        assertEquals(mlStatsInput.getNodeIds(), earlier.getNodeIds());
+        assertEquals(mlStatsInput.getAlgorithms(), earlier.getAlgorithms());
+        assertEquals(mlStatsInput.getModels(), earlier.getModels());
+        assertEquals(mlStatsInput.getActions(), earlier.getActions());
+    }
+
+    public void testWriteTo_ARequestForConnectorAuthStatsOnly_asksAnEarlierNodeForNoNodeLevelStat() throws IOException {
+        MLStatsInput request = MLStatsInput
+            .builder()
+            .targetStatLevels(EnumSet.of(MLStatLevel.CLUSTER, MLStatLevel.NODE))
+            .nodeLevelStats(EnumSet.copyOf(MLNodeLevelStat.CONNECTOR_AUTH_STATS))
+            .build();
+
+        MLStatsInput current = roundTrip(request, Version.CURRENT);
+        assertEquals(EnumSet.copyOf(MLNodeLevelStat.CONNECTOR_AUTH_STATS), current.getNodeLevelStats());
+        assertEquals(EnumSet.of(MLStatLevel.CLUSTER, MLStatLevel.NODE), current.getTargetStatLevels());
+
+        // An empty set would ask for every node level stat, so the node level is left out of the request instead.
+        MLStatsInput earlier = roundTrip(request, CommonValue.VERSION_3_9_0);
+        assertEquals(EnumSet.of(MLStatLevel.CLUSTER), earlier.getTargetStatLevels());
+        assertTrue(earlier.getNodeLevelStats().isEmpty());
+        assertTrue(earlier.retrieveAllNodeLevelStats());
     }
 
     public void testParseMLStatsInput() throws IOException {

@@ -16,8 +16,10 @@ import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -55,6 +57,34 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         response.writeTo(output);
         MLStatsNodeResponse newResponse = new MLStatsNodeResponse(output.bytes().streamInput());
         Assert.assertEquals(newResponse.getNodeLevelStatSize(), response.getNodeLevelStatSize());
+    }
+
+    private static MLStatsNodeResponse roundTrip(MLStatsNodeResponse response, Version version) throws IOException {
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(version);
+        response.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(version);
+        return new MLStatsNodeResponse(input);
+    }
+
+    public void testWriteTo_ConnectorAuthStatsReachOnlyNodesThatKnowThem() throws IOException {
+        Map<MLNodeLevelStat, Object> statsToValues = new HashMap<>();
+        for (MLNodeLevelStat stat : MLNodeLevelStat.values()) {
+            statsToValues.put(stat, 1L);
+        }
+        MLStatsNodeResponse response = new MLStatsNodeResponse(node, statsToValues);
+
+        MLStatsNodeResponse current = roundTrip(response, Version.CURRENT);
+        for (MLNodeLevelStat stat : MLNodeLevelStat.values()) {
+            assertEquals(stat.name(), 1L, current.getNodeLevelStat(stat));
+        }
+
+        MLStatsNodeResponse earlier = roundTrip(response, CommonValue.VERSION_3_9_0);
+        assertEquals(MLNodeLevelStat.values().length - MLNodeLevelStat.CONNECTOR_AUTH_STATS.size(), earlier.getNodeLevelStatSize());
+        for (MLNodeLevelStat stat : MLNodeLevelStat.values()) {
+            assertEquals(stat.name(), MLNodeLevelStat.CONNECTOR_AUTH_STATS.contains(stat) ? null : 1L, earlier.getNodeLevelStat(stat));
+        }
     }
 
     public void testToXContent_NodeLevelStats() throws IOException {
