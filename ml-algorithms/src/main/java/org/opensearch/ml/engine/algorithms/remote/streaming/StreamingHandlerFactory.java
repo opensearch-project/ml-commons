@@ -39,12 +39,22 @@ public class StreamingHandlerFactory {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, parameters, ConnectorAddressValidator.DEFAULT);
+        return createHandler(
+            llmInterface,
+            connector,
+            httpClient,
+            connectorClientConfig,
+            parameters,
+            ConnectorAddressValidator.DEFAULT,
+            null
+        );
     }
 
     /**
      * @param addressValidator applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
      *                         validates addresses itself
+     * @param onUnauthorized   run when the remote service answers 401, before the failure is reported; may be null; HTTP
+     *                         streams only
      */
     public static StreamingHandler createHandler(
         String llmInterface,
@@ -52,7 +62,8 @@ public class StreamingHandlerFactory {
         SdkAsyncHttpClient httpClient,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        ConnectorAddressValidator addressValidator
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
         switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
@@ -60,7 +71,7 @@ public class StreamingHandlerFactory {
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
             case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator, onUnauthorized);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -89,8 +100,9 @@ public class StreamingHandlerFactory {
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        ConnectorAddressValidator addressValidator
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator, onUnauthorized);
     }
 }

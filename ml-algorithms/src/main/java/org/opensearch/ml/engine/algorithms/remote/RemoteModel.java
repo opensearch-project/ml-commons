@@ -30,6 +30,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -164,6 +165,8 @@ public class RemoteModel implements Predictable {
                         (List) params.getOrDefault(CONNECTOR_RESTRICTED_IP_PATTERNS, Collections.emptyList())
                     );
                 this.connectorExecutor.setTrustedConnectorEndpointsRegex((List<String>) params.get(TRUSTED_CONNECTOR_ENDPOINTS_REGEX));
+                this.connectorExecutor
+                    .setAuthorizationProviderFactory((AuthorizationProviderFactory) params.get(AUTHORIZATION_PROVIDER_FACTORY));
                 listener.onResponse(this);
             }, e -> {
                 log.error("Failed to init remote model.", e);

@@ -399,7 +399,7 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
             factory
                 .when(
                     () -> org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory
-                        .createHandler(any(), any(), any(), any(), any(), any())
+                        .createHandler(any(), any(), any(), any(), any(), any(), any())
                 )
                 .thenReturn(handler);
 

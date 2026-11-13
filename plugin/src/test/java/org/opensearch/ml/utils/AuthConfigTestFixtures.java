@@ -207,6 +207,25 @@ public final class AuthConfigTestFixtures {
             .build();
     }
 
+    /**
+     * An http connector holding {@link #oauth2()}, its credential decrypted, and one action of {@code type} to
+     * {@link #ACTION_URL}: a connector whose requests carry an OAuth2 token.
+     */
+    public static HttpConnector oauth2Http(ConnectorAction.ActionType type) {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("c")
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .parameters(parameters())
+            .credential(Map.of(SECRET_KEY, STORED_CIPHERTEXT))
+            .actions(List.of(ConnectorAction.builder().actionType(type).method("POST").url(ACTION_URL).requestBody("{}").build()))
+            .authConfig(oauth2())
+            .build();
+        connector.setDecryptedCredential(Map.of(SECRET_KEY, "secret"));
+        return connector;
+    }
+
     /** An MCP connector of {@code protocol} without parameters, as MCP connectors are often stored; it never holds {@code auth_config}. */
     public static Connector mcp(String protocol) {
         if (ConnectorProtocols.MCP_SSE.equals(protocol)) {

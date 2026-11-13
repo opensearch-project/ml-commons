@@ -21,7 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
@@ -30,6 +32,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.opensearch.common.CheckedRunnable;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -120,9 +123,13 @@ public final class OAuth2TestFixtures {
         return snapshot(Map.of("client_secret", CLIENT_SECRET));
     }
 
+    /** The header the predict action of {@link #connector} defines. */
+    public static final Map<String, String> ACTION_HEADERS = Map.of("x-api-version", "1");
+
     /**
-     * An http connector holding {@code authConfig}, with one predict action to {@code actionUrl} and the decrypted
-     * credential {@link #clientSecret} reads.
+     * An http connector holding {@code authConfig}, with one predict action to {@code actionUrl} carrying
+     * {@link #ACTION_HEADERS}, decrypted as executors receive it: the decrypted credential is the one
+     * {@link #clientSecret} reads.
      */
     public static HttpConnector connector(OAuth2AuthConfig authConfig, String actionUrl) {
         HttpConnector connector = HttpConnector
@@ -131,6 +138,7 @@ public final class OAuth2TestFixtures {
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
             .parameters(new HashMap<>())
+            .credential(Map.of("client_secret", CLIENT_SECRET))
             .authConfig(authConfig)
             .actions(
                 List
@@ -140,12 +148,21 @@ public final class OAuth2TestFixtures {
                             .actionType(ConnectorAction.ActionType.PREDICT)
                             .method("POST")
                             .url(actionUrl)
+                            .headers(ACTION_HEADERS)
                             .requestBody("{}")
                             .build()
                     )
             )
             .build();
-        connector.setDecryptedCredential(new HashMap<>(Map.of("client_secret", CLIENT_SECRET)));
+        connector
+            .decrypt(
+                ConnectorAction.ActionType.PREDICT.name(),
+                (values, tenantId, listener) -> listener.onResponse(values),
+                null,
+                ActionListener.wrap(decrypted -> {}, e -> {
+                    throw new AssertionError(e);
+                })
+            );
         return connector;
     }
 
@@ -242,6 +259,55 @@ public final class OAuth2TestFixtures {
     /** {@link #tokenClient(OkHttpClient, ThreadPool, BooleanSupplier)} with the flag on. */
     public static OAuth2TokenClient tokenClient(OkHttpClient transport, ThreadPool threadPool) {
         return tokenClient(transport, threadPool, () -> true);
+    }
+
+    /** A handle for {@code value} that no cache entry holds; {@code authEnabled} stands for the connector auth flag. */
+    public static TokenHandle handle(String value, BooleanSupplier authEnabled) {
+        return new TokenHandle(value, null, null, authEnabled);
+    }
+
+    /**
+     * A provider that answers each request with the next of its outcomes, a token value or an exception, counts the
+     * requests, and records the handles it issued and the ones it was asked to invalidate. {@code invalidate} returns
+     * {@link #invalidates}, true unless a test changes it.
+     */
+    public static final class FakeAuthorizationProvider implements AuthorizationProvider {
+        public final List<TokenHandle> issued = new CopyOnWriteArrayList<>();
+        public final List<TokenHandle> invalidated = new CopyOnWriteArrayList<>();
+        public final AtomicInteger requests = new AtomicInteger();
+        public volatile boolean invalidates = true;
+        private final Queue<Object> outcomes;
+        private final BooleanSupplier authEnabled;
+
+        /** Handles the connector auth flag reads as {@code authEnabled}; each outcome is a token value or an exception. */
+        public FakeAuthorizationProvider(BooleanSupplier authEnabled, Object... outcomes) {
+            this.authEnabled = authEnabled;
+            this.outcomes = new ConcurrentLinkedQueue<>(List.of(outcomes));
+        }
+
+        /** Handles of an enabled flag. */
+        public FakeAuthorizationProvider(Object... outcomes) {
+            this(() -> true, outcomes);
+        }
+
+        @Override
+        public void authorizationValue(ActionListener<TokenHandle> listener) {
+            requests.incrementAndGet();
+            Object outcome = outcomes.remove();
+            if (outcome instanceof Exception e) {
+                listener.onFailure(e);
+                return;
+            }
+            TokenHandle handle = handle((String) outcome, authEnabled);
+            issued.add(handle);
+            listener.onResponse(handle);
+        }
+
+        @Override
+        public boolean invalidate(TokenHandle handle) {
+            invalidated.add(handle);
+            return invalidates;
+        }
     }
 
     /** A thread pool whose {@code opensearch_ml_predict_remote} pool has one thread and a queue of one. */

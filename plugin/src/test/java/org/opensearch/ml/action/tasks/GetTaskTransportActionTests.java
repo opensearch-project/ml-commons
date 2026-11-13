@@ -77,11 +77,13 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.AuthConfigTestFixtures;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
@@ -141,6 +143,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     MLEngine mlEngine;
+    @Mock
+    private AuthorizationProviderFactory authorizationProviderFactory;
 
     GetTaskTransportAction getTaskTransportAction;
     MLTaskGetRequest mlTaskGetRequest;
@@ -202,7 +206,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 mlFeatureEnabledSetting,
                 settings,
-                mlEngine
+                mlEngine,
+                authorizationProviderFactory
             )
         );
 
@@ -414,6 +419,34 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_BatchPredictStatus_anOauth2ConnectorObtainsItsProviderFromTheFactory() throws IOException {
+        HttpConnector oauth2 = AuthConfigTestFixtures.oauth2Http(ConnectorAction.ActionType.BATCH_PREDICT_STATUS);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(7);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(oauth2);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+        when(authorizationProviderFactory.providerFor(oauth2)).thenThrow(new IllegalArgumentException("refused"));
+        GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, new HashMap<>(Map.of("id", "b1")));
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+
+        verify(authorizationProviderFactory).providerFor(oauth2);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("refused", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BatchPredictStatus_NoModel() throws IOException {
