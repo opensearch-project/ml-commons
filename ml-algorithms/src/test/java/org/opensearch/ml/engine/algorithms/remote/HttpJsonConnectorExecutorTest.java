@@ -630,6 +630,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
 
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         StreamPredictActionListener<MLTaskResponse, ?> streamActionListener = mock(StreamPredictActionListener.class);
 
         Map<String, String> parameters = ImmutableMap.of("_llm_interface", "invalid_interface", "input", "test input");
@@ -640,8 +641,24 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(streamActionListener, times(1)).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Unsupported llm interface: invalid_interface", captor.getValue().getMessage());
+
+        // Any other failure is wrapped: here a request without the interface parameter.
+        StreamPredictActionListener<MLTaskResponse, ?> otherListener = mock(StreamPredictActionListener.class);
+        executor
+            .invokeRemoteServiceStream(
+                PREDICT.name(),
+                createMLInput(),
+                ImmutableMap.of("input", "test input"),
+                payload,
+                new ExecutionContext(0),
+                otherListener
+            );
+        ArgumentCaptor<Exception> wrapped = ArgumentCaptor.forClass(Exception.class);
+        verify(otherListener, times(1)).onFailure(wrapped.capture());
+        assertTrue(wrapped.getValue() instanceof MLException);
+        assertEquals("Fail to execute streaming", wrapped.getValue().getMessage());
     }
 
     @Test
@@ -1100,7 +1117,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
-        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getCause().getMessage());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
     }
 
     @Test
@@ -1188,7 +1205,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         Map<String, String> parameters = Map
             .of("endpoint", "api.openai.com", "model", "gpt-4o", "_llm_interface", "openai/v1/chat/completions");
         try (MockedStatic<StreamingHandlerFactory> factory = mockStatic(StreamingHandlerFactory.class)) {
-            factory.when(() -> StreamingHandlerFactory.createHandler(any(), any(), any(), any(), any(), any())).thenReturn(handler);
+            factory.when(() -> StreamingHandlerFactory.createHandler(any(), any(), any(), any(), any(), any(), any())).thenReturn(handler);
 
             executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
         }

@@ -230,7 +230,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
                         connectorPrivateIpEnabled,
                         connectorTrustedPrivateEndpoints,
                         connectorRestrictedIpPatterns
-                    )
+                    ),
+                    null
                 );
             handler.startStream(endpoint, connector.getHeadersWithRuntimeParameters(parameters), parameters, payload, actionListener);
         } catch (Exception e) {
