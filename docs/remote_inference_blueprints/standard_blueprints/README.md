@@ -22,6 +22,10 @@ These blueprints use the ML inference processor to handle input/output mapping, 
   - image embedding: [embed-multimodal-v3.0 & embed-multimodal-v2.0](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/cohere_connector_image_embedding_blueprint.md)
 - OpenAI:
   - [text-embedding-ada-002](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/openai_connector_embedding_standard_blueprint.md)
+- Voyage AI:
+  - text embedding: [voyage-4, voyage-3.5, voyage-code-4, voyage-finance-2, voyage-law-2 and more](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/voyage_connector_text_embedding_standard_blueprint.md)
+  - contextualized embedding: [voyage-context-4 & voyage-context-3](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/voyage_connector_contextualized_embedding_standard_blueprint.md)
+  - multimodal embedding: [voyage-multimodal-3.5 & voyage-multimodal-3](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/voyage_connector_multimodal_embedding_standard_blueprint.md)
 - Yandex Cloud:
   - text embedding: [text-search-doc & text-search-query](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/yandexcloud_connector_embedding_standard_blueprint.md)
 
@@ -51,6 +55,10 @@ These blueprints include pre- and post-processing functions, suitable when you n
   
 - VertexAI
   - [embedding](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_connector_embedding_blueprint.md)
+
+- Voyage AI:
+  - text embedding: [voyage-4, voyage-3.5, voyage-code-4, voyage-finance-2, voyage-law-2 and more](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/voyage_connector_embedding_blueprint.md)
+  - rerank: [rerank-3, rerank-3-lite, rerank-2.5 & rerank-2.5-lite](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/voyage_connector_rerank_blueprint.md)
 
 - Yandex Cloud
   - text embedding: [text-search-doc & text-search-query](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/yandexcloud_connector_embedding_legacy_blueprint.md) 
