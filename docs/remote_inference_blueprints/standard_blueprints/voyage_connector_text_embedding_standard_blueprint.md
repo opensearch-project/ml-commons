@@ -6,7 +6,7 @@ If you need the `text_embedding` ingest processor, please refer to the legacy bl
 
 Supported models: `voyage-4-large`, `voyage-4`, `voyage-4-lite`, `voyage-code-4`, `voyage-3-large`, `voyage-3.5`, `voyage-3.5-lite`, `voyage-code-3` (default dimension 1024, `output_dimension` 2048, 1024, 512 or 256, 32K context), `voyage-finance-2` (1024, 32K context) and `voyage-law-2` (1024, 16K context).
 
-The model is always required; the blueprint has no default. A request accepts at most 1000 inputs and a per-model token cap (1M tokens for the `-lite` models, 320K for `voyage-4` and `voyage-3.5`, 120K for the others). Set `input_docs_processed_step_size` to keep a call under these limits; ML Commons counts documents, not tokens.
+The model is always required; the blueprint has no default. A request accepts at most 1000 inputs and a per-model token cap: 1M tokens for `voyage-4-lite` and `voyage-3.5-lite`, 320K for `voyage-4` and `voyage-3.5`, and 120K for `voyage-4-large`, `voyage-3-large`, `voyage-code-3`, `voyage-finance-2` and `voyage-law-2`. Voyage documents no cap for `voyage-code-4`. This blueprint sends the whole `input` list in one request, and ML Commons does not count tokens, so keep each list under these limits. (`input_docs_processed_step_size` only splits text documents sent as `text_docs`; see the legacy blueprint.)
 
 ## 1. Create a connector
 
@@ -22,8 +22,7 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "model": "<ENTER_MODEL_NAME_HERE>", // Choose a model from the list above
-    "input_type": "document",
-    "input_docs_processed_step_size": "128"
+    "input_type": "document"
   },
   "actions": [
     {
