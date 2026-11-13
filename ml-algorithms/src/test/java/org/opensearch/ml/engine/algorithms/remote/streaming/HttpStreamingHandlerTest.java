@@ -30,6 +30,7 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.ResolvedAddresses;
 
 import okhttp3.OkHttpClient;
 import okhttp3.sse.EventSource;
@@ -164,9 +165,9 @@ public class HttpStreamingHandlerTest extends MLStaticMockBase {
         InetAddress a = InetAddress.getByName("203.0.113.1");
         InetAddress b = InetAddress.getByName("203.0.113.2");
 
-        HttpStreamingHandler.ResolvedAddresses first = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { a, b });
-        HttpStreamingHandler.ResolvedAddresses same = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { a, b });
-        HttpStreamingHandler.ResolvedAddresses other = new HttpStreamingHandler.ResolvedAddresses(new InetAddress[] { b });
+        ResolvedAddresses first = new ResolvedAddresses(new InetAddress[] { a, b });
+        ResolvedAddresses same = new ResolvedAddresses(new InetAddress[] { a, b });
+        ResolvedAddresses other = new ResolvedAddresses(new InetAddress[] { b });
 
         assertEquals(first, same);
         assertEquals(first.hashCode(), same.hashCode());

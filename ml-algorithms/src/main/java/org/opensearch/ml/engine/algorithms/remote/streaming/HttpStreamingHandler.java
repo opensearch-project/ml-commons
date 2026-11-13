@@ -46,13 +46,12 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
+import org.opensearch.ml.engine.algorithms.remote.ResolvedAddresses;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
 
-import lombok.EqualsAndHashCode;
 import lombok.extern.log4j.Log4j2;
-import okhttp3.Dns;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -177,24 +176,6 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     @VisibleForTesting
     OkHttpClient okHttpClient() {
         return okHttpClient;
-    }
-
-    /**
-     * The addresses a stream may connect to. Compared by value: OkHttp lets a call reuse a pooled connection only when the
-     * two calls' {@link Dns} are equal, so any reuse it considers is for a call validated to the same addresses.
-     */
-    @EqualsAndHashCode
-    static final class ResolvedAddresses implements Dns {
-        private final List<InetAddress> addresses;
-
-        ResolvedAddresses(InetAddress[] addresses) {
-            this.addresses = List.of(addresses);
-        }
-
-        @Override
-        public List<InetAddress> lookup(String hostname) {
-            return addresses;
-        }
     }
 
     @Override

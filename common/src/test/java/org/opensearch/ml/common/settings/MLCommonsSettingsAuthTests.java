@@ -11,6 +11,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
 import java.util.List;
@@ -47,6 +48,26 @@ public class MLCommonsSettingsAuthTests {
         assertDynamicNodeScope(ML_COMMONS_CONNECTOR_AUTH_ENABLED);
         assertTrue(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE.contains("plugins.ml_commons.connector.auth_enabled"));
         assertTrue(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE.endsWith(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey()));
+    }
+
+    @Test
+    public void tokenCacheMaxSeconds() {
+        assertEquals("plugins.ml_commons.connector.oauth2_token_cache_max_seconds", ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.getKey());
+        assertDynamicNodeScope(ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS);
+        assertEquals(3600, (int) ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.get(Settings.EMPTY));
+        for (int accepted : new int[] { 60, 86400 }) {
+            assertEquals(accepted, (int) ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.get(tokenCacheMaxSeconds(accepted)));
+        }
+        for (int refused : new int[] { 59, 86401 }) {
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.get(tokenCacheMaxSeconds(refused))
+            );
+        }
+    }
+
+    private static Settings tokenCacheMaxSeconds(int seconds) {
+        return Settings.builder().put(ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.getKey(), seconds).build();
     }
 
     @Test
