@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -16,6 +17,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.stats.MLAlgoStats;
 import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -93,9 +95,14 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        if (nodeStats != null) {
+        Map<MLNodeLevelStat, Object> nodeLevelStats = nodeStats;
+        if (nodeLevelStats != null && out.getVersion().before(HttpConnector.MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH)) {
+            nodeLevelStats = new HashMap<>(nodeLevelStats);
+            nodeLevelStats.keySet().removeAll(MLNodeLevelStat.CONNECTOR_AUTH_STATS);
+        }
+        if (nodeLevelStats != null) {
             out.writeBoolean(true);
-            out.writeMap(nodeStats, (stream, v) -> stream.writeEnum(v), StreamOutput::writeGenericValue);
+            out.writeMap(nodeLevelStats, (stream, v) -> stream.writeEnum(v), StreamOutput::writeGenericValue);
         } else {
             out.writeBoolean(false);
         }

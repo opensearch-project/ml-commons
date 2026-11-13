@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +53,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenCache;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.jobs.MLJobRunner;
 import org.opensearch.ml.jobs.processors.MemoryRetentionJobProcessor;
@@ -59,6 +61,10 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
+import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.ml.stats.MLStat;
+import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
@@ -369,6 +375,36 @@ public class MachineLearningPluginTests {
             holder.close();
         } finally {
             MemoryRetentionJobProcessor.reset();
+        }
+    }
+
+    @Test
+    public void incrementOAuth2Stat_countsEachTokenCacheEventInItsNodeLevelStat() {
+        Map<OAuth2TokenCache.Stat, MLNodeLevelStat> nodeLevelStats = Map
+            .of(
+                OAuth2TokenCache.Stat.TOKEN_REQUEST,
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_REQUEST_COUNT,
+                OAuth2TokenCache.Stat.TOKEN_FAILURE,
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_FAILURE_COUNT,
+                OAuth2TokenCache.Stat.CACHE_HIT,
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_CACHE_HIT_COUNT,
+                OAuth2TokenCache.Stat.UNAUTHORIZED_RESPONSE,
+                MLNodeLevelStat.ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT
+            );
+        Map<Enum, MLStat<?>> stats = new HashMap<>();
+        nodeLevelStats.values().forEach(stat -> stats.put(stat, new MLStat<>(false, new CounterSupplier())));
+        MLStats mlStats = new MLStats(stats);
+
+        // A different count per event, so that each event shows up in its own stat only.
+        OAuth2TokenCache.Stat[] events = OAuth2TokenCache.Stat.values();
+        for (int i = 0; i < events.length; i++) {
+            for (int j = 0; j <= i; j++) {
+                MachineLearningPlugin.incrementOAuth2Stat(mlStats, events[i]);
+            }
+        }
+
+        for (int i = 0; i < events.length; i++) {
+            assertEquals((long) i + 1, mlStats.getStat(nodeLevelStats.get(events[i])).getValue());
         }
     }
 }

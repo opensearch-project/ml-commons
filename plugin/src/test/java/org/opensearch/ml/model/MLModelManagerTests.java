@@ -3227,6 +3227,20 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void connectorAddressValidator_followsThePrivateAddressSetting() throws Exception {
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(false);
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> modelManager.connectorAddressValidator().validate("https://10.0.0.1/v1", "https", "10.0.0.1", 443)
+        );
+
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(true);
+        InetAddress[] addresses = modelManager.connectorAddressValidator().validate("https://10.0.0.1/v1", "https", "10.0.0.1", 443);
+
+        assertArrayEquals(new InetAddress[] { InetAddress.getByName("10.0.0.1") }, addresses);
+    }
+
+    @Test
     public void testSetUpParameterMap_includesSecurityPatterns() throws Exception {
         String modelId = "test-model-id";
         String tenantId = "test-tenant";

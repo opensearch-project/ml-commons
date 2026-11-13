@@ -163,6 +163,7 @@ import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.httpclient.TokenEndpointAddressValidator;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -274,6 +275,9 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenCache;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenClient;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.algorithms.tool.MLToolExecutor;
 import org.opensearch.ml.engine.analysis.DJLUtils;
@@ -768,6 +772,10 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_OAUTH2_TOKEN_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_OAUTH2_TOKEN_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_OAUTH2_TOKEN_CACHE_HIT_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
         mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
@@ -796,6 +804,35 @@ public class MachineLearningPlugin extends Plugin
             nodeHelper,
             mlFeatureEnabledSetting
         );
+
+        OAuth2TokenCache oauth2TokenCache = new OAuth2TokenCache(
+            clusterService.getClusterSettings(),
+            mlFeatureEnabledSetting,
+            stat -> incrementOAuth2Stat(mlStats, stat),
+            System::nanoTime
+        );
+        threadPool
+            .scheduleWithFixedDelay(
+                oauth2TokenCache::removeExpired,
+                OAuth2TokenCache.EXPIRED_ENTRY_SWEEP_INTERVAL,
+                ThreadPool.Names.GENERIC
+            );
+        OAuth2TokenClient oauth2TokenClient = OAuth2TokenClient
+            .create(
+                new TokenEndpointAddressValidator(
+                    mlModelManager::connectorAddressValidator,
+                    TokenEndpointAddressValidator.clusterPorts(settings)
+                ),
+                threadPool,
+                mlFeatureEnabledSetting::isConnectorAuthEnabled,
+                mlFeatureEnabledSetting::getOAuth2TokenCacheMaxSeconds
+            );
+        AuthorizationProviderFactory authorizationProviderFactory = new AuthorizationProviderFactory(
+            oauth2TokenCache,
+            oauth2TokenClient,
+            mlFeatureEnabledSetting
+        );
+        mlModelManager.setAuthorizationProviderFactory(authorizationProviderFactory);
 
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
@@ -1046,8 +1083,20 @@ public class MachineLearningPlugin extends Plugin
                 sdkClient,
                 toolFactoryWrapper,
                 mcpToolsHelper,
-                agenticSearchTemplateService
+                agenticSearchTemplateService,
+                authorizationProviderFactory
             );
+    }
+
+    /** Counts an event of the node's OAuth2 token cache in its node-level stat. */
+    static void incrementOAuth2Stat(MLStats mlStats, OAuth2TokenCache.Stat stat) {
+        MLNodeLevelStat nodeLevelStat = switch (stat) {
+            case TOKEN_REQUEST -> MLNodeLevelStat.ML_OAUTH2_TOKEN_REQUEST_COUNT;
+            case TOKEN_FAILURE -> MLNodeLevelStat.ML_OAUTH2_TOKEN_FAILURE_COUNT;
+            case CACHE_HIT -> MLNodeLevelStat.ML_OAUTH2_TOKEN_CACHE_HIT_COUNT;
+            case UNAUTHORIZED_RESPONSE -> MLNodeLevelStat.ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT;
+        };
+        mlStats.getStat(nodeLevelStat).increment();
     }
 
     @Override

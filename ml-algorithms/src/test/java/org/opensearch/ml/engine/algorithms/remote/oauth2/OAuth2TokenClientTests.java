@@ -17,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_HOST;
@@ -51,14 +52,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockMakers;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLException;
@@ -184,7 +188,12 @@ public class OAuth2TokenClientTests {
             // A client that used the JVM proxy settings would fail to connect.
             ProxySelector.setDefault(ProxySelector.of(new InetSocketAddress(InetAddress.getLoopbackAddress(), closedPort)));
             OAuth2TokenClient client = OAuth2TokenClient
-                .create(new TokenEndpointAddressValidator(() -> ConnectorAddressValidator.DEFAULT, Set.of()), threadPool, () -> 3600);
+                .create(
+                    new TokenEndpointAddressValidator(() -> ConnectorAddressValidator.DEFAULT, Set.of()),
+                    threadPool,
+                    () -> true,
+                    () -> 3600
+                );
             // idp.test does not resolve, so reaching the server shows that the client used the given addresses.
             Request request = new Request.Builder().url("http://idp.test:" + server.getAddress().getPort() + "/token").build();
             OkHttpClient connecting = client.clientFor(new InetAddress[] { server.getAddress().getAddress() });
@@ -283,6 +292,36 @@ public class OAuth2TokenClientTests {
     }
 
     @Test
+    public void requestToken_readsTheAuthSettingAgainBeforeSending() throws Exception {
+        AtomicBoolean authEnabled = new AtomicBoolean(true);
+        OAuth2TokenClient client = tokenClient(scriptedTransport(recorded, reply(200, TOKEN_RESPONSE)), threadPool, authEnabled::get);
+        ExecutorService pool = threadPool.executor(RETRY_EXECUTOR);
+        CountDownLatch release = new CountDownLatch(1);
+        pool.execute(() -> {
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        AtomicReference<Exception> failure = new AtomicReference<>();
+
+        List<String> lines = logged(OAuth2TokenClient.class, () -> {
+            // Queued behind the blocked thread, so the setting changes after requestToken and before send.
+            CompletableFuture<OAuth2TokenClient.IssuedToken> result = request(client, POST, clientSecret(), allowAll());
+            authEnabled.set(false);
+            release.countDown();
+            failure.set(failure(result));
+        });
+
+        assertSame(OpenSearchStatusException.class, failure.get().getClass());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) failure.get()).status());
+        assertEquals(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, failure.get().getMessage());
+        assertEquals(List.of("WARN OAuth2 token request refused before sending: host=203.0.113.10 reason=auth_disabled"), lines);
+        assertTrue(recorded.isEmpty());
+    }
+
+    @Test
     public void requestToken_sendsToTheTokenUrlAReferenceResolvesTo() throws Exception {
         OAuth2TokenClient client = client(reply(200, TOKEN_RESPONSE));
 
@@ -302,7 +341,7 @@ public class OAuth2TokenClientTests {
         TokenEndpointAddressValidator addresses = mock(TokenEndpointAddressValidator.class, withSettings().mockMaker(MockMakers.INLINE));
         when(addresses.validate(any(), any(), anyInt()))
             .thenThrow(new IllegalStateException(TokenEndpointAddressValidator.INTERFACE_ADDRESSES_UNAVAILABLE_MESSAGE));
-        OAuth2TokenClient client = new OAuth2TokenClient(scriptedTransport(recorded), addresses, threadPool, () -> 3600);
+        OAuth2TokenClient client = new OAuth2TokenClient(scriptedTransport(recorded), addresses, threadPool, () -> true, () -> 3600);
 
         Failed outcome = failed(client, POST, clientSecret(), allowAll());
 
