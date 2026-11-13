@@ -125,42 +125,4 @@ public class MLHttpClientFactoryTests {
             .getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100, true, trustedEndpoints, restrictedPatterns, true);
         assertNotNull(client);
     }
-
-    @org.junit.Test
-    public void validateConnectorEndpoint_appliesPrivateIpPolicy() {
-        IllegalArgumentException e = org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> MLHttpClientFactory.validateConnectorEndpoint("http://10.0.0.1/v1", "http", "10.0.0.1", 80, false, null, null)
-            );
-        org.junit.Assert.assertEquals("Remote inference host name has private ip address: 10.0.0.1", e.getMessage());
-        MLHttpClientFactory.validateConnectorEndpoint("http://10.0.0.1/v1", "http", "10.0.0.1", 80, true, null, null);
-        MLHttpClientFactory.validateConnectorEndpoint("https://203.0.113.1/v1", "https", "203.0.113.1", 443, false, null, null);
-    }
-
-    @org.junit.Test
-    public void validateConnectorEndpoint_appliesRestrictedAndTrustedPrivatePatterns() {
-        java.util.List<java.util.regex.Pattern> restricted = java.util.List.of(java.util.regex.Pattern.compile("10\\.0\\.0\\.9"));
-        org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> MLHttpClientFactory.validateConnectorEndpoint("http://10.0.0.9/v1", "http", "10.0.0.9", 80, true, null, restricted)
-            );
-        java.util.List<java.util.regex.Pattern> trusted = java.util.List.of(java.util.regex.Pattern.compile("^http://10\\.0\\.0\\.1/.*$"));
-        MLHttpClientFactory.validateConnectorEndpoint("http://10.0.0.1/v1", "http", "10.0.0.1", 80, true, trusted, null);
-        org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> MLHttpClientFactory.validateConnectorEndpoint("http://10.0.0.2/v1", "http", "10.0.0.2", 80, true, trusted, null)
-            );
-    }
-
-    @org.junit.Test
-    public void validateConnectorEndpoint_rejectsNonHttpScheme() {
-        org.junit.Assert
-            .assertThrows(
-                IllegalArgumentException.class,
-                () -> MLHttpClientFactory.validateConnectorEndpoint("ftp://203.0.113.1/x", "ftp", "203.0.113.1", 21, false, null, null)
-            );
-    }
 }

@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -315,8 +314,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
      * @param parameters - connector parameters
      */
     public void validatePrePostProcessFunctions(Map<String, String> parameters) {
-        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        String endPoint = substitutor.replace(url);
+        String endPoint = Connector.substituteParameters(url, parameters);
         String remoteServer = getRemoteServerFromURL(endPoint);
         if (!remoteServer.isEmpty()) {
             validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
