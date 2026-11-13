@@ -23,6 +23,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
@@ -623,6 +624,23 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                         .contains("You can specify backend roles only for a model group with the restricted access mode.")
                 );
             }
+        });
+    }
+
+    public void test_RegisterModelIntoPrivateModelGroupOfAnotherUser_returnsForbidden() throws IOException {
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("user1PrivateModelGroup", null, AccessMode.PRIVATE, null);
+        registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
+            // Access is checked before the connector is used, so any connector ID will do
+            String registerModelInput = "{\"name\":\"user2-model\",\"function_name\":\"remote\",\"model_group_id\":\""
+                + modelGroupId
+                + "\",\"connector_id\":\"any-connector-id\"}";
+            ResponseException e = expectThrows(
+                ResponseException.class,
+                () -> TestHelper.makeRequest(user2Client, "POST", "/_plugins/_ml/models/_register", null, registerModelInput, null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permissions to perform this operation on this model."));
         });
     }
 

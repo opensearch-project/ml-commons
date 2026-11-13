@@ -13,6 +13,7 @@ import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegist
 import java.util.Base64;
 import java.util.concurrent.Semaphore;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
@@ -22,6 +23,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -91,8 +93,9 @@ public class MLModelChunkUploader {
                                         log.error("You don't have permissions to perform this operation on this model.");
                                         wrappedListener
                                             .onFailure(
-                                                new IllegalArgumentException(
-                                                    "You don't have permissions to perform this operation on this model."
+                                                new OpenSearchStatusException(
+                                                    "You don't have permissions to perform this operation on this model.",
+                                                    RestStatus.FORBIDDEN
                                                 )
                                             );
                                     } else {

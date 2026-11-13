@@ -271,7 +271,13 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     // if user does not have access to the model group ID provided in the input, we let user know they do not have access to
                     // the
                     // specified model group
-                    listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "You don't have permissions to perform this operation on this model.",
+                                RestStatus.FORBIDDEN
+                            )
+                        );
                 }, listener::onFailure)
             );
     }
