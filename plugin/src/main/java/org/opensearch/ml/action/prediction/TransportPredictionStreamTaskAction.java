@@ -175,12 +175,13 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                         mlPredictionTaskRequest.getMlInput().setCallerAlgorithm(mlPredictionTaskRequest.getMlInput().getAlgorithm());
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
-                    // Validate user access to model group
+                    // Validate user access to the model
                     modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             userInfo,
                             mlFeatureEnabledSetting,
                             tenantId,
+                            modelId,
                             mlModel.getModelGroupId(),
                             MLPredictionStreamTaskAction.NAME,
                             client,

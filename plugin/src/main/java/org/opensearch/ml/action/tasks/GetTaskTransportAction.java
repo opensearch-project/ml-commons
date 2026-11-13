@@ -380,10 +380,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             ActionListener<MLModel> getModelListener = ActionListener
                 .wrap(
                     model -> modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             user,
                             mlFeatureEnabledSetting,
                             tenantId,
+                            modelId,
                             model.getModelGroupId(),
                             MLTaskGetAction.NAME,
                             client,
