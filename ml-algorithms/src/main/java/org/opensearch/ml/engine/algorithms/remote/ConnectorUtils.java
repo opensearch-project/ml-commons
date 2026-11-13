@@ -422,8 +422,7 @@ public class ConnectorUtils {
 
         // Apply parameter substitution only if needed
         if (!parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
+            predictEndpoint = Connector.substituteParameters(predictEndpoint, parameters);
         }
 
         boolean isCancelAction = actionType == CANCEL_BATCH_PREDICT;
