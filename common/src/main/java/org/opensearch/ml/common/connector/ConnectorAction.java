@@ -44,6 +44,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
     public static final String SUPPORTS_STRUCTURED_OUTPUT_FIELD = "supports_structured_output";
+    /** A literal cleartext scheme at the start of a URL. */
+    public static final Pattern CLEARTEXT_URL = Pattern.compile("^\\s*http://", Pattern.CASE_INSENSITIVE);
     public static final String OPENAI = "openai";
     public static final String COHERE = "cohere";
     public static final String BEDROCK = "bedrock";
@@ -300,6 +302,24 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (ActionType.isValidAction(name)) {
             throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
         }
+    }
+
+    /**
+     * The first action URL that, with the parameters substituted, starts with a cleartext scheme; null when there is none
+     * or actions is null.
+     * @throws IllegalArgumentException with Connector.URL_PARAMETER_CYCLE_MESSAGE when the parameters refer to each other in a cycle
+     */
+    public static String firstCleartextUrl(List<ConnectorAction> actions, Map<String, String> parameters) {
+        if (actions == null) {
+            return null;
+        }
+        for (ConnectorAction action : actions) {
+            String url = Connector.substituteParameters(action.getUrl(), parameters);
+            if (CLEARTEXT_URL.matcher(url).find()) {
+                return url.trim();
+            }
+        }
+        return null;
     }
 
     /**

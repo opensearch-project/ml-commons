@@ -300,7 +300,12 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                 mlFeatureEnabledSetting,
                                 clusterService::state
                             );
-                        AuthConfigValidator.validate(inlineConnector, AuthConfigValidator.keysOf(inlineConnector.getCredential()));
+                        AuthConfigValidator
+                            .validate(
+                                inlineConnector,
+                                AuthConfigValidator.keysOf(inlineConnector.getCredential()),
+                                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                            );
                     } catch (Exception e) {
                         log.error("Rejected model registration: the inline connector failed the protocol or auth_config check", e);
                         listener.onFailure(e);
@@ -498,7 +503,12 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
         }
         // A hidden model skips only the endpoint allowlist above; its auth_config is validated like any other.
-        AuthConfigValidator.validate(connector, AuthConfigValidator.keysOf(connector.getCredential()));
+        AuthConfigValidator
+            .validate(
+                connector,
+                AuthConfigValidator.keysOf(connector.getCredential()),
+                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+            );
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {

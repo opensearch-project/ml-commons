@@ -18,7 +18,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
@@ -187,9 +186,6 @@ public class ConnectorProtocolValidator {
         return PROTOCOLS_WITHOUT_MUTUAL_TLS.contains(protocol);
     }
 
-    /** A literal cleartext scheme at the start of an action URL. */
-    private static final Pattern CLEARTEXT_URL = Pattern.compile("^\\s*http://", Pattern.CASE_INSENSITIVE);
-
     /**
      * Rejects {@code mutual_tls_enabled} on a connector whose action URL is plain {@code http://}.
      * <p>
@@ -328,7 +324,7 @@ public class ConnectorProtocolValidator {
             && url != null
             && clientConfig != null
             && Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())
-            && CLEARTEXT_URL.matcher(url).find();
+            && ConnectorAction.CLEARTEXT_URL.matcher(url).find();
     }
 
     /** Mirrors {@code HttpConnector#update}, which merges parameters with putAll rather than replacing them. */
@@ -353,20 +349,10 @@ public class ConnectorProtocolValidator {
         Map<String, String> parameters,
         ConnectorClientConfig clientConfig
     ) {
-        if (actions == null || clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
+        if (clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
             return null;
         }
-        for (ConnectorAction action : actions) {
-            String url = action == null ? null : action.getUrl();
-            if (url == null) {
-                continue;
-            }
-            String resolved = Connector.substituteParameters(url, parameters);
-            if (CLEARTEXT_URL.matcher(resolved).find()) {
-                return resolved.trim();
-            }
-        }
-        return null;
+        return ConnectorAction.firstCleartextUrl(actions, parameters);
     }
 
     // ---- auth_config --------------------------------------------------------------------------------------------

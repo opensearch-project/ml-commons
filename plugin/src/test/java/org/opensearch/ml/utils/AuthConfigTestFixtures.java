@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,6 +23,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -34,6 +37,7 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.connector.auth.TokenResponseSpec;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.test.MockLogAppender;
@@ -49,7 +53,8 @@ public final class AuthConfigTestFixtures {
 
     private AuthConfigTestFixtures() {}
 
-    public static final String TOKEN_URL = "https://login.example.com/t";
+    /** A token URL the default token endpoint patterns admit. */
+    public static final String TOKEN_URL = "https://login.microsoftonline.com/t/oauth2/v2.0/token";
     /** The credential key {@link #oauth2()} references. */
     public static final String SECRET_KEY = "api_key";
     /** The node version {@link #oldNodeCluster()} holds, below the version the guard requires. */
@@ -57,6 +62,10 @@ public final class AuthConfigTestFixtures {
     public static final String ACTION_URL = "https://api.openai.com/v1/chat/completions";
     /** The value a stored credential holds: already encrypted, never a plaintext the request supplies. */
     public static final String STORED_CIPHERTEXT = "ciphertext";
+    /** The token endpoint patterns of a node with default settings. */
+    public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
+        ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
+    );
     /** The document {@link OAuth2AuthConfig#NONE} emits. */
     public static final JsonNode NONE_DOCUMENT = tree("{\"type\":\"none\"}");
     /** The document a {@code none} update over {@link #fullOauth2()} writes: every stored member marked as removed. */

@@ -50,6 +50,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -158,7 +159,12 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             try {
                 ConnectorProtocolValidator
                     .validateAuth(supplied.getProtocol(), supplied.getAuthConfig(), mlFeatureEnabledSetting, clusterService::state);
-                AuthConfigValidator.validate(supplied, AuthConfigValidator.keysOf(supplied.getCredential()));
+                AuthConfigValidator
+                    .validate(
+                        supplied,
+                        AuthConfigValidator.keysOf(supplied.getCredential()),
+                        mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                    );
             } catch (Exception e) {
                 log.error("Rejected update of model {} with a caller-supplied connector: {}", modelId, e.getMessage());
                 actionListener.onFailure(e);
@@ -486,7 +492,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     boolean authOrProtocolTouched = ConnectorProtocolValidator
                         .touchesAuthOrProtocol(updateModelInput.getConnector().getAuthConfig(), updatedProtocol, connector.getProtocol());
                     Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
-                    boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys);
+                    TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
+                    boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys, allowlist);
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update
@@ -501,7 +508,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // A supplied credential replaces the stored one, so its keys are the ones the references must name.
                     Set<String> keyView = hasSuppliedCredential ? AuthConfigValidator.keysOf(suppliedCredential) : storedKeys;
                     try {
-                        if (AuthConfigValidator.validateOrGrandfather(connector, keyView, authOrProtocolTouched, storedPassed)) {
+                        if (AuthConfigValidator.validateOrGrandfather(connector, keyView, allowlist, authOrProtocolTouched, storedPassed)) {
                             log
                                 .warn(
                                     "Model {} keeps a stored inline auth_config that fails validation; this update leaves it unchanged",
