@@ -44,6 +44,7 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -234,7 +235,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             // Before update(), which changes the connector in place.
                             boolean authOrProtocolTouched = ConnectorProtocolValidator
                                 .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol());
-                            boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys);
+                            TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
+                            boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys, allowlist);
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
@@ -270,7 +272,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 ? AuthConfigValidator.keysOf(requestCredential)
                                 : storedKeys;
                             try {
-                                if (AuthConfigValidator.validateOrGrandfather(connector, keyView, authOrProtocolTouched, storedPassed)) {
+                                if (AuthConfigValidator
+                                    .validateOrGrandfather(connector, keyView, allowlist, authOrProtocolTouched, storedPassed)) {
                                     log
                                         .warn(
                                             "Connector {} keeps a stored auth_config that fails validation; this update leaves it unchanged",

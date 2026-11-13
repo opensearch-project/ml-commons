@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_OVER_FULL_OAUTH2_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
@@ -155,6 +156,7 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.state()).thenReturn(clusterState(Version.CURRENT));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
         ThreadContext threadContext = new ThreadContext(
             Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build()
         );
@@ -413,6 +415,22 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
     @Test
     public void testStoredConfigurationThatFails_unrelatedUpdate_passesWithAWarning() throws Exception {
         stubStored(storedWithCredential(oauth2Referencing("missing")));
+        stubRequest(descriptionOnly());
+
+        expectLog(
+            UpdateConnectorTransportAction.class,
+            Level.WARN,
+            this::execute,
+            new String[] { KEPT_FAILING_CONFIGURATION_LOG },
+            new String[0]
+        );
+
+        assertSucceeded();
+    }
+
+    @Test
+    public void testStoredOauth2OutsideTheTokenEndpointAllowlist_unrelatedUpdate_passesWithAWarning() throws Exception {
+        stubStored(storedWithCredential(oauth2().toBuilder().tokenUrl("https://login.example.com/t").build()));
         stubRequest(descriptionOnly());
 
         expectLog(
