@@ -58,6 +58,7 @@ public class RemoteModel implements Predictable {
     public static final String CONNECTOR_RESTRICTED_IP_PATTERNS = "connectorRestrictedIpPatterns";
     public static final String TRUSTED_CONNECTOR_ENDPOINTS_REGEX = "trustedConnectorEndpointsRegex";
     public static final String LEGACY_ACTION_URL_ORIGIN_ENABLED = "legacyActionUrlOriginEnabled";
+    public static final String AUTHORIZATION_PROVIDER_FACTORY = "authorizationProviderFactory";
     public static final String SDK_CLIENT = "sdk_client";
     public static final String SETTINGS = "settings";
 
