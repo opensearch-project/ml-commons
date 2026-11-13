@@ -96,8 +96,14 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         if (llmResponseExcludePath != null) {
             dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
         }
-        String llmFinishReason = JsonPath.read(dataAsMap, FINISH_REASON_PATH);
-        if (!llmFinishReason.contentEquals(FINISH_REASON)) {
+        String llmFinishReason;
+        try {
+            llmFinishReason = JsonPath.read(dataAsMap, FINISH_REASON_PATH);
+        } catch (PathNotFoundException e) {
+            // No stop reason means no tool calls; the agent reports an empty or unreadable reply itself
+            return output;
+        }
+        if (!FINISH_REASON.equals(llmFinishReason)) {
             return output;
         }
         List toolCalls = JsonPath.read(dataAsMap, CALL_PATH);

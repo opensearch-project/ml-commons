@@ -1483,4 +1483,77 @@ public class OpenaiV1ChatCompletionsModelProviderTest {
     private List<Map<String, String>> extractMessages(String payload) {
         return (List<Map<String, String>>) StringUtils.gson.fromJson(payload, Map.class).get("messages");
     }
+
+    @Test
+    public void testExtractFinishReason() {
+        Map<String, Object> response = Map
+            .of("choices", List.of(Map.of("finish_reason", "length", "message", Map.of("role", "assistant"))));
+        assertEquals("length", provider.extractFinishReason(response));
+    }
+
+    @Test
+    public void testChoiceWithoutAMessageStillHasItsFinishReason() {
+        Map<String, Object> response = Map.of("choices", List.of(Map.of("index", 0, "finish_reason", "length")));
+        assertNull(provider.extractMessageFromResponse(response));
+        assertEquals("length", provider.extractFinishReason(response));
+    }
+
+    @Test
+    public void testExtractFinishReasonMissingIsNull() {
+        assertNull(provider.extractFinishReason(null));
+        assertNull(provider.extractFinishReason(Map.of()));
+        assertNull(provider.extractFinishReason(Map.of("choices", List.of())));
+        assertNull(provider.extractFinishReason(Map.of("choices", List.of(Map.of("message", Map.of())))));
+    }
+
+    @Test
+    public void testRefusalIsReportedAsTheFinishReason() {
+        Map<String, Object> message = new HashMap<>();
+        message.put("role", "assistant");
+        message.put("content", null);
+        message.put("refusal", "I can't help with that.");
+        Map<String, Object> response = Map.of("choices", List.of(Map.of("finish_reason", "stop", "message", message)));
+
+        assertEquals("refusal", provider.extractFinishReason(response));
+        assertTrue(provider.isEmptyReply(response));
+    }
+
+    @Test
+    public void testIsEmptyReply_NoContentAndNoToolCalls() {
+        Map<String, Object> nullContent = new HashMap<>();
+        nullContent.put("role", "assistant");
+        nullContent.put("content", null);
+        for (Map<String, Object> message : List
+            .of(
+                nullContent,
+                Map.<String, Object>of("role", "assistant", "content", ""),
+                Map.<String, Object>of("content", List.of(), "tool_calls", List.of())
+            )) {
+            assertTrue(
+                message.toString(),
+                provider.isEmptyReply(Map.of("choices", List.of(Map.of("finish_reason", "stop", "message", message))))
+            );
+        }
+    }
+
+    @Test
+    public void testIsEmptyReply_FalseForContentOrToolCallsOrAnotherShape() {
+        List<Object> parts = List.of(Map.of("type", "text", "text", "hi"));
+        List<Object> toolCalls = List.of(Map.of("id", "call_1", "function", Map.of("name", "search", "arguments", "{}")));
+        for (Map<String, Object> message : List
+            .of(
+                Map.<String, Object>of("content", "hi"),
+                Map.<String, Object>of("content", parts),
+                Map.<String, Object>of("content", "", "tool_calls", toolCalls)
+            )) {
+            assertFalse(
+                message.toString(),
+                provider.isEmptyReply(Map.of("choices", List.of(Map.of("finish_reason", "stop", "message", message))))
+            );
+        }
+        assertFalse(provider.isEmptyReply(null));
+        assertFalse(provider.isEmptyReply(Map.of("choices", List.of())));
+        // No message at all is not the usual shape (e.g. a post-process stripped it), so it's a format error
+        assertFalse(provider.isEmptyReply(Map.of("choices", List.of(Map.of("finish_reason", "length")))));
+    }
 }

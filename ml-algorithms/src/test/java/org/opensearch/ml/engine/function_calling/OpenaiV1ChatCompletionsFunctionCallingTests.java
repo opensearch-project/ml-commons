@@ -74,6 +74,21 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
     }
 
     @Test
+    public void handleWithoutAFinishReasonReturnsNoToolCalls() {
+        Map<String, Object> nullReason = new HashMap<>();
+        nullReason.put("message", Map.of("content", ""));
+        nullReason.put("finish_reason", null);
+        for (Map<String, Object> choice : List.of(Map.<String, Object>of("message", Map.of("content", "")), nullReason)) {
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(Map.of("choices", List.of(choice))).build();
+            ModelTensorOutput output = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(tensor)).build()))
+                .build();
+            Assert.assertTrue(functionCalling.handle(output, new HashMap<>()).isEmpty());
+        }
+    }
+
+    @Test
     public void supply() {
         List<LLMMessage> messages = functionCalling
             .supply(
