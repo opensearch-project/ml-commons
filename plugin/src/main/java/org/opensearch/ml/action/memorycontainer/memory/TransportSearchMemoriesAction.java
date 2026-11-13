@@ -79,6 +79,11 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             return;
         }
 
+        if (input.getMemoryType() == null) {
+            actionListener.onFailure(new IllegalArgumentException("Memory type is required"));
+            return;
+        }
+
         if (!MLSearchRequestValidator.validate(input.getSearchSourceBuilder(), AggregationPolicy.QUERY_SCOPED, actionListener)) {
             return;
         }
@@ -119,6 +124,19 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             MemoryConfiguration memoryConfig = container.getConfiguration();
             MemoryType memoryType = input.getMemoryType();
             String indexName = memoryConfig.getIndexName(memoryType);
+            if (indexName == null) {
+                // The container has no index for this memory type: long-term and history memory need an LLM and strategies,
+                // and sessions or history can be disabled. Return an empty result, as a search of a memory index that was
+                // never created does, instead of building a search request with no index (#5231).
+                log
+                    .debug(
+                        "Memory container {} has no {} index, returning an empty search result",
+                        input.getMemoryContainerId(),
+                        memoryType
+                    );
+                actionListener.onResponse(RestActionUtils.emptySearchResponse());
+                return;
+            }
 
             // Always add container ID filter to prevent cross-container access when containers share index prefix
             memoryContainerHelper.addContainerIdFilter(input.getMemoryContainerId(), input.getSearchSourceBuilder());
