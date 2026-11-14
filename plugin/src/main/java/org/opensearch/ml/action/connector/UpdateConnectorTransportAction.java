@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -42,12 +43,14 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.ConnectorProtocolValidator;
@@ -80,6 +83,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     final MLModelManager mlModelManager;
     final MLEngine mlEngine;
+    final MLIndicesHandler mlIndicesHandler;
+    final ClusterService clusterService;
     volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
@@ -93,7 +98,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         Settings settings,
         ClusterService clusterService,
         MLEngine mlEngine,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLIndicesHandler mlIndicesHandler
     ) {
         super(MLUpdateConnectorAction.NAME, transportService, actionFilters, MLUpdateConnectorRequest::new);
         this.client = client;
@@ -102,6 +108,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         this.mlModelManager = mlModelManager;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mlIndicesHandler = mlIndicesHandler;
+        this.clusterService = clusterService;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -129,6 +137,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             connectorAccessControlHelper
                 .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
                     // context is already restored here
+                    // Fetched with its stored credential so the auth_config checks below can see its key names. Only
+                    // the names are kept: the object written back holds no ciphertext.
+                    Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
+                    connector.removeCredential();
                     if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
                         boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                         if (hasPermission) {
@@ -164,6 +176,17 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         );
                                     }
                                 }
+                                // Outside the protocol block: an update that only changes auth_config sets no protocol.
+                                // Runs before update(), which changes the connector in place.
+                                ConnectorProtocolValidator
+                                    .validateAuthAfterUpdate(
+                                        connector,
+                                        updatedProtocol,
+                                        mlCreateConnectorInput.getAuthConfig(),
+                                        mlCreateConnectorInput.getCredential(),
+                                        mlFeatureEnabledSetting,
+                                        clusterService::state
+                                    );
                                 ConnectorProtocolValidator
                                     .validateMutualTlsSupportedAfterUpdate(
                                         connector.getProtocol(),
@@ -208,6 +231,10 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
 
                             boolean storedMutualTls = connector.getConnectorClientConfig() != null
                                 && Boolean.TRUE.equals(connector.getConnectorClientConfig().getMutualTlsEnabled());
+                            // Before update(), which changes the connector in place.
+                            boolean authOrProtocolTouched = ConnectorProtocolValidator
+                                .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol());
+                            boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys);
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
@@ -235,24 +262,55 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             // Before encrypt(): reject an invalid mutual TLS configuration up front rather
                             // than on every request the updated connector serves.
                             validateMutualTlsConfig(connector, updateContent, storedMutualTls);
+                            // Not inside the encrypt listener below, which would report a rejection as an encryption
+                            // failure. A credential in the request replaces the stored one, so its keys are the ones
+                            // the references must name.
+                            Map<String, String> requestCredential = updateContent.getCredential();
+                            Set<String> keyView = requestCredential != null && !requestCredential.isEmpty()
+                                ? AuthConfigValidator.keysOf(requestCredential)
+                                : storedKeys;
+                            try {
+                                if (AuthConfigValidator.validateOrGrandfather(connector, keyView, authOrProtocolTouched, storedPassed)) {
+                                    log
+                                        .warn(
+                                            "Connector {} keeps a stored auth_config that fails validation; this update leaves it unchanged",
+                                            connectorId
+                                        );
+                                }
+                            } catch (IllegalArgumentException e) {
+                                log.error("Rejected connector update for connector id {}", connectorId, e);
+                                listener.onFailure(e);
+                                return;
+                            }
 
                             ActionListener<Boolean> encryptCredentialListener = ActionListener.wrap(r -> {
                                 connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                                 connector.setLastUpdateTime(Instant.now());
-                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-                                    .builder()
-                                    .index(ML_CONNECTOR_INDEX)
-                                    .id(connectorId)
-                                    .tenantId(tenantId)
-                                    .dataObject(connector)
-                                    .build();
-                                try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
-                                    updateUndeployedConnector(
-                                        connectorId,
-                                        updateDataObjectRequest,
-                                        ActionListener.runBefore(listener, innerContext::restore)
-                                    );
-                                }
+                                // As create does: the index mapping is brought up to date before the write, so a
+                                // document that carries auth_config is never mapped dynamically.
+                                mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
+                                    if (!indexCreated) {
+                                        listener.onFailure(new RuntimeException("No response to create ML Connector index"));
+                                        return;
+                                    }
+                                    UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                        .builder()
+                                        .index(ML_CONNECTOR_INDEX)
+                                        .id(connectorId)
+                                        .tenantId(tenantId)
+                                        .dataObject(connector)
+                                        .build();
+                                    try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
+                                        updateUndeployedConnector(
+                                            connectorId,
+                                            updateDataObjectRequest,
+                                            ActionListener.runBefore(listener, innerContext::restore)
+                                        );
+                                    }
+                                }, e -> {
+                                    log.error("Failed to init ML connector index", e);
+                                    listener.onFailure(e);
+                                }));
                             }, e -> {
                                 log.error("Failed to encrypt credentials in connector", e);
                                 listener.onFailure(e);
@@ -270,7 +328,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                 }, exception -> {
                     log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
                     listener.onFailure(exception);
-                }));
+                }), true);
         } catch (Exception e) {
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);

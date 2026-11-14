@@ -172,13 +172,8 @@ public class ConnectorAccessControlHelper {
     }
 
     /**
-     * Gets a connector with the provided clients.
-     * @param sdkClient The SDKClient
-     * @param client The OpenSearch client for thread pool management
-     * @param context The Stored Context.  Executing this method will restore this context.
-     * @param getDataObjectRequest The get request
-     * @param connectorId The connector Id
-     * @param listener the action listener to complete with the GetResponse or Exception
+     * {@link #getConnector(SdkClient, Client, ThreadContext.StoredContext, GetDataObjectRequest, String, ActionListener, boolean)}
+     * with the credential stripped from the returned connector.
      */
     public void getConnector(
         SdkClient sdkClient,
@@ -187,6 +182,29 @@ public class ConnectorAccessControlHelper {
         GetDataObjectRequest getDataObjectRequest,
         String connectorId,
         ActionListener<Connector> listener
+    ) {
+        getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, listener, false);
+    }
+
+    /**
+     * Gets a connector with the provided clients.
+     * @param sdkClient The SDKClient
+     * @param client The OpenSearch client for thread pool management
+     * @param context The Stored Context.  Executing this method will restore this context.
+     * @param getDataObjectRequest The get request
+     * @param connectorId The connector Id
+     * @param listener the action listener to complete with the GetResponse or Exception
+     * @param keepEncryptedCredential whether to hand the connector on with its stored, still encrypted credential
+     *     instead of stripping it. A caller that passes true must not return that connector to a user.
+     */
+    public void getConnector(
+        SdkClient sdkClient,
+        Client client,
+        ThreadContext.StoredContext context,
+        GetDataObjectRequest getDataObjectRequest,
+        String connectorId,
+        ActionListener<Connector> listener,
+        boolean keepEncryptedCredential
     ) {
 
         sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
@@ -224,7 +242,9 @@ public class ConnectorAccessControlHelper {
                                     );
                                 return;
                             }
-                            mlConnector.removeCredential();
+                            if (!keepEncryptedCredential) {
+                                mlConnector.removeCredential();
+                            }
                             listener.onResponse(mlConnector);
                         } catch (Exception e) {
                             log.error("Failed to parse ml connector {}", r.id(), e);
