@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -29,6 +30,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 
@@ -78,6 +80,9 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isVertexAIConnectorEnabled;
 
+    private volatile Boolean isConnectorAuthEnabled;
+    private volatile List<String> trustedOAuth2TokenEndpointsRegex;
+
     private volatile Boolean isMutualTlsEnabled;
 
     private volatile Boolean isIndexInsightEnabled;
@@ -114,6 +119,8 @@ public class MLFeatureEnabledSetting {
         isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
         isMemoryRetentionEnabled = ML_COMMONS_MEMORY_RETENTION_ENABLED.get(settings);
         isVertexAIConnectorEnabled = ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.get(settings);
+        isConnectorAuthEnabled = ML_COMMONS_CONNECTOR_AUTH_ENABLED.get(settings);
+        trustedOAuth2TokenEndpointsRegex = ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.get(settings);
         isMutualTlsEnabled = ML_COMMONS_MUTUAL_TLS_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
@@ -163,6 +170,10 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED, it -> isVertexAIConnectorEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_AUTH_ENABLED, it -> isConnectorAuthEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX, it -> trustedOAuth2TokenEndpointsRegex = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MUTUAL_TLS_ENABLED, it -> isMutualTlsEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
@@ -332,6 +343,23 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isVertexAIConnectorEnabled() {
         return isVertexAIConnectorEnabled;
+    }
+
+    /**
+     * Whether connector auth_config blocks whose type is not none are enabled. Disabled by default (opt-in).
+     * @return whether connector auth_config is enabled.
+     */
+    public boolean isConnectorAuthEnabled() {
+        return isConnectorAuthEnabled;
+    }
+
+    /**
+     * The patterns a connector auth_config token_url must match, in canonical form.
+     * @return an unmodifiable view of the current list; empty when none is set.
+     */
+    public List<String> getTrustedOAuth2TokenEndpointsRegex() {
+        List<String> current = trustedOAuth2TokenEndpointsRegex;
+        return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
     }
 
     /**
