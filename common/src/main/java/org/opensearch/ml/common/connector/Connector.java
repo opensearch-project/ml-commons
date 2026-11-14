@@ -37,6 +37,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
@@ -80,6 +81,11 @@ public interface Connector extends ToXContentObject, Writeable {
     void addAction(ConnectorAction action);
 
     ConnectorClientConfig getConnectorClientConfig();
+
+    /** The connector's {@code auth_config}; null when it has none, which only an HTTP-family connector can carry. */
+    default OAuth2AuthConfig getAuthConfig() {
+        return null;
+    }
 
     BatchJobStatusMapping getBatchJobStatus();
 
@@ -148,9 +154,31 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
-    @SuppressWarnings("removal")
     static Connector createConnector(XContentParser parser) throws IOException {
-        Map<String, Object> connectorMap = parser.map();
+        return createConnector(parser.map());
+    }
+
+    /**
+     * Parses the inline connector of a model register request: the strict {@code auth_config} checks of a request run
+     * first, then the stored-document parser.
+     *
+     * @throws IllegalArgumentException when the {@code auth_config} content of the request is invalid
+     */
+    @SuppressWarnings("unchecked")
+    static Connector createConnectorFromRequest(XContentParser parser) throws IOException {
+        Map<String, Object> connectorMap = parser.mapOrdered();
+        if (connectorMap.containsKey(AbstractConnector.AUTH_CONFIG_FIELD)) {
+            Object authConfig = connectorMap.get(AbstractConnector.AUTH_CONFIG_FIELD);
+            if (!(authConfig instanceof Map)) {
+                throw new IllegalArgumentException(OAuth2AuthConfig.NOT_AN_OBJECT_MESSAGE);
+            }
+            OAuth2AuthConfig.parse((Map<String, Object>) authConfig);
+        }
+        return createConnector(connectorMap);
+    }
+
+    @SuppressWarnings("removal")
+    private static Connector createConnector(Map<String, Object> connectorMap) throws IOException {
         String jsonStr;
         try {
             jsonStr = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(connectorMap));
