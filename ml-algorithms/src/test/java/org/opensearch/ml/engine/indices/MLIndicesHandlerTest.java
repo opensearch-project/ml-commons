@@ -20,9 +20,11 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 
 import java.lang.reflect.Field;
@@ -48,6 +50,8 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -682,11 +686,11 @@ public class MLIndicesHandlerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void resetConfigIndexMappingUpdated() throws Exception {
+    private void resetMappingUpdated(String indexName) throws Exception {
         Field field = MLIndicesHandler.class.getDeclaredField("indexMappingUpdated");
         field.setAccessible(true);
         Map<String, AtomicBoolean> flags = (Map<String, AtomicBoolean>) field.get(null);
-        flags.get(ML_CONFIG_INDEX).set(false);
+        flags.get(indexName).set(false);
     }
 
     private void mockLegacyConfigIndexMapping() {
@@ -700,7 +704,7 @@ public class MLIndicesHandlerTest {
 
     @Test
     public void initMLConfigIndex_legacyMappingTypeConflict_appliesAdditiveMapping() throws Exception {
-        resetConfigIndexMappingUpdated();
+        resetMappingUpdated(ML_CONFIG_INDEX);
         mockLegacyConfigIndexMapping();
         ActionListener<Boolean> listener = mock(ActionListener.class);
         int[] putMappingCalls = { 0 };
@@ -735,7 +739,7 @@ public class MLIndicesHandlerTest {
 
     @Test
     public void initMLConfigIndex_otherMappingFailure_propagatesFailure() throws Exception {
-        resetConfigIndexMappingUpdated();
+        resetMappingUpdated(ML_CONFIG_INDEX);
         mockLegacyConfigIndexMapping();
         ActionListener<Boolean> listener = mock(ActionListener.class);
         doAnswer(invocation -> {
@@ -752,7 +756,7 @@ public class MLIndicesHandlerTest {
 
     @Test
     public void initMLConfigIndex_settingsNotAcknowledged_stillSucceeds() throws Exception {
-        resetConfigIndexMappingUpdated();
+        resetMappingUpdated(ML_CONFIG_INDEX);
         IndexMetadata configIndexMetadata = mock(IndexMetadata.class);
         MappingMetadata configMappingMetadata = mock(MappingMetadata.class);
         when(metadata.indices()).thenReturn(Map.of(ML_CONFIG_INDEX, configIndexMetadata));
@@ -782,5 +786,109 @@ public class MLIndicesHandlerTest {
         assertTrue(indicesHandler.isFieldTypeConflict(ML_CONFIG_INDEX, new RuntimeException("wrapped", conflict)));
         assertFalse(indicesHandler.isFieldTypeConflict(ML_AGENT_INDEX, conflict));
         assertFalse(indicesHandler.isFieldTypeConflict(ML_CONFIG_INDEX, new IllegalArgumentException("other")));
+    }
+
+    // The connector and model mappings carry auth_config from schema versions 6 and 15.
+    // ConnectorAuthConfigMappingUpgradeITTests (plugin) has its own copy: plugin tests cannot see this module's test classes.
+    @SuppressWarnings("unchecked")
+    private static boolean mappingUpdated(String indexName) throws Exception {
+        Field field = MLIndicesHandler.class.getDeclaredField("indexMappingUpdated");
+        field.setAccessible(true);
+        return ((Map<String, AtomicBoolean>) field.get(null)).get(indexName).get();
+    }
+
+    private void mockIndexAtSchemaVersion(String indexName, int schemaVersion) {
+        IndexMetadata indexMetadata = mock(IndexMetadata.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+        when(metadata.indices()).thenReturn(Map.of(indexName, indexMetadata));
+        when(indexMetadata.mapping()).thenReturn(mappingMetadata);
+        when(mappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, schemaVersion)));
+    }
+
+    private void acknowledgePutMappingAndSettings() {
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).updateSettings(any(), any());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> capturedMappingProperties() {
+        ArgumentCaptor<PutMappingRequest> requestCaptor = ArgumentCaptor.forClass(PutMappingRequest.class);
+        verify(indicesAdminClient).putMapping(requestCaptor.capture(), any());
+        Map<String, Object> mapping = XContentHelper.convertToMap(XContentType.JSON.xContent(), requestCaptor.getValue().source(), true);
+        return (Map<String, Object>) mapping.get("properties");
+    }
+
+    @Test
+    public void initMLConnectorIndex_fromSchemaVersion5_putsTheAuthConfigMapping() throws Exception {
+        resetMappingUpdated(ML_CONNECTOR_INDEX);
+        mockIndexAtSchemaVersion(ML_CONNECTOR_INDEX, 5);
+        acknowledgePutMappingAndSettings();
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        indicesHandler.initMLConnectorIndex(listener);
+
+        // The put mapping source holds "auth_config": {"type": "flat_object"} among the connector properties.
+        assertEquals(Map.of("type", "flat_object"), capturedMappingProperties().get("auth_config"));
+        verify(listener).onResponse(true);
+        assertTrue(mappingUpdated(ML_CONNECTOR_INDEX));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void initModelIndexIfAbsent_fromSchemaVersion14_putsTheInlineConnectorAuthConfigMapping() throws Exception {
+        resetMappingUpdated(ML_MODEL_INDEX);
+        mockIndexAtSchemaVersion(ML_MODEL_INDEX, 14);
+        acknowledgePutMappingAndSettings();
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        indicesHandler.initModelIndexIfAbsent(listener);
+
+        Map<String, Object> connector = (Map<String, Object>) capturedMappingProperties().get("connector");
+        Map<String, Object> connectorProperties = (Map<String, Object>) connector.get("properties");
+        assertEquals(Map.of("type", "flat_object"), connectorProperties.get("auth_config"));
+        verify(listener).onResponse(true);
+        assertTrue(mappingUpdated(ML_MODEL_INDEX));
+    }
+
+    @Test
+    public void initMLConnectorIndex_atSchemaVersion6_putsNoMapping() throws Exception {
+        resetMappingUpdated(ML_CONNECTOR_INDEX);
+        mockIndexAtSchemaVersion(ML_CONNECTOR_INDEX, 6);
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        indicesHandler.initMLConnectorIndex(listener);
+
+        verify(indicesAdminClient, times(0)).putMapping(any(), any());
+        verify(listener).onResponse(true);
+        assertTrue(mappingUpdated(ML_CONNECTOR_INDEX));
+    }
+
+    @Test
+    public void initMLConnectorIndex_mappingConflict_reachesOnFailureAndKeepsTheFlagUnset() throws Exception {
+        resetMappingUpdated(ML_CONNECTOR_INDEX);
+        mockIndexAtSchemaVersion(ML_CONNECTOR_INDEX, 5);
+        IllegalArgumentException conflict = new IllegalArgumentException(
+            "can't merge a non object mapping [auth_config] with an object mapping"
+        );
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(conflict);
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        indicesHandler.initMLConnectorIndex(listener);
+
+        verify(listener).onFailure(conflict);
+        verify(listener, times(0)).onResponse(any());
+        assertFalse(mappingUpdated(ML_CONNECTOR_INDEX));
     }
 }
