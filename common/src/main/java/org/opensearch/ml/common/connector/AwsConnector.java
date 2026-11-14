@@ -58,7 +58,8 @@ public class AwsConnector extends HttpConnector {
             owner,
             connectorClientConfig,
             tenantId,
-            provisionedBy
+            provisionedBy,
+            null
         );
         validate();
     }
