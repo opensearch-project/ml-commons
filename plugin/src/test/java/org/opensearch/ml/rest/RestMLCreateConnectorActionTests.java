@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -93,6 +94,10 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
         String actionName = restMLCreateConnectorAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_create_connector_action", actionName);
+    }
+
+    public void testGetFilteredFields_redactsTheAuthConfigSecret() {
+        assertEquals(Set.of("credential", "*.Authorization", "auth_config.client_secret"), restMLCreateConnectorAction.getFilteredFields());
     }
 
     public void testRoutes() {
