@@ -854,6 +854,32 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(ConnectorAccessControlHelper.isAdmin(admin));
     }
 
+    @Test
+    public void testGetConnector_keepingTheCredential_returnsItIntact() throws IOException {
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
+        GetResponse getResponse = prepareConnectorWithCredential();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        connectorAccessControlHelper
+            .getConnector(
+                sdkClient,
+                client,
+                client.threadPool().getThreadContext().newStoredContext(true),
+                getRequest,
+                "connectorId",
+                getConnectorActionListener,
+                true
+            );
+
+        ArgumentCaptor<Connector> argumentCaptor = ArgumentCaptor.forClass(Connector.class);
+        verify(getConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(Map.of("api_key", "secret"), argumentCaptor.getValue().getCredential());
+    }
+
     private GetResponse createGetResponse(List<String> backendRoles) {
         HttpConnector httpConnector = HttpConnector
             .builder()

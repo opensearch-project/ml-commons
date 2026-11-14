@@ -7,11 +7,13 @@ package org.opensearch.ml.common.settings;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Set;
 
 import org.junit.Before;
@@ -59,7 +61,9 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -319,6 +323,35 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build());
 
         assertTrue(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testConnectorAuthSettingsDefaults() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+
+        assertFalse(setting.isConnectorAuthEnabled());
+        assertEquals(
+            MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.get(Settings.EMPTY),
+            setting.getTrustedOAuth2TokenEndpointsRegex()
+        );
+        assertThrows(UnsupportedOperationException.class, () -> setting.getTrustedOAuth2TokenEndpointsRegex().add("^https://x$"));
+    }
+
+    @Test
+    public void testConnectorAuthSettingsDynamicUpdate() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+
+        mockClusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .put("plugins.ml_commons.connector.auth_enabled", true)
+                    .putList("plugins.ml_commons.trusted_oauth2_token_endpoints_regex", "^https://idp\\.corp\\.example/token$")
+                    .build()
+            );
+
+        assertTrue(setting.isConnectorAuthEnabled());
+        assertEquals(List.of("^https://idp\\.corp\\.example/token$"), setting.getTrustedOAuth2TokenEndpointsRegex());
     }
 
     @Test

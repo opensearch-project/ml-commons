@@ -32,6 +32,7 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -61,6 +62,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private static final CertificateProcessor CERTIFICATE_PROCESSOR = new CertificateProcessor();
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final ClusterService clusterService;
     private final SdkClient sdkClient;
     private final MLEngine mlEngine;
     private final MLModelManager mlModelManager;
@@ -87,6 +89,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         super(MLCreateConnectorAction.NAME, transportService, actionFilters, MLCreateConnectorRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.clusterService = clusterService;
         this.sdkClient = sdkClient;
         this.mlEngine = mlEngine;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
@@ -110,6 +113,15 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
         try {
             ConnectorProtocolValidator.validateProtocolEnabled(mlCreateConnectorInput.getProtocol(), mlFeatureEnabledSetting);
+            // Before the dry-run return below, so a dry run gets these checks too. AuthConfigValidator runs only on the
+            // real request, after that return.
+            ConnectorProtocolValidator
+                .validateAuth(
+                    mlCreateConnectorInput.getProtocol(),
+                    mlCreateConnectorInput.getAuthConfig(),
+                    mlFeatureEnabledSetting,
+                    clusterService::state
+                );
             ConnectorProtocolValidator
                 .validateMutualTlsSupported(mlCreateConnectorInput.getProtocol(), mlCreateConnectorInput.getConnectorClientConfig());
             ConnectorProtocolValidator.validateMutualTlsEnabled(mlCreateConnectorInput.getConnectorClientConfig(), mlFeatureEnabledSetting);
@@ -147,6 +159,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             // Fail fast: otherwise an invalid mutual TLS configuration is only caught at execution
             // time, and then on every single request the connector serves.
             validateMutualTlsConfig(connector);
+            // The credential is still plaintext here; it is encrypted just before the write.
+            AuthConfigValidator.validate(connector, AuthConfigValidator.keysOf(connector.getCredential()));
 
             User user = RestActionUtils.getUserContext(client);
             String connectorId = mlCreateConnectorInput.getConnectorId();

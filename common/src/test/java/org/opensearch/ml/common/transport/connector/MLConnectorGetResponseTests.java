@@ -18,12 +18,15 @@ import java.io.UncheckedIOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
 
@@ -115,4 +118,26 @@ public class MLConnectorGetResponseTests {
         MLConnectorGetResponse response = MLConnectorGetResponse.builder().build();
         assertNull(response.getMlConnector());
     }
+
+    @Test
+    public void toXContent_showsTheStoredAuthConfigWithoutRemovalMarkers() throws IOException {
+        String stored = "{\"name\":\"c\",\"protocol\":\"http\",\"parameters\":{\"model\":\"x\"},"
+            + "\"auth_config\":{\"scope\":[],\"type\":\"none\",\"token_url\":[],\"token_response\":[]}}";
+        Connector parsed;
+        try (
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, stored)
+        ) {
+            parser.nextToken();
+            parsed = Connector.createConnector(parser);
+        }
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        MLConnectorGetResponse.builder().mlConnector(parsed).build().toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertEquals(
+            "{\"name\":\"c\",\"protocol\":\"http\",\"parameters\":{\"model\":\"x\"},\"auth_config\":{\"type\":\"none\"}}",
+            builder.toString()
+        );
+    }
+
 }

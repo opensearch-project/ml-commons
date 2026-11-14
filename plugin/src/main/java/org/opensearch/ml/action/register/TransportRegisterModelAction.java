@@ -46,6 +46,7 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -288,7 +289,23 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 if (inlineConnector != null) {
                     // Same order as validateInternalConnector uses on the other branch, so the same request content
                     // does not report a different status depending on whether a connector_id happens to accompany it.
-                    ConnectorProtocolValidator.validateProtocolEnabled(inlineConnector.getProtocol(), mlFeatureEnabledSetting);
+                    // Reported through the listener: a throw here would reach the failure handler of whichever
+                    // listener called this method, and be logged under that handler's message.
+                    try {
+                        ConnectorProtocolValidator.validateProtocolEnabled(inlineConnector.getProtocol(), mlFeatureEnabledSetting);
+                        ConnectorProtocolValidator
+                            .validateAuth(
+                                inlineConnector.getProtocol(),
+                                inlineConnector.getAuthConfig(),
+                                mlFeatureEnabledSetting,
+                                clusterService::state
+                            );
+                        AuthConfigValidator.validate(inlineConnector, AuthConfigValidator.keysOf(inlineConnector.getCredential()));
+                    } catch (Exception e) {
+                        log.error("Rejected model registration: the inline connector failed the protocol or auth_config check", e);
+                        listener.onFailure(e);
+                        return;
+                    }
                 }
                 if (inlineConnector != null && ConnectorProtocols.isMcpProtocol(inlineConnector.getProtocol())) {
                     log.error("Rejected model registration with an inline MCP connector, protocol {}", inlineConnector.getProtocol());
@@ -448,6 +465,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         // Checked ahead of the validations below so a protocol left disabled reports as disabled rather
         // than as whatever the next validation happens to find.
         ConnectorProtocolValidator.validateProtocolEnabled(connector.getProtocol(), mlFeatureEnabledSetting);
+        ConnectorProtocolValidator
+            .validateAuth(connector.getProtocol(), connector.getAuthConfig(), mlFeatureEnabledSetting, clusterService::state);
         // An MCP connector carries no actions, so every action accessor used below - and later by the preset
         // model interface lookup - throws UnsupportedOperationException on one. Reject it before reading any
         // of them, otherwise an unusable request escapes as a 500 "Not implemented." instead of a 4xx.
@@ -478,6 +497,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             Map<String, String> headers = action.getHeaders();
             AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
         }
+        // A hidden model skips only the endpoint allowlist above; its auth_config is validated like any other.
+        AuthConfigValidator.validate(connector, AuthConfigValidator.keysOf(connector.getCredential()));
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {

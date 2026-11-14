@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collections;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -27,6 +28,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.search.SearchModule;
 
 public class MLUpdateConnectorRequestTests {
@@ -225,6 +227,25 @@ public class MLUpdateConnectorRequestTests {
 
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: Model connector description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    private static MLUpdateConnectorRequest parseUpdate(String json) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        parser.nextToken();
+        return MLUpdateConnectorRequest.parse(parser, "test-connector_id", null);
+    }
+
+    @Test
+    public void parse_readsAuthConfigIntoTheField() throws IOException {
+        MLUpdateConnectorRequest request = parseUpdate("{\"parameters\":{\"model\":\"x\"},\"auth_config\":{\"type\":\"none\"}}");
+        assertEquals(OAuth2AuthConfig.NONE, request.getUpdateContent().getAuthConfig());
+        assertEquals(Map.of("model", "x"), request.getUpdateContent().getParameters());
     }
 
 }

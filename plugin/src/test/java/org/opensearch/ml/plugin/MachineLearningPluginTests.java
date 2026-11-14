@@ -49,6 +49,7 @@ import org.opensearch.ingest.Processor;
 import org.opensearch.jobscheduler.spi.JobDocVersion;
 import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -256,6 +257,8 @@ public class MachineLearningPluginTests {
         assertNotNull(settings);
         assertFalse(settings.isEmpty());
         assertTrue(settings.size() > 40); // Plugin has many settings
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED));
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX));
     }
 
     @Test

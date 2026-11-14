@@ -64,6 +64,7 @@ import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -122,6 +123,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     MLModelManager mlModelManager;
+
+    @Mock
+    MLIndicesHandler mlIndicesHandler;
 
     ThreadContext threadContext;
 
@@ -195,8 +199,14 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             settings,
             clusterService,
             mlEngine,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            mlIndicesHandler
         );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(any(ActionListener.class));
 
         when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
@@ -229,7 +239,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             // doNothing().when(connector).update(any(), any());
             listener.onResponse(connector);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -730,7 +740,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
     }
 
     private void stubUpdateSucceeds() {
@@ -868,7 +878,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -900,7 +910,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
 
@@ -1001,7 +1011,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
         when(updateRequest.getUpdateContent())
             .thenReturn(
                 MLCreateConnectorInput

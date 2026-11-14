@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_5_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.parseMessage;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -42,6 +43,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -828,4 +830,52 @@ public class MLRegisterModelInputTest {
         MLRegisterModelInput deserialized = new MLRegisterModelInput(streamInput);
         assertEquals("text_embedding_v1", deserialized.getModelId());
     }
+
+    // The inline connector of a register request goes through the strict auth_config checks.
+
+    private static final String INLINE_HEAD = "{'name':'c','version':'1','protocol':'http','credential':{'key':'v'},"
+        + "'actions':[{'action_type':'PREDICT','method':'POST','url':'https://api.openai.com/v1/chat'}]";
+
+    private static String registerWith(String inlineFields) {
+        String connector = INLINE_HEAD + (inlineFields.isEmpty() ? "" : "," + inlineFields) + "}";
+        return ("{'name':'m','function_name':'remote','connector':" + connector + "}").replace('\'', '"');
+    }
+
+    /** Parses with both overloads, which must agree. */
+    private MLRegisterModelInput parseBoth(String inlineFields) throws Exception {
+        MLRegisterModelInput[] parsed = new MLRegisterModelInput[2];
+        testParseFromJsonString("m", "1", false, registerWith(inlineFields), input -> parsed[0] = input);
+        testParseFromJsonString(false, registerWith(inlineFields), input -> parsed[1] = input);
+        assertEquals(parsed[0].getConnector().getAuthConfig(), parsed[1].getConnector().getAuthConfig());
+        assertEquals(parsed[0].getConnector().getParameters(), parsed[1].getConnector().getParameters());
+        return parsed[1];
+    }
+
+    private void bothFail(String inlineFields, String message) {
+        IllegalArgumentException first = assertThrows(
+            IllegalArgumentException.class,
+            () -> testParseFromJsonString("m", "1", false, registerWith(inlineFields), input -> {})
+        );
+        assertEquals(inlineFields, message, first.getMessage());
+        IllegalArgumentException second = assertThrows(
+            IllegalArgumentException.class,
+            () -> testParseFromJsonString(false, registerWith(inlineFields), input -> {})
+        );
+        assertEquals(inlineFields, message, second.getMessage());
+    }
+
+    @Test
+    public void parse_readsTheInlineAuthConfigIntoTheFieldOnBothOverloads() throws Exception {
+        MLRegisterModelInput input = parseBoth("'parameters':{'model':'x'},'auth_config':{'type':'none'}");
+        assertEquals(OAuth2AuthConfig.NONE, input.getConnector().getAuthConfig());
+        assertEquals(Map.of("model", "x"), input.getConnector().getParameters());
+        assertNull(parseBoth("'parameters':{'model':'x'}").getConnector().getAuthConfig());
+    }
+
+    @Test
+    public void parse_rejectsInvalidInlineAuthConfig() {
+        bothFail("'auth_config':[]", OAuth2AuthConfig.NOT_AN_OBJECT_MESSAGE);
+        bothFail("'auth_config':{'type':'OAuth2'}", parseMessage(Map.of("type", "OAuth2")));
+    }
+
 }
