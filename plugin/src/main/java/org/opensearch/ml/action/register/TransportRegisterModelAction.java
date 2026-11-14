@@ -363,9 +363,10 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                             } else {
                                 listener
                                     .onFailure(
-                                        new IllegalArgumentException(
+                                        new OpenSearchStatusException(
                                             "You don't have permission to use the connector provided, connector id: "
-                                                + registerModelInput.getConnectorId()
+                                                + registerModelInput.getConnectorId(),
+                                            RestStatus.FORBIDDEN
                                         )
                                     );
                             }

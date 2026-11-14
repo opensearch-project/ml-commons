@@ -632,6 +632,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             "You don't have permission to use the connector provided, connector id: mockConnectorId",
             argumentCaptor.getValue().getMessage()
         );
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     @Test
