@@ -17,6 +17,7 @@ import static org.opensearch.ml.utils.TestHelper.toJsonString;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -95,6 +96,14 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String actionName = restMLUpdateModelAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_update_model_action", actionName);
+    }
+
+    @Test
+    public void testGetFilteredFields_redactsTheAuthConfigSecret() {
+        assertEquals(
+            Set.of("connector.credential", "*.Authorization", "connector.auth_config.client_secret"),
+            restMLUpdateModelAction.getFilteredFields()
+        );
     }
 
     @Test

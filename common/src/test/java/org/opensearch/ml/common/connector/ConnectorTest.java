@@ -7,6 +7,8 @@ package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.opensearch.ml.common.connector.HttpConnectorTest.createHttpConnector;
@@ -18,6 +20,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -26,6 +29,7 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -36,6 +40,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchModule;
 
 public class ConnectorTest {
@@ -408,6 +413,157 @@ public class ConnectorTest {
                 assertTrue(expected.getMessage(), expected.getMessage().contains("unresolved parameter placeholder"));
             }
         }
+    }
+
+    private static final String PREDICT = ConnectorAction.ActionType.PREDICT.name();
+    private static final List<String> ANY_URL = List.of(".*");
+    private static final String ENDPOINT_URL = "https://${parameters.endpoint}/v1/chat/completions";
+    private static final Map<String, String> STORED_ENDPOINT = Map.of("endpoint", "api.openai.com");
+
+    @Test
+    public void resolveActionEndpoint_requestParametersFillPathAndQuery() {
+        HttpConnector connector = connectorWithUrl(
+            "https://${parameters.endpoint}/v1/${parameters.model}?api-version=${parameters.v}",
+            STORED_ENDPOINT
+        );
+        Map<String, String> request = Map.of("endpoint", "api.openai.com", "model", "gpt-4o", "v", "2024-10-21");
+
+        assertEquals(
+            URI.create("https://api.openai.com/v1/gpt-4o?api-version=2024-10-21"),
+            connector.resolveActionEndpoint(PREDICT, request, ANY_URL)
+        );
+    }
+
+    @Test
+    public void resolveActionEndpoint_requestParametersCannotChangeSchemeHostOrPort() {
+        assertEquals(
+            "The scheme, host and port of a connector action URL come from the connector's own parameters; request parameters "
+                + "cannot change them. Store the parameters that set them on the connector, or on the model for a connector "
+                + "defined inside it",
+            Connector.ACTION_URL_HOST_CHANGED_MESSAGE
+        );
+        assertHostChanged(ENDPOINT_URL, STORED_ENDPOINT, Map.of("endpoint", "api.example.com"));
+        assertHostChanged(ENDPOINT_URL, STORED_ENDPOINT, Map.of("endpoint", "api.openai.com:8443"));
+        assertHostChanged("${parameters.scheme}://api.openai.com/v1", Map.of("scheme", "https"), Map.of("scheme", "http"));
+    }
+
+    @Test
+    public void resolveActionEndpoint_comparesCaseInsensitiveHostAndDefaultPort() {
+        HttpConnector connector = connectorWithUrl(ENDPOINT_URL, STORED_ENDPOINT);
+        assertEquals(
+            URI.create("https://api.openai.com:443/v1/chat/completions"),
+            connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com:443"), ANY_URL)
+        );
+        assertEquals(
+            URI.create("https://API.OpenAI.com/v1/chat/completions"),
+            connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "API.OpenAI.com"), ANY_URL)
+        );
+        Map<String, String> storedIpv6 = Map.of("endpoint", "[2001:db8::1]");
+        assertEquals(
+            URI.create("https://[2001:DB8::1]/v1/chat/completions"),
+            connectorWithUrl(ENDPOINT_URL, storedIpv6).resolveActionEndpoint(PREDICT, Map.of("endpoint", "[2001:DB8::1]"), ANY_URL)
+        );
+        assertHostChanged(ENDPOINT_URL, storedIpv6, Map.of("endpoint", "[2001:db8:0::1]"));
+        String httpUrl = "http://${parameters.endpoint}/v1";
+        assertEquals(
+            URI.create("http://api.openai.com:80/v1"),
+            connectorWithUrl(httpUrl, STORED_ENDPOINT).resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com:80"), ANY_URL)
+        );
+        assertHostChanged(httpUrl, STORED_ENDPOINT, Map.of("endpoint", "api.openai.com:443"));
+    }
+
+    @Test
+    public void resolveActionEndpoint_comparesTheHostTheParserReports() {
+        for (String value : List.of("evil.example?x=api.openai.com", "evil.example/api.openai.com", "api.openai.com.")) {
+            assertHostChanged(ENDPOINT_URL, STORED_ENDPOINT, Map.of("endpoint", value));
+        }
+        HttpConnector connector = connectorWithUrl(ENDPOINT_URL, STORED_ENDPOINT);
+        // Refused before the comparison by validateResolvedEndpoint, whose messages its own tests pin.
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com@evil.example"), ANY_URL)
+        );
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "evil.example#a"), ANY_URL)
+        );
+    }
+
+    @Test
+    public void resolveActionEndpoint_requestParameterMayAddPathAfterHost() {
+        assertEquals(
+            URI.create("https://api.openai.com/other/v1/chat/completions"),
+            connectorWithUrl(ENDPOINT_URL, STORED_ENDPOINT)
+                .resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com/other"), ANY_URL)
+        );
+    }
+
+    @Test
+    public void resolveActionEndpoint_failsWhenStoredParametersGiveNoSchemeOrHost() {
+        assertHostChanged(ENDPOINT_URL, Map.of(), Map.of("endpoint", "api.openai.com"));
+        Map<String, String> tenantHost = Map.of("endpoint", "${parameters.tenant}.example.com");
+        assertHostChanged(ENDPOINT_URL, tenantHost, Map.of("endpoint", "${parameters.tenant}.example.com", "tenant", "a"));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> connectorWithUrl(ENDPOINT_URL, Map.of()).resolveActionEndpoint(PREDICT, Map.of(), ANY_URL)
+        );
+    }
+
+    @Test
+    public void resolveActionEndpoint_readsOnlyTheStoredSchemeAndAuthority() {
+        assertEquals(
+            URI.create("https://api.x.com/ab"),
+            connectorWithUrl("https://api.x.com/${parameters.model}", Map.of("model", "a b"))
+                .resolveActionEndpoint(PREDICT, Map.of("model", "ab"), ANY_URL)
+        );
+    }
+
+    @Test
+    public void parameterCycleIsRejectedWithoutNamingParameters() throws IOException {
+        assertEquals("Connector URL parameters refer to each other in a cycle", Connector.URL_PARAMETER_CYCLE_MESSAGE);
+        String url = "https://api.x.com/${parameters.a}";
+        Map<String, String> cycle = Map.of("a", "${parameters.b}", "b", "${parameters.a}");
+        assertParameterCycle(() -> connectorWithUrl(url, Map.of()).resolveActionEndpoint(PREDICT, cycle, ANY_URL));
+        Connector stored = readConnector(url, cycle);
+        assertParameterCycle(() -> stored.resolveActionEndpoint(PREDICT, Map.of("a", "x", "b", "y"), ANY_URL));
+        assertParameterCycle(() -> stored.validateConnectorURL(ANY_URL));
+        assertParameterCycle(() -> connectorWithUrl(url, cycle));
+    }
+
+    @Test
+    public void resolveActionEndpoint_hostParameterThatCarriesTheScheme() {
+        String url = "${parameters.endpoint}/_plugins/x/${parameters.id}";
+        Map<String, String> stored = Map.of("endpoint", "https://memory.example.com");
+        assertEquals(
+            URI.create("https://memory.example.com/_plugins/x/1"),
+            connectorWithUrl(url, stored)
+                .resolveActionEndpoint(PREDICT, Map.of("endpoint", "https://memory.example.com", "id", "1"), ANY_URL)
+        );
+        assertHostChanged(url, stored, Map.of("endpoint", "https://other.example.com", "id", "1"));
+    }
+
+    /** A connector as read back from the index, which does not run the checks of the builder. */
+    private static Connector readConnector(String url, Map<String, String> parameters) throws IOException {
+        Map<String, Object> action = Map.of("action_type", "PREDICT", "method", "POST", "url", url, "request_body", "{}");
+        String json = StringUtils.gson
+            .toJson(Map.of("name", "n", "version", "1", "protocol", "http", "parameters", parameters, "actions", List.of(action)));
+        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+        parser.nextToken();
+        return new HttpConnector("http", parser);
+    }
+
+    private static void assertHostChanged(String url, Map<String, String> stored, Map<String, String> request) {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> connectorWithUrl(url, stored).resolveActionEndpoint(PREDICT, request, ANY_URL)
+        );
+        assertEquals(request.toString(), Connector.ACTION_URL_HOST_CHANGED_MESSAGE, e.getMessage());
+    }
+
+    private static void assertParameterCycle(ThrowingRunnable call) {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, call);
+        assertEquals(Connector.URL_PARAMETER_CYCLE_MESSAGE, e.getMessage());
+        assertNull(e.getCause());
     }
 
     private static List<String> defaults() {

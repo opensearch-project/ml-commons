@@ -57,6 +57,7 @@ import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -87,6 +88,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     MLTaskManager mlTaskManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final AuthorizationProviderFactory authorizationProviderFactory;
 
     volatile List<String> trustedConnectorEndpointsRegex;
 
@@ -103,7 +105,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        AuthorizationProviderFactory authorizationProviderFactory
     ) {
         super(MLCancelBatchJobAction.NAME, transportService, actionFilters, MLCancelBatchJobRequest::new);
         this.client = client;
@@ -116,6 +119,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.authorizationProviderFactory = authorizationProviderFactory;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(clusterService.getSettings());
         clusterService
             .getClusterSettings()
@@ -277,6 +281,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
+            connectorExecutor.setAuthorizationProviderFactory(authorizationProviderFactory);
             connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(taskResponse, actionListener);

@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -45,6 +44,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
     public static final String SUPPORTS_STRUCTURED_OUTPUT_FIELD = "supports_structured_output";
+    /** A literal cleartext scheme at the start of a URL. */
+    public static final Pattern CLEARTEXT_URL = Pattern.compile("^\\s*http://", Pattern.CASE_INSENSITIVE);
     public static final String OPENAI = "openai";
     public static final String COHERE = "cohere";
     public static final String BEDROCK = "bedrock";
@@ -304,6 +305,24 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     /**
+     * The first action URL that, with the parameters substituted, starts with a cleartext scheme; null when there is none
+     * or actions is null.
+     * @throws IllegalArgumentException with Connector.URL_PARAMETER_CYCLE_MESSAGE when the parameters refer to each other in a cycle
+     */
+    public static String firstCleartextUrl(List<ConnectorAction> actions, Map<String, String> parameters) {
+        if (actions == null) {
+            return null;
+        }
+        for (ConnectorAction action : actions) {
+            String url = Connector.substituteParameters(action.getUrl(), parameters);
+            if (CLEARTEXT_URL.matcher(url).find()) {
+                return url.trim();
+            }
+        }
+        return null;
+    }
+
+    /**
      * Checks the compatibility of pre and post-process functions with the selected LLM service.
      * Each LLM service (eg: Bedrock, OpenAI, SageMaker) has recommended pre and post-process functions
      * designed for optimal performance. While it's possible to use functions from other services,
@@ -315,8 +334,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
      * @param parameters - connector parameters
      */
     public void validatePrePostProcessFunctions(Map<String, String> parameters) {
-        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        String endPoint = substitutor.replace(url);
+        String endPoint = Connector.substituteParameters(url, parameters);
         String remoteServer = getRemoteServerFromURL(endPoint);
         if (!remoteServer.isEmpty()) {
             validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);

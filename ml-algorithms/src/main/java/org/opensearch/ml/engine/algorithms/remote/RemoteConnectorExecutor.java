@@ -54,6 +54,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
@@ -204,6 +205,8 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
     default void setMlGuard(MLGuard mlGuard) {}
 
     default void setTrustedConnectorEndpointsRegex(List<String> trustedConnectorEndpointsRegex) {}
+
+    default void setAuthorizationProviderFactory(AuthorizationProviderFactory authorizationProviderFactory) {}
 
     default void preparePayloadAndInvoke(
         String action,

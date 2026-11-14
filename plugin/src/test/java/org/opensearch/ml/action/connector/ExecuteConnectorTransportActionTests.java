@@ -14,6 +14,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -32,13 +34,16 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.utils.AuthConfigTestFixtures;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -82,6 +87,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     ThreadPool threadPool;
+    @Mock
+    private AuthorizationProviderFactory authorizationProviderFactory;
 
     @Before
     public void setup() {
@@ -117,7 +124,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             xContentRegistry,
             connectorAccessControlHelper,
             encryptor,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            authorizationProviderFactory
         );
     }
 
@@ -341,6 +349,39 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
 
         verify(connectorAccessControlHelper).getConnector(eq(client), eq("test_connector_id"), any());
+    }
+
+    public void testExecute_anOauth2ConnectorObtainsItsProviderFromTheFactory() {
+        HttpConnector oauth2 = AuthConfigTestFixtures.oauth2Http(ConnectorAction.ActionType.EXECUTE);
+        when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput())
+            .thenReturn(
+                org.opensearch.ml.common.input.MLInput
+                    .builder()
+                    .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+                    .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(new HashMap<>(), null))
+                    .build()
+            );
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(oauth2);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(invocation.getArgument(0));
+            return null;
+        }).when(encryptor).decrypt(any(), any(), any());
+        when(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex()).thenReturn(List.of("^https://api\\.openai\\.com/.*$"));
+        when(authorizationProviderFactory.providerFor(oauth2)).thenThrow(new IllegalArgumentException("refused"));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(authorizationProviderFactory).providerFor(oauth2);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals("refused", captor.getValue().getMessage());
     }
 
     public void testExecute_DecryptFailure() {

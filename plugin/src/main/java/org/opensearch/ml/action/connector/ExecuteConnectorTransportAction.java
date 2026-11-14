@@ -29,6 +29,7 @@ import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -50,6 +51,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
     ConnectorAccessControlHelper connectorAccessControlHelper;
     EncryptorImpl encryptor;
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final AuthorizationProviderFactory authorizationProviderFactory;
 
     @Inject
     public ExecuteConnectorTransportAction(
@@ -61,7 +63,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         EncryptorImpl encryptor,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        AuthorizationProviderFactory authorizationProviderFactory
     ) {
         super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLExecuteConnectorRequest::new);
         this.client = client;
@@ -71,6 +74,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.encryptor = encryptor;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.authorizationProviderFactory = authorizationProviderFactory;
     }
 
     @Override
@@ -120,6 +124,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                             .initInstance(connector.getProtocol(), connector, Connector.class);
                         connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
                         connectorExecutor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+                        connectorExecutor.setAuthorizationProviderFactory(authorizationProviderFactory);
                         connectorExecutor.setScriptService(scriptService);
                         connectorExecutor.setClusterService(clusterService);
                         connectorExecutor.setClient(client);

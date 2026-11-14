@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.stats;
 
+import java.util.Set;
+
 /**
  * ML commons has 4 levels of stats: cluster, node, algorithm and action.
  * This enum represents node level stats.
@@ -16,7 +18,20 @@ public enum MLNodeLevelStat {
     ML_REQUEST_COUNT,
     ML_FAILURE_COUNT,
     ML_DEPLOYED_MODEL_COUNT,
-    ML_CIRCUIT_BREAKER_TRIGGER_COUNT;
+    ML_CIRCUIT_BREAKER_TRIGGER_COUNT,
+    ML_OAUTH2_TOKEN_REQUEST_COUNT, // Token requests the node's OAuth2 token cache started.
+    ML_OAUTH2_TOKEN_FAILURE_COUNT, // Started token requests that failed.
+    ML_OAUTH2_TOKEN_CACHE_HIT_COUNT, // Requests served a cached OAuth2 token.
+    ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT; // 401 answers to requests that carried an OAuth2 token.
+
+    /** The stats that came with connector auth_config; a node of an earlier release does not know them. */
+    public static final Set<MLNodeLevelStat> CONNECTOR_AUTH_STATS = Set
+        .of(
+            ML_OAUTH2_TOKEN_REQUEST_COUNT,
+            ML_OAUTH2_TOKEN_FAILURE_COUNT,
+            ML_OAUTH2_TOKEN_CACHE_HIT_COUNT,
+            ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT
+        );
 
     public static MLNodeLevelStat from(String value) {
         try {

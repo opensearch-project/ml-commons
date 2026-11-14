@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
@@ -42,6 +43,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 import com.google.gson.JsonElement;
@@ -50,6 +52,7 @@ import com.google.gson.JsonParser;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
@@ -65,6 +68,11 @@ public class HttpConnector extends AbstractConnector {
     public static final String REGION_FIELD = "region";
     // TODO: move the AgentUtils class from algorithm module to common module
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+    /**
+     * The oldest node version that carries {@code auth_config} on the transport and in its stored documents. A write
+     * that carries one is refused while any node of the cluster is older. A fixed release, not {@code Version.CURRENT}.
+     */
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH = VERSION_3_10_0;
 
     // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
     // Restricts injection to structured-output fields only; prevents callers from overriding
@@ -77,6 +85,9 @@ public class HttpConnector extends AbstractConnector {
         );
 
     // TODO: add RequestConfig like request time out,
+
+    @Getter
+    private OAuth2AuthConfig authConfig;
 
     @Builder
     public HttpConnector(
@@ -92,7 +103,8 @@ public class HttpConnector extends AbstractConnector {
         User owner,
         ConnectorClientConfig connectorClientConfig,
         String tenantId,
-        String provisionedBy
+        String provisionedBy,
+        OAuth2AuthConfig authConfig
     ) {
         validateProtocol(protocol);
         if (actions != null) {
@@ -113,7 +125,7 @@ public class HttpConnector extends AbstractConnector {
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
         this.provisionedBy = provisionedBy;
-
+        this.authConfig = authConfig;
     }
 
     public HttpConnector(String protocol, XContentParser parser) throws IOException {
@@ -183,6 +195,9 @@ public class HttpConnector extends AbstractConnector {
                 case BATCH_JOB_STATUS_FIELD:
                     batchJobStatus = BatchJobStatusMapping.parse(parser);
                     break;
+                case AUTH_CONFIG_FIELD:
+                    authConfig = OAuth2AuthConfig.fromStored(parser.map());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -207,6 +222,9 @@ public class HttpConnector extends AbstractConnector {
         }
         if (parameters != null) {
             builder.field(PARAMETERS_FIELD, parameters);
+        }
+        if (authConfig != null) {
+            builder.field(AUTH_CONFIG_FIELD, authConfig);
         }
         if (credential != null) {
             builder.field(CREDENTIAL_FIELD, credential);
@@ -290,6 +308,9 @@ public class HttpConnector extends AbstractConnector {
         if (streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean()) {
             this.batchJobStatus = new BatchJobStatusMapping(input);
         }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH) && input.readBoolean()) {
+            this.authConfig = new OAuth2AuthConfig(input);
+        }
     }
 
     @Override
@@ -355,6 +376,12 @@ public class HttpConnector extends AbstractConnector {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH)) {
+            out.writeBoolean(authConfig != null);
+            if (authConfig != null) {
+                authConfig.writeTo(out);
+            }
+        }
     }
 
     @Override
@@ -372,7 +399,14 @@ public class HttpConnector extends AbstractConnector {
             this.protocol = updateContent.getProtocol();
         }
         if (updateContent.getParameters() != null && !updateContent.getParameters().isEmpty()) {
-            getParameters().putAll(updateContent.getParameters());
+            if (parameters == null) {
+                parameters = new HashMap<>();
+            }
+            parameters.putAll(updateContent.getParameters());
+        }
+        // The request object is the whole configuration; the stored members it lacks are marked as removed.
+        if (updateContent.getAuthConfig() != null) {
+            this.authConfig = updateContent.getAuthConfig().replacing(this.authConfig);
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
