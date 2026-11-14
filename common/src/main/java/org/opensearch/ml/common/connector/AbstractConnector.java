@@ -207,8 +207,7 @@ public abstract class AbstractConnector implements Connector {
         }
         String predictEndpoint = actionEndpoint.get().getUrl();
         if (parameters != null && !parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
+            predictEndpoint = Connector.substituteParameters(predictEndpoint, parameters);
         }
         return predictEndpoint;
     }

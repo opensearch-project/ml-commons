@@ -20,6 +20,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
@@ -287,6 +288,19 @@ public class ConnectorProtocolValidatorTests extends OpenSearchTestCase {
             IllegalArgumentException.class,
             () -> ConnectorProtocolValidator.validateMutualTlsScheme(actions("  HTTP://host/predict"), null, mtls(true))
         );
+    }
+
+    public void testMutualTlsScheme_parameterCycleIsRejectedWithoutNamingTheParameters() {
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> ConnectorProtocolValidator
+                .validateMutualTlsScheme(
+                    actions("https://${parameters.a}/predict"),
+                    Map.of("a", "${parameters.b}", "b", "${parameters.a}"),
+                    mtls(true)
+                )
+        );
+        assertEquals(Connector.URL_PARAMETER_CYCLE_MESSAGE, e.getMessage());
     }
 
     /** The scheme of a substituted URL is not knowable until predict time, so it is left alone. */

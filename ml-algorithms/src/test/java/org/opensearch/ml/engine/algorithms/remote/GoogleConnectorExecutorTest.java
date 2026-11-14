@@ -11,6 +11,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -36,6 +37,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
@@ -66,7 +68,11 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
     }
 
     private GoogleCloudConnector adcConnector(String method, String url) {
-        Map<String, String> parameters = new HashMap<>();
+        return adcConnector(method, url, Map.of());
+    }
+
+    private GoogleCloudConnector adcConnector(String method, String url, Map<String, String> stored) {
+        Map<String, String> parameters = new HashMap<>(stored);
         parameters.put(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC);
         ConnectorAction predictAction = ConnectorAction
             .builder()
@@ -285,5 +291,137 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
         verify(listener, times(1)).onFailure(failure.capture());
         Throwable cause = failure.getValue() instanceof IllegalArgumentException ? failure.getValue() : failure.getValue().getCause();
         assertTrue(String.valueOf(cause), cause instanceof IllegalArgumentException && cause.getMessage().contains("not matching"));
+    }
+
+    /** A Vertex AI connector whose host takes the stored location. */
+    private GoogleCloudConnector storedLocationConnector() {
+        return adcConnector(
+            "POST",
+            "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/p/locations/${parameters.location}"
+                + "/publishers/google/models/gemini:generateContent",
+            Map.of("location", "us-central1")
+        );
+    }
+
+    @Test
+    public void invokeRemoteService_requestParametersCannotChangeLocationInHost() {
+        GoogleConnectorExecutor executor = spy(new GoogleConnectorExecutor(storedLocationConnector()));
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://.*-aiplatform\\.googleapis\\.com/.*$"));
+        GoogleCredentialProvider credentialProvider = mock(GoogleCredentialProvider.class);
+        executor.setCredentialProvider(credentialProvider);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        doReturn(httpClient).when(executor).getHttpClient();
+
+        executor.invokeRemoteService(PREDICT.name(), null, Map.of("location", "europe-west4"), "{\"contents\":[]}", null, actionListener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+        verify(credentialProvider, never()).getAccessToken();
+        verify(httpClient, never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_requestParametersCannotChangeLocationInHost() {
+        GoogleConnectorExecutor executor = new GoogleConnectorExecutor(storedLocationConnector());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://.*-aiplatform\\.googleapis\\.com/.*$"));
+        GoogleCredentialProvider credentialProvider = mock(GoogleCredentialProvider.class);
+        executor.setCredentialProvider(credentialProvider);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
+        Map<String, String> parameters = Map.of("location", "europe-west4", "_llm_interface", "gemini/v1beta/generateContent");
+
+        executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"contents\":[]}", null, listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getCause().getMessage());
+        verify(credentialProvider, never()).getAccessToken();
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_privateDestinationFollowsPrivateIpSetting() {
+        GoogleCloudConnector connector = adcConnector("POST", "http://10.0.0.1/v1/x:streamGenerateContent");
+        connector
+            .decrypt(PREDICT.name(), (keys, tenantId, listener) -> listener.onResponse(keys), null, ActionListener.wrap(r -> {}, e -> {}));
+        Map<String, String> params = new HashMap<>();
+        params.put("_llm_interface", "gemini/v1beta/generateContent");
+
+        GoogleConnectorExecutor off = new GoogleConnectorExecutor(connector);
+        off.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://10\\.0\\.0\\.1/.*$"));
+        off.setCredentialProvider(fixedTokenProvider("stream-token"));
+        off.setConnectorPrivateIpEnabled(false);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> l1 = mock(StreamPredictActionListener.class);
+        off.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(params), "{\"input\": \"x\"}", new ExecutionContext(0), l1);
+        ArgumentCaptor<Exception> f1 = ArgumentCaptor.forClass(Exception.class);
+        verify(l1, times(1)).onFailure(f1.capture());
+        assertTrue(String.valueOf(f1.getValue().getCause()), f1.getValue().getCause().getMessage().contains("private ip address"));
+
+        GoogleConnectorExecutor on = new GoogleConnectorExecutor(connector);
+        on.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://10\\.0\\.0\\.1/.*$"));
+        on.setCredentialProvider(fixedTokenProvider("stream-token"));
+        on.setConnectorPrivateIpEnabled(true);
+        on.setConnectorTrustedPrivateEndpoints(Arrays.asList(java.util.regex.Pattern.compile("^http://10\\.0\\.0\\.2/.*$")));
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> l2 = mock(StreamPredictActionListener.class);
+        on.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(params), "{\"input\": \"x\"}", new ExecutionContext(0), l2);
+        ArgumentCaptor<Exception> f2 = ArgumentCaptor.forClass(Exception.class);
+        verify(l2, times(1)).onFailure(f2.capture());
+        assertTrue(
+            String.valueOf(f2.getValue().getCause()),
+            f2.getValue().getCause().getMessage().contains("trusted connector private endpoint")
+        );
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_passesTheCheckedUriAndTheBearerHeader() throws Exception {
+        GoogleConnectorExecutor executor = new GoogleConnectorExecutor(storedLocationConnector());
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^https://.*-aiplatform\\.googleapis\\.com/.*$"));
+        GoogleCredentialProvider credentialProvider = mock(GoogleCredentialProvider.class);
+        when(credentialProvider.getAccessToken()).thenReturn("token-1");
+        executor.setCredentialProvider(credentialProvider);
+        org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler handler = mock(
+            org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler.class
+        );
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<org.opensearch.ml.common.transport.MLTaskResponse, ?> listener = mock(
+            StreamPredictActionListener.class
+        );
+        Map<String, String> parameters = Map.of("location", "us-central1", "_llm_interface", "gemini/v1beta/generateContent");
+        try (
+            MockedStatic<org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory> factory = mockStatic(
+                org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory.class
+            )
+        ) {
+            factory
+                .when(
+                    () -> org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory
+                        .createHandler(any(), any(), any(), any(), any(), any())
+                )
+                .thenReturn(handler);
+
+            executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"contents\":[]}", null, listener);
+        }
+
+        ArgumentCaptor<Map<String, String>> headers = ArgumentCaptor.forClass(Map.class);
+        verify(handler)
+            .startStream(
+                org.mockito.ArgumentMatchers
+                    .eq(
+                        java.net.URI
+                            .create(
+                                "https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1"
+                                    + "/publishers/google/models/gemini:generateContent"
+                            )
+                    ),
+                headers.capture(),
+                any(),
+                any(),
+                any()
+            );
+        assertEquals("Bearer token-1", headers.getValue().get("Authorization"));
     }
 }
