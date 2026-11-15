@@ -23,10 +23,12 @@ import static org.opensearch.ml.utils.AuthConfigTestFixtures.ACTION_URL;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.SECRET_KEY;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.actions;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.documentOf;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBearer;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oldNodeCluster;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.parameters;
@@ -62,6 +64,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.PrivateKeys;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -253,6 +256,23 @@ public class TransportCreateConnectorActionAuthConfigTests extends OpenSearchTes
         when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
         execute(parse(withAuthConfig(oauth2().toBuilder().tokenUrl("https://login.example.com/t").build())));
         assertRejected(RestStatus.BAD_REQUEST, TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
+    }
+
+    public void testPrivateKeyInTheRequestCredential_mustBeAnUnencryptedPkcs8Key() {
+        // The key is parsed while the credential is plaintext; a PKCS#1 document is refused before anything is written.
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        MLCreateConnectorInput input = MLCreateConnectorInput
+            .builder()
+            .name("c")
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .parameters(parameters())
+            .credential(Map.of(PRIVATE_KEY_KEY, "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAK\n-----END RSA PRIVATE KEY-----"))
+            .actions(actions(ACTION_URL))
+            .authConfig(jwtBearer())
+            .build();
+        execute(input);
+        assertRejected(RestStatus.BAD_REQUEST, PrivateKeys.INVALID_MESSAGE);
     }
 
     public void testDryRun_runsTheChecksAndNeedsAProtocol() throws IOException {

@@ -236,7 +236,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             boolean authOrProtocolTouched = ConnectorProtocolValidator
                                 .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol());
                             TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
-                            boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys, allowlist);
+                            boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
@@ -272,8 +272,17 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 ? AuthConfigValidator.keysOf(requestCredential)
                                 : storedKeys;
                             try {
+                                // A private key the request credential holds is parsed while it is plaintext.
+                                AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), requestCredential);
                                 if (AuthConfigValidator
-                                    .validateOrGrandfather(connector, keyView, allowlist, authOrProtocolTouched, storedPassed)) {
+                                    .validateOrGrandfather(
+                                        connector,
+                                        connector.getAuthConfig(),
+                                        keyView,
+                                        allowlist,
+                                        authOrProtocolTouched,
+                                        storedPassed
+                                    )) {
                                     log
                                         .warn(
                                             "Connector {} keeps a stored auth_config that fails validation; this update leaves it unchanged",

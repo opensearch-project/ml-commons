@@ -53,16 +53,21 @@ public final class AuthConfigValidator {
     }
 
     /**
-     * Validates the {@code auth_config} {@code connector} holds; a connector without one passes.
+     * Validates {@code config}, the {@code auth_config} of {@code connector}; a connector without one passes.
      *
-     * @param connector the connector as it will be stored
+     * @param connector the connector as it will be stored; its actions and client config are judged for an active type
+     * @param config the configuration to judge, as the caller reads it from the connector; null when it holds none
      * @param credentialKeys the credential keys the stored connector will have; references must name one of them
      * @param allowlist the trusted token endpoint patterns a literal {@code token_url} must match
-     * @return the configuration; null when the connector holds none
+     * @return {@code config}
      * @throws IllegalArgumentException when the configuration is invalid
      */
-    public static OAuth2AuthConfig validate(Connector connector, Set<String> credentialKeys, TokenEndpointAllowlist allowlist) {
-        OAuth2AuthConfig config = connector.getAuthConfig();
+    public static OAuth2AuthConfig validate(
+        Connector connector,
+        OAuth2AuthConfig config,
+        Set<String> credentialKeys,
+        TokenEndpointAllowlist allowlist
+    ) {
         if (config == null) {
             return null;
         }
@@ -149,12 +154,39 @@ public final class AuthConfigValidator {
     }
 
     /**
-     * Whether {@link #validate} would accept {@code connector}. Never throws: any exception counts as a failure. Used
-     * to tell whether a stored configuration already failed before an update.
+     * Parses the private key that the {@code jwt.private_key} reference of {@code config} names, when
+     * {@code plaintextCredential} holds it, so that a key the signer could not use is refused where the plaintext is
+     * still at hand instead of on every request the connector serves. Nothing is read for a configuration that is
+     * absent, attaches nothing or has no {@code jwt} block, or when the map lacks the key ({@link #validate} reports a
+     * missing key). The key material is parsed and dropped; it is never logged or echoed.
+     *
+     * @param config the configuration the write leaves; may be null
+     * @param plaintextCredential the credential the request carries, before encryption; may be null
+     * @throws IllegalArgumentException with {@link PrivateKeys#INVALID_MESSAGE} when the key is not an unencrypted
+     *     PKCS#8 RSA key, with {@link PrivateKeys#KEY_TOO_SHORT_MESSAGE} when it is one of fewer than 2048 bits
      */
-    public static boolean passes(Connector connector, Set<String> credentialKeys, TokenEndpointAllowlist allowlist) {
+    public static void validatePrivateKey(OAuth2AuthConfig config, Map<String, String> plaintextCredential) {
+        if (config == null || !config.getType().isActive() || config.getJwt() == null || plaintextCredential == null) {
+            return;
+        }
+        String pem = plaintextCredential.get(CredentialReference.keyOf(config.getJwt().getPrivateKey()));
+        if (pem != null) {
+            PrivateKeys.parsePkcs8(pem);
+        }
+    }
+
+    /**
+     * Whether {@link #validate} would accept {@code config} on {@code connector}. Never throws: any exception counts
+     * as a failure. Used to tell whether a stored configuration already failed before an update.
+     */
+    public static boolean passes(
+        Connector connector,
+        OAuth2AuthConfig config,
+        Set<String> credentialKeys,
+        TokenEndpointAllowlist allowlist
+    ) {
         try {
-            validate(connector, credentialKeys, allowlist);
+            validate(connector, config, credentialKeys, allowlist);
             return true;
         } catch (Exception e) {
             return false;
@@ -171,13 +203,14 @@ public final class AuthConfigValidator {
      */
     public static boolean validateOrGrandfather(
         Connector connector,
+        OAuth2AuthConfig config,
         Set<String> credentialKeys,
         TokenEndpointAllowlist allowlist,
         boolean authOrProtocolTouched,
         boolean storedPassed
     ) {
         try {
-            validate(connector, credentialKeys, allowlist);
+            validate(connector, config, credentialKeys, allowlist);
             return false;
         } catch (IllegalArgumentException e) {
             if (!authOrProtocolTouched && !storedPassed) {

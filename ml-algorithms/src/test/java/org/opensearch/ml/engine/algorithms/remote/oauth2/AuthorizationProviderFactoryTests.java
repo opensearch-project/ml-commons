@@ -19,6 +19,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.featureSettings;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.oauth2Connector;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.parse;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.reply;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.scriptedTransport;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.testThreadPool;
@@ -37,6 +38,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.threadpool.ThreadPool;
@@ -85,10 +87,15 @@ public class AuthorizationProviderFactoryTests {
 
     @Test
     public void theConfigurationIsCheckedAgainUnderTheCurrentSettings() {
-        assertRefused(
-            connector(config(PUBLIC_TOKEN_URL, CLIENT_AUTH_METHOD_NONE, ""), ACTION_URL),
-            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE
+        // A client that authenticates with no method has no secret to reference.
+        OAuth2AuthConfig none = parse(
+            "{'type':'oauth2','token_url':'"
+                + PUBLIC_TOKEN_URL
+                + "','client_auth_method':'"
+                + CLIENT_AUTH_METHOD_NONE
+                + "','client_id':'app'}"
         );
+        assertRefused(connector(none, ACTION_URL), AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
 
         clusterSettings
             .applySettings(Settings.builder().putList(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getKey(), List.of()).build());

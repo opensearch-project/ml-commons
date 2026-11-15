@@ -36,6 +36,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.connector.auth.TokenResponseSpec;
@@ -66,6 +67,10 @@ public final class AuthConfigTestFixtures {
     public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
         ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
     );
+    /** A token URL the default token endpoint patterns admit, for the jwt-bearer configurations. */
+    public static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    /** The credential key {@link #jwtBearer()} references for its private key. */
+    public static final String PRIVATE_KEY_KEY = "k";
     /** The document {@link OAuth2AuthConfig#NONE} emits. */
     public static final JsonNode NONE_DOCUMENT = tree("{\"type\":\"none\"}");
     /** The document a {@code none} update over {@link #fullOauth2()} writes: every stored member marked as removed. */
@@ -112,6 +117,28 @@ public final class AuthConfigTestFixtures {
      */
     public static OAuth2AuthConfig oauth2Referencing(String key) {
         return oauth2().toBuilder().clientSecret("${credential." + key + "}").build();
+    }
+
+    /** The smallest jwt block that builds, as a builder for variants. */
+    public static JwtSpec.JwtSpecBuilder jwtBuilder() {
+        return JwtSpec.builder().issuer("svc@project.iam.gserviceaccount.com").privateKey("${credential." + PRIVATE_KEY_KEY + "}");
+    }
+
+    /** A jwt-bearer configuration for {@link #GOOGLE_TOKEN_URL} holding {@code jwt}: the grant and {@code client_auth_method} none. */
+    public static OAuth2AuthConfig jwtBearer(JwtSpec jwt) {
+        return OAuth2AuthConfig
+            .builder()
+            .type(ConnectorAuthType.OAUTH2)
+            .tokenUrl(GOOGLE_TOKEN_URL)
+            .grantType(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER)
+            .clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE)
+            .jwt(jwt)
+            .build();
+    }
+
+    /** {@link #jwtBearer(JwtSpec)} with the smallest jwt block. */
+    public static OAuth2AuthConfig jwtBearer() {
+        return jwtBearer(jwtBuilder().build());
     }
 
     public static TokenResponseSpec ttl(int seconds) {

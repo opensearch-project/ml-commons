@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.auth.CredentialReference;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
@@ -358,6 +360,11 @@ public class ConnectorProtocolValidator {
 
     /** What {@link #firstChangedProtectedField} reports when the set of referenced credential keys differs. */
     static final String REFERENCED_KEYS = "credential keys referenced by auth_config";
+    /** The protected members of the {@code jwt} block, as {@link #firstChangedProtectedField} reports them. */
+    static final String JWT_ISSUER = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.ISSUER_FIELD;
+    static final String JWT_SUBJECT = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.SUBJECT_FIELD;
+    static final String JWT_AUDIENCE = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.AUDIENCE_FIELD;
+    static final String JWT_ADDITIONAL_CLAIMS = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.ADDITIONAL_CLAIMS_FIELD;
 
     /** A request that carries {@code auth_config} without a credential changes the referenced credential keys. */
     public static final String REFERENCED_KEYS_CREDENTIAL_REQUIRED_MESSAGE =
@@ -394,8 +401,8 @@ public class ConnectorProtocolValidator {
 
     /**
      * Write-time checks of the {@code auth_config} of a connector that is created, registered inline, or supplied whole
-     * by a transport caller. In order: the protocol takes {@code auth_config}, every node of the cluster supports it,
-     * and the feature flag is on for a type that attaches credentials.
+     * by a transport caller. In order: the type is one a request may set, the protocol takes {@code auth_config}, every
+     * node of the cluster supports it, and the feature flag is on for a type that attaches credentials.
      * <p>
      * A request without {@code auth_config} is not judged, and neither the flag nor the cluster state is read. A
      * configuration without a protocol is rejected like one on a protocol that does not take {@code auth_config};
@@ -419,6 +426,7 @@ public class ConnectorProtocolValidator {
         if (authConfig == null) {
             return;
         }
+        requireUserWritableType(authConfig);
         requireProtocolTakesAuthConfig(protocol);
         requireEveryNodeSupportsConnectorAuth(clusterState);
         if (authConfig.getType().isActive()) {
@@ -463,6 +471,9 @@ public class ConnectorProtocolValidator {
         String storedProtocol = stored.getProtocol();
         if (!touchesAuthOrProtocol(updated, updatedProtocol, storedProtocol)) {
             return;
+        }
+        if (carriesAuth) {
+            requireUserWritableType(updated);
         }
         OAuth2AuthConfig resulting = carriesAuth ? updated : stored.getAuthConfig();
         if (resulting == null) {
@@ -515,10 +526,13 @@ public class ConnectorProtocolValidator {
     /**
      * The first protected field whose value differs between the stored configuration and the resulting one, then
      * {@link #REFERENCED_KEYS} when the set of referenced credential keys differs. Empty when nothing protected
-     * changes, and when the result is absent or {@code none}. Not protected: {@code token_response.*}.
+     * changes, and when the result is absent or {@code none}. Not protected: {@code token_response.*},
+     * {@code jwt.signing_alg}, {@code jwt.lifetime_seconds} and {@code jwt.private_key}, whose key is part of the
+     * referenced set.
      * <p>
-     * A stored side that is absent compares as {@code {"type": "none"}}. A literal {@code token_url} compares in its
-     * canonical form, a reference as written.
+     * A stored side that is absent compares as {@code {"type": "none"}}; an absent {@code jwt} block compares as one
+     * without members and without claims. A literal {@code token_url} compares in its canonical form, a reference as
+     * written.
      *
      * @param stored the stored configuration, possibly null
      * @param resulting the configuration the write leaves, possibly null
@@ -551,6 +565,20 @@ public class ConnectorProtocolValidator {
         if (!before.getTokenRequestParams().equals(resulting.getTokenRequestParams())) {
             return Optional.of(OAuth2AuthConfig.TOKEN_REQUEST_PARAMS_FIELD);
         }
+        JwtSpec beforeJwt = before.getJwt();
+        JwtSpec resultingJwt = resulting.getJwt();
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getIssuer), jwtMember(resultingJwt, JwtSpec::getIssuer))) {
+            return Optional.of(JWT_ISSUER);
+        }
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getSubject), jwtMember(resultingJwt, JwtSpec::getSubject))) {
+            return Optional.of(JWT_SUBJECT);
+        }
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getAudience), jwtMember(resultingJwt, JwtSpec::getAudience))) {
+            return Optional.of(JWT_AUDIENCE);
+        }
+        if (!jwtClaims(beforeJwt).equals(jwtClaims(resultingJwt))) {
+            return Optional.of(JWT_ADDITIONAL_CLAIMS);
+        }
         if (!before.referencedCredentialKeys().equals(resulting.referencedCredentialKeys())) {
             return Optional.of(REFERENCED_KEYS);
         }
@@ -560,6 +588,26 @@ public class ConnectorProtocolValidator {
     /** A literal {@code token_url} in its canonical form; a reference, or null, as it is. */
     private static String comparableTokenUrl(String tokenUrl) {
         return tokenUrl == null || CredentialReference.isReference(tokenUrl) ? tokenUrl : OAuth2AuthConfig.canonicalTokenUrl(tokenUrl);
+    }
+
+    /** A member of {@code jwt}; null for an absent block. */
+    private static String jwtMember(JwtSpec jwt, Function<JwtSpec, String> member) {
+        return jwt == null ? null : member.apply(jwt);
+    }
+
+    /** The claims of {@code jwt}; an absent block adds none. */
+    private static Map<String, String> jwtClaims(JwtSpec jwt) {
+        return jwt == null ? Map.of() : jwt.getAdditionalClaims();
+    }
+
+    /**
+     * A type only code builds is refused however the configuration arrived: the request parsers refuse it already, and
+     * a connector supplied whole by an in-process caller would otherwise be stored with a block no read can parse.
+     */
+    private static void requireUserWritableType(OAuth2AuthConfig authConfig) {
+        if (!authConfig.getType().isUserWritable()) {
+            throw new IllegalArgumentException(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE);
+        }
     }
 
     private static void requireProtocolTakesAuthConfig(String protocol) {

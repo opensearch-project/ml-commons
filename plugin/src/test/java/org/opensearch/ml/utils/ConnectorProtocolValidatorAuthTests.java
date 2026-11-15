@@ -17,14 +17,21 @@ import static org.opensearch.ml.utils.AuthConfigTestFixtures.actions;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.fullOauth2;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.http;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBearer;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBuilder;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.mcp;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2Builder;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oldNodeCluster;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.pairs;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.ttl;
+import static org.opensearch.ml.utils.ConnectorProtocolValidator.JWT_ADDITIONAL_CLAIMS;
+import static org.opensearch.ml.utils.ConnectorProtocolValidator.JWT_AUDIENCE;
+import static org.opensearch.ml.utils.ConnectorProtocolValidator.JWT_ISSUER;
+import static org.opensearch.ml.utils.ConnectorProtocolValidator.JWT_SUBJECT;
 import static org.opensearch.ml.utils.ConnectorProtocolValidator.REFERENCED_KEYS;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,12 +46,15 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.cluster.ClusterState;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.OAuth2AuthConfigBuilder;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -143,6 +153,11 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         return oauth2With(b -> b.clientSecret("${credential." + key + "}"));
     }
 
+    /** A jwt-bearer configuration whose jwt block has one member set beside the two every block holds. */
+    private static OAuth2AuthConfig jwtWith(UnaryOperator<JwtSpec.JwtSpecBuilder> member) {
+        return jwtBearer(member.apply(jwtBuilder()).build());
+    }
+
     public void testValidateAuth_nothingDeclared_readsNeitherTheFlagNorTheClusterState() {
         validateAuth(ConnectorProtocols.HTTP, null);
         validateAuth(null, null);
@@ -202,6 +217,20 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         // The flag last.
         when(state.get()).thenReturn(clusterState(Version.CURRENT));
         assertForbidden(() -> validateAuth(ConnectorProtocols.HTTP, oauth2()));
+    }
+
+    public void testValidateAuth_aTypeOnlyCodeBuilds_isRefusedHoweverTheConnectorArrived() throws IOException {
+        // The request parsers refuse the type; a connector a transport caller supplies whole arrives by stream, which
+        // carries it, and is judged here before anything else is read.
+        OAuth2AuthConfig internal = OAuth2AuthConfig.builder().type(ConnectorAuthType.GOOGLE_ADC).build();
+        BytesStreamOutput out = new BytesStreamOutput();
+        http(internal).writeTo(out);
+        HttpConnector supplied = new HttpConnector(out.bytes().streamInput());
+        assertEquals(ConnectorAuthType.GOOGLE_ADC, supplied.getAuthConfig().getType());
+
+        assertEquals(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE, validateAuthFails(supplied.getProtocol(), supplied.getAuthConfig()));
+        assertEquals(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE, afterUpdateFails(http(oauth2()), null, internal, null));
+        verifyNothingRead();
     }
 
     public void testAfterUpdate_untouchedUpdate_readsNothing() {
@@ -295,16 +324,22 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         assertEquals(Optional.of(REFERENCED_KEYS), changed(oauth2Builder().build(), secret("s")));
         assertEquals(Optional.of("token_url"), changed(NONE, withUrl.toBuilder().clientSecret("${credential.s}").build()));
         assertEquals(Optional.empty(), changed(fullOauth2(), fullOauth2()));
+        // The members of the jwt block that name the identity are protected; its lifetime is not, and the only
+        // admitted signing algorithm leaves nothing to change. The private key surfaces through the referenced keys.
+        assertEquals(Optional.of("jwt.issuer"), changed(jwtBearer(), jwtWith(j -> j.issuer("other@project.iam.gserviceaccount.com"))));
+        assertEquals(Optional.of("jwt.subject"), changed(jwtBearer(), jwtWith(j -> j.subject("user@example.com"))));
+        assertEquals(Optional.of("jwt.audience"), changed(jwtBearer(), jwtWith(j -> j.audience("https://api.example"))));
+        assertEquals(Optional.of("jwt.additional_claims"), changed(jwtBearer(), jwtWith(j -> j.additionalClaims(Map.of("scope", "s")))));
+        assertEquals(Optional.empty(), changed(jwtBearer(), jwtWith(j -> j.lifetimeSeconds(120))));
+        assertEquals(Optional.of(REFERENCED_KEYS), changed(jwtBearer(), jwtWith(j -> j.privateKey("${credential.other}"))));
+        assertEquals(Optional.empty(), changed(jwtBearer(), jwtBearer()));
     }
 
     public void testComparator_eachProtectedFieldChangedAloneIsNamed() {
         Map<String, List<UnaryOperator<OAuth2AuthConfigBuilder>>> fields = new LinkedHashMap<>();
         fields.put("token_url", List.of(b -> b.tokenUrl(TOKEN_URL), b -> b.tokenUrl("https://login.example.com/other")));
         fields
-            .put(
-                "grant_type",
-                List.of(b -> b.grantType("client_credentials"), b -> b.grantType("urn:ietf:params:oauth:grant-type:jwt-bearer"))
-            );
+            .put("grant_type", List.of(b -> b.grantType("client_credentials"), b -> b.grantType("urn:ibm:params:oauth:grant-type:apikey")));
         fields
             .put(
                 "client_auth_method",
@@ -350,6 +385,38 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         assertEquals(Optional.of("audience"), changed(stored, update.scope(stored.getScope()).build()));
         assertEquals(Optional.of("token_request_params"), changed(stored, update.audience(stored.getAudience()).build()));
         assertEquals(Optional.empty(), changed(stored, update.tokenRequestParams(stored.getTokenRequestParams()).build()));
+
+        // The jwt block follows token_request_params, member by member, then the referenced keys.
+        JwtSpec storedJwt = jwtBuilder().subject("u1").audience("a1").additionalClaims(Map.of("scope", "s1")).build();
+        OAuth2AuthConfig storedBearer = jwtBearer(storedJwt).toBuilder().tokenRequestParams(pairs("resource", "r")).build();
+        JwtSpec.JwtSpecBuilder updatedJwt = storedJwt
+            .toBuilder()
+            .issuer("other@project.iam.gserviceaccount.com")
+            .subject("u2")
+            .audience("a2")
+            .additionalClaims(Map.of("scope", "s2"))
+            .privateKey("${credential.other}");
+        OAuth2AuthConfigBuilder bearerUpdate = storedBearer.toBuilder().tokenRequestParams(pairs("resource", "r2"));
+        assertEquals(Optional.of("token_request_params"), changed(storedBearer, bearerUpdate.jwt(updatedJwt.build()).build()));
+        bearerUpdate.tokenRequestParams(storedBearer.getTokenRequestParams());
+        assertEquals(Optional.of(JWT_ISSUER), changed(storedBearer, bearerUpdate.jwt(updatedJwt.build()).build()));
+        assertEquals(
+            Optional.of(JWT_SUBJECT),
+            changed(storedBearer, bearerUpdate.jwt(updatedJwt.issuer(storedJwt.getIssuer()).build()).build())
+        );
+        assertEquals(Optional.of(JWT_AUDIENCE), changed(storedBearer, bearerUpdate.jwt(updatedJwt.subject("u1").build()).build()));
+        assertEquals(
+            Optional.of(JWT_ADDITIONAL_CLAIMS),
+            changed(storedBearer, bearerUpdate.jwt(updatedJwt.audience("a1").build()).build())
+        );
+        assertEquals(
+            Optional.of(REFERENCED_KEYS),
+            changed(storedBearer, bearerUpdate.jwt(updatedJwt.additionalClaims(Map.of("scope", "s1")).build()).build())
+        );
+        assertEquals(
+            Optional.empty(),
+            changed(storedBearer, bearerUpdate.jwt(updatedJwt.privateKey(storedJwt.getPrivateKey()).build()).build())
+        );
     }
 
     public void testComparator_literalTokenUrlsCompareCanonicallyAndReferencesAsWritten() {
@@ -410,7 +477,7 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         HttpConnector stored = http(fullOauth2());
         Map<String, UnaryOperator<OAuth2AuthConfigBuilder>> changes = new LinkedHashMap<>();
         changes.put("token_url", b -> b.tokenUrl("https://login.example.com/other"));
-        changes.put("grant_type", b -> b.grantType("urn:ietf:params:oauth:grant-type:jwt-bearer"));
+        changes.put("grant_type", b -> b.grantType("urn:ibm:params:oauth:grant-type:apikey"));
         changes.put("client_auth_method", b -> b.clientAuthMethod("client_secret_post"));
         changes.put("client_id", b -> b.clientId("c"));
         changes.put("scope", b -> b.scope("s2"));

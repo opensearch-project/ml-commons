@@ -83,6 +83,6 @@ public class RestMLCreateConnectorAction extends BaseRestHandler implements Rest
 
     @Override
     public Set<String> getFilteredFields() {
-        return Set.of("credential", "*.Authorization", "auth_config.client_secret");
+        return Set.of("credential", "*.Authorization", "auth_config.client_secret", "auth_config.jwt.private_key");
     }
 }

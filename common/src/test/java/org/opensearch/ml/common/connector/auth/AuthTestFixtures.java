@@ -10,6 +10,10 @@ import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +73,34 @@ public final class AuthTestFixtures {
             + "'audience':[],'token_request_params':{'x':[],'resource':'r'}}"
     );
 
+    /** A token URL the default token endpoint patterns admit, for the jwt-bearer configurations. */
+    public static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    public static final String ISSUER = "svc@project.iam.gserviceaccount.com";
+    /** The credential key {@link #jwt()} references for its private key. */
+    public static final String PRIVATE_KEY_KEY = "k";
+    /** The document {@link #jwt()} emits: the two required members plus the defaults. */
+    public static final String JWT_JSON = json(
+        "{'issuer':'" + ISSUER + "','signing_alg':'RS256','lifetime_seconds':60,'private_key':'${credential." + PRIVATE_KEY_KEY + "}'}"
+    );
+    /** The document {@link #fullJwt()} emits, in schema order. */
+    public static final String FULL_JWT_JSON = json(
+        "{'issuer':'"
+            + ISSUER
+            + "','subject':'user@example.com','audience':'https://api.example','signing_alg':'RS256','lifetime_seconds':120,"
+            + "'additional_claims':{'scope':'https://www.googleapis.com/auth/cloud-platform','tenant':'t1'},"
+            + "'private_key':'${credential."
+            + PRIVATE_KEY_KEY
+            + "}'}"
+    );
+    /** The document {@link #jwtBearer()} emits. */
+    public static final String JWT_BEARER_JSON = json(
+        "{'type':'oauth2','token_url':'"
+            + GOOGLE_TOKEN_URL
+            + "','grant_type':'urn:ietf:params:oauth:grant-type:jwt-bearer','client_auth_method':'none','jwt':"
+            + JWT_JSON
+            + "}"
+    );
+
     /** The token endpoint patterns of a node with default settings. */
     public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
         ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
@@ -108,6 +140,99 @@ public final class AuthTestFixtures {
             .tokenRequestParams(Map.of("resource", "r"))
             .tokenResponse(TokenResponseSpec.builder().defaultTtlSeconds(600).build())
             .build();
+    }
+
+    /** The smallest jwt block that builds, as a builder for variants. */
+    public static JwtSpec.JwtSpecBuilder jwtBuilder() {
+        return JwtSpec.builder().issuer(ISSUER).privateKey("${credential." + PRIVATE_KEY_KEY + "}");
+    }
+
+    public static JwtSpec jwt() {
+        return jwtBuilder().build();
+    }
+
+    /** {@link #jwt()} with every optional member set. */
+    public static JwtSpec fullJwt() {
+        Map<String, String> claims = new LinkedHashMap<>();
+        claims.put("tenant", "t1");
+        claims.put("scope", "https://www.googleapis.com/auth/cloud-platform");
+        return jwtBuilder()
+            .subject("user@example.com")
+            .audience("https://api.example")
+            .lifetimeSeconds(120)
+            .additionalClaims(claims)
+            .build();
+    }
+
+    /** The smallest jwt-bearer configuration: the grant, {@code client_auth_method} none and {@link #jwt()}. */
+    public static OAuth2AuthConfig.OAuth2AuthConfigBuilder jwtBearerBuilder() {
+        return OAuth2AuthConfig
+            .builder()
+            .type(ConnectorAuthType.OAUTH2)
+            .tokenUrl(GOOGLE_TOKEN_URL)
+            .grantType(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER)
+            .clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE)
+            .jwt(jwt());
+    }
+
+    public static OAuth2AuthConfig jwtBearer() {
+        return jwtBearerBuilder().build();
+    }
+
+    /** {@link #jwtBearer()} with {@link #fullJwt()}, a {@code token_request_params} member and a {@code token_response}. */
+    public static OAuth2AuthConfig fullJwtBearer() {
+        return jwtBearerBuilder()
+            .tokenRequestParams(Map.of("resource", "r"))
+            .tokenResponse(TokenResponseSpec.builder().defaultTtlSeconds(600).build())
+            .jwt(fullJwt())
+            .build();
+    }
+
+    /** Generated once, since key generation is slow; loaded only by the tests that read a key. */
+    private static final class Keys {
+        static final KeyPair RSA = generate("RSA", 2048);
+        static final KeyPair EC = generate("EC", 256);
+
+        private static KeyPair generate(String algorithm, int keySize) {
+            try {
+                KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm);
+                generator.initialize(keySize);
+                return generator.generateKeyPair();
+            } catch (GeneralSecurityException e) {
+                throw new AssertionError(e);
+            }
+        }
+    }
+
+    /** The PKCS#8 encoding of an RSA private key. */
+    public static byte[] rsaPkcs8() {
+        return Keys.RSA.getPrivate().getEncoded();
+    }
+
+    /** The PKCS#8 encoding of a freshly generated RSA key of {@code bits} bits, for a key shorter than the parser admits. */
+    public static byte[] rsaPkcs8(int bits) {
+        return Keys.generate("RSA", bits).getPrivate().getEncoded();
+    }
+
+    /** The PKCS#8 encoding of an EC private key: well-formed, but not a key the RSA signer can use. */
+    public static byte[] ecPkcs8() {
+        return Keys.EC.getPrivate().getEncoded();
+    }
+
+    /** {@link #rsaPkcs8()} as the PEM document a key file holds. */
+    public static String rsaPkcs8Pem() {
+        return pem("PRIVATE KEY", rsaPkcs8(), true);
+    }
+
+    /**
+     * {@code encoded} in base64 between {@code -----BEGIN <label>-----} and {@code -----END <label>-----}, with the
+     * body in 64-character lines as key files have it or on one line.
+     */
+    public static String pem(String label, byte[] encoded, boolean lineBreaks) {
+        String body = lineBreaks
+            ? Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(encoded)
+            : Base64.getEncoder().encodeToString(encoded);
+        return "-----BEGIN " + label + "-----\n" + body + "\n-----END " + label + "-----\n";
     }
 
     /** Writes JSON with single quotes for readability. */
