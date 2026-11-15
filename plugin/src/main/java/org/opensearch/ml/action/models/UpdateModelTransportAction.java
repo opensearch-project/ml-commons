@@ -509,8 +509,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // A supplied credential replaces the stored one, so its keys are the ones the references must name.
                     Set<String> keyView = hasSuppliedCredential ? AuthConfigValidator.keysOf(suppliedCredential) : storedKeys;
                     try {
-                        // A private key the supplied credential holds is parsed while it is plaintext.
-                        AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), suppliedCredential);
                         if (AuthConfigValidator
                             .validateOrGrandfather(
                                 connector,
@@ -526,6 +524,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                     modelId
                                 );
                         }
+                        // A private key the supplied credential holds is parsed while it is plaintext.
+                        AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), suppliedCredential);
                     } catch (IllegalArgumentException e) {
                         log.error("Rejected inline connector update for model {}", modelId, e);
                         wrappedListener.onFailure(e);

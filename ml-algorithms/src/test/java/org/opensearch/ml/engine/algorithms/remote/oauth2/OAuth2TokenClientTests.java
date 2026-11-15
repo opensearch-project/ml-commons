@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote.oauth2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
@@ -17,9 +18,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
+import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_HOST;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.TOKEN_RESPONSE;
@@ -29,7 +32,10 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.fail;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.json;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.logged;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.reply;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.scriptedTransport;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
@@ -41,6 +47,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ProxySelector;
 import java.net.ServerSocket;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
@@ -65,6 +72,7 @@ import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.httpclient.TokenEndpointAddressValidator;
 import org.opensearch.threadpool.ThreadPool;
@@ -74,6 +82,7 @@ import com.sun.net.httpserver.HttpServer;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okio.Buffer;
 
 public class OAuth2TokenClientTests {
 
@@ -447,6 +456,40 @@ public class OAuth2TokenClientTests {
             List.of("INFO OAuth2 token request: host=203.0.113.10 outcome=transport_error latency_ms=? exception=IOException"),
             outcome.log()
         );
+    }
+
+    @Test
+    public void requestToken_jwtBearer_sendsASignedAssertionWithNoClientAuthentication() throws Exception {
+        OAuth2TokenClient client = client(reply(200, TOKEN_RESPONSE));
+
+        OAuth2TokenClient.IssuedToken token = request(client, jwtBearerConfig(), privateKey(), allowAll()).get(10, TimeUnit.SECONDS);
+
+        assertArrayEquals("tok-1".getBytes(StandardCharsets.US_ASCII), token.token());
+        assertEquals(1, recorded.size());
+        Request sent = recorded.get(0);
+        assertEquals(PUBLIC_TOKEN_URL, sent.url().toString());
+        assertNull(sent.header("Authorization"));
+        Buffer body = new Buffer();
+        sent.body().writeTo(body);
+        String form = body.readUtf8();
+        String grant = "grant_type=" + URLEncoder.encode(GRANT_TYPE_JWT_BEARER, StandardCharsets.UTF_8) + "&assertion=";
+        assertTrue(form, form.startsWith(grant));
+        assertFalse(form, form.contains("client_secret") || form.contains("PRIVATE"));
+    }
+
+    @Test
+    public void requestToken_jwtBearer_failsAsATokenFailureWhenTheKeyCannotSign() throws Exception {
+        OAuth2TokenClient client = client();
+
+        Failed outcome = failed(client, jwtBearerConfig(), snapshot(privateKeyCredential(PKCS1_PEM)), allowAll());
+
+        assertSame(MLException.class, outcome.exception().getClass());
+        assertEquals(failureMessage(PUBLIC_TOKEN_HOST, OAuth2TokenClient.INVALID_PRIVATE_KEY), outcome.exception().getMessage());
+        assertEquals(
+            List.of("WARN OAuth2 token request refused before sending: host=203.0.113.10 reason=invalid_private_key"),
+            outcome.log()
+        );
+        assertTrue(recorded.isEmpty());
     }
 
     @Test

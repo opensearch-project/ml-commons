@@ -45,13 +45,14 @@ import okhttp3.Response;
 import okio.BufferedSource;
 
 /**
- * Requests OAuth2 access tokens with the client credentials grant. A token request goes to the declared token endpoint
- * once its URL is https, in canonical form and on the token-endpoint allowlist, and only to the addresses that passed
- * {@link TokenEndpointAddressValidator}: directly, without redirects, within {@link #TIMEOUT}, reading at most
- * {@link #MAX_RESPONSE_BYTES}. The JVM trust store and hostname verification always apply.
+ * Requests OAuth2 access tokens with the client credentials grant or the JWT bearer grant. A token request goes to the
+ * declared token endpoint once its URL is https, in canonical form and on the token-endpoint allowlist, and only to
+ * the addresses that passed {@link TokenEndpointAddressValidator}: directly, without redirects, within
+ * {@link #TIMEOUT}, reading at most {@link #MAX_RESPONSE_BYTES}. The JVM trust store and hostname verification always
+ * apply.
  *
- * <p>Logs one line per request: the host, the status, the outcome and the latency. Tokens, bodies, credential values
- * and exception messages are never logged.
+ * <p>Logs one line per request: the host, the status, the outcome and the latency. Tokens, bodies, credential values,
+ * private keys and exception messages are never logged.
  */
 @Log4j2
 public final class OAuth2TokenClient {
@@ -62,6 +63,7 @@ public final class OAuth2TokenClient {
     public static final String TOKEN_URL_NOT_CANONICAL =
         "auth_config.token_url is not in canonical form; write it with a path and without dot segments";
     public static final String HOST_NOT_RESOLVED = "the token endpoint host could not be resolved";
+    public static final String INVALID_PRIVATE_KEY = "invalid private key";
     public static final String IDP_ERROR_DETAIL = "%s (HTTP %d)";
     static final String TRANSPORT_ERROR = "transport_error";
 
@@ -137,6 +139,7 @@ public final class OAuth2TokenClient {
      * as it is about to be sent, or with an {@link IllegalStateException} when this node's interface addresses cannot be
      * read; a request that was sent and failed, with an {@link OpenSearchStatusException}: status 400 when the token
      * endpoint answered 4xx, 502 when it answered anything else that is not a usable token, 503 when no answer arrived;
+     * a request whose assertion could not be signed with the key the credential holds, with an {@link MLException};
      * none has a cause. A full pool fails it with its rejection.
      */
     public void requestToken(
@@ -195,7 +198,16 @@ public final class OAuth2TokenClient {
             logRefusal(host, "auth_disabled");
             throw new OpenSearchStatusException(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
         }
-        Request request = TokenRequests.build(url, config, credentials);
+        Request request;
+        try {
+            request = TokenRequests.build(url, config, credentials, canonical);
+        } catch (IllegalArgumentException e) {
+            // The key the JWT bearer configuration references cannot sign its assertion. A token failure rather than a
+            // refusal: the cache then holds requests with this configuration back as it does after an endpoint failure,
+            // so a key that cannot sign is not parsed again on every request the connector serves.
+            logRefusal(host, "invalid_private_key");
+            throw new MLException(failureMessage(host, INVALID_PRIVATE_KEY));
+        }
         TokenCallback callback = new TokenCallback(config, canonical, host, listener);
         AccessController.doPrivileged(() -> clientFor(resolved).newCall(request).enqueue(callback));
     }

@@ -159,9 +159,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             // Fail fast: otherwise an invalid mutual TLS configuration is only caught at execution
             // time, and then on every single request the connector serves.
             validateMutualTlsConfig(connector);
-            // The credential is still plaintext here; it is encrypted just before the write. A private key the
-            // configuration references is parsed while it is, so a key that could not sign is refused now.
-            AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), connector.getCredential());
             AuthConfigValidator
                 .validate(
                     connector,
@@ -169,6 +166,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     AuthConfigValidator.keysOf(connector.getCredential()),
                     mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
                 );
+            // The credential is still plaintext here; it is encrypted just before the write. A private key the
+            // configuration references is parsed while it is, so a key that could not sign is refused now.
+            AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), connector.getCredential());
 
             User user = RestActionUtils.getUserContext(client);
             String connectorId = mlCreateConnectorInput.getConnectorId();

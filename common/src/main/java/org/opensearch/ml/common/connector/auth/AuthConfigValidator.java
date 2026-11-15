@@ -22,10 +22,12 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 public final class AuthConfigValidator {
 
     public static final String GRANT_TYPE_NOT_SUPPORTED_MESSAGE = "auth_config.grant_type is not supported in this version; use "
-        + OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS;
+        + OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS
+        + " or "
+        + OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
     public static final String CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE = "auth_config.client_auth_method ["
         + OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE
-        + "] is not supported in this version";
+        + "] is supported only with the jwt-bearer grant in this version";
     public static final String AUTHORIZATION_HEADER_MESSAGE =
         "A connector with an active auth_config must not define an Authorization header; the token is injected at request time";
     public static final String CLEARTEXT_ACTION_URL_MESSAGE = "A connector with an active auth_config must use https for every action URL";
@@ -83,21 +85,19 @@ public final class AuthConfigValidator {
         return config;
     }
 
+    /**
+     * The checks of a configuration that attaches a token: the grant and what it authenticates with, then the token
+     * endpoint, the actions and the client config, which every grant shares.
+     */
     private static void validateActive(Connector connector, OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
-        if (!OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS.equals(config.getGrantType())) {
+        String grantType = config.getGrantType();
+        if (OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS.equals(grantType)) {
+            validateClientCredentials(config);
+        } else if (!OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(grantType)) {
+            // The JWT bearer grant authenticates with its assertion alone: the configuration already holds the jwt block,
+            // names no method and has no secret, and the key the block references is parsed where the credential is
+            // plaintext (validatePrivateKey) or when an assertion is signed.
             throw new IllegalArgumentException(GRANT_TYPE_NOT_SUPPORTED_MESSAGE);
-        }
-        // The parse admits only client_secret_basic, client_secret_post and none, so after this check the method sends
-        // a client id and secret.
-        String method = config.getClientAuthMethod();
-        if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(method)) {
-            throw new IllegalArgumentException(CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
-        }
-        if (config.getClientId() == null) {
-            throw new IllegalArgumentException(clientIdRequiredMessage(method));
-        }
-        if (config.getClientSecret() == null) {
-            throw new IllegalArgumentException(clientSecretRequiredMessage(method));
         }
         // A reference is checked when a token is requested, once its value is known.
         String tokenUrl = config.getTokenUrl();
@@ -135,6 +135,22 @@ public final class AuthConfigValidator {
         ConnectorClientConfig clientConfig = connector.getConnectorClientConfig();
         if (clientConfig != null && Boolean.TRUE.equals(clientConfig.getSkipSslVerification())) {
             throw new IllegalArgumentException(SKIP_SSL_VERIFICATION_MESSAGE);
+        }
+    }
+
+    /** The client credentials grant authenticates with a client id and secret, which the method must send. */
+    private static void validateClientCredentials(OAuth2AuthConfig config) {
+        // The parse admits only client_secret_basic, client_secret_post and none, so after this check the method sends
+        // a client id and secret.
+        String method = config.getClientAuthMethod();
+        if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(method)) {
+            throw new IllegalArgumentException(CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
+        }
+        if (config.getClientId() == null) {
+            throw new IllegalArgumentException(clientIdRequiredMessage(method));
+        }
+        if (config.getClientSecret() == null) {
+            throw new IllegalArgumentException(clientSecretRequiredMessage(method));
         }
     }
 
