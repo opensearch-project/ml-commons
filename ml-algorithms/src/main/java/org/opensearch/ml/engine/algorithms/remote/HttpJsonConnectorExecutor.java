@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
@@ -20,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
@@ -70,6 +70,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public static final String NO_AUTHORIZATION_PROVIDER_FACTORY_MESSAGE =
         "The connector executor has no authorization provider factory, so it cannot send requests for a connector whose auth_config attaches a token";
+    public static final String LLM_INTERFACE_REQUIRED_MESSAGE = LLM_INTERFACE + " is required for streaming";
 
     @Getter
     private HttpConnector connector;
@@ -104,8 +105,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @Setter
     private volatile AuthorizationProviderFactory authorizationProviderFactory;
-    private volatile AuthorizationProvider authorizationProvider;
-    /** True when the connector's auth_config has a type that attaches a token. */
+    private final AtomicReference<AuthorizationProvider> authorizationProvider = new AtomicReference<>();
+    /** True when the connector's effective auth_config has a type that attaches a token. */
     private final boolean declaresAuthorization;
 
     private final CertificateProcessor certificateProcessor = new CertificateProcessor();
@@ -119,7 +120,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
-        OAuth2AuthConfig authConfig = this.connector.getAuthConfig();
+        OAuth2AuthConfig authConfig = this.connector.getEffectiveAuthConfig();
         this.declaresAuthorization = authConfig != null && authConfig.getType().isActive();
     }
 
@@ -147,7 +148,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 return;
             }
             // Checked before a token is requested, so a request that cannot be sent costs no call to the identity provider.
-            AuthConfigValidator.requireHttps(endpoint);
+            AuthConfigValidator.requireHttps(endpoint, connector);
             AuthorizationProvider provider = authorizationProvider();
             ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true);
             ActionListener<TokenHandle> sendWithToken = ActionListener.wrap(handle -> {
@@ -234,18 +235,19 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    /** The provider of this executor's connector, built on first use. */
+    /** The provider of this executor's connector, built on first use; the first instance published is the one kept. */
     private AuthorizationProvider authorizationProvider() {
-        AuthorizationProvider provider = authorizationProvider;
+        AuthorizationProvider provider = authorizationProvider.get();
         if (provider == null) {
             AuthorizationProviderFactory factory = authorizationProviderFactory;
             if (factory == null) {
                 // A caller that builds executors itself must pass the node's factory; name the gap instead of failing on a null.
                 throw new IllegalStateException(NO_AUTHORIZATION_PROVIDER_FACTORY_MESSAGE);
             }
-            // Two first requests may each build one; they are equivalent and the last one is kept.
-            provider = factory.providerFor(connector);
-            authorizationProvider = provider;
+            // Two first requests may each build one; the first to be published wins, so a request sent again after a
+            // 401 reads the instance that issued its token and dropped it.
+            authorizationProvider.compareAndSet(null, factory.providerFor(connector));
+            provider = authorizationProvider.get();
         }
         return provider;
     }
@@ -289,7 +291,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             URI endpoint = connector
                 .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
-            String llmInterface = StringEscapeUtils.unescapeJava(parameters.get(LLM_INTERFACE).trim().toLowerCase(Locale.ROOT));
+            String declaredInterface = parameters.get(LLM_INTERFACE);
+            if (declaredInterface == null) {
+                throw new IllegalArgumentException(LLM_INTERFACE_REQUIRED_MESSAGE);
+            }
+            String llmInterface = StringEscapeUtils.unescapeJava(declaredInterface.trim().toLowerCase(Locale.ROOT));
             validateLLMInterface(llmInterface);
 
             Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
@@ -298,7 +304,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 return;
             }
             // Checked before a token is requested, so a request that cannot be sent costs no call to the identity provider.
-            AuthConfigValidator.requireHttps(endpoint);
+            AuthConfigValidator.requireHttps(endpoint, connector);
             AuthorizationProvider provider = authorizationProvider();
             ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true);
             // A 401 ends the stream and discards this token unless it is younger than ten seconds; the stream is not sent again.
@@ -344,12 +350,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    private void validateLLMInterface(String llmInterface) {
-        switch (llmInterface) {
-            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+    /** The interfaces the streaming handler factory serves over HTTP; the list lives there. */
+    private static void validateLLMInterface(String llmInterface) {
+        if (!StreamingHandlerFactory.HTTP_STREAMING_INTERFACES.contains(llmInterface)) {
+            throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
     }
 

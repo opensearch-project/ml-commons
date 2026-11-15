@@ -12,7 +12,11 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_HOST;
@@ -22,13 +26,18 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.featureSettings;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.googleAdcConnector;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.googleConnector;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.googleServiceAccountConnector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConnector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.oauth2Connector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.parse;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.reply;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.rsaPkcs8Pem;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.scriptedTransport;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.serviceAccountCredential;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.testThreadPool;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.tokenClient;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenCache.Stat.TOKEN_FAILURE;
@@ -36,6 +45,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenCache
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -45,9 +55,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
@@ -108,6 +122,27 @@ public class AuthorizationProviderFactoryTests {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> factory.providerFor(connector));
         assertEquals(message, e.getMessage());
         assertTrue(recorded.isEmpty());
+    }
+
+    private void setConnectorAuthEnabled(boolean enabled) {
+        clusterSettings.applySettings(Settings.builder().put(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey(), enabled).build());
+    }
+
+    private void setVertexAiEnabled(boolean enabled) {
+        clusterSettings.applySettings(Settings.builder().put(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey(), enabled).build());
+    }
+
+    /** The 403 the provider answers with, and its message. */
+    private static String forbidden(AuthorizationProvider provider) {
+        OpenSearchStatusException e = (OpenSearchStatusException) failure(provider);
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+        return e.getMessage();
+    }
+
+    private static String form(Request request) throws Exception {
+        Buffer body = new Buffer();
+        request.body().writeTo(body);
+        return body.readUtf8();
     }
 
     @Test
@@ -194,6 +229,97 @@ public class AuthorizationProviderFactoryTests {
 
         assertEquals(List.of(TOKEN_REQUEST, TOKEN_FAILURE), counted);
         assertTrue(recorded.isEmpty());
+    }
+
+    @Test
+    public void aLegacyServiceAccountConnector_runsOnTheTokenEngineUnderTheVertexAiSettingAlone() throws Exception {
+        AuthorizationProvider provider = factory.providerFor(googleServiceAccountConnector(ACTION_URL));
+
+        assertEquals("tok-1", token(provider));
+        assertEquals(PUBLIC_TOKEN_URL, recorded.get(0).url().toString());
+        assertTrue(form(recorded.get(0)).contains("&assertion="));
+        // connector.auth_enabled plays no part: turning it off empties the cache, and the next request is served again.
+        setConnectorAuthEnabled(false);
+        assertEquals("tok-2", token(provider));
+        setVertexAiEnabled(false);
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, forbidden(provider));
+
+        assertEquals(2, recorded.size());
+        // Counted as any connector on the engine.
+        assertEquals(List.of(TOKEN_REQUEST, TOKEN_REQUEST), counted);
+    }
+
+    @Test
+    public void aLegacyServiceAccountConnector_whoseTokenUriNoPatternMatches_failsEveryTokenRequest_andNothingIsSent() {
+        GoogleCloudConnector connector = googleConnector(null, serviceAccountCredential("https://idp.example/token"), null, ACTION_URL);
+        AuthorizationProvider provider = factory.providerFor(connector);
+
+        Exception e = failure(provider);
+
+        assertSame(IllegalArgumentException.class, e.getClass());
+        assertEquals(
+            String.format(Locale.ROOT, OAuth2TokenClient.FAILURE_MESSAGE, "idp.example", TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE),
+            e.getMessage()
+        );
+        assertTrue(recorded.isEmpty());
+    }
+
+    @Test
+    public void aLegacyAdcConnector_isServedByTheLibraryBackedProvider_whichTheEngineNeitherCachesNorCounts() {
+        AuthorizationProvider provider = factory.providerFor(googleAdcConnector(ACTION_URL));
+
+        assertTrue(provider instanceof GoogleAdcAuthorizationProvider);
+        setVertexAiEnabled(false);
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, forbidden(provider));
+        assertTrue(recorded.isEmpty());
+        assertTrue(counted.isEmpty());
+    }
+
+    @Test
+    public void aLegacyAdcConnector_isHeldToTheConnectorLevelChecksOfAnActiveConfiguration() {
+        ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
+        Map<String, String> adc = Map.of(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC);
+
+        assertRefused(googleConnector(adc, null, null, ACTION_URL, skip), AuthConfigValidator.GOOGLE_CLOUD_SKIP_SSL_VERIFICATION_MESSAGE);
+    }
+
+    /** Written before such a header was refused; the token takes its place on every request, so the connector is served. */
+    @Test
+    public void aLegacyConnectorWithAStoredAuthorizationHeader_isServed() throws Exception {
+        Map<String, String> header = Map.of("authorization", "Bearer stale");
+        Map<String, String> adc = Map.of(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC);
+
+        AuthorizationProvider serviceAccount = factory
+            .providerFor(googleConnector(null, serviceAccountCredential(PUBLIC_TOKEN_URL), null, ACTION_URL, null, header));
+        assertEquals("tok-1", token(serviceAccount));
+
+        assertTrue(
+            factory.providerFor(googleConnector(adc, null, null, ACTION_URL, null, header)) instanceof GoogleAdcAuthorizationProvider
+        );
+    }
+
+    @Test
+    public void anExplicitBlockOnGoogleCloud_runsUnderBothSettings() throws Exception {
+        GoogleCloudConnector connector = googleConnector(null, privateKeyCredential(rsaPkcs8Pem()), jwtBearerConfig(), ACTION_URL);
+        AuthorizationProvider provider = factory.providerFor(connector);
+        assertEquals("tok-1", token(provider));
+
+        setConnectorAuthEnabled(false);
+        assertEquals(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, forbidden(provider));
+        setConnectorAuthEnabled(true);
+        setVertexAiEnabled(false);
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, forbidden(provider));
+        // Both off, in one update: the Vertex AI setting is named, as the first of the two.
+        clusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .put(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey(), false)
+                    .put(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey(), false)
+                    .build()
+            );
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, forbidden(provider));
+        assertEquals(1, recorded.size());
     }
 
     @Test

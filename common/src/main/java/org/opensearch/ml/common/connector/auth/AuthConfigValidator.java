@@ -12,6 +12,7 @@ import java.util.Set;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 
 /**
  * Write-time checks of the {@code auth_config} a connector holds: every credential key it references must be a key of
@@ -33,6 +34,13 @@ public final class AuthConfigValidator {
     public static final String CLEARTEXT_ACTION_URL_MESSAGE = "A connector with an active auth_config must use https for every action URL";
     public static final String SKIP_SSL_VERIFICATION_MESSAGE = "A connector with an active auth_config must not set client_config."
         + ConnectorClientConfig.SKIP_SSL_VERIFICATION_FIELD;
+    public static final String GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE =
+        "A google_cloud connector must not define an Authorization header; its access token is sent in that header. Remove the header";
+    public static final String GOOGLE_CLOUD_CLEARTEXT_ACTION_URL_MESSAGE =
+        "A google_cloud connector must use https for every action URL: its access token is sent with every request";
+    public static final String GOOGLE_CLOUD_SKIP_SSL_VERIFICATION_MESSAGE = "A google_cloud connector must not set client_config."
+        + ConnectorClientConfig.SKIP_SSL_VERIFICATION_FIELD
+        + ": its access token is sent with every request";
     public static final String TOKEN_URL_DOT_SEGMENT_MESSAGE = "auth_config.token_url must not contain a dot segment (. or ..) in its path";
     public static final String TOKEN_URL_PATH_MUST_BE_ASCII_MESSAGE =
         "auth_config.token_url path must contain only ASCII characters; percent-encode other characters";
@@ -55,7 +63,14 @@ public final class AuthConfigValidator {
     }
 
     /**
-     * Validates {@code config}, the {@code auth_config} of {@code connector}; a connector without one passes.
+     * Validates {@code config}, the {@code auth_config} of {@code connector}; a connector without one passes, except a
+     * {@code google_cloud} connector that defines an Authorization header, which its access token would replace.
+     * <p>
+     * A {@code google_cloud} connector without a declaration is judged twice: the write paths pass {@code null} and get
+     * the header check, so a new connector cannot take such a header; the executor passes the configuration the stored
+     * identity stands for, which is judged as an active configuration without the header check, so a connector written
+     * before this check keeps working, its header replaced and logged where its provider is built. Its messages name
+     * the protocol rather than a declaration it does not hold.
      *
      * @param connector the connector as it will be stored; its actions and client config are judged for an active type
      * @param config the configuration to judge, as the caller reads it from the connector; null when it holds none
@@ -71,6 +86,9 @@ public final class AuthConfigValidator {
         TokenEndpointAllowlist allowlist
     ) {
         if (config == null) {
+            if (isLegacyGoogleCloud(connector)) {
+                requireNoAuthorizationHeader(connector, GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE);
+            }
             return null;
         }
         // Sorted, so the first missing key is reported deterministically.
@@ -87,9 +105,18 @@ public final class AuthConfigValidator {
 
     /**
      * The checks of a configuration that attaches a token: the grant and what it authenticates with, then the token
-     * endpoint, the actions and the client config, which every grant shares.
+     * endpoint, the actions and the client config, which every grant shares. A {@code google_adc} configuration makes
+     * no token request of its own, so only the connector is examined.
      */
     private static void validateActive(Connector connector, OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
+        if (config.getType() != ConnectorAuthType.GOOGLE_ADC) {
+            validateTokenRequest(config, allowlist);
+        }
+        validateConnector(connector, isLegacyGoogleCloud(connector));
+    }
+
+    /** The grant, what it authenticates with and the literal token endpoint. */
+    private static void validateTokenRequest(OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
         String grantType = config.getGrantType();
         if (OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS.equals(grantType)) {
             validateClientCredentials(config);
@@ -116,26 +143,67 @@ public final class AuthConfigValidator {
                 throw new IllegalArgumentException(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
             }
         }
-        if (connector.getActions() != null) {
-            for (ConnectorAction action : connector.getActions()) {
-                if (action.getHeaders() == null) {
-                    continue;
-                }
-                for (String header : action.getHeaders().keySet()) {
-                    if (OAuth2Support.AUTHORIZATION_HEADER.equalsIgnoreCase(header)) {
-                        throw new IllegalArgumentException(AUTHORIZATION_HEADER_MESSAGE);
-                    }
-                }
-            }
+    }
+
+    /** No action writes an {@code Authorization} header, every action URL is https and TLS is verified. */
+    /**
+     * The actions and the client config of a connector whose requests carry a token. A {@code google_cloud} connector
+     * without a declaration ({@code legacyGoogleCloud}) is not refused for an Authorization header, which the token
+     * replaces, and gets messages that name the protocol.
+     */
+    private static void validateConnector(Connector connector, boolean legacyGoogleCloud) {
+        if (!legacyGoogleCloud) {
+            requireNoAuthorizationHeader(connector, AUTHORIZATION_HEADER_MESSAGE);
         }
         // A scheme that is still a placeholder after substitution passes here: it is known only once a request resolves it.
         if (ConnectorAction.firstCleartextUrl(connector.getActions(), connector.getParameters()) != null) {
-            throw new IllegalArgumentException(CLEARTEXT_ACTION_URL_MESSAGE);
+            throw new IllegalArgumentException(
+                legacyGoogleCloud ? GOOGLE_CLOUD_CLEARTEXT_ACTION_URL_MESSAGE : CLEARTEXT_ACTION_URL_MESSAGE
+            );
         }
         ConnectorClientConfig clientConfig = connector.getConnectorClientConfig();
         if (clientConfig != null && Boolean.TRUE.equals(clientConfig.getSkipSslVerification())) {
-            throw new IllegalArgumentException(SKIP_SSL_VERIFICATION_MESSAGE);
+            throw new IllegalArgumentException(
+                legacyGoogleCloud ? GOOGLE_CLOUD_SKIP_SSL_VERIFICATION_MESSAGE : SKIP_SSL_VERIFICATION_MESSAGE
+            );
         }
+    }
+
+    /** Whether {@code connector} is a {@code google_cloud} connector without a declaration, so that its stored identity stands for one. */
+    private static boolean isLegacyGoogleCloud(Connector connector) {
+        return connector instanceof GoogleCloudConnector && connector.getAuthConfig() == null;
+    }
+
+    /** Whether an action of {@code connector} defines an Authorization header, in any case. */
+    public static boolean definesAuthorizationHeader(Connector connector) {
+        if (connector.getActions() == null) {
+            return false;
+        }
+        for (ConnectorAction action : connector.getActions()) {
+            if (action.getHeaders() == null) {
+                continue;
+            }
+            for (String header : action.getHeaders().keySet()) {
+                if (OAuth2Support.AUTHORIZATION_HEADER.equalsIgnoreCase(header)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void requireNoAuthorizationHeader(Connector connector, String message) {
+        if (definesAuthorizationHeader(connector)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    /**
+     * Whether an update of {@code stored} that supplies actions ({@code suppliesActions}) is judged as a create: a
+     * {@code google_cloud} connector without a declaration may keep a stored Authorization header, but not take one.
+     */
+    public static boolean actionsAreJudgedAsNew(Connector stored, boolean suppliesActions) {
+        return suppliesActions && isLegacyGoogleCloud(stored);
     }
 
     /** The client credentials grant authenticates with a client id and secret, which the method must send. */
@@ -240,6 +308,15 @@ public final class AuthConfigValidator {
     public static void requireHttps(URI endpoint) {
         if (!OAuth2AuthConfig.HTTPS.equalsIgnoreCase(endpoint.getScheme())) {
             throw new IllegalArgumentException(CLEARTEXT_ACTION_URL_MESSAGE);
+        }
+    }
+
+    /** {@link #requireHttps(URI)} for a request of {@code connector}, with the message of a {@code google_cloud} connector without a declaration. */
+    public static void requireHttps(URI endpoint, Connector connector) {
+        if (!OAuth2AuthConfig.HTTPS.equalsIgnoreCase(endpoint.getScheme())) {
+            throw new IllegalArgumentException(
+                isLegacyGoogleCloud(connector) ? GOOGLE_CLOUD_CLEARTEXT_ACTION_URL_MESSAGE : CLEARTEXT_ACTION_URL_MESSAGE
+            );
         }
     }
 

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.connector.auth;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ACTION_URL;
@@ -41,6 +42,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 
@@ -329,6 +331,118 @@ public class AuthConfigValidatorTests {
             http(parameters(), oauth2(), actions(null, ACTION_URL), ConnectorClientConfig.builder().skipSslVerification(false).build())
         );
         validate(http(parameters(), oauth2(), actions(null, ACTION_URL), ConnectorClientConfig.builder().build()));
+    }
+
+    @Test
+    public void googleAdcConfiguration_makesNoTokenRequest_soOnlyTheConnectorIsExamined() {
+        OAuth2AuthConfig adc = OAuth2AuthConfig.builder().type(ConnectorAuthType.GOOGLE_ADC).build();
+        // No grant, no token URL and no key to check, so the allowlist and the key set play no part.
+        assertEquals(
+            adc,
+            AuthConfigValidator.validate(http(parameters(), null, actions(null, ACTION_URL), null), adc, Set.of(), NOTHING_ALLOWED)
+        );
+
+        ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
+        assertEquals(
+            AuthConfigValidator.AUTHORIZATION_HEADER_MESSAGE,
+            failsWith(http(parameters(), null, actions(Map.of("Authorization", "Bearer x"), ACTION_URL), null), adc)
+        );
+        assertEquals(
+            AuthConfigValidator.CLEARTEXT_ACTION_URL_MESSAGE,
+            failsWith(http(parameters(), null, actions(null, "http://api.openai.com/v1"), null), adc)
+        );
+        assertEquals(
+            AuthConfigValidator.SKIP_SSL_VERIFICATION_MESSAGE,
+            failsWith(http(parameters(), null, actions(null, ACTION_URL), skip), adc)
+        );
+    }
+
+    @Test
+    public void aGoogleCloudConnectorWithoutADeclaration_isRefusedAnAuthorizationHeaderWhenWritten_notWhenRun() {
+        Map<String, String> credential = Map
+            .of(GoogleCloudConnector.PRIVATE_KEY_FIELD, "k", GoogleCloudConnector.CLIENT_EMAIL_FIELD, "sa@p.iam.gserviceaccount.com");
+        Set<String> keys = credential.keySet();
+        List<ConnectorAction> withHeader = actions(Map.of("authorization", "Bearer stale"), ACTION_URL);
+        GoogleCloudConnector stored = google(credential, withHeader, null, null);
+        GoogleCloudConnector clean = google(credential, actions(null, ACTION_URL), null, null);
+
+        // Written: the write paths pass the declaration the connector holds, none here.
+        assertEquals(
+            AuthConfigValidator.GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE,
+            assertThrows(IllegalArgumentException.class, () -> AuthConfigValidator.validate(stored, null, keys, DEFAULT_TOKEN_ALLOWLIST))
+                .getMessage()
+        );
+        assertNull(AuthConfigValidator.validate(clean, null, keys, DEFAULT_TOKEN_ALLOWLIST));
+        assertTrue(AuthConfigValidator.definesAuthorizationHeader(stored));
+        assertFalse(AuthConfigValidator.definesAuthorizationHeader(clean));
+
+        // Run: the executor passes the configuration the stored identity stands for; the token replaces the header.
+        OAuth2AuthConfig implied = stored.getEffectiveAuthConfig();
+        assertSame(implied, AuthConfigValidator.validate(stored, implied, keys, DEFAULT_TOKEN_ALLOWLIST));
+
+        // The other checks of an active configuration still apply, worded for the protocol.
+        assertEquals(
+            AuthConfigValidator.GOOGLE_CLOUD_CLEARTEXT_ACTION_URL_MESSAGE,
+            failsWhenRun(google(credential, actions(null, "http://api.openai.com/v1"), null, null), keys)
+        );
+        ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
+        assertEquals(
+            AuthConfigValidator.GOOGLE_CLOUD_SKIP_SSL_VERIFICATION_MESSAGE,
+            failsWhenRun(google(credential, actions(null, ACTION_URL), null, skip), keys)
+        );
+        URI cleartext = URI.create("http://api.example/v1");
+        assertEquals(
+            AuthConfigValidator.GOOGLE_CLOUD_CLEARTEXT_ACTION_URL_MESSAGE,
+            assertThrows(IllegalArgumentException.class, () -> AuthConfigValidator.requireHttps(cleartext, stored)).getMessage()
+        );
+        assertEquals(
+            AuthConfigValidator.CLEARTEXT_ACTION_URL_MESSAGE,
+            assertThrows(IllegalArgumentException.class, () -> AuthConfigValidator.requireHttps(cleartext, http(oauth2()))).getMessage()
+        );
+
+        // An explicit declaration on the protocol keeps the general rule.
+        GoogleCloudConnector explicit = google(credential, withHeader, oauth2(), null);
+        assertEquals(AuthConfigValidator.AUTHORIZATION_HEADER_MESSAGE, fails(explicit, Set.of("s")));
+
+        // An update that supplies actions is judged as a create for such a connector alone.
+        assertTrue(AuthConfigValidator.actionsAreJudgedAsNew(stored, true));
+        assertFalse(AuthConfigValidator.actionsAreJudgedAsNew(stored, false));
+        assertFalse(AuthConfigValidator.actionsAreJudgedAsNew(explicit, true));
+        assertFalse(AuthConfigValidator.actionsAreJudgedAsNew(http(oauth2()), true));
+    }
+
+    private static GoogleCloudConnector google(
+        Map<String, String> credential,
+        List<ConnectorAction> actions,
+        OAuth2AuthConfig authConfig,
+        ConnectorClientConfig clientConfig
+    ) {
+        return GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("g")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .credential(credential)
+            .actions(actions)
+            .authConfig(authConfig)
+            .connectorClientConfig(clientConfig)
+            .build();
+    }
+
+    /** The message the executor's check refuses {@code connector} with: its effective configuration, under the default allowlist. */
+    private static String failsWhenRun(GoogleCloudConnector connector, Set<String> keys) {
+        return assertThrows(
+            IllegalArgumentException.class,
+            () -> AuthConfigValidator.validate(connector, connector.getEffectiveAuthConfig(), keys, DEFAULT_TOKEN_ALLOWLIST)
+        ).getMessage();
+    }
+
+    /** The message {@link AuthConfigValidator#validate} refuses {@code config} on {@code connector} with, no keys and nothing allowed. */
+    private static String failsWith(Connector connector, OAuth2AuthConfig config) {
+        return assertThrows(
+            IllegalArgumentException.class,
+            () -> AuthConfigValidator.validate(connector, config, Set.of(), NOTHING_ALLOWED)
+        ).getMessage();
     }
 
     @Test

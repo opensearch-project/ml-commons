@@ -59,7 +59,6 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
@@ -153,7 +152,12 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
             .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true)
             .putList(
                 ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(),
-                List.of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$")
+                List
+                    .of(
+                        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+                        "^https://api\\.openai\\.com/.*$",
+                        "^https://[a-z0-9-]+-aiplatform\\.googleapis\\.com/.*$"
+                    )
             )
             .build();
         ClusterSettings clusterSettings = clusterSetting(
@@ -318,25 +322,38 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
         verify(connectorAccessControlHelper).validateConnectorAccess(any(), any(), eq(CONNECTOR_ID), any(), any(), any());
     }
 
-    public void testInlineGoogleCloudWithAConfiguration_isRejectedAfterTheVertexFlag() throws IOException {
-        String json = "{\"name\":\"g\",\"protocol\":\"google_cloud\",\"parameters\":{\"model\":\"x\"},\"auth_config\":{\"type\":\"none\"},"
-            + "\"credential\":{\"private_key\":\"k\",\"client_email\":\"e\"},"
+    /** An inline google_cloud connector with a configuration: the protocol flag first, then the auth checks as on http. */
+    public void testInlineGoogleCloudWithAConfiguration_isJudgedAfterTheVertexFlag() throws IOException {
+        Connector none = inlineGoogleCloud("{\"type\":\"none\"}");
+        Connector oauth2 = inlineGoogleCloud(
+            "{\"type\":\"oauth2\",\"token_url\":\"https://oauth2.googleapis.com/token\",\"client_auth_method\":\"client_secret_post\","
+                + "\"client_id\":\"app\",\"client_secret\":\"${credential.client_email}\"}"
+        );
+
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+        assertRejected(none, null, RestStatus.FORBIDDEN, ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(false);
+        assertRejected(oauth2, null, RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+        assertRejected(none, null, RestStatus.FORBIDDEN, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        clearInvocations(actionListener, mlModelManager);
+        register(none, null);
+        verify(actionListener, never()).onFailure(any());
+        verify(mlModelManager).registerMLRemoteModel(any(), any(), any(), any());
+    }
+
+    private static Connector inlineGoogleCloud(String authConfig) throws IOException {
+        String json = "{\"name\":\"g\",\"protocol\":\"google_cloud\",\"parameters\":{\"model\":\"x\"},\"auth_config\":"
+            + authConfig
+            + ",\"credential\":{\"private_key\":\"k\",\"client_email\":\"e\"},"
             + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\","
             + "\"url\":\"https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/l/endpoints/e:predict\",\"request_body\":\"{}\"}]}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
         parser.nextToken();
-        Connector inline = Connector.createConnectorFromRequest(parser);
-
-        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
-        assertRejected(inline, null, RestStatus.FORBIDDEN, ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
-        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
-        assertRejected(
-            inline,
-            null,
-            RestStatus.BAD_REQUEST,
-            ConnectorProtocolValidator.protocolNotSupportedMessage(ConnectorProtocols.GOOGLE_CLOUD)
-        );
+        return Connector.createConnectorFromRequest(parser);
     }
 }

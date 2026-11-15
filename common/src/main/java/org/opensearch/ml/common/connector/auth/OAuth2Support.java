@@ -43,9 +43,13 @@ public final class OAuth2Support {
         return token.getBytes(StandardCharsets.US_ASCII);
     }
 
-    /** A new map: {@code headers} (may be null or immutable, never modified) plus {@code Authorization: Bearer token}. */
+    /**
+     * A new map: {@code headers} (may be null or immutable, never modified) with {@code Authorization: Bearer token} in
+     * place of any Authorization header they hold, whatever its case, so that the token is the only one sent.
+     */
     public static Map<String, String> withBearer(Map<String, String> headers, String token) {
         Map<String, String> result = headers == null ? new HashMap<>() : new HashMap<>(headers);
+        result.keySet().removeIf(AUTHORIZATION_HEADER::equalsIgnoreCase);
         result.put(AUTHORIZATION_HEADER, BEARER_PREFIX + token);
         return result;
     }

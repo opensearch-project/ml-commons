@@ -92,6 +92,14 @@ public interface Connector extends ToXContentObject, Writeable {
         return null;
     }
 
+    /**
+     * The configuration the executor uses: {@link #getAuthConfig()}, unless the connector type derives one from its
+     * stored fields when none is stored. The write checks, GET and the stream read {@link #getAuthConfig()} only.
+     */
+    default OAuth2AuthConfig getEffectiveAuthConfig() {
+        return getAuthConfig();
+    }
+
     BatchJobStatusMapping getBatchJobStatus();
 
     String getActionEndpoint(String action, Map<String, String> parameters);

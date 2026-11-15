@@ -49,4 +49,12 @@ public class OAuth2SupportTests {
         assertEquals(Map.of("Content-Type", "x", OAuth2Support.AUTHORIZATION_HEADER, OAuth2Support.BEARER_PREFIX + "tok-1"), result);
         assertEquals(Map.of("Content-Type", "x"), headers);
     }
+
+    @Test
+    public void withBearer_replacesAnAuthorizationHeaderWhateverItsCase() {
+        Map<String, String> headers = Map.of("authorization", "Bearer stale", "Content-Type", "x");
+
+        assertEquals(Map.of("Content-Type", "x", "Authorization", "Bearer tok-1"), OAuth2Support.withBearer(headers, "tok-1"));
+        assertEquals(Map.of("Authorization", "Bearer tok-1"), OAuth2Support.withBearer(Map.of("AUTHORIZATION", "Bearer stale"), "tok-1"));
+    }
 }

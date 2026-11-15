@@ -21,17 +21,21 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_OVER_FULL_OAUTH2_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.SECRET_KEY;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.STORED_CIPHERTEXT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.documentOf;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.expectLog;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.fullOauth2;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.googleCloud;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.http;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBearer;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.mcp;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.oauth2Referencing;
@@ -446,6 +450,17 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
             http(OAuth2AuthConfig.NONE),
             authUpdate(OAuth2AuthConfig.NONE, null),
             ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE
+        );
+    }
+
+    @Test
+    public void testActiveBlockOnGoogleCloud_protocolOmitted_isJudgedByTheVertexAiFlag() {
+        when(mlFeatureEnabledSetting.isConnectorAuthEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(false);
+        assertRejectedBeforeUpdate(
+            googleCloud(),
+            authUpdate(jwtBearer(), Map.of(PRIVATE_KEY_KEY, "p")),
+            ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE
         );
     }
 

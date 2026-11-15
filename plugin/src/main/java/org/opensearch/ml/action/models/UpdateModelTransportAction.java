@@ -491,7 +491,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // Before update(), which changes the connector in place. The stored credential values are
                     // ciphertext; only their keys are needed.
                     boolean authOrProtocolTouched = ConnectorProtocolValidator
-                        .touchesAuthOrProtocol(updateModelInput.getConnector().getAuthConfig(), updatedProtocol, connector.getProtocol());
+                        .touchesAuthOrProtocol(updateModelInput.getConnector().getAuthConfig(), updatedProtocol, connector.getProtocol())
+                        || AuthConfigValidator.actionsAreJudgedAsNew(connector, updateModelInput.getConnector().getActions() != null);
                     Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
                     TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
                     boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);

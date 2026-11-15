@@ -402,12 +402,13 @@ public class ConnectorProtocolValidator {
     /**
      * Write-time checks of the {@code auth_config} of a connector that is created, registered inline, or supplied whole
      * by a transport caller. In order: the type is one a request may set, the protocol takes {@code auth_config}, every
-     * node of the cluster supports it, for a type that attaches credentials the protocol's own flag is on, and the
-     * feature flag is on.
+     * node of the cluster supports it, for a type that attaches credentials the flag of the protocol is on, then
+     * {@code plugins.ml_commons.connector.auth_enabled}, which every configuration needs, {@code none} included. Every
+     * write path, the caller-supplied connector included, thus runs the same flag checks; the protocol check the create
+     * and register actions run themselves gives the same answer.
      * <p>
-     * The flag gates every configuration, {@code none} included. A stored {@code none} is a lasting change: no later
-     * update can remove it, and it holds the connector to the protocols that take {@code auth_config}. Such a change
-     * is not written while the feature is off.
+     * A stored {@code none} is a lasting change: no later update can remove it, and it holds the connector to the
+     * protocols that take {@code auth_config}. Such a change is not written while the feature is off.
      * <p>
      * A request without {@code auth_config} is not judged, and neither the flag nor the cluster state is read. A
      * configuration without a protocol is rejected like one on a protocol that does not take {@code auth_config};
@@ -420,7 +421,8 @@ public class ConnectorProtocolValidator {
      * @param clusterState the current cluster state; read only for a configuration
      * @throws IllegalArgumentException when the configuration is not accepted
      * @throws OpenSearchStatusException with {@link RestStatus#FORBIDDEN} for a configuration while
-     *     {@code plugins.ml_commons.connector.auth_enabled} is off
+     *     {@code plugins.ml_commons.connector.auth_enabled} is off, or for a type that attaches credentials while the
+     *     protocol's flag is off
      */
     public static void validateAuth(
         String protocol,

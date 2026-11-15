@@ -239,7 +239,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 && Boolean.TRUE.equals(connector.getConnectorClientConfig().getMutualTlsEnabled());
                             // Before update(), which changes the connector in place.
                             boolean authOrProtocolTouched = ConnectorProtocolValidator
-                                .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol());
+                                .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol())
+                                || AuthConfigValidator.actionsAreJudgedAsNew(connector, mlCreateConnectorInput.getActions() != null);
                             TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
                             boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
