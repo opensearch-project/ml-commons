@@ -824,7 +824,6 @@ public class MachineLearningPlugin extends Plugin
                     TokenEndpointAddressValidator.clusterPorts(settings)
                 ),
                 threadPool,
-                mlFeatureEnabledSetting::isConnectorAuthEnabled,
                 mlFeatureEnabledSetting::getOAuth2TokenCacheMaxSeconds
             );
         AuthorizationProviderFactory authorizationProviderFactory = new AuthorizationProviderFactory(

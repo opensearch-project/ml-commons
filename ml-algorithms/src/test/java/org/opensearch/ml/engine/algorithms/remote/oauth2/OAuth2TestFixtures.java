@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 
 import java.io.IOException;
@@ -41,7 +43,9 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
@@ -267,28 +271,123 @@ public final class OAuth2TestFixtures {
     }
 
     /**
-     * Cluster settings with the settings the token cache follows: plugins.ml_commons.connector.auth_enabled, on, and
-     * plugins.ml_commons.trusted_oauth2_token_endpoints_regex, trusting {@link #PUBLIC_TOKEN_URL}.
+     * A google_cloud connector with the given parameters, credential and explicit configuration (each possibly null), one
+     * predict action to {@code actionUrl} and no headers, decrypted as executors receive it.
+     */
+    public static GoogleCloudConnector googleConnector(
+        Map<String, String> parameters,
+        Map<String, String> credential,
+        OAuth2AuthConfig authConfig,
+        String actionUrl
+    ) {
+        return googleConnector(parameters, credential, authConfig, actionUrl, null);
+    }
+
+    /** As above, with the connector's client config. */
+    public static GoogleCloudConnector googleConnector(
+        Map<String, String> parameters,
+        Map<String, String> credential,
+        OAuth2AuthConfig authConfig,
+        String actionUrl,
+        ConnectorClientConfig clientConfig
+    ) {
+        GoogleCloudConnector connector = GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("gcp")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters == null ? null : new HashMap<>(parameters))
+            .credential(credential)
+            .authConfig(authConfig)
+            .connectorClientConfig(clientConfig)
+            .actions(
+                List
+                    .of(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url(actionUrl)
+                            .requestBody("{}")
+                            .build()
+                    )
+            )
+            .build();
+        connector
+            .decrypt(
+                ConnectorAction.ActionType.PREDICT.name(),
+                (values, tenantId, listener) -> listener.onResponse(values),
+                null,
+                ActionListener.wrap(decrypted -> {}, e -> {
+                    throw new AssertionError(e);
+                })
+            );
+        return connector;
+    }
+
+    /**
+     * The legacy service account credential: {@link #rsaPkcs8Pem()} as the key, {@link #ISSUER} as the account and
+     * {@code tokenUri} as the token URI when there is one.
+     */
+    public static Map<String, String> serviceAccountCredential(String tokenUri) {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, rsaPkcs8Pem());
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, ISSUER);
+        if (tokenUri != null) {
+            credential.put(GoogleCloudConnector.TOKEN_URI_FIELD, tokenUri);
+        }
+        return credential;
+    }
+
+    /** A legacy service account connector whose token URI is {@link #PUBLIC_TOKEN_URL}, so that its token request stays local. */
+    public static GoogleCloudConnector googleServiceAccountConnector(String actionUrl) {
+        return googleConnector(null, serviceAccountCredential(PUBLIC_TOKEN_URL), null, actionUrl);
+    }
+
+    /** A legacy connector using application default credentials. */
+    public static GoogleCloudConnector googleAdcConnector(String actionUrl) {
+        return googleConnector(Map.of(GoogleCloudConnector.AUTH_MODE_FIELD, GoogleCloudConnector.AUTH_MODE_ADC), null, null, actionUrl);
+    }
+
+    /**
+     * Cluster settings with the settings the token engine follows: plugins.ml_commons.connector.auth_enabled and
+     * plugins.ml_commons.connector.vertexai_enabled, both on, and plugins.ml_commons.trusted_oauth2_token_endpoints_regex,
+     * trusting {@link #PUBLIC_TOKEN_URL}.
      */
     public static ClusterSettings clusterSettings() {
         Settings nodeSettings = Settings
             .builder()
             .put(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey(), true)
+            .put(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.getKey(), true)
             .putList(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getKey(), PUBLIC_TOKEN_URL_PATTERN)
             .build();
         return new ClusterSettings(
             nodeSettings,
-            Set.of(ML_COMMONS_CONNECTOR_AUTH_ENABLED, ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX)
+            Set
+                .of(
+                    ML_COMMONS_CONNECTOR_AUTH_ENABLED,
+                    ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
+                    ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX
+                )
         );
     }
 
-    /** Feature settings whose connector auth flag and trusted token endpoints are those of {@code clusterSettings}. */
+    /** Feature settings whose two connector flags and trusted token endpoints are those of {@code clusterSettings}. */
     public static MLFeatureEnabledSetting featureSettings(ClusterSettings clusterSettings) {
         MLFeatureEnabledSetting settings = mock(MLFeatureEnabledSetting.class);
         when(settings.isConnectorAuthEnabled()).thenAnswer(invocation -> clusterSettings.get(ML_COMMONS_CONNECTOR_AUTH_ENABLED));
+        when(settings.isVertexAIConnectorEnabled()).thenAnswer(invocation -> clusterSettings.get(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED));
         when(settings.getTrustedOAuth2TokenEndpoints())
             .thenAnswer(invocation -> new TokenEndpointAllowlist(clusterSettings.get(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX)));
         return settings;
+    }
+
+    /** A gate that is always open. */
+    public static final Gate OPEN = () -> null;
+
+    /** The gate of the connector auth flag, {@code authEnabled} standing for it. */
+    public static Gate connectorAuthGate(BooleanSupplier authEnabled) {
+        return Gate.of(authEnabled, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
     }
 
     public static TokenEndpointAllowlist allowAll() {
@@ -341,24 +440,19 @@ public final class OAuth2TestFixtures {
 
     /**
      * A token client over {@code transport} whose address checks allow private addresses, refuse port 9200 and read this
-     * host's interface addresses; {@code authEnabled} stands for the connector auth flag.
+     * host's interface addresses.
      */
-    public static OAuth2TokenClient tokenClient(OkHttpClient transport, ThreadPool threadPool, BooleanSupplier authEnabled) {
+    public static OAuth2TokenClient tokenClient(OkHttpClient transport, ThreadPool threadPool) {
         TokenEndpointAddressValidator addresses = new TokenEndpointAddressValidator(
             () -> new ConnectorAddressValidator(true, null, null),
             Set.of(9200)
         );
-        return new OAuth2TokenClient(transport, addresses, threadPool, authEnabled, () -> 3600);
-    }
-
-    /** {@link #tokenClient(OkHttpClient, ThreadPool, BooleanSupplier)} with the flag on. */
-    public static OAuth2TokenClient tokenClient(OkHttpClient transport, ThreadPool threadPool) {
-        return tokenClient(transport, threadPool, () -> true);
+        return new OAuth2TokenClient(transport, addresses, threadPool, () -> 3600);
     }
 
     /** A handle for {@code value} that no cache entry holds; {@code authEnabled} stands for the connector auth flag. */
     public static TokenHandle handle(String value, BooleanSupplier authEnabled) {
-        return new TokenHandle(value, null, null, authEnabled);
+        return new TokenHandle(value, null, null, connectorAuthGate(authEnabled));
     }
 
     /**

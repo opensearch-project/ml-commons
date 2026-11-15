@@ -32,6 +32,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
@@ -250,6 +251,22 @@ public final class AuthConfigTestFixtures {
             .build();
         connector.setDecryptedCredential(Map.of(SECRET_KEY, "secret"));
         return connector;
+    }
+
+    /** A legacy google_cloud service account connector, which stores no {@code auth_config}; its credential is ciphertext. */
+    public static GoogleCloudConnector googleCloud() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(GoogleCloudConnector.PRIVATE_KEY_FIELD, STORED_CIPHERTEXT);
+        credential.put(GoogleCloudConnector.CLIENT_EMAIL_FIELD, STORED_CIPHERTEXT);
+        return GoogleCloudConnector
+            .googleCloudConnectorBuilder()
+            .name("g")
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(parameters())
+            .credential(credential)
+            .actions(actions("https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1/x:generateContent"))
+            .build();
     }
 
     /** An MCP connector of {@code protocol} without parameters, as MCP connectors are often stored; it never holds {@code auth_config}. */

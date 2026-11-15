@@ -20,8 +20,10 @@ import static org.mockito.Mockito.withSettings;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.OPEN;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_HOST;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
@@ -30,6 +32,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.allowNone;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.clientSecret;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connectorAuthGate;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.fail;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.json;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
@@ -111,8 +114,18 @@ public class OAuth2TokenClientTests {
         CredentialSnapshot credentials,
         TokenEndpointAllowlist allowlist
     ) {
+        return request(client, config, credentials, allowlist, OPEN);
+    }
+
+    private static CompletableFuture<OAuth2TokenClient.IssuedToken> request(
+        OAuth2TokenClient client,
+        OAuth2AuthConfig config,
+        CredentialSnapshot credentials,
+        TokenEndpointAllowlist allowlist,
+        Gate gate
+    ) {
         CompletableFuture<OAuth2TokenClient.IssuedToken> result = new CompletableFuture<>();
-        client.requestToken(config, credentials, allowlist, ActionListener.wrap(result::complete, result::completeExceptionally));
+        client.requestToken(config, credentials, allowlist, gate, ActionListener.wrap(result::complete, result::completeExceptionally));
         return result;
     }
 
@@ -156,7 +169,7 @@ public class OAuth2TokenClientTests {
         CompletableFuture<OAuth2TokenClient.IssuedToken> result = new CompletableFuture<>();
 
         List<String> lines = logged(OAuth2TokenClient.class, () -> {
-            client.requestToken(POST, clientSecret(), allowAll(), ActionListener.wrap(token -> {
+            client.requestToken(POST, clientSecret(), allowAll(), OPEN, ActionListener.wrap(token -> {
                 thread.set(Thread.currentThread().getName());
                 result.complete(token);
             }, result::completeExceptionally));
@@ -196,12 +209,7 @@ public class OAuth2TokenClientTests {
             // A client that used the JVM proxy settings would fail to connect.
             ProxySelector.setDefault(ProxySelector.of(new InetSocketAddress(InetAddress.getLoopbackAddress(), closedPort)));
             OAuth2TokenClient client = OAuth2TokenClient
-                .create(
-                    new TokenEndpointAddressValidator(() -> ConnectorAddressValidator.DEFAULT, Set.of()),
-                    threadPool,
-                    () -> true,
-                    () -> 3600
-                );
+                .create(new TokenEndpointAddressValidator(() -> ConnectorAddressValidator.DEFAULT, Set.of()), threadPool, () -> 3600);
             // idp.test does not resolve, so reaching the server shows that the client used the given addresses.
             Request request = new Request.Builder().url("http://idp.test:" + server.getAddress().getPort() + "/token").build();
             OkHttpClient connecting = client.clientFor(new InetAddress[] { server.getAddress().getAddress() });
@@ -300,9 +308,9 @@ public class OAuth2TokenClientTests {
     }
 
     @Test
-    public void requestToken_readsTheAuthSettingAgainBeforeSending() throws Exception {
+    public void requestToken_readsItsGateAgainBeforeSending() throws Exception {
         AtomicBoolean authEnabled = new AtomicBoolean(true);
-        OAuth2TokenClient client = tokenClient(scriptedTransport(recorded, reply(200, TOKEN_RESPONSE)), threadPool, authEnabled::get);
+        OAuth2TokenClient client = client(reply(200, TOKEN_RESPONSE));
         ExecutorService pool = threadPool.executor(RETRY_EXECUTOR);
         CountDownLatch release = new CountDownLatch(1);
         pool.execute(() -> {
@@ -316,7 +324,13 @@ public class OAuth2TokenClientTests {
 
         List<String> lines = logged(OAuth2TokenClient.class, () -> {
             // Queued behind the blocked thread, so the setting changes after requestToken and before send.
-            CompletableFuture<OAuth2TokenClient.IssuedToken> result = request(client, POST, clientSecret(), allowAll());
+            CompletableFuture<OAuth2TokenClient.IssuedToken> result = request(
+                client,
+                POST,
+                clientSecret(),
+                allowAll(),
+                connectorAuthGate(authEnabled::get)
+            );
             authEnabled.set(false);
             release.countDown();
             failure.set(failure(result));
@@ -327,6 +341,12 @@ public class OAuth2TokenClientTests {
         assertEquals(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, failure.get().getMessage());
         assertEquals(List.of("WARN OAuth2 token request refused before sending: host=203.0.113.10 reason=auth_disabled"), lines);
         assertTrue(recorded.isEmpty());
+        // The reason is read from the refusal itself, so it cannot disagree with the 403 the request failed with.
+        assertEquals(
+            "vertexai_disabled",
+            Gate.labelOf(new OpenSearchStatusException(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, RestStatus.FORBIDDEN))
+        );
+        assertEquals("gate_closed", Gate.labelOf(new OpenSearchStatusException("other", RestStatus.FORBIDDEN)));
     }
 
     @Test
@@ -349,7 +369,7 @@ public class OAuth2TokenClientTests {
         TokenEndpointAddressValidator addresses = mock(TokenEndpointAddressValidator.class, withSettings().mockMaker(MockMakers.INLINE));
         when(addresses.validate(any(), any(), anyInt()))
             .thenThrow(new IllegalStateException(TokenEndpointAddressValidator.INTERFACE_ADDRESSES_UNAVAILABLE_MESSAGE));
-        OAuth2TokenClient client = new OAuth2TokenClient(scriptedTransport(recorded), addresses, threadPool, () -> true, () -> 3600);
+        OAuth2TokenClient client = new OAuth2TokenClient(scriptedTransport(recorded), addresses, threadPool, () -> 3600);
 
         Failed outcome = failed(client, POST, clientSecret(), allowAll());
 

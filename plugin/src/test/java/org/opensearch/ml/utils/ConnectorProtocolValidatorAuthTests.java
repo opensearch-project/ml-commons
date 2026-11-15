@@ -11,11 +11,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.actions;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.fullOauth2;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.googleCloud;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.http;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBearer;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.jwtBuilder;
@@ -72,8 +74,7 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
     private static final String[] PROTOCOLS_WITHOUT_AUTH_CONFIG = {
         ConnectorProtocols.AWS_SIGV4,
         ConnectorProtocols.MCP_SSE,
-        ConnectorProtocols.MCP_STREAMABLE_HTTP,
-        ConnectorProtocols.GOOGLE_CLOUD };
+        ConnectorProtocols.MCP_STREAMABLE_HTTP };
 
     @Mock
     private MLFeatureEnabledSetting setting;
@@ -114,10 +115,14 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
     }
 
     private void assertForbidden(Runnable call) {
+        assertForbidden(call, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+        assertTrue(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE.contains(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey()));
+    }
+
+    private void assertForbidden(Runnable call, String message) {
         OpenSearchStatusException e = expectThrows(OpenSearchStatusException.class, call::run);
         assertEquals(RestStatus.FORBIDDEN, e.status());
-        assertEquals(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, e.getMessage());
-        assertTrue(e.getMessage().contains(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey()));
+        assertEquals(message, e.getMessage());
     }
 
     private static String notSupported(String protocol) {
@@ -191,6 +196,27 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         verifyNothingRead();
     }
 
+    public void testValidateAuth_googleCloud_takesAuthConfigAsHttpDoes() {
+        when(setting.isVertexAIConnectorEnabled()).thenReturn(true);
+        validateAuth(ConnectorProtocols.GOOGLE_CLOUD, NONE);
+        when(setting.isConnectorAuthEnabled()).thenReturn(true);
+        validateAuth(ConnectorProtocols.GOOGLE_CLOUD, oauth2());
+        when(setting.isConnectorAuthEnabled()).thenReturn(false);
+        assertForbidden(() -> validateAuth(ConnectorProtocols.GOOGLE_CLOUD, oauth2()));
+    }
+
+    public void testValidateAuth_activeBlockOnGoogleCloud_isJudgedByTheProtocolFlagFirst() {
+        when(setting.isVertexAIConnectorEnabled()).thenReturn(false);
+        when(setting.isConnectorAuthEnabled()).thenReturn(false);
+        assertForbidden(() -> validateAuth(ConnectorProtocols.GOOGLE_CLOUD, jwtBearer()), ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        // A none block is judged by neither flag.
+        validateAuth(ConnectorProtocols.GOOGLE_CLOUD, NONE);
+        when(setting.isVertexAIConnectorEnabled()).thenReturn(true);
+        assertForbidden(() -> validateAuth(ConnectorProtocols.GOOGLE_CLOUD, jwtBearer()));
+        when(setting.isConnectorAuthEnabled()).thenReturn(true);
+        validateAuth(ConnectorProtocols.GOOGLE_CLOUD, jwtBearer());
+    }
+
     public void testValidateAuth_nullProtocol_isRejectedLikeAnUnsupportedProtocol() {
         assertEquals(notSupported(null), validateAuthFails(null, NONE));
         assertEquals(notSupported(null), validateAuthFails(null, oauth2()));
@@ -246,8 +272,8 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
     public void testAfterUpdate_protocolLock() {
         assertEquals(notSupported(ConnectorProtocols.AWS_SIGV4), afterUpdateFails(http(NONE), ConnectorProtocols.AWS_SIGV4, null, null));
         assertEquals(
-            notSupported(ConnectorProtocols.GOOGLE_CLOUD),
-            afterUpdateFails(http(fullOauth2()), ConnectorProtocols.GOOGLE_CLOUD, null, CREDENTIAL)
+            notSupported(ConnectorProtocols.MCP_SSE),
+            afterUpdateFails(http(fullOauth2()), ConnectorProtocols.MCP_SSE, null, CREDENTIAL)
         );
         // Switching to none in the same request does not help: the resulting protocol is judged first.
         assertEquals(
@@ -266,6 +292,23 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         // The flag comes before the credential requirement.
         when(setting.isConnectorAuthEnabled()).thenReturn(false);
         assertForbidden(() -> afterUpdate(http(NONE), null, oauth2(), null));
+    }
+
+    public void testAfterUpdate_activeBlockOnGoogleCloud_isJudgedByTheProtocolFlagFirst_withOrWithoutTheProtocol() {
+        Connector stored = googleCloud();
+        when(setting.isVertexAIConnectorEnabled()).thenReturn(false);
+        when(setting.isConnectorAuthEnabled()).thenReturn(false);
+        assertForbidden(() -> afterUpdate(stored, null, jwtBearer(), CREDENTIAL), ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        assertForbidden(
+            () -> afterUpdate(stored, ConnectorProtocols.GOOGLE_CLOUD, jwtBearer(), CREDENTIAL),
+            ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE
+        );
+        // A none block is judged by neither flag.
+        afterUpdate(stored, null, NONE, null);
+        when(setting.isVertexAIConnectorEnabled()).thenReturn(true);
+        assertForbidden(() -> afterUpdate(stored, null, jwtBearer(), CREDENTIAL));
+        when(setting.isConnectorAuthEnabled()).thenReturn(true);
+        afterUpdate(stored, null, jwtBearer(), CREDENTIAL);
     }
 
     public void testAfterUpdate_oauth2ToNone_withoutCredential_passes() {

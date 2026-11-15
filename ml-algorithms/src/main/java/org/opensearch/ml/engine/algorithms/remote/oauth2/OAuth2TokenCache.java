@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.algorithms.remote.oauth2;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
@@ -17,18 +16,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -51,11 +47,16 @@ import lombok.extern.log4j.Log4j2;
  * without a token request for 1 second, doubling up to 60 seconds, until a token request succeeds or the trusted token
  * endpoints change.
  *
- * <p>Turning {@code plugins.ml_commons.connector.auth_enabled} off removes every token, and a change of
- * {@code plugins.ml_commons.trusted_oauth2_token_endpoints_regex} removes the tokens whose endpoint no longer matches;
- * both are checked again whenever a token is handed out. Token bytes are zero-filled when a token is removed, replaced,
- * evicted or found expired by {@link #removeExpired}. No log line or message carries a token, a credential value, a
- * key, a tenant, an {@code auth_config} value or a token URL.
+ * <p>Every request names the {@link Gate} it is subject to, which is read before its credential is read, when a token it
+ * waited for arrives and whenever its handle's value is read. A token request belongs to its entry, not to the request
+ * that started it: it is refused before sending only while the gate of every request waiting for it is closed, each of
+ * them then being refused by its own gate, and a request whose gate is open that joined it after that refusal is served
+ * by a new token request started for it; a refresh ahead of expiry, which no request waits for, is subject to the gate
+ * of the request that started it. Turning {@code plugins.ml_commons.connector.auth_enabled} off also removes every
+ * token, and a change of {@code plugins.ml_commons.trusted_oauth2_token_endpoints_regex} removes the tokens whose
+ * endpoint no longer matches; the endpoints are checked again whenever a token is handed out. Token bytes are
+ * zero-filled when a token is removed, replaced, evicted or found expired by {@link #removeExpired}. No log line or
+ * message carries a token, a credential value, a key, a tenant, an {@code auth_config} value or a token URL.
  */
 @Log4j2
 public final class OAuth2TokenCache {
@@ -69,12 +70,16 @@ public final class OAuth2TokenCache {
     static final long MAX_BACKOFF_NANOS = TimeUnit.SECONDS.toNanos(60);
     static final long MIN_AGE_BEFORE_INVALIDATION_NANOS = TimeUnit.SECONDS.toNanos(10);
 
-    /** Requests one token. Completes the listener exactly once and does not throw. */
+    /**
+     * Requests one token. Completes the listener exactly once and does not throw. {@code gate} is the gate of the token
+     * request as a whole, to be read as the request is about to be sent.
+     */
     @FunctionalInterface
     public interface TokenSource {
         void requestToken(
             CredentialSnapshot credentials,
             TokenEndpointAllowlist allowlist,
+            Gate gate,
             ActionListener<OAuth2TokenClient.IssuedToken> listener
         );
     }
@@ -99,14 +104,13 @@ public final class OAuth2TokenCache {
         .removalListener((RemovalNotification<String, Slot> removal) -> removal.getValue().remove())
         .build();
     private final MLFeatureEnabledSetting settings;
-    private final BooleanSupplier authEnabled;
     private final Consumer<Stat> stats;
     private final LongSupplier nanoTime;
 
     /**
      * @param clusterSettings where the cache registers for changes of the connector auth flag and of the trusted token
      *     endpoints
-     * @param settings read for the current flag and trusted token endpoints whenever a token is handed out
+     * @param settings read for the current trusted token endpoints whenever a token is handed out
      * @param stats called once per counted event
      * @param nanoTime the clock of token lifetimes and backoffs
      */
@@ -117,7 +121,6 @@ public final class OAuth2TokenCache {
         LongSupplier nanoTime
     ) {
         this.settings = settings;
-        this.authEnabled = settings::isConnectorAuthEnabled;
         this.stats = stats;
         this.nanoTime = nanoTime;
         clusterSettings.addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_AUTH_ENABLED, enabled -> {
@@ -132,11 +135,6 @@ public final class OAuth2TokenCache {
             );
     }
 
-    /** The refusal while {@code plugins.ml_commons.connector.auth_enabled} is off. */
-    static OpenSearchStatusException authDisabled() {
-        return new OpenSearchStatusException(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
-    }
-
     /**
      * Hands {@code listener} the token for one request: the entry's token, or the result of a token request through
      * {@code source}. A request served from the cache completes on the calling thread, one that waits for a token
@@ -147,19 +145,24 @@ public final class OAuth2TokenCache {
      *     credential values
      * @param credentials read once per call; the values it returns are both part of the key and what a token request
      *     started by this call sends
+     * @param gate the setting the request is subject to, read now, when a token it waits for arrives and by its handle,
+     *     and, with the gates of the other requests waiting for the same token request, before that request is sent
      */
     public void get(
         String tenantId,
         String authConfig,
         CredentialResolver credentials,
         TokenSource source,
+        Gate gate,
         ActionListener<TokenHandle> listener
     ) {
-        if (!authEnabled.getAsBoolean()) {
-            listener.onFailure(authDisabled());
+        OpenSearchStatusException refused = gate.refusal();
+        if (refused != null) {
+            listener.onFailure(refused);
             return;
         }
-        credentials.snapshot(ActionListener.delegateFailure(listener, (l, snapshot) -> lookUp(tenantId, authConfig, snapshot, source, l)));
+        credentials
+            .snapshot(ActionListener.delegateFailure(listener, (l, snapshot) -> lookUp(tenantId, authConfig, snapshot, source, gate, l)));
     }
 
     private void lookUp(
@@ -167,6 +170,7 @@ public final class OAuth2TokenCache {
         String authConfig,
         CredentialSnapshot snapshot,
         TokenSource source,
+        Gate gate,
         ActionListener<TokenHandle> listener
     ) {
         String key = key(tenantId, authConfig, snapshot.fingerprint());
@@ -182,7 +186,7 @@ public final class OAuth2TokenCache {
             Token token = slot.token;
             if (token != null && now < token.expiresAtNanos()) {
                 if (settings.getTrustedOAuth2TokenEndpoints().matches(token.tokenUrl())) {
-                    hit = handle(slot, token);
+                    hit = handle(slot, token, gate);
                     claimed = now >= token.refreshAtNanos() && !slot.fetching && !slot.backingOff(now);
                 } else {
                     slot.clearToken();
@@ -193,7 +197,7 @@ public final class OAuth2TokenCache {
                 if (slot.backingOff(now)) {
                     failure = copyOf(slot.backoff.failure());
                 } else {
-                    slot.waiters.add(listener);
+                    slot.waiters.add(new Waiter(listener, gate));
                     claimed = !slot.fetching;
                 }
             }
@@ -204,7 +208,7 @@ public final class OAuth2TokenCache {
         // Started before the listener runs, so a listener that throws cannot leave the entry waiting for a request that
         // was never sent.
         if (claimed) {
-            start(slot, snapshot, source);
+            start(slot, snapshot, source, gate);
         }
         if (hit != null) {
             stats.accept(Stat.CACHE_HIT);
@@ -214,19 +218,59 @@ public final class OAuth2TokenCache {
         }
     }
 
-    /** Starts the token request of {@code slot}, whose lock the caller does not hold. */
-    private void start(Slot slot, CredentialSnapshot snapshot, TokenSource source) {
+    /**
+     * Starts the token request of {@code slot}, whose lock the caller does not hold. {@code starterGate} is read for the
+     * request only while no request waits for it. The entry remembers {@code snapshot} and {@code source} while the request
+     * is in flight, for a request started again on behalf of its waiters by {@link #failed}: every request of one entry
+     * carries the same credential values and the same configuration, so those of any requester serve.
+     */
+    private void start(Slot slot, CredentialSnapshot snapshot, TokenSource source, Gate starterGate) {
+        synchronized (slot) {
+            slot.snapshot = snapshot;
+            slot.source = source;
+        }
         // Read before the request is sent, so a token is taken to be as old as it can be.
         long startedAt = nanoTime.getAsLong();
         stats.accept(Stat.TOKEN_REQUEST);
         ActionListener<OAuth2TokenClient.IssuedToken> done = ActionListener
             .wrap(issued -> publish(slot, issued, startedAt), e -> failed(slot, e));
         try {
-            source.requestToken(snapshot, settings.getTrustedOAuth2TokenEndpoints(), done);
+            source.requestToken(snapshot, settings.getTrustedOAuth2TokenEndpoints(), requestGate(slot, starterGate), done);
         } catch (Exception e) {
             // A request that never started must not leave the entry waiting for it.
             done.onFailure(e);
         }
+    }
+
+    /**
+     * The gate of the token request of {@code slot}: open while the gate of any request waiting for it is open, so that a
+     * waiter whose setting is on is not refused on account of another's; closed, it is the first waiter's refusal. With
+     * no waiter the request is a refresh, judged by the gate of the request that started it. The waiters are read under
+     * the entry's lock, since the source reads the gate on another thread.
+     */
+    private static Gate requestGate(Slot slot, Gate starterGate) {
+        return () -> {
+            List<Gate> gates = new ArrayList<>();
+            synchronized (slot) {
+                for (Waiter waiter : slot.waiters) {
+                    gates.add(waiter.gate());
+                }
+            }
+            if (gates.isEmpty()) {
+                return starterGate.refusal();
+            }
+            OpenSearchStatusException first = null;
+            for (Gate gate : gates) {
+                OpenSearchStatusException refusal = gate.refusal();
+                if (refusal == null) {
+                    return null;
+                }
+                if (first == null) {
+                    first = refusal;
+                }
+            }
+            return first;
+        };
     }
 
     private void publish(Slot slot, OAuth2TokenClient.IssuedToken issued, long startedAt) {
@@ -239,46 +283,71 @@ public final class OAuth2TokenCache {
         }
         List<Runnable> completions = new ArrayList<>();
         synchronized (slot) {
-            slot.fetching = false;
-            List<ActionListener<TokenHandle>> waiters = slot.takeWaiters();
-            Supplier<Exception> refusal = null;
-            if (!authEnabled.getAsBoolean()) {
-                refusal = OAuth2TokenCache::authDisabled;
-            } else if (!settings.getTrustedOAuth2TokenEndpoints().matches(issued.tokenUrl())) {
-                // The trusted token endpoints changed while the request ran.
-                refusal = () -> new IllegalArgumentException(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
-            }
-            if (refusal != null) {
-                Arrays.fill(issued.token(), (byte) 0);
-                for (ActionListener<TokenHandle> waiter : waiters) {
-                    Supplier<Exception> failure = refusal;
-                    completions.add(() -> waiter.onFailure(failure.get()));
-                }
-            } else {
-                for (ActionListener<TokenHandle> waiter : waiters) {
-                    TokenHandle handle = handle(slot, token);
-                    completions.add(() -> waiter.onResponse(handle));
-                }
-                if (slot.removed) {
-                    // The entry left the cache while the request ran; nothing would zero-fill the token later.
-                    Arrays.fill(token.value(), (byte) 0);
+            slot.completed();
+            List<Waiter> waiters = slot.takeWaiters();
+            // The trusted token endpoints may have changed while the request ran.
+            boolean allowed = settings.getTrustedOAuth2TokenEndpoints().matches(issued.tokenUrl());
+            boolean taken = false;
+            for (Waiter waiter : waiters) {
+                // Each waiter's own gate, read again now that the token is here.
+                OpenSearchStatusException closed = waiter.gate().refusal();
+                if (closed != null) {
+                    completions.add(() -> waiter.listener().onFailure(closed));
+                } else if (!allowed) {
+                    completions
+                        .add(() -> waiter.listener().onFailure(new IllegalArgumentException(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE)));
                 } else {
-                    slot.clearToken();
-                    slot.token = token;
-                    slot.backoff = null;
+                    TokenHandle handle = handle(slot, token, waiter.gate());
+                    completions.add(() -> waiter.listener().onResponse(handle));
+                    taken = true;
                 }
+            }
+            // Kept while it may still be handed out: the endpoint is trusted and no waiter, or not every waiter, was
+            // refused. Dropped as well when the entry left the cache while the request ran, as nothing would zero-fill
+            // the token later.
+            if (allowed && (waiters.isEmpty() || taken) && !slot.removed) {
+                slot.clearToken();
+                slot.token = token;
+                slot.backoff = null;
+            } else {
+                Arrays.fill(token.value(), (byte) 0);
             }
         }
         completeEach(completions);
     }
 
     private void failed(Slot slot, Exception e) {
-        // A full thread pool says nothing about the token endpoint, which was not asked.
-        boolean endpointFailed = !(e instanceof OpenSearchRejectedExecutionException);
-        List<ActionListener<TokenHandle>> waiters;
+        // A full thread pool, or a gate found closed before the request was sent, says nothing about the token endpoint,
+        // which was not asked.
+        boolean refusedByGate = e instanceof OpenSearchStatusException;
+        boolean endpointFailed = !(e instanceof OpenSearchRejectedExecutionException || refusedByGate);
+        List<Runnable> completions = new ArrayList<>();
+        Gate keptGate = null;
+        CredentialSnapshot snapshot = null;
+        TokenSource source = null;
         synchronized (slot) {
-            slot.fetching = false;
-            waiters = slot.takeWaiters();
+            for (Waiter waiter : slot.takeWaiters()) {
+                // A gate refusal is the first closed waiter's: each waiter whose own gate is closed is refused by that gate.
+                // A waiter whose gate is open joined after the request was refused: it is kept, the entry still fetching,
+                // and a token request is started again for it below rather than refusing it under another request's
+                // setting.
+                OpenSearchStatusException own = refusedByGate ? waiter.gate().refusal() : null;
+                if (refusedByGate && own == null) {
+                    slot.waiters.add(waiter);
+                    if (keptGate == null) {
+                        keptGate = waiter.gate();
+                    }
+                } else {
+                    Exception failure = own != null ? own : copyOf(e);
+                    completions.add(() -> waiter.listener().onFailure(failure));
+                }
+            }
+            if (keptGate != null) {
+                snapshot = slot.snapshot;
+                source = slot.source;
+            } else {
+                slot.completed();
+            }
             if (endpointFailed) {
                 long now = nanoTime.getAsLong();
                 slot.backoff = Backoff.after(slot.backoff, e, now);
@@ -292,9 +361,11 @@ public final class OAuth2TokenCache {
         if (endpointFailed) {
             stats.accept(Stat.TOKEN_FAILURE);
         }
-        List<Runnable> completions = new ArrayList<>();
-        for (ActionListener<TokenHandle> waiter : waiters) {
-            completions.add(() -> waiter.onFailure(copyOf(e)));
+        // Started before the refused waiters are completed, as in lookUp. Bounded: a request is started again only while
+        // some waiter's gate is open now, and the request started is refused only if every waiter's gate is closed when
+        // it is about to be sent, so each further restart needs a setting to change between the two readings.
+        if (keptGate != null) {
+            start(slot, snapshot, source, keptGate);
         }
         completeEach(completions);
     }
@@ -380,8 +451,8 @@ public final class OAuth2TokenCache {
     }
 
     /** Made under the entry's lock, so the bytes cannot be zero-filled while they are copied. */
-    private TokenHandle handle(Slot slot, Token token) {
-        return new TokenHandle(new String(token.value(), US_ASCII), slot, token, authEnabled);
+    private static TokenHandle handle(Slot slot, Token token, Gate gate) {
+        return new TokenHandle(new String(token.value(), US_ASCII), slot, token, gate);
     }
 
     // Listeners may change the exception they receive (GroupedActionListener adds the other failures as suppressed), so
@@ -403,11 +474,18 @@ public final class OAuth2TokenCache {
         return StringUtils.hashString(StringUtils.MAPPER.writeValueAsString(parts));
     }
 
+    /** A request waiting for a token request to complete, and the gate its handle is subject to. */
+    private record Waiter(ActionListener<TokenHandle> listener, Gate gate) {
+    }
+
     /** One entry. Every field is guarded by the entry's lock. */
     static final class Slot {
         Token token;
         boolean fetching;
-        List<ActionListener<TokenHandle>> waiters = new ArrayList<>();
+        /** The credential values and the source of the token request in flight; null while there is none. */
+        CredentialSnapshot snapshot;
+        TokenSource source;
+        List<Waiter> waiters = new ArrayList<>();
         Backoff backoff;
         boolean removed;
 
@@ -415,10 +493,17 @@ public final class OAuth2TokenCache {
             return backoff != null && now < backoff.retryAtNanos();
         }
 
-        List<ActionListener<TokenHandle>> takeWaiters() {
-            List<ActionListener<TokenHandle>> taken = waiters;
+        List<Waiter> takeWaiters() {
+            List<Waiter> taken = waiters;
             waiters = new ArrayList<>();
             return taken;
+        }
+
+        /** The token request in flight has completed, with a token or without one. */
+        void completed() {
+            fetching = false;
+            snapshot = null;
+            source = null;
         }
 
         /** Zero-fills the token's bytes and drops it. */

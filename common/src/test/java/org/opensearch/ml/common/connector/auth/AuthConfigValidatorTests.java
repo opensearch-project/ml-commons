@@ -332,6 +332,38 @@ public class AuthConfigValidatorTests {
     }
 
     @Test
+    public void googleAdcConfiguration_makesNoTokenRequest_soOnlyTheConnectorIsExamined() {
+        OAuth2AuthConfig adc = OAuth2AuthConfig.builder().type(ConnectorAuthType.GOOGLE_ADC).build();
+        // No grant, no token URL and no key to check, so the allowlist and the key set play no part.
+        assertEquals(
+            adc,
+            AuthConfigValidator.validate(http(parameters(), null, actions(null, ACTION_URL), null), adc, Set.of(), NOTHING_ALLOWED)
+        );
+
+        ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
+        assertEquals(
+            AuthConfigValidator.AUTHORIZATION_HEADER_MESSAGE,
+            failsWith(http(parameters(), null, actions(Map.of("Authorization", "Bearer x"), ACTION_URL), null), adc)
+        );
+        assertEquals(
+            AuthConfigValidator.CLEARTEXT_ACTION_URL_MESSAGE,
+            failsWith(http(parameters(), null, actions(null, "http://api.openai.com/v1"), null), adc)
+        );
+        assertEquals(
+            AuthConfigValidator.SKIP_SSL_VERIFICATION_MESSAGE,
+            failsWith(http(parameters(), null, actions(null, ACTION_URL), skip), adc)
+        );
+    }
+
+    /** The message {@link AuthConfigValidator#validate} refuses {@code config} on {@code connector} with, no keys and nothing allowed. */
+    private static String failsWith(Connector connector, OAuth2AuthConfig config) {
+        return assertThrows(
+            IllegalArgumentException.class,
+            () -> AuthConfigValidator.validate(connector, config, Set.of(), NOTHING_ALLOWED)
+        ).getMessage();
+    }
+
+    @Test
     public void noneConfiguration_attachesNothing_soActionsAndClientConfigAreNotExamined() {
         ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
         List<ConnectorAction> actions = actions(Map.of("Authorization", "Bearer ${credential.s}"), "http://plain.example.com/x");

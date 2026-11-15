@@ -45,6 +45,7 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
     private static final String MODELS = "/_plugins/_ml/models/";
     private static final String CONNECTOR_INDEX = ".plugins-ml-connector";
     private static final String AUTH_ENABLED = "plugins.ml_commons.connector.auth_enabled";
+    private static final String VERTEXAI_ENABLED = "plugins.ml_commons.connector.vertexai_enabled";
     private static final String MCP_CONNECTOR_ENABLED = "plugins.ml_commons.mcp_connector_enabled";
 
     // Rejection messages; the text comes from the request parsers and the validators.
@@ -52,6 +53,7 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
     private static final String TYPE_REQUIRED = OAuth2AuthConfig.TYPE_REQUIRED_MESSAGE;
     private static final String SCOPE_NOT_A_STRING = "auth_config.scope must be a string";
     private static final String AUTH_DISABLED = MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
+    private static final String VERTEXAI_DISABLED = MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
     private static final String NONE_WITH_FIELDS = OAuth2AuthConfig.NONE_WITH_FIELDS_MESSAGE;
     private static final String TOKEN_URL_NOT_ALLOWED = TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE;
     private static final String CLIENT_SECRET_KEY_MISSING = AuthConfigValidator.missingCredentialKeyMessage("client_secret");
@@ -114,6 +116,18 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
             "request_body": "{ \\"prompt\\": \\"${parameters.prompt}\\" }"
           }
         ]""";
+    private static final String VERTEX_PARAMETERS =
+        "{\"project_id\": \"my-project\", \"location\": \"us-central1\", \"model\": \"gemini-2.0-flash\"}";
+    private static final String VERTEX_ACTIONS =
+        """
+            [
+              {
+                "action_type": "predict",
+                "method": "POST",
+                "url": "https://${parameters.location}-aiplatform.googleapis.com/v1/projects/${parameters.project_id}/locations/${parameters.location}/publishers/google/models/${parameters.model}:generateContent",
+                "request_body": "{ \\"contents\\": [{\\"role\\": \\"user\\", \\"parts\\": [{\\"text\\": \\"${parameters.prompt}\\"}]}] }"
+              }
+            ]""";
     private static final String MCP_SSE_WITH_AUTH_CONFIG = """
         {
           "name": "auth config mcp connector",
@@ -500,6 +514,48 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
             assertEquals(stored, storedCredential(c1));
         } finally {
             updateClusterSettings(AUTH_ENABLED, (Object) null);
+        }
+    }
+
+    /**
+     * google_cloud takes an explicit auth_config under its protocol setting and the auth_config setting, both checked on
+     * write; a legacy service account connector stores none, is written as before and shows none.
+     */
+    @SuppressWarnings("unchecked")
+    public void testGoogleCloudTakesAnExplicitAuthConfigUnderBothSettings() throws Exception {
+        String pem = pem("PRIVATE KEY", generatedRsaKey());
+        String serviceAccount = "{\"private_key\": \""
+            + pem.replace("\n", "\\n")
+            + "\", \"client_email\": \""
+            + ISSUER
+            + "\", \"token_uri\": \"https://oauth2.googleapis.com/token\"}";
+        String legacy = connectorBody("google_cloud", VERTEX_PARAMETERS, null, serviceAccount, VERTEX_ACTIONS);
+        String jwtBearer = jwtBearer(", \"additional_claims\": {\"scope\": \"" + SCOPE_CLAIM + "\"}");
+        String explicit = connectorBody("google_cloud", VERTEX_PARAMETERS, jwtBearer, privateKeyCredential(pem), VERTEX_ACTIONS);
+
+        // The protocol setting comes first, for either form.
+        assertRejected(RestStatus.FORBIDDEN, VERTEXAI_DISABLED, () -> createConnector(legacy));
+        assertRejected(RestStatus.FORBIDDEN, VERTEXAI_DISABLED, () -> createConnector(explicit));
+        updateClusterSettings(VERTEXAI_ENABLED, true);
+        try {
+            String c1 = registerConnector(legacy);
+            assertNull(getConnector(c1).get("auth_config"));
+            assertEquals(Set.of("private_key", "client_email", "token_uri"), storedCredential(c1).keySet());
+            assertRejected(RestStatus.FORBIDDEN, AUTH_DISABLED, () -> createConnector(explicit));
+            updateClusterSettings(AUTH_ENABLED, true);
+            try {
+                String c2 = registerConnector(explicit);
+                Map<String, Object> created = authConfigOf(getConnector(c2));
+                assertEquals(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER, created.get("grant_type"));
+                assertEquals(PRIVATE_KEY_REFERENCE, ((Map<String, Object>) created.get("jwt")).get("private_key"));
+                assertEquals(Set.of("private_key"), storedCredential(c2).keySet());
+                assertTrue(searchConnectorIds(TERM_TYPE_OAUTH2).contains(c2));
+                assertNull(getConnector(c1).get("auth_config"));
+            } finally {
+                updateClusterSettings(AUTH_ENABLED, (Object) null);
+            }
+        } finally {
+            updateClusterSettings(VERTEXAI_ENABLED, (Object) null);
         }
     }
 

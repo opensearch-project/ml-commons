@@ -19,11 +19,13 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL_PATTERN;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.allowNone;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.clientSecret;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.clusterSettings;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connectorAuthGate;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.featureSettings;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TokenCache.MAX_ENTRIES;
@@ -46,6 +48,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -76,26 +79,53 @@ public class OAuth2TokenCacheTests {
     private final RecordingSource source = new RecordingSource();
     private ClusterSettings clusterSettings;
     private MLFeatureEnabledSetting settings;
+    /** The gate of the connector auth flag, which every request of these tests is subject to unless it names another. */
+    private Gate gate;
     private OAuth2TokenCache cache;
 
     @Before
     public void setUp() {
         clusterSettings = clusterSettings();
         settings = featureSettings(clusterSettings);
+        gate = connectorAuthGate(settings::isConnectorAuthEnabled);
         cache = new OAuth2TokenCache(clusterSettings, settings, counted::add, clock::get);
     }
 
-    /** Records every token request; the test completes them. */
+    /** Records every token request and its gate; the test completes them. */
     private static final class RecordingSource implements OAuth2TokenCache.TokenSource {
         final List<ActionListener<OAuth2TokenClient.IssuedToken>> requests = new CopyOnWriteArrayList<>();
+        final List<Gate> gates = new CopyOnWriteArrayList<>();
+        private OpenSearchStatusException decided;
 
         @Override
         public void requestToken(
             CredentialSnapshot credentials,
             TokenEndpointAllowlist allowlist,
+            Gate gate,
             ActionListener<OAuth2TokenClient.IssuedToken> listener
         ) {
             requests.add(listener);
+            gates.add(gate);
+        }
+
+        /** Completes the latest request as the token client does when about to send: its gate's refusal if closed, else {@code token}. */
+        void send(String token) {
+            decide();
+            deliver(token);
+        }
+
+        /** Reads the latest request's gate as the token client does when about to send, and holds what it found. */
+        void decide() {
+            decided = gates.get(gates.size() - 1).refusal();
+        }
+
+        /** Completes the latest request with what {@link #decide} found: the refusal, else {@code token}. */
+        void deliver(String token) {
+            if (decided != null) {
+                fail(decided);
+            } else {
+                issue(token);
+            }
         }
 
         /** Completes the latest request with {@code issued}. */
@@ -141,7 +171,22 @@ public class OAuth2TokenCacheTests {
     }
 
     private void get(String tenantId, String authConfig, CredentialSnapshot credentials, ActionListener<TokenHandle> listener) {
-        cache.get(tenantId, authConfig, l -> l.onResponse(credentials), source, listener);
+        cache.get(tenantId, authConfig, l -> l.onResponse(credentials), source, gate, listener);
+    }
+
+    /** A request for the entry of {@code authConfig} subject to {@code gate} rather than the connector auth flag. */
+    private CompletableFuture<TokenHandle> get(String authConfig, Gate gate) {
+        CompletableFuture<TokenHandle> result = new CompletableFuture<>();
+        cache
+            .get(
+                null,
+                authConfig,
+                l -> l.onResponse(CREDENTIALS),
+                source,
+                gate,
+                ActionListener.wrap(result::complete, result::completeExceptionally)
+            );
+        return result;
     }
 
     /** The token of the default entry, obtained by a miss and one token request. */
@@ -382,12 +427,7 @@ public class OAuth2TokenCacheTests {
     @Test
     public void afterAFailure_everyWaiterAndEveryFastFailureGetsItsOwnCopy() {
         List<Exception> failures = List
-            .of(
-                new MLException(TRANSPORT_FAILURE),
-                new IllegalArgumentException("refused"),
-                new IllegalStateException("unavailable"),
-                OAuth2TokenCache.authDisabled()
-            );
+            .of(new MLException(TRANSPORT_FAILURE), new IllegalArgumentException("refused"), new IllegalStateException("unavailable"));
         for (Exception original : failures) {
             String auth = "auth-" + original.getClass().getSimpleName();
             List<CompletableFuture<TokenHandle>> results = new ArrayList<>(List.of(get(auth), get(auth)));
@@ -403,15 +443,12 @@ public class OAuth2TokenCacheTests {
                 Exception copy = failure(result);
                 assertSame(original.getClass(), copy.getClass());
                 assertEquals(original.getMessage(), copy.getMessage());
-                if (original instanceof OpenSearchStatusException) {
-                    assertAuthDisabled(copy);
-                }
                 assertNotSame(original, copy);
                 distinct.add(copy);
             }
             assertEquals(22, distinct.size());
         }
-        assertEquals(4, source.requests.size());
+        assertEquals(3, source.requests.size());
     }
 
     @Test
@@ -522,7 +559,7 @@ public class OAuth2TokenCacheTests {
         cache.get(null, AUTH, listener -> {
             reads.incrementAndGet();
             listener.onResponse(CREDENTIALS);
-        }, source, ActionListener.wrap(result::complete, result::completeExceptionally));
+        }, source, gate, ActionListener.wrap(result::complete, result::completeExceptionally));
 
         assertAuthDisabled(failure(result));
         assertEquals(0, reads.get());
@@ -554,6 +591,158 @@ public class OAuth2TokenCacheTests {
         setAuthEnabled(true);
         assertFalse(get().isDone());
         assertEquals(2, source.requests.size());
+    }
+
+    @Test
+    public void eachRequestIsSubjectToTheGateItNames_beforeAndAfterItsTokenArrives() {
+        AtomicBoolean first = new AtomicBoolean(true);
+        AtomicBoolean second = new AtomicBoolean(true);
+        Gate firstGate = Gate.of(first::get, "first is off");
+        Gate secondGate = Gate.of(second::get, "second is off");
+        TokenHandle firstHandle = served(get("first", firstGate), "tok-1");
+        TokenHandle secondHandle = served(get("second", secondGate), "tok-2");
+
+        first.set(false);
+
+        // The handle and the next request of the first entry are refused by its gate; the second entry is untouched.
+        assertEquals("first is off", assertThrows(OpenSearchStatusException.class, firstHandle::value).getMessage());
+        assertEquals("first is off", failure(get("first", firstGate)).getMessage());
+        assertEquals("tok-2", secondHandle.value());
+        assertEquals("tok-2", served(get("second", secondGate)).value());
+        assertEquals(2, source.requests.size());
+
+        // A token that arrives once a waiter's gate has closed is refused with that gate's message.
+        CompletableFuture<TokenHandle> waiter = get("third", secondGate);
+        second.set(false);
+        source.issue("tok-3");
+        assertEquals("second is off", failure(waiter).getMessage());
+    }
+
+    private TokenHandle served(CompletableFuture<TokenHandle> result, String token) {
+        source.issue(token);
+        return served(result);
+    }
+
+    @Test
+    public void aTokenThatArrives_isJudgedByEachWaitersOwnGate_andKeptWhenOneOfThemTakesIt() {
+        AtomicBoolean first = new AtomicBoolean(true);
+        AtomicBoolean second = new AtomicBoolean(true);
+        Gate firstGate = Gate.of(first::get, "first is off");
+        Gate secondGate = Gate.of(second::get, "second is off");
+        CompletableFuture<TokenHandle> starter = get("shared", firstGate);
+        CompletableFuture<TokenHandle> other = get("shared", secondGate);
+        assertEquals(1, source.requests.size());
+
+        first.set(false);
+        source.issue("tok-1");
+
+        // The request that started the token request is refused by its own gate; the other is served and the token kept.
+        assertEquals("first is off", failure(starter).getMessage());
+        assertEquals("tok-1", served(other).value());
+        assertEquals("tok-1", served(get("shared", secondGate)).value());
+        assertEquals(1, source.requests.size());
+        assertEquals(List.of(TOKEN_REQUEST, CACHE_HIT), counted);
+    }
+
+    @Test
+    public void aGateRefusalOfTheTokenRequest_failsTheWaiters_withoutABackoffOrAFailureCount() {
+        CompletableFuture<TokenHandle> waiter = get();
+        setAuthEnabled(false);
+        source.send("tok-1");
+
+        assertAuthDisabled(failure(waiter));
+        // The next request, with the gate open, sends a token request at once.
+        setAuthEnabled(true);
+        assertFalse(get().isDone());
+        assertEquals(2, source.requests.size());
+        assertEquals(List.of(TOKEN_REQUEST, TOKEN_REQUEST), counted);
+    }
+
+    @Test
+    public void aTokenRequestIsRefusedBeforeSending_onlyWhileEveryWaitersGateIsClosed() {
+        AtomicBoolean vertexAi = new AtomicBoolean(true);
+        Gate vertexAiGate = Gate.of(vertexAi::get, ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        // A legacy google_cloud connector starts the request; the generic form of the same account joins it.
+        CompletableFuture<TokenHandle> legacy = get("shared", vertexAiGate);
+        CompletableFuture<TokenHandle> generic = get("shared", gate);
+        assertEquals(1, source.requests.size());
+
+        vertexAi.set(false);
+        source.send("tok-1");
+
+        // Open for the generic waiter, so the request was sent; each waiter is then judged by its own gate.
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, failure(legacy).getMessage());
+        assertEquals("tok-1", served(generic).value());
+        assertEquals("tok-1", served(get("shared", gate)).value());
+        assertEquals(1, source.requests.size());
+        assertEquals(List.of(TOKEN_REQUEST, CACHE_HIT), counted);
+    }
+
+    @Test
+    public void aWaiterThatJoinsAfterARefusalBeforeSending_isServedByANewTokenRequest() {
+        AtomicBoolean vertexAi = new AtomicBoolean(true);
+        Gate vertexAiGate = Gate.of(vertexAi::get, ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        CompletableFuture<TokenHandle> legacy = get("shared", vertexAiGate);
+        vertexAi.set(false);
+        // Refused as it is about to be sent, the legacy request being its only waiter; the generic form joins before the
+        // refusal is delivered.
+        source.decide();
+        CompletableFuture<TokenHandle> generic = get("shared", gate);
+        assertEquals(1, source.requests.size());
+
+        source.deliver("tok-1");
+
+        // The legacy waiter is refused by its own gate; the generic waiter, whose gate is open, waits for a second token
+        // request rather than being refused under the legacy request's setting.
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, failure(legacy).getMessage());
+        assertFalse(generic.isDone());
+        assertEquals(2, source.requests.size());
+        source.send("tok-2");
+        assertEquals("tok-2", served(generic).value());
+        assertEquals("tok-2", served(get("shared", gate)).value());
+        assertEquals(2, source.requests.size());
+        assertEquals(List.of(TOKEN_REQUEST, TOKEN_REQUEST, CACHE_HIT), counted);
+    }
+
+    @Test
+    public void aTokenRequestRefusedBeforeSending_failsEachWaiterWithItsOwnGatesRefusal() {
+        AtomicBoolean vertexAi = new AtomicBoolean(true);
+        AtomicBoolean auth = new AtomicBoolean(true);
+        Gate vertexAiGate = Gate.of(vertexAi::get, ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE);
+        Gate authGate = Gate.of(auth::get, ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE);
+        CompletableFuture<TokenHandle> legacy = get("shared", vertexAiGate);
+        CompletableFuture<TokenHandle> generic = get("shared", authGate);
+
+        vertexAi.set(false);
+        auth.set(false);
+        source.send("tok-1");
+
+        assertEquals(ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE, failure(legacy).getMessage());
+        assertAuthDisabled(failure(generic));
+        // No backoff and no failure count: the next request whose gate is open sends a token request at once.
+        auth.set(true);
+        assertFalse(get("shared", authGate).isDone());
+        assertEquals(2, source.requests.size());
+        assertEquals(List.of(TOKEN_REQUEST, TOKEN_REQUEST), counted);
+    }
+
+    @Test
+    public void aRefreshNoRequestWaitsFor_isSubjectToTheGateOfTheRequestThatStartedIt() {
+        AtomicBoolean on = new AtomicBoolean(true);
+        Gate starterGate = Gate.of(on::get, "starter is off");
+        served(get("entry", starterGate), "tok-1");
+        atSeconds(3540);
+        assertEquals("tok-1", served(get("entry", starterGate)).value());
+        assertEquals(2, source.requests.size());
+
+        on.set(false);
+        source.send("tok-2");
+
+        // Refused before sending, with nothing to complete: the token stays, served to a request whose gate is open, and
+        // that request starts a refresh again.
+        assertEquals("tok-1", served(get("entry", gate)).value());
+        assertEquals(3, source.requests.size());
+        assertFalse(counted.contains(TOKEN_FAILURE));
     }
 
     @Test
@@ -678,9 +867,9 @@ public class OAuth2TokenCacheTests {
     @Test
     public void aSourceThatThrows_failsItsWaiters_andALaterRequestStartsAgain() {
         CompletableFuture<TokenHandle> result = new CompletableFuture<>();
-        cache.get(null, AUTH, listener -> listener.onResponse(CREDENTIALS), (credentials, allowlist, listener) -> {
+        cache.get(null, AUTH, listener -> listener.onResponse(CREDENTIALS), (credentials, allowlist, requestGate, listener) -> {
             throw new IllegalStateException("source failed");
-        }, ActionListener.wrap(result::complete, result::completeExceptionally));
+        }, gate, ActionListener.wrap(result::complete, result::completeExceptionally));
 
         assertEquals("source failed", failure(result).getMessage());
         atSeconds(1);

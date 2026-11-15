@@ -70,11 +70,11 @@ public class ConnectorProtocolsTest {
     }
 
     @Test
-    public void supportsAuthConfig_onlyHttpAndNeverThrows() {
+    public void supportsAuthConfig_httpAndGoogleCloudOnly_andNeverThrows() {
         assertTrue(ConnectorProtocols.supportsAuthConfig(ConnectorProtocols.HTTP));
+        assertTrue(ConnectorProtocols.supportsAuthConfig(ConnectorProtocols.GOOGLE_CLOUD));
         for (String protocol : new String[] {
             ConnectorProtocols.AWS_SIGV4,
-            ConnectorProtocols.GOOGLE_CLOUD,
             ConnectorProtocols.MCP_SSE,
             ConnectorProtocols.MCP_STREAMABLE_HTTP,
             null,

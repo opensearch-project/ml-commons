@@ -87,9 +87,18 @@ public final class AuthConfigValidator {
 
     /**
      * The checks of a configuration that attaches a token: the grant and what it authenticates with, then the token
-     * endpoint, the actions and the client config, which every grant shares.
+     * endpoint, the actions and the client config, which every grant shares. A {@code google_adc} configuration makes
+     * no token request of its own, so only the connector is examined.
      */
     private static void validateActive(Connector connector, OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
+        if (config.getType() != ConnectorAuthType.GOOGLE_ADC) {
+            validateTokenRequest(config, allowlist);
+        }
+        validateConnector(connector);
+    }
+
+    /** The grant, what it authenticates with and the literal token endpoint. */
+    private static void validateTokenRequest(OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
         String grantType = config.getGrantType();
         if (OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS.equals(grantType)) {
             validateClientCredentials(config);
@@ -116,6 +125,10 @@ public final class AuthConfigValidator {
                 throw new IllegalArgumentException(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE);
             }
         }
+    }
+
+    /** No action writes an {@code Authorization} header, every action URL is https and TLS is verified. */
+    private static void validateConnector(Connector connector) {
         if (connector.getActions() != null) {
             for (ConnectorAction action : connector.getActions()) {
                 if (action.getHeaders() == null) {

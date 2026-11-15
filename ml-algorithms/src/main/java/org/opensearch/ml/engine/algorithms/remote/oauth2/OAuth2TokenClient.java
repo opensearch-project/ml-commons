@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote.oauth2;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 
 import java.io.IOException;
@@ -17,14 +16,12 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRunnable;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLException;
@@ -70,7 +67,6 @@ public final class OAuth2TokenClient {
     private final OkHttpClient transport;
     private final TokenEndpointAddressValidator addresses;
     private final ThreadPool threadPool;
-    private final BooleanSupplier authEnabled;
     private final IntSupplier maxLifetimeSeconds;
 
     /**
@@ -84,23 +80,10 @@ public final class OAuth2TokenClient {
     /**
      * A client on the default OkHttp transport.
      *
-     * @param authEnabled whether {@code plugins.ml_commons.connector.auth_enabled} is on, read again before every request
-     *     is sent
      * @param maxLifetimeSeconds the longest lifetime a token may be given, read on every request
      */
-    public static OAuth2TokenClient create(
-        TokenEndpointAddressValidator addresses,
-        ThreadPool threadPool,
-        BooleanSupplier authEnabled,
-        IntSupplier maxLifetimeSeconds
-    ) {
-        return new OAuth2TokenClient(
-            AccessController.doPrivileged(() -> new OkHttpClient()),
-            addresses,
-            threadPool,
-            authEnabled,
-            maxLifetimeSeconds
-        );
+    public static OAuth2TokenClient create(TokenEndpointAddressValidator addresses, ThreadPool threadPool, IntSupplier maxLifetimeSeconds) {
+        return new OAuth2TokenClient(AccessController.doPrivileged(() -> new OkHttpClient()), addresses, threadPool, maxLifetimeSeconds);
     }
 
     /** The configuration below is applied to whatever {@code transport} is given. */
@@ -108,7 +91,6 @@ public final class OAuth2TokenClient {
         OkHttpClient transport,
         TokenEndpointAddressValidator addresses,
         ThreadPool threadPool,
-        BooleanSupplier authEnabled,
         IntSupplier maxLifetimeSeconds
     ) {
         this.transport = AccessController
@@ -126,7 +108,6 @@ public final class OAuth2TokenClient {
             );
         this.addresses = addresses;
         this.threadPool = threadPool;
-        this.authEnabled = authEnabled;
         this.maxLifetimeSeconds = maxLifetimeSeconds;
     }
 
@@ -134,22 +115,23 @@ public final class OAuth2TokenClient {
      * Requests one token for {@code config}, resolving its references from {@code credentials} and matching the token URL
      * against {@code allowlist}. The checks, the name resolution and the request building run on the
      * {@code opensearch_ml_predict_remote} pool, and the listener completes there too, exactly once; callers restore their
-     * own thread context. A request refused before sending fails with an {@link IllegalArgumentException}, with an
-     * {@link OpenSearchStatusException} of status 403 when it finds {@code plugins.ml_commons.connector.auth_enabled} off
-     * as it is about to be sent, or with an {@link IllegalStateException} when this node's interface addresses cannot be
-     * read; a request that was sent and failed, or whose assertion could not be signed with the key the credential
-     * holds, with an {@link MLException}; none has a cause. A full pool fails it with its rejection.
+     * own thread context. A request refused before sending fails with an {@link IllegalArgumentException}, with the
+     * {@link OpenSearchStatusException} of status 403 of {@code gate} when it finds the gate closed as it is about to be
+     * sent, or with an {@link IllegalStateException} when this node's interface addresses cannot be read; a request that
+     * was sent and failed, or whose assertion could not be signed with the key the credential holds, with an
+     * {@link MLException}; none has a cause. A full pool fails it with its rejection.
      */
     public void requestToken(
         OAuth2AuthConfig config,
         CredentialSnapshot credentials,
         TokenEndpointAllowlist allowlist,
+        Gate gate,
         ActionListener<IssuedToken> listener
     ) {
         // A completion is short, and it must run even when the pool is full: a rejected completion would drop an issued
         // token or never report a failure.
         ActionListener<IssuedToken> completion = new ThreadedActionListener<>(log, threadPool, RETRY_EXECUTOR, listener, true);
-        threadPool.executor(RETRY_EXECUTOR).execute(ActionRunnable.wrap(completion, l -> send(config, credentials, allowlist, l)));
+        threadPool.executor(RETRY_EXECUTOR).execute(ActionRunnable.wrap(completion, l -> send(config, credentials, allowlist, gate, l)));
     }
 
     /** A client that connects only to {@code addresses}, the ones that passed validation, whatever DNS answers next. */
@@ -162,6 +144,7 @@ public final class OAuth2TokenClient {
         OAuth2AuthConfig config,
         CredentialSnapshot credentials,
         TokenEndpointAllowlist allowlist,
+        Gate gate,
         ActionListener<IssuedToken> listener
     ) {
         String canonical;
@@ -192,9 +175,10 @@ public final class OAuth2TokenClient {
             throw refused(host, addressRefusalReason(e.getMessage()), e.getMessage());
         }
         // Read again here: the setting may have been turned off while this request waited for a thread.
-        if (!authEnabled.getAsBoolean()) {
-            logRefusal(host, "auth_disabled");
-            throw new OpenSearchStatusException(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        OpenSearchStatusException refused = gate.refusal();
+        if (refused != null) {
+            logRefusal(host, Gate.labelOf(refused));
+            throw refused;
         }
         Request request;
         try {

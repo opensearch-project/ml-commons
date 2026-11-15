@@ -402,7 +402,9 @@ public class ConnectorProtocolValidator {
     /**
      * Write-time checks of the {@code auth_config} of a connector that is created, registered inline, or supplied whole
      * by a transport caller. In order: the type is one a request may set, the protocol takes {@code auth_config}, every
-     * node of the cluster supports it, and the feature flag is on for a type that attaches credentials.
+     * node of the cluster supports it, and for a type that attaches credentials the flag of the protocol is on, then
+     * {@code plugins.ml_commons.connector.auth_enabled}. Every write path, the caller-supplied connector included, thus
+     * runs the same flag checks; the protocol check the create and register actions run themselves gives the same answer.
      * <p>
      * A request without {@code auth_config} is not judged, and neither the flag nor the cluster state is read. A
      * configuration without a protocol is rejected like one on a protocol that does not take {@code auth_config};
@@ -414,8 +416,8 @@ public class ConnectorProtocolValidator {
      * @param mlFeatureEnabledSetting feature flag accessor
      * @param clusterState the current cluster state; read only for a configuration
      * @throws IllegalArgumentException when the configuration is not accepted
-     * @throws OpenSearchStatusException with {@link RestStatus#FORBIDDEN} for a type that attaches credentials while
-     *     {@code plugins.ml_commons.connector.auth_enabled} is off
+     * @throws OpenSearchStatusException with {@link RestStatus#FORBIDDEN} for a type that attaches credentials while the
+     *     protocol's flag or {@code plugins.ml_commons.connector.auth_enabled} is off
      */
     public static void validateAuth(
         String protocol,
@@ -430,6 +432,7 @@ public class ConnectorProtocolValidator {
         requireProtocolTakesAuthConfig(protocol);
         requireEveryNodeSupportsConnectorAuth(clusterState);
         if (authConfig.getType().isActive()) {
+            validateProtocolEnabled(protocol, mlFeatureEnabledSetting);
             requireConnectorAuthEnabled(mlFeatureEnabledSetting);
         }
     }
@@ -448,9 +451,11 @@ public class ConnectorProtocolValidator {
      * configuration is the request's when it carries one and the stored one otherwise; a connector that ends up
      * without one is not judged further. The checks then run in the {@link #validateAuth} order, followed by the
      * protected-field check: a request that carries {@code auth_config} without a credential may not change a
-     * protected field or the referenced credential keys, or switch to a type that attaches credentials. The flag and
+     * protected field or the referenced credential keys, or switch to a type that attaches credentials. The flags and
      * the protected-field check apply only to a request that carries {@code auth_config}; the version guard applies to
-     * every request that is judged, an identical re-send included.
+     * every request that is judged, an identical re-send included. For a type that attaches credentials, the flag of
+     * the resulting protocol is judged before {@code plugins.ml_commons.connector.auth_enabled}, as the action judges
+     * it when the request re-sends the protocol, so an update that omits the protocol is judged the same way.
      *
      * @param stored the connector as fetched; never null
      * @param updatedProtocol the protocol the request sets, or null
@@ -479,9 +484,11 @@ public class ConnectorProtocolValidator {
         if (resulting == null) {
             return;
         }
-        requireProtocolTakesAuthConfig(updatedProtocol != null ? updatedProtocol : storedProtocol);
+        String resultingProtocol = updatedProtocol != null ? updatedProtocol : storedProtocol;
+        requireProtocolTakesAuthConfig(resultingProtocol);
         requireEveryNodeSupportsConnectorAuth(clusterState);
         if (carriesAuth && resulting.getType().isActive()) {
+            validateProtocolEnabled(resultingProtocol, mlFeatureEnabledSetting);
             requireConnectorAuthEnabled(mlFeatureEnabledSetting);
         }
         if (carriesAuth && (updatedCredential == null || updatedCredential.isEmpty())) {

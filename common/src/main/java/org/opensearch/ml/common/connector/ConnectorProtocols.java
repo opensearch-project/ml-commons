@@ -22,7 +22,7 @@ public class ConnectorProtocols {
 
     private static final Set<String> MCP_PROTOCOLS = Set.of(MCP_SSE, MCP_STREAMABLE_HTTP);
 
-    private static final Set<String> AUTH_CONFIG_PROTOCOLS = Set.of(HTTP);
+    private static final Set<String> AUTH_CONFIG_PROTOCOLS = Set.of(HTTP, GOOGLE_CLOUD);
 
     /**
      * Whether the protocol speaks MCP. MCP connectors are a different shape from the inference protocols:

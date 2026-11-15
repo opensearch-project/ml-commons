@@ -52,7 +52,6 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -644,7 +643,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         assertTrue(captor.getValue() instanceof IllegalArgumentException);
         assertEquals("Unsupported llm interface: invalid_interface", captor.getValue().getMessage());
 
-        // Any other failure is wrapped: here a request without the interface parameter.
+        // A request without the interface parameter is refused with the message that names it.
         StreamPredictActionListener<MLTaskResponse, ?> otherListener = mock(StreamPredictActionListener.class);
         executor
             .invokeRemoteServiceStream(
@@ -655,10 +654,10 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
                 new ExecutionContext(0),
                 otherListener
             );
-        ArgumentCaptor<Exception> wrapped = ArgumentCaptor.forClass(Exception.class);
-        verify(otherListener, times(1)).onFailure(wrapped.capture());
-        assertTrue(wrapped.getValue() instanceof MLException);
-        assertEquals("Fail to execute streaming", wrapped.getValue().getMessage());
+        ArgumentCaptor<Exception> missing = ArgumentCaptor.forClass(Exception.class);
+        verify(otherListener, times(1)).onFailure(missing.capture());
+        assertTrue(missing.getValue() instanceof IllegalArgumentException);
+        assertEquals(HttpJsonConnectorExecutor.LLM_INTERFACE_REQUIRED_MESSAGE, missing.getValue().getMessage());
     }
 
     @Test

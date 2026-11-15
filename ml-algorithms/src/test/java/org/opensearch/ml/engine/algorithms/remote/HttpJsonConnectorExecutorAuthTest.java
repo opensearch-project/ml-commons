@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -22,10 +23,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 import static org.opensearch.ml.common.connector.AbstractConnector.AUTH_CONFIG_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ACTION_HEADERS;
@@ -35,6 +38,8 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.clusterSettings;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.featureSettings;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.googleServiceAccountConnector;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConnector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.oauth2Connector;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.reply;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.scriptedTransport;
@@ -50,7 +55,11 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -329,6 +338,39 @@ public class HttpJsonConnectorExecutorAuthTest extends MLStaticMockBase {
         assertEquals(List.of(), sent);
     }
 
+    @Test
+    public void concurrentFirstRequests_shareTheFirstProviderPublished() throws Exception {
+        HttpConnector connector = oauth2Connector(ACTION_URL);
+        List<FakeAuthorizationProvider> built = new CopyOnWriteArrayList<>();
+        CountDownLatch bothBuilding = new CountDownLatch(2);
+        AuthorizationProviderFactory factory = mock(AuthorizationProviderFactory.class);
+        when(factory.providerFor(connector)).thenAnswer(invocation -> {
+            FakeAuthorizationProvider provider = new FakeAuthorizationProvider("tok-1", "tok-1", "tok-1");
+            built.add(provider);
+            // Neither build returns before the other has started, so both requests have a provider to publish.
+            bothBuilding.countDown();
+            assertTrue(bothBuilding.await(10, TimeUnit.SECONDS));
+            return provider;
+        });
+        HttpJsonConnectorExecutor executor = executor(connector, factory);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<?>> first = List
+                .of(pool.submit(() -> predict(executor, listener())), pool.submit(() -> predict(executor, listener())));
+            for (Future<?> request : first) {
+                request.get(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        predict(executor, listener());
+
+        // The two first requests and the one after were all answered by the provider the executor kept; the other is never used.
+        assertEquals(2, built.size());
+        assertEquals(List.of(0, 3), built.stream().map(provider -> provider.requests.get()).sorted().toList());
+        assertEquals(3, sent.size());
+    }
+
     /** {@link #oauth2Connector} whose client config retries three times after a millisecond. */
     private static HttpConnector retryingConnector() {
         HttpConnector connector = oauth2Connector(ACTION_URL);
@@ -452,6 +494,53 @@ public class HttpJsonConnectorExecutorAuthTest extends MLStaticMockBase {
         callbacks.getAllValues().get(0).run();
         assertEquals(provider.issued, provider.invalidated);
         assertNull(callbacks.getAllValues().get(1));
+        verifyNoInteractions(untouched);
+    }
+
+    @Test
+    public void aStreamWithTheGeminiInterface_isAccepted_andAJwtBearerConnectorCarriesItsBearer() {
+        FakeAuthorizationProvider provider = new FakeAuthorizationProvider("tok-1");
+        HttpJsonConnectorExecutor executor = executor(jwtBearerConnector(ACTION_URL), provider);
+        StreamingHandler handler = mock(StreamingHandler.class);
+        StreamPredictActionListener<MLTaskResponse, ?> l = mock(StreamPredictActionListener.class);
+        ArgumentCaptor<String> interfaces = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, String>> headers = ArgumentCaptor.forClass(Map.class);
+        Map<String, String> parameters = new HashMap<>(Map.of(LLM_INTERFACE, LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT));
+
+        // Only the handler is replaced; the factory's other statics keep their behaviour.
+        try (
+            MockedStatic<StreamingHandlerFactory> handlers = mockStatic(
+                StreamingHandlerFactory.class,
+                withSettings().defaultAnswer(CALLS_REAL_METHODS)
+            )
+        ) {
+            handlers.when(() -> StreamingHandlerFactory.createHandler(any(), any(), any(), any(), any(), any(), any())).thenReturn(handler);
+            // Stubbing ran the real method once; only the executor's call is counted.
+            handlers.clearInvocations();
+            executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{}", new ExecutionContext(0), l);
+            handlers.verify(() -> StreamingHandlerFactory.createHandler(interfaces.capture(), any(), any(), any(), any(), any(), any()));
+        }
+
+        verify(l, never()).onFailure(any());
+        assertEquals(LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT, interfaces.getValue());
+        verify(handler).startStream(eq(URI.create(ACTION_URL)), headers.capture(), any(), any(), any());
+        assertEquals("Bearer tok-1", headers.getValue().get("Authorization"));
+    }
+
+    @Test
+    public void aStreamWithoutTheInterfaceParameter_isRefusedNamingIt_onEitherProtocol() {
+        AuthorizationProviderFactory untouched = mock(AuthorizationProviderFactory.class);
+        for (HttpConnector connector : List.of(oauth2Connector(ACTION_URL), googleServiceAccountConnector(ACTION_URL))) {
+            StreamPredictActionListener<MLTaskResponse, ?> l = mock(StreamPredictActionListener.class);
+
+            executor(connector, untouched)
+                .invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(), "{}", new ExecutionContext(0), l);
+
+            Exception e = streamFailureOf(l);
+            assertSame(IllegalArgumentException.class, e.getClass());
+            assertEquals(HttpJsonConnectorExecutor.LLM_INTERFACE_REQUIRED_MESSAGE, e.getMessage());
+        }
+        // Refused before a provider is built or a token requested.
         verifyNoInteractions(untouched);
     }
 

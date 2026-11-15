@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote.oauth2;
 
-import java.util.function.BooleanSupplier;
-
 import org.opensearch.OpenSearchStatusException;
 
 /**
@@ -15,26 +13,26 @@ import org.opensearch.OpenSearchStatusException;
  * {@code toString}.
  */
 public final class TokenHandle {
-    // The cache entry and the token object the value came from, compared by identity.
+    // The cache entry and the token object the value came from, compared by identity; null for a token no entry holds.
     final OAuth2TokenCache.Slot slot;
     final OAuth2TokenCache.Token token;
     private final String value;
-    private final BooleanSupplier authEnabled;
+    private final Gate gate;
 
-    TokenHandle(String value, OAuth2TokenCache.Slot slot, OAuth2TokenCache.Token token, BooleanSupplier authEnabled) {
+    TokenHandle(String value, OAuth2TokenCache.Slot slot, OAuth2TokenCache.Token token, Gate gate) {
         this.value = value;
         this.slot = slot;
         this.token = token;
-        this.authEnabled = authEnabled;
+        this.gate = gate;
     }
 
     /**
-     * @throws OpenSearchStatusException 403 naming plugins.ml_commons.connector.auth_enabled when it was turned off after
-     *     the token was obtained
+     * @throws OpenSearchStatusException 403 naming the setting that was turned off after the token was obtained
      */
     public String value() {
-        if (!authEnabled.getAsBoolean()) {
-            throw OAuth2TokenCache.authDisabled();
+        OpenSearchStatusException refused = gate.refusal();
+        if (refused != null) {
+            throw refused;
         }
         return value;
     }
