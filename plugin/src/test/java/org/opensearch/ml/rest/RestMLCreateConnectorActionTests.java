@@ -97,7 +97,10 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testGetFilteredFields_redactsTheAuthConfigSecret() {
-        assertEquals(Set.of("credential", "*.Authorization", "auth_config.client_secret"), restMLCreateConnectorAction.getFilteredFields());
+        assertEquals(
+            Set.of("credential", "*.Authorization", "auth_config.client_secret", "auth_config.jwt.private_key"),
+            restMLCreateConnectorAction.getFilteredFields()
+        );
     }
 
     public void testRoutes() {

@@ -12,12 +12,17 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ACTION_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.SECRET_LOOKING;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.http;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.pem;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.rsaPkcs8;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.rsaPkcs8Pem;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -44,15 +49,32 @@ public class AuthConfigValidatorTests {
     private static final TokenEndpointAllowlist NOTHING_ALLOWED = new TokenEndpointAllowlist(List.of());
     private static final TokenEndpointAllowlist EVERYTHING_ALLOWED = new TokenEndpointAllowlist(List.of(".*"));
 
+    /** {@link AuthConfigValidator#validate} of the configuration {@code connector} holds. */
+    private static OAuth2AuthConfig validate(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
+        return AuthConfigValidator.validate(connector, connector.getAuthConfig(), keys, allowlist);
+    }
+
     private static OAuth2AuthConfig validate(Connector connector) {
-        return AuthConfigValidator.validate(connector, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST);
+        return validate(connector, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST);
+    }
+
+    private static boolean passes(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
+        return AuthConfigValidator.passes(connector, connector.getAuthConfig(), keys, allowlist);
+    }
+
+    private static boolean validateOrGrandfather(
+        Connector connector,
+        Set<String> keys,
+        TokenEndpointAllowlist allowlist,
+        boolean authOrProtocolTouched,
+        boolean storedPassed
+    ) {
+        return AuthConfigValidator
+            .validateOrGrandfather(connector, connector.getAuthConfig(), keys, allowlist, authOrProtocolTouched, storedPassed);
     }
 
     private static String fails(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
-        IllegalArgumentException e = assertThrows(
-            IllegalArgumentException.class,
-            () -> AuthConfigValidator.validate(connector, keys, allowlist)
-        );
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> validate(connector, keys, allowlist));
         assertFalse(e.getMessage(), e.getMessage().contains(SECRET_LOOKING));
         assertNull(e.getCause());
         return e.getMessage();
@@ -97,7 +119,7 @@ public class AuthConfigValidatorTests {
     @Test
     public void referencedCredentialKeys_mustBeInTheGivenKeyView() {
         assertEquals(oauth2(), validate(http(oauth2())));
-        AuthConfigValidator.validate(http(fullOauth2()), Set.of("s", "unused"), DEFAULT_TOKEN_ALLOWLIST);
+        validate(http(fullOauth2()), Set.of("s", "unused"), DEFAULT_TOKEN_ALLOWLIST);
         assertEquals(AuthConfigValidator.missingCredentialKeyMessage("s"), fails(http(oauth2()), Set.of("other")));
         // The connector's own credential holds s; the given view does not, and it is the view that counts.
         validate(HttpConnector.builder().name("c").protocol(ConnectorProtocols.HTTP).authConfig(oauth2()).build());
@@ -108,37 +130,35 @@ public class AuthConfigValidatorTests {
         assertEquals(AuthConfigValidator.missingCredentialKeyMessage("a"), fails(http(THREE_KEYS), Set.of()));
         assertEquals(AuthConfigValidator.missingCredentialKeyMessage("a"), fails(http(THREE_KEYS), Set.of("s", "u")));
         assertEquals(AuthConfigValidator.missingCredentialKeyMessage("u"), fails(http(THREE_KEYS), Set.of("a", "s")));
-        AuthConfigValidator.validate(http(THREE_KEYS), Set.of("a", "s", "u"), DEFAULT_TOKEN_ALLOWLIST);
+        validate(http(THREE_KEYS), Set.of("a", "s", "u"), DEFAULT_TOKEN_ALLOWLIST);
     }
 
     @Test
     public void nothingToValidate_passesWithAnyKeySet() {
         // No configuration, a protocol that never holds one, or a configuration that references no key.
-        assertNull(AuthConfigValidator.validate(http(null), Set.of(), NOTHING_ALLOWED));
+        assertNull(validate(http(null), Set.of(), NOTHING_ALLOWED));
         assertNull(
-            AuthConfigValidator
-                .validate(
-                    McpConnector.builder().name("m").protocol(ConnectorProtocols.MCP_SSE).url("https://api.openai.com/mcp").build(),
-                    Set.of(),
-                    NOTHING_ALLOWED
-                )
+            validate(
+                McpConnector.builder().name("m").protocol(ConnectorProtocols.MCP_SSE).url("https://api.openai.com/mcp").build(),
+                Set.of(),
+                NOTHING_ALLOWED
+            )
         );
-        assertEquals(OAuth2AuthConfig.NONE, AuthConfigValidator.validate(http(OAuth2AuthConfig.NONE), Set.of(), NOTHING_ALLOWED));
+        assertEquals(OAuth2AuthConfig.NONE, validate(http(OAuth2AuthConfig.NONE), Set.of(), NOTHING_ALLOWED));
     }
 
     @Test
     public void grantAndClientAuthMethod_onlyClientCredentialsWithASecret() {
         validate(http(oauth2Builder().grantType(OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS).build()));
-        for (String grant : new String[] {
-            "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "urn:ibm:params:oauth:grant-type:apikey",
-            "Client_Credentials" }) {
+        for (String grant : new String[] { "urn:ibm:params:oauth:grant-type:apikey", "Client_Credentials" }) {
             assertEquals(
                 grant,
                 AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE,
                 fails(http(oauth2Builder().grantType(grant).build()))
             );
         }
+        // The jwt-bearer grant builds, with its block, and is refused here until the node can sign for it.
+        assertEquals(AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE, fails(http(jwtBearer()), Set.of(PRIVATE_KEY_KEY)));
         assertEquals(
             AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE,
             fails(http(oauth2Builder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE).clientSecret(null).build()))
@@ -175,7 +195,7 @@ public class AuthConfigValidatorTests {
         // A malformed literal never builds, so no stored configuration carries one.
         assertEquals(canonicalFormMessage, assertThrows(IllegalArgumentException.class, () -> tokenUrl(malformed)).getMessage());
         // A reference is checked once its value is known.
-        AuthConfigValidator.validate(http(tokenUrl("${credential.u}")), Set.of("s", "u"), NOTHING_ALLOWED);
+        validate(http(tokenUrl("${credential.u}")), Set.of("s", "u"), NOTHING_ALLOWED);
         assertEquals(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE, fails(http(oauth2()), Set.of("s"), NOTHING_ALLOWED));
     }
 
@@ -201,7 +221,7 @@ public class AuthConfigValidatorTests {
 
     @Test
     public void literalTokenUrl_mayHaveADotInsideASegment() {
-        AuthConfigValidator.validate(http(tokenUrl("https://acme.okta.com/a/b.c/")), Set.of("s"), EVERYTHING_ALLOWED);
+        validate(http(tokenUrl("https://acme.okta.com/a/b.c/")), Set.of("s"), EVERYTHING_ALLOWED);
     }
 
     @Test
@@ -214,7 +234,7 @@ public class AuthConfigValidatorTests {
 
     @Test
     public void literalTokenUrl_mayHaveAPercentEncodedCharacterInItsPath() {
-        AuthConfigValidator.validate(http(tokenUrl("https://acme.okta.com/caf%C3%A9/token")), Set.of("s"), EVERYTHING_ALLOWED);
+        validate(http(tokenUrl("https://acme.okta.com/caf%C3%A9/token")), Set.of("s"), EVERYTHING_ALLOWED);
     }
 
     @Test
@@ -273,18 +293,18 @@ public class AuthConfigValidatorTests {
     public void noneConfiguration_attachesNothing_soActionsAndClientConfigAreNotExamined() {
         ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
         List<ConnectorAction> actions = actions(Map.of("Authorization", "Bearer ${credential.s}"), "http://plain.example.com/x");
-        AuthConfigValidator.validate(http(parameters(), OAuth2AuthConfig.NONE, actions, skip), Set.of(), NOTHING_ALLOWED);
+        validate(http(parameters(), OAuth2AuthConfig.NONE, actions, skip), Set.of(), NOTHING_ALLOWED);
     }
 
     @Test
     public void passesAndValidateOrGrandfather_useTheGivenAllowlist() {
         HttpConnector connector = http(oauth2());
-        assertTrue(AuthConfigValidator.passes(connector, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
-        assertFalse(AuthConfigValidator.passes(connector, Set.of("s"), NOTHING_ALLOWED));
-        assertTrue(AuthConfigValidator.validateOrGrandfather(connector, Set.of("s"), NOTHING_ALLOWED, false, false));
+        assertTrue(passes(connector, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
+        assertFalse(passes(connector, Set.of("s"), NOTHING_ALLOWED));
+        assertTrue(validateOrGrandfather(connector, Set.of("s"), NOTHING_ALLOWED, false, false));
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,
-            () -> AuthConfigValidator.validateOrGrandfather(connector, Set.of("s"), NOTHING_ALLOWED, true, false)
+            () -> validateOrGrandfather(connector, Set.of("s"), NOTHING_ALLOWED, true, false)
         );
         assertEquals(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE, e.getMessage());
     }
@@ -292,13 +312,13 @@ public class AuthConfigValidatorTests {
     @Test
     public void validateOrGrandfather_passesWithoutAWarning_whenTheConfigurationIsValid() {
         HttpConnector valid = http(oauth2());
-        assertFalse(AuthConfigValidator.validateOrGrandfather(valid, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, false, false));
-        assertFalse(AuthConfigValidator.validateOrGrandfather(valid, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, true, true));
+        assertFalse(validateOrGrandfather(valid, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, false, false));
+        assertFalse(validateOrGrandfather(valid, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, true, true));
     }
 
     @Test
     public void validateOrGrandfather_anUntouchedUpdateOverAStoredFailure_proceedsWithAWarning() {
-        assertTrue(AuthConfigValidator.validateOrGrandfather(http(THREE_KEYS), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, false, false));
+        assertTrue(validateOrGrandfather(http(THREE_KEYS), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, false, false));
     }
 
     @Test
@@ -309,7 +329,7 @@ public class AuthConfigValidatorTests {
             boolean storedPassed = touchedAndStoredPassed[1];
             IllegalArgumentException e = assertThrows(
                 IllegalArgumentException.class,
-                () -> AuthConfigValidator.validateOrGrandfather(failing, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, touched, storedPassed)
+                () -> validateOrGrandfather(failing, Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, touched, storedPassed)
             );
             assertEquals(AuthConfigValidator.missingCredentialKeyMessage("a"), e.getMessage());
         }
@@ -317,9 +337,39 @@ public class AuthConfigValidatorTests {
 
     @Test
     public void passes_isTrueExactlyWhenValidateDoesNotThrow() {
-        assertTrue(AuthConfigValidator.passes(http(null), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
-        assertTrue(AuthConfigValidator.passes(http(oauth2()), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
-        assertFalse(AuthConfigValidator.passes(http(oauth2()), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
+        assertTrue(passes(http(null), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
+        assertTrue(passes(http(oauth2()), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
+        assertFalse(passes(http(oauth2()), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
+    }
+
+    @Test
+    public void validate_judgesTheGivenConfiguration() {
+        // The caller reads the configuration from the connector; what is judged is the one it passes.
+        assertEquals(oauth2(), AuthConfigValidator.validate(http(null), oauth2(), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
+        assertNull(AuthConfigValidator.validate(http(oauth2()), null, Set.of(), NOTHING_ALLOWED));
+        assertFalse(AuthConfigValidator.passes(http(null), oauth2(), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
+    }
+
+    @Test
+    public void validatePrivateKey_parsesTheReferencedKeyWhenThePlaintextCredentialHoldsIt() {
+        AuthConfigValidator.validatePrivateKey(jwtBearer(), Map.of(PRIVATE_KEY_KEY, rsaPkcs8Pem()));
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> AuthConfigValidator.validatePrivateKey(jwtBearer(), Map.of(PRIVATE_KEY_KEY, pem("RSA PRIVATE KEY", rsaPkcs8(), true)))
+        );
+        assertEquals(PrivateKeys.INVALID_MESSAGE, e.getMessage());
+        assertNull(e.getCause());
+    }
+
+    @Test
+    public void validatePrivateKey_readsNothingWithoutAJwtBlockOrWithoutTheKey() {
+        Map<String, String> notAKey = Map.of(PRIVATE_KEY_KEY, SECRET_LOOKING, "s", SECRET_LOOKING);
+        // The reference check of validate reports a key the map lacks.
+        AuthConfigValidator.validatePrivateKey(jwtBearer(), Map.of("other", SECRET_LOOKING));
+        AuthConfigValidator.validatePrivateKey(jwtBearer(), null);
+        AuthConfigValidator.validatePrivateKey(oauth2(), notAKey);
+        AuthConfigValidator.validatePrivateKey(OAuth2AuthConfig.NONE, notAKey);
+        AuthConfigValidator.validatePrivateKey(null, notAKey);
     }
 
     @Test

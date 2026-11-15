@@ -18,6 +18,8 @@ public class ConnectorAuthTypeTests {
     public void from_acceptsSupportedTypes() {
         assertEquals(ConnectorAuthType.OAUTH2, ConnectorAuthType.from("oauth2"));
         assertEquals(ConnectorAuthType.NONE, ConnectorAuthType.from("none"));
+        // Built in code and read back from the transport; a request never gets this far with it.
+        assertEquals(ConnectorAuthType.GOOGLE_ADC, ConnectorAuthType.from("google_adc"));
     }
 
     @Test
@@ -31,6 +33,14 @@ public class ConnectorAuthTypeTests {
     @Test
     public void isActive_isFalseOnlyForNone() {
         assertTrue(ConnectorAuthType.OAUTH2.isActive());
+        assertTrue(ConnectorAuthType.GOOGLE_ADC.isActive());
         assertFalse(ConnectorAuthType.NONE.isActive());
+    }
+
+    @Test
+    public void isUserWritable_isFalseOnlyForGoogleAdc() {
+        assertTrue(ConnectorAuthType.OAUTH2.isUserWritable());
+        assertTrue(ConnectorAuthType.NONE.isUserWritable());
+        assertFalse(ConnectorAuthType.GOOGLE_ADC.isUserWritable());
     }
 }

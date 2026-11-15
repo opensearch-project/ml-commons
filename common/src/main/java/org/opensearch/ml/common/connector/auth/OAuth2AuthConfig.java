@@ -74,6 +74,8 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         );
 
     public static final String GRANT_TYPE_CLIENT_CREDENTIALS = "client_credentials";
+    /** The JWT bearer grant of RFC 7523: the client authenticates with an assertion it signs ({@link #jwt}). */
+    public static final String GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer";
     /** Interactive, user-credential and refresh grants are never accepted (RFC 9700 section 2.4 for password). */
     public static final Set<String> DENIED_GRANT_TYPES = Set
         .of("password", "authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code");
@@ -84,11 +86,18 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     public static final String CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT = "private_key_jwt";
     public static final String NOT_AN_OBJECT_MESSAGE = "auth_config must be a JSON object";
     public static final String TYPE_REQUIRED_MESSAGE = "auth_config.type is required";
-    public static final String JWT_NOT_SUPPORTED_MESSAGE = "auth_config.jwt is not supported in this version";
+    public static final String INTERNAL_TYPE_MESSAGE = "auth_config type ["
+        + ConnectorAuthType.GOOGLE_ADC.getValue()
+        + "] is internal and cannot be configured";
     public static final String NONE_WITH_FIELDS_MESSAGE = "auth_config of type none must not contain other fields";
     public static final String PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE = "auth_config.client_auth_method ["
         + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
         + "] is not supported in this version";
+    public static final String JWT_REQUIRED_MESSAGE = "auth_config.jwt is required for the jwt-bearer grant";
+    public static final String JWT_ONLY_WITH_JWT_BEARER_MESSAGE = "auth_config.jwt is used only with grant_type " + GRANT_TYPE_JWT_BEARER;
+    public static final String JWT_BEARER_NEEDS_NONE_MESSAGE = "auth_config.client_auth_method must be none for the jwt-bearer grant";
+    public static final String CLIENT_SECRET_WITH_NONE_MESSAGE =
+        "auth_config.client_secret must not be set when client_auth_method is none";
     public static final String CLIENT_SECRET_MUST_BE_REFERENCE_MESSAGE =
         "auth_config.client_secret must be a ${credential.<key>} reference; put the secret itself in the connector credential";
     public static final String TOKEN_URL_MUST_USE_HTTPS_MESSAGE = "auth_config.token_url must use https";
@@ -128,6 +137,8 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     @ToString.Exclude
     private final Map<String, String> tokenRequestParams;
     private final TokenResponseSpec tokenResponse;
+    /** The assertion of the JWT bearer grant; present exactly when {@link #grantType} is {@link #GRANT_TYPE_JWT_BEARER}. */
+    private final JwtSpec jwt;
     /**
      * In a partial update, the stored configuration this one replaces. Its members this one lacks are emitted as
      * empty arrays, so that a store which merges the update drops them. Never streamed, never read back.
@@ -148,6 +159,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         String audience,
         Map<String, String> tokenRequestParams,
         TokenResponseSpec tokenResponse,
+        JwtSpec jwt,
         OAuth2AuthConfig replaced
     ) {
         this.type = type;
@@ -160,10 +172,12 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         this.audience = audience;
         this.tokenRequestParams = tokenRequestParams == null ? Map.of() : Collections.unmodifiableMap(new TreeMap<>(tokenRequestParams));
         this.tokenResponse = tokenResponse == null ? TokenResponseSpec.defaults() : tokenResponse;
+        this.jwt = jwt;
         this.replaced = replaced;
         // The rules parse applies before it reads the members, for a configuration built or streamed instead: stored
-        // as it is, a block that fails them would not read back.
-        if (this.type == ConnectorAuthType.NONE && document().size() > 1) {
+        // as it is, a block that fails them would not read back. A none block holds only its type; so does the
+        // internal google_adc one, which stands for an identity the node holds rather than one that is configured.
+        if ((this.type == ConnectorAuthType.NONE || this.type == ConnectorAuthType.GOOGLE_ADC) && document().size() > 1) {
             throw new IllegalArgumentException(NONE_WITH_FIELDS_MESSAGE);
         }
         validateMembers();
@@ -181,6 +195,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             in.readOptionalString(),
             in.readMap(StreamInput::readString, StreamInput::readString),
             new TokenResponseSpec(in),
+            in.readBoolean() ? new JwtSpec(in) : null,
             null
         );
     }
@@ -197,6 +212,10 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         out.writeOptionalString(audience);
         out.writeMap(tokenRequestParams, StreamOutput::writeString, StreamOutput::writeString);
         tokenResponse.writeTo(out);
+        out.writeBoolean(jwt != null);
+        if (jwt != null) {
+            jwt.writeTo(out);
+        }
     }
 
     /**
@@ -228,6 +247,9 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             throw new IllegalArgumentException("auth_config.type must be a string");
         }
         ConnectorAuthType type = ConnectorAuthType.from(typeNode.stringValue());
+        if (!type.isUserWritable()) {
+            throw new IllegalArgumentException(INTERNAL_TYPE_MESSAGE);
+        }
 
         for (String field : root.propertyNames()) {
             if (!FIELDS.contains(field)) {
@@ -237,9 +259,6 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         if (type == ConnectorAuthType.NONE && root.size() > 1) {
             throw new IllegalArgumentException(NONE_WITH_FIELDS_MESSAGE);
         }
-        if (!isAbsent(root.get(JWT_FIELD))) {
-            throw new IllegalArgumentException(JWT_NOT_SUPPORTED_MESSAGE);
-        }
 
         String tokenUrl = optionalString(root, TOKEN_URL_FIELD);
         String grantType = optionalString(root, GRANT_TYPE_FIELD);
@@ -248,8 +267,12 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         String clientSecret = optionalString(root, CLIENT_SECRET_FIELD);
         String scope = optionalString(root, SCOPE_FIELD);
         String audience = optionalString(root, AUDIENCE_FIELD);
-        Map<String, String> tokenRequestParams = parseTokenRequestParams(root.get(TOKEN_REQUEST_PARAMS_FIELD));
+        Map<String, String> tokenRequestParams = parseStringMap(
+            root.get(TOKEN_REQUEST_PARAMS_FIELD),
+            "auth_config." + TOKEN_REQUEST_PARAMS_FIELD
+        );
         TokenResponseSpec tokenResponse = parseTokenResponse(root.get(TOKEN_RESPONSE_FIELD));
+        JwtSpec jwt = parseJwt(root.get(JWT_FIELD));
 
         return OAuth2AuthConfig
             .builder()
@@ -263,6 +286,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             .audience(audience)
             .tokenRequestParams(tokenRequestParams)
             .tokenResponse(tokenResponse)
+            .jwt(jwt)
             .build();
     }
 
@@ -366,6 +390,12 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         addKey(keys, scope);
         addKey(keys, audience);
         tokenRequestParams.values().forEach(value -> addKey(keys, value));
+        if (jwt != null) {
+            addKey(keys, jwt.getPrivateKey());
+            addKey(keys, jwt.getIssuer());
+            addKey(keys, jwt.getSubject());
+            addKey(keys, jwt.getAudience());
+        }
         return Collections.unmodifiableSet(keys);
     }
 
@@ -397,7 +427,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     /**
      * The members present, in the member order of the block, with {@code token_request_params} in key order. An empty
      * {@code token_request_params} and a default {@code token_response} are omitted; the {@code grant_type} default of
-     * {@code oauth2} is emitted.
+     * {@code oauth2} is emitted, and so is the {@code jwt} block when there is one.
      */
     private Map<String, Object> document() {
         Map<String, Object> document = new LinkedHashMap<>();
@@ -414,6 +444,9 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         }
         if (!tokenResponse.equals(TokenResponseSpec.defaults())) {
             document.put(TOKEN_RESPONSE_FIELD, tokenResponse.document());
+        }
+        if (jwt != null) {
+            document.put(JWT_FIELD, jwt.document());
         }
         return document;
     }
@@ -444,8 +477,9 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
      * The value rules of the block, run once the members are assigned so that a configuration parsed, built or
      * streamed meets the same ones: no empty member, no reserved or referencing {@code token_request_params},
      * placeholders only as whole-value credential references where a reference is allowed, {@code client_secret} a
-     * reference, and for {@code oauth2} a well-formed {@code token_url}, a supported {@code client_auth_method} and an
-     * allowed grant.
+     * reference, and for {@code oauth2} a well-formed {@code token_url}, a supported {@code client_auth_method}, an
+     * allowed grant, and a {@code jwt} block exactly for the jwt-bearer grant, which authenticates with the assertion
+     * alone: {@code client_auth_method} none and no {@code client_secret}.
      */
     private void validateMembers() {
         checkNotEmpty("auth_config." + TOKEN_URL_FIELD, tokenUrl);
@@ -502,19 +536,41 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             }
             // Required for oauth2.
             validateClientAuthMethod(clientAuthMethod);
+            validateGrantType(grantType);
+            validateGrantCombination();
         }
-        validateGrantType(grantType);
+    }
+
+    /**
+     * The grant, the client authentication method and the {@code jwt} block agree: the jwt-bearer grant has a block
+     * and authenticates with the assertion alone (RFC 7523 section 2.1, so {@code client_auth_method} none), every
+     * other grant has no block, and a client that authenticates with no method sends no secret.
+     */
+    private void validateGrantCombination() {
+        if (GRANT_TYPE_JWT_BEARER.equals(grantType)) {
+            if (jwt == null) {
+                throw new IllegalArgumentException(JWT_REQUIRED_MESSAGE);
+            }
+            if (!CLIENT_AUTH_METHOD_NONE.equals(clientAuthMethod)) {
+                throw new IllegalArgumentException(JWT_BEARER_NEEDS_NONE_MESSAGE);
+            }
+        } else if (jwt != null) {
+            throw new IllegalArgumentException(JWT_ONLY_WITH_JWT_BEARER_MESSAGE);
+        }
+        if (CLIENT_AUTH_METHOD_NONE.equals(clientAuthMethod) && clientSecret != null) {
+            throw new IllegalArgumentException(CLIENT_SECRET_WITH_NONE_MESSAGE);
+        }
     }
 
     /** {@code value}, when present, is not the empty string. */
-    private static void checkNotEmpty(String path, String value) {
+    static void checkNotEmpty(String path, String value) {
         if (value != null && value.isEmpty()) {
             throw new IllegalArgumentException(path + " must not be empty");
         }
     }
 
     /** {@code value}, when present, contains no <code>${</code> or is exactly one {@code ${credential.<key>}} reference. */
-    private static void checkPlaceholders(String path, String value) {
+    static void checkPlaceholders(String path, String value) {
         if (value == null) {
             return;
         }
@@ -527,7 +583,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     }
 
     /** Like {@link #checkPlaceholders}, for members that name a method or a field and so cannot be references. */
-    private static void checkLiteral(String path, String value) {
+    static void checkLiteral(String path, String value) {
         if (value != null && value.contains("${")) {
             throw new IllegalArgumentException(
                 path + (value.contains(PARAMETERS_PLACEHOLDER) ? PARAMETERS_NOT_ALLOWED : " must be a literal value, not a reference")
@@ -571,24 +627,49 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         }
     }
 
-    private static Map<String, String> parseTokenRequestParams(JsonNode node) {
+    /** An object of strings at {@code path}, or null when the field is absent. */
+    private static Map<String, String> parseStringMap(JsonNode node, String path) {
         if (isAbsent(node)) {
             return null;
         }
-        String path = "auth_config." + TOKEN_REQUEST_PARAMS_FIELD;
         if (!node.isObject()) {
             throw new IllegalArgumentException(path + " must be a JSON object");
         }
-        Map<String, String> params = new LinkedHashMap<>();
+        Map<String, String> members = new LinkedHashMap<>();
         for (Map.Entry<String, JsonNode> entry : node.properties()) {
             String name = entry.getKey();
             JsonNode value = entry.getValue();
             if (!value.isString()) {
                 throw new IllegalArgumentException(path + "." + name + " must be a string");
             }
-            params.put(name, value.stringValue());
+            members.put(name, value.stringValue());
         }
-        return params;
+        return members;
+    }
+
+    private static JwtSpec parseJwt(JsonNode node) {
+        if (isAbsent(node)) {
+            return null;
+        }
+        String path = "auth_config." + JWT_FIELD;
+        if (!node.isObject()) {
+            throw new IllegalArgumentException(path + " must be a JSON object");
+        }
+        for (String field : node.propertyNames()) {
+            if (!JwtSpec.FIELDS.contains(field)) {
+                throw new IllegalArgumentException("Unknown " + path + " field [" + field + "]");
+            }
+        }
+        return JwtSpec
+            .builder()
+            .issuer(optionalString(node, JwtSpec.ISSUER_FIELD, path))
+            .subject(optionalString(node, JwtSpec.SUBJECT_FIELD, path))
+            .audience(optionalString(node, JwtSpec.AUDIENCE_FIELD, path))
+            .signingAlg(optionalString(node, JwtSpec.SIGNING_ALG_FIELD, path))
+            .lifetimeSeconds(optionalInteger(node, JwtSpec.LIFETIME_SECONDS_FIELD, path))
+            .additionalClaims(parseStringMap(node.get(JwtSpec.ADDITIONAL_CLAIMS_FIELD), path + "." + JwtSpec.ADDITIONAL_CLAIMS_FIELD))
+            .privateKey(optionalString(node, JwtSpec.PRIVATE_KEY_FIELD, path))
+            .build();
     }
 
     private static TokenResponseSpec parseTokenResponse(JsonNode node) {

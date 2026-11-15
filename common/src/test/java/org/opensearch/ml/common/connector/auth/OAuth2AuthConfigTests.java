@@ -10,12 +10,21 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_JWT_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_OAUTH2_JSON;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ISSUER;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.JWT_BEARER_JSON;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.JWT_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.OAUTH2_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.STORED_WITH_MARKERS_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.document;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwt;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearer;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearerBuilder;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.parseMessage;
@@ -35,9 +44,8 @@ import org.opensearch.Version;
 
 public class OAuth2AuthConfigTests {
 
-    /** {@link AuthTestFixtures#OAUTH2_JSON} with one member added or replaced; {@code valueJson} is raw JSON, null removes the member. */
-    private static Map<String, Object> oauth2With(String field, String valueJson) {
-        Map<String, Object> block = document(OAUTH2_JSON);
+    /** The object {@code baseJson} denotes with one member added or replaced; {@code valueJson} is raw JSON, null removes the member. */
+    private static Map<String, Object> with(Map<String, Object> block, String field, String valueJson) {
         if (valueJson == null) {
             block.remove(field);
         } else {
@@ -46,8 +54,26 @@ public class OAuth2AuthConfigTests {
         return block;
     }
 
+    /** {@link AuthTestFixtures#OAUTH2_JSON} with one member added or replaced; {@code valueJson} is raw JSON, null removes the member. */
+    private static Map<String, Object> oauth2With(String field, String valueJson) {
+        return with(document(OAUTH2_JSON), field, valueJson);
+    }
+
     private static Map<String, Object> oauth2Without(String field) {
         return oauth2With(field, null);
+    }
+
+    /** {@link AuthTestFixtures#JWT_BEARER_JSON} with one top-level member added or replaced; null removes the member. */
+    private static Map<String, Object> jwtBearerWith(String field, String valueJson) {
+        return with(document(JWT_BEARER_JSON), field, valueJson);
+    }
+
+    /** {@link AuthTestFixtures#JWT_BEARER_JSON} with one member of its {@code jwt} block added or replaced; null removes the member. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> jwtWith(String member, String valueJson) {
+        Map<String, Object> block = document(JWT_BEARER_JSON);
+        with((Map<String, Object>) block.get(OAuth2AuthConfig.JWT_FIELD), member, valueJson);
+        return block;
     }
 
     private static IllegalArgumentException canonicalFails(String tokenUrl) {
@@ -188,7 +214,9 @@ public class OAuth2AuthConfigTests {
 
     @Test
     public void parse_clientAuthMethodValues() {
-        assertEquals("none", OAuth2AuthConfig.parse(oauth2With("client_auth_method", "'none'")).getClientAuthMethod());
+        Map<String, Object> none = oauth2With("client_auth_method", "'none'");
+        none.remove("client_secret");
+        assertEquals("none", OAuth2AuthConfig.parse(none).getClientAuthMethod());
         assertEquals(
             "auth_config.client_auth_method must be one of client_secret_basic, client_secret_post, none",
             parseMessage(oauth2With("client_auth_method", "'Client_Secret_Post'"))
@@ -200,16 +228,10 @@ public class OAuth2AuthConfigTests {
     }
 
     @Test
-    public void parse_jwtAndPrivateKeyJwtAreNotSupported() {
+    public void parse_privateKeyJwtAndTokenRequestParamReferencesAreNotSupported() {
         assertEquals(
             OAuth2AuthConfig.PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE,
             parseMessage(oauth2With("client_auth_method", "'private_key_jwt'"))
-        );
-        assertEquals(
-            OAuth2AuthConfig.JWT_NOT_SUPPORTED_MESSAGE,
-            parseMessage(
-                oauth2With("jwt", "{'issuer':'app','private_key':'${credential.private_key}','signing_alg':'RS256','lifetime_seconds':60}")
-            )
         );
         assertEquals(
             "auth_config.token_request_params.apikey: ${credential.<key>} references in token_request_params are not supported in this version",
@@ -234,12 +256,11 @@ public class OAuth2AuthConfigTests {
 
     @Test
     public void parse_vendorGrantTypesAreAccepted() {
-        for (String grant : new String[] {
-            "client_credentials",
-            "urn:ibm:params:oauth:grant-type:apikey",
-            "urn:ietf:params:oauth:grant-type:jwt-bearer" }) {
+        for (String grant : new String[] { "client_credentials", "urn:ibm:params:oauth:grant-type:apikey" }) {
             assertEquals(grant, OAuth2AuthConfig.parse(oauth2With("grant_type", "'" + grant + "'")).getGrantType());
         }
+        // The jwt-bearer grant comes with its block and without client authentication.
+        assertEquals(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER, OAuth2AuthConfig.parse(document(JWT_BEARER_JSON)).getGrantType());
     }
 
     @Test
@@ -294,14 +315,17 @@ public class OAuth2AuthConfigTests {
             { "token_url", "'https://${parameters.x}/token'", "auth_config.token_url" },
             { "token_request_params", "{'resource':'${parameters.x}'}", "auth_config.token_request_params.resource" },
             { "token_response", "{'access_token_field':'${parameters.x}'}", "auth_config.token_response.access_token_field" },
-            { "grant_type", "'${parameters.x}'", "auth_config.grant_type" } };
+            { "grant_type", "'${parameters.x}'", "auth_config.grant_type" },
+            { "jwt", "{'issuer':'${parameters.x}','private_key':'${credential.k}'}", "auth_config.jwt.issuer" },
+            {
+                "jwt",
+                "{'issuer':'a','additional_claims':{'scope':'${parameters.x}'},'private_key':'${credential.k}'}",
+                "auth_config.jwt.additional_claims.scope" } };
         for (String[] c : cases) {
             String message = parseMessage(oauth2With(c[0], c[1]));
             assertEquals(c[2] + " must not use ${parameters.*}: auth_config is read from the stored connector only", message);
             assertFalse(message, message.contains("parameters.x"));
         }
-        // A jwt block is rejected before any of its values is read.
-        assertEquals(OAuth2AuthConfig.JWT_NOT_SUPPORTED_MESSAGE, parseMessage(oauth2With("jwt", "{'issuer':'${parameters.x}'}")));
     }
 
     /** {@code leafJson} nested {@code depth} objects deep under keys of {@code keyLength} characters. */
@@ -316,14 +340,15 @@ public class OAuth2AuthConfigTests {
 
     @Test
     public void parse_deepValuesAreRejectedAtTheirRootWithoutBeingWalked() {
-        // 400 levels under 1,000-character keys: each value is rejected at its root, and no path down to the leaf is built.
+        // 400 levels under 1,000-character keys: each value is rejected at its root, and no path down to the leaf is
+        // built. The message is the one a shallow value of the wrong type gets.
         String deep = nested(400, 1000, "\"${parameters.x}\"");
-        assertEquals(OAuth2AuthConfig.JWT_NOT_SUPPORTED_MESSAGE, parseMessage(oauth2With("jwt", deep)));
-        // Elsewhere the message is the one a shallow value of the wrong type gets.
         String[][] cases = {
             { "scope", deep, "1" },
             { "token_request_params", "{'resource':" + deep + "}", "{'resource':1}" },
-            { "token_response", "{'default_ttl_seconds':" + deep + "}", "{'default_ttl_seconds':true}" } };
+            { "token_response", "{'default_ttl_seconds':" + deep + "}", "{'default_ttl_seconds':true}" },
+            { "jwt", "{'issuer':" + deep + "}", "{'issuer':1}" },
+            { "jwt", "{'additional_claims':{'scope':" + deep + "}}", "{'additional_claims':{'scope':1}}" } };
         for (String[] c : cases) {
             assertEquals(c[0], parseMessage(oauth2With(c[0], c[2])), parseMessage(oauth2With(c[0], c[1])));
         }
@@ -494,7 +519,7 @@ public class OAuth2AuthConfigTests {
             .builder()
             .type(ConnectorAuthType.OAUTH2)
             .tokenUrl("${credential.token_uri}")
-            .clientAuthMethod("none")
+            .clientAuthMethod("client_secret_post")
             .clientId("${credential.client_id}")
             .clientSecret("${credential.client_secret}")
             .scope("${credential.scope}")
@@ -606,12 +631,124 @@ public class OAuth2AuthConfigTests {
 
     @Test
     public void stream_roundTripIsEqualAndDropsTheReplacedConfiguration() throws IOException {
-        for (OAuth2AuthConfig config : new OAuth2AuthConfig[] { fullOauth2(), oauth2(), OAuth2AuthConfig.NONE }) {
+        for (OAuth2AuthConfig config : new OAuth2AuthConfig[] {
+            fullOauth2(),
+            oauth2(),
+            OAuth2AuthConfig.NONE,
+            jwtBearer(),
+            fullJwtBearer() }) {
             assertEquals(config, roundTrip(config, Version.CURRENT, OAuth2AuthConfig::new));
         }
         OAuth2AuthConfig read = roundTrip(oauth2().replacing(fullOauth2()), Version.CURRENT, OAuth2AuthConfig::new);
         assertNull(read.getReplaced());
         assertEquals(OAUTH2_JSON, toJson(read));
+    }
+
+    @Test
+    public void parse_jwtBlock() {
+        assertEquals(jwtBearer(), OAuth2AuthConfig.parse(document(JWT_BEARER_JSON)));
+        OAuth2AuthConfig config = OAuth2AuthConfig
+            .parse(jwtBearerWith("jwt", FULL_JWT_JSON.replace("\"lifetime_seconds\":120", "\"lifetime_seconds\":\"120\"")));
+        JwtSpec jwt = config.getJwt();
+        assertEquals(ISSUER, jwt.getIssuer());
+        assertEquals("user@example.com", jwt.getSubject());
+        assertEquals("https://api.example", jwt.getAudience());
+        assertEquals("RS256", jwt.getSigningAlg());
+        assertEquals("an integral string, as some metadata stores return numbers", 120, jwt.getLifetimeSeconds());
+        assertEquals(List.of("scope", "tenant"), List.copyOf(jwt.getAdditionalClaims().keySet()));
+        assertEquals("${credential.k}", jwt.getPrivateKey());
+        assertEquals(Set.of("k"), config.referencedCredentialKeys());
+        // JSON null inside the block means absent.
+        assertNull(OAuth2AuthConfig.parse(jwtWith("subject", "null")).getJwt().getSubject());
+    }
+
+    @Test
+    public void parse_jwtShape() {
+        assertEquals("auth_config.jwt must be a JSON object", parseMessage(jwtBearerWith("jwt", "'x'")));
+        assertEquals("Unknown auth_config.jwt field [kid]", parseMessage(jwtWith("kid", "'k1'")));
+        assertEquals("auth_config.jwt.issuer must be a string", parseMessage(jwtWith("issuer", "1")));
+        assertEquals("auth_config.jwt.lifetime_seconds must be an integer", parseMessage(jwtWith("lifetime_seconds", "'1m'")));
+        assertEquals("auth_config.jwt.additional_claims must be a JSON object", parseMessage(jwtWith("additional_claims", "'scope=x'")));
+        assertEquals("auth_config.jwt.additional_claims.scope must be a string", parseMessage(jwtWith("additional_claims", "{'scope':1}")));
+        // The value rules of the block apply to a parsed one.
+        assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, parseMessage(jwtWith("issuer", null)));
+        assertEquals(JwtSpec.PRIVATE_KEY_REQUIRED_MESSAGE, parseMessage(jwtWith("private_key", null)));
+    }
+
+    @Test
+    public void parse_googleAdcIsInternal() {
+        assertEquals(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE, parseMessage(document("{'type':'google_adc'}")));
+        // Refused once the type is read, before any other member is looked at, on the stored path too.
+        assertEquals(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE, parseMessage(document("{'type':'google_adc','bogus':1}")));
+        assertEquals(
+            OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE,
+            assertThrows(IllegalArgumentException.class, () -> OAuth2AuthConfig.fromStored(document("{'type':'google_adc'}"))).getMessage()
+        );
+    }
+
+    @Test
+    public void build_googleAdcHoldsOnlyType() throws IOException {
+        OAuth2AuthConfig adc = OAuth2AuthConfig.builder().type(ConnectorAuthType.GOOGLE_ADC).build();
+        assertEquals("{\"type\":\"google_adc\"}", toJson(adc));
+        assertTrue(adc.getType().isActive());
+        assertNull("the client_credentials default applies to oauth2 only", adc.getGrantType());
+        assertTrue(adc.referencedCredentialKeys().isEmpty());
+        assertEquals(OAuth2AuthConfig.NONE_WITH_FIELDS_MESSAGE, buildMessage(adc.toBuilder().scope("x")));
+        assertEquals(adc, roundTrip(adc, Version.CURRENT, OAuth2AuthConfig::new));
+    }
+
+    @Test
+    public void build_jwtBearerAuthenticatesWithTheAssertionAlone() {
+        assertEquals("a client id may accompany the assertion", "app", jwtBearerBuilder().clientId("app").build().getClientId());
+        assertEquals(OAuth2AuthConfig.JWT_REQUIRED_MESSAGE, buildMessage(jwtBearerBuilder().jwt(null)));
+        assertEquals(
+            OAuth2AuthConfig.JWT_BEARER_NEEDS_NONE_MESSAGE,
+            buildMessage(jwtBearerBuilder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC))
+        );
+        assertEquals(OAuth2AuthConfig.CLIENT_SECRET_WITH_NONE_MESSAGE, buildMessage(jwtBearerBuilder().clientSecret("${credential.s}")));
+        // Whatever the grant, a client that authenticates with no method sends no secret.
+        assertEquals(
+            OAuth2AuthConfig.CLIENT_SECRET_WITH_NONE_MESSAGE,
+            buildMessage(oauth2Builder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE))
+        );
+        assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, buildMessage(oauth2Builder().jwt(jwt())));
+        // The parse applies the same rules.
+        assertEquals(OAuth2AuthConfig.JWT_REQUIRED_MESSAGE, parseMessage(jwtBearerWith("jwt", null)));
+        assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, parseMessage(oauth2With("jwt", JWT_JSON)));
+    }
+
+    @Test
+    public void referencedCredentialKeys_includeTheJwtReferences() {
+        OAuth2AuthConfig config = jwtBearerBuilder()
+            .jwt(jwtBuilder().issuer("${credential.i}").subject("${credential.u}").audience("${credential.a}").build())
+            .build();
+        assertEquals(Set.of("a", "i", "k", "u"), config.referencedCredentialKeys());
+    }
+
+    @Test
+    public void toXContent_emitsTheJwtBlockAfterTokenResponse() throws IOException {
+        assertEquals(JWT_BEARER_JSON, toJson(jwtBearer()));
+        Map<String, Object> full = emitted(fullJwtBearer());
+        assertEquals(
+            List.of("type", "token_url", "grant_type", "client_auth_method", "token_request_params", "token_response", "jwt"),
+            List.copyOf(full.keySet())
+        );
+        assertEquals(document(FULL_JWT_JSON), full.get(OAuth2AuthConfig.JWT_FIELD));
+    }
+
+    @Test
+    public void replacing_marksRemovedJwtMembersAndADroppedJwtBlock() throws IOException {
+        Map<String, Object> narrowed = emitted(jwtBearer().replacing(fullJwtBearer()));
+        assertEquals(withMarkers(JWT_JSON, "subject", "audience", "additional_claims"), narrowed.get(OAuth2AuthConfig.JWT_FIELD));
+        assertEquals(List.of(), narrowed.get(OAuth2AuthConfig.TOKEN_REQUEST_PARAMS_FIELD));
+        assertEquals("what the replacement emits reads back as the replacement", jwtBearer(), OAuth2AuthConfig.fromStored(narrowed));
+        assertTrue(jwtBearer().dropsMembers(fullJwtBearer()));
+        assertFalse(fullJwtBearer().dropsMembers(jwtBearer()));
+
+        Map<String, Object> dropped = emitted(oauth2().replacing(jwtBearer()));
+        assertEquals(List.of(), dropped.get(OAuth2AuthConfig.JWT_FIELD));
+        assertEquals(oauth2(), OAuth2AuthConfig.fromStored(dropped));
+        assertTrue(oauth2().dropsMembers(jwtBearer()));
     }
 
     @Test

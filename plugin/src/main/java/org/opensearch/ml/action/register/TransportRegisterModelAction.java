@@ -306,9 +306,12 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                 mlFeatureEnabledSetting,
                                 clusterService::state
                             );
+                        // The inline credential is still plaintext here, so a referenced private key is parsed now.
+                        AuthConfigValidator.validatePrivateKey(inlineConnector.getAuthConfig(), inlineConnector.getCredential());
                         AuthConfigValidator
                             .validate(
                                 inlineConnector,
+                                inlineConnector.getAuthConfig(),
                                 AuthConfigValidator.keysOf(inlineConnector.getCredential()),
                                 mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
                             );
@@ -509,10 +512,13 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             Map<String, String> headers = action.getHeaders();
             AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
         }
-        // A hidden model skips only the endpoint allowlist above; its auth_config is validated like any other.
+        // A hidden model skips only the endpoint allowlist above; its auth_config is validated like any other. The
+        // inline credential is still plaintext here, so a referenced private key is parsed now.
+        AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), connector.getCredential());
         AuthConfigValidator
             .validate(
                 connector,
+                connector.getAuthConfig(),
                 AuthConfigValidator.keysOf(connector.getCredential()),
                 mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
             );

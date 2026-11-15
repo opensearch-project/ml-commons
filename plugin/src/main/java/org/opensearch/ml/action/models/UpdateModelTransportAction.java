@@ -162,6 +162,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 AuthConfigValidator
                     .validate(
                         supplied,
+                        supplied.getAuthConfig(),
                         AuthConfigValidator.keysOf(supplied.getCredential()),
                         mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
                     );
@@ -493,7 +494,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         .touchesAuthOrProtocol(updateModelInput.getConnector().getAuthConfig(), updatedProtocol, connector.getProtocol());
                     Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
                     TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
-                    boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys, allowlist);
+                    boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update
@@ -508,7 +509,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // A supplied credential replaces the stored one, so its keys are the ones the references must name.
                     Set<String> keyView = hasSuppliedCredential ? AuthConfigValidator.keysOf(suppliedCredential) : storedKeys;
                     try {
-                        if (AuthConfigValidator.validateOrGrandfather(connector, keyView, allowlist, authOrProtocolTouched, storedPassed)) {
+                        // A private key the supplied credential holds is parsed while it is plaintext.
+                        AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), suppliedCredential);
+                        if (AuthConfigValidator
+                            .validateOrGrandfather(
+                                connector,
+                                connector.getAuthConfig(),
+                                keyView,
+                                allowlist,
+                                authOrProtocolTouched,
+                                storedPassed
+                            )) {
                             log
                                 .warn(
                                     "Model {} keeps a stored inline auth_config that fails validation; this update leaves it unchanged",

@@ -37,7 +37,12 @@ public class AuthorizationProviderFactory {
     public AuthorizationProvider providerFor(Connector connector) {
         Map<String, String> credential = connector.getDecryptedCredential();
         OAuth2AuthConfig config = AuthConfigValidator
-            .validate(connector, AuthConfigValidator.keysOf(credential), settings.getTrustedOAuth2TokenEndpoints());
+            .validate(
+                connector,
+                connector.getAuthConfig(),
+                AuthConfigValidator.keysOf(credential),
+                settings.getTrustedOAuth2TokenEndpoints()
+            );
         // Taken now: some callers clear the connector's decrypted credential when their action completes.
         CredentialSnapshot snapshot = CredentialSnapshot.of(credential, config.referencedCredentialKeys());
         CredentialResolver credentials = listener -> listener.onResponse(snapshot);

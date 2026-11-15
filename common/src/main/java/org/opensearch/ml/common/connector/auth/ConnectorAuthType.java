@@ -13,7 +13,12 @@ import lombok.Getter;
  */
 public enum ConnectorAuthType {
     OAUTH2("oauth2"),
-    NONE("none");
+    NONE("none"),
+    /**
+     * Google application default credentials: the identity of a legacy {@code google_cloud} connector without a
+     * service account. Built in code for such a connector, never written by a request.
+     */
+    GOOGLE_ADC("google_adc");
 
     @Getter
     private final String value;
@@ -39,5 +44,10 @@ public enum ConnectorAuthType {
     /** True for every type that attaches credentials to requests, that is, for anything other than {@link #NONE}. */
     public boolean isActive() {
         return this != NONE;
+    }
+
+    /** True for every type a request may set; false for {@link #GOOGLE_ADC}, which only code builds. */
+    public boolean isUserWritable() {
+        return this != GOOGLE_ADC;
     }
 }

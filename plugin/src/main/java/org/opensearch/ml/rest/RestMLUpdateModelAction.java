@@ -95,6 +95,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler implements RestRequ
 
     @Override
     public Set<String> getFilteredFields() {
-        return Set.of("connector.credential", "*.Authorization", "connector.auth_config.client_secret");
+        return Set
+            .of("connector.credential", "*.Authorization", "connector.auth_config.client_secret", "connector.auth_config.jwt.private_key");
     }
 }
