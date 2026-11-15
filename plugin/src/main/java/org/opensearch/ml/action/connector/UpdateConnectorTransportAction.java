@@ -261,8 +261,9 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         } else {
                             listener
                                 .onFailure(
-                                    new IllegalArgumentException(
-                                        "You don't have permission to update the connector, connector id: " + connectorId
+                                    new OpenSearchStatusException(
+                                        "You don't have permission to update the connector, connector id: " + connectorId,
+                                        RestStatus.FORBIDDEN
                                     )
                                 );
                         }

@@ -638,6 +638,22 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             );
             assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
             assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+
+            // Sending access control fields hits the owner/admin check first, which should also be a 403
+            mlUpdateModelGroupInput = createUpdateModelGroupInput(
+                modelGroupId,
+                "name",
+                "description",
+                Arrays.asList("IT"),
+                AccessMode.RESTRICTED,
+                null
+            );
+            e = expectThrows(
+                ResponseException.class,
+                () -> updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
         });
     }
 
