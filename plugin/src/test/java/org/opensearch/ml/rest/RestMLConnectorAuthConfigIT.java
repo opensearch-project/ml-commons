@@ -7,7 +7,10 @@ package org.opensearch.ml.rest;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.KeyPairGenerator;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +26,9 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.PrivateKeys;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.ConnectorProtocolValidator;
@@ -133,6 +138,14 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
     );
     /** The credential that holds the key {@link #OAUTH2} references. */
     private static final String CLIENT_SECRET = "{\"client_secret\": \"s\"}";
+    /** The members of a JWT bearer object before its jwt block; the default token endpoints admit the token URL. */
+    private static final String JWT_BEARER_MEMBERS = "\"type\": \"oauth2\", \"token_url\": \"https://oauth2.googleapis.com/token\", "
+        + "\"grant_type\": \""
+        + OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER
+        + "\", \"client_auth_method\": \"none\"";
+    private static final String ISSUER = "svc@project.iam.gserviceaccount.com";
+    private static final String SCOPE_CLAIM = "https://www.googleapis.com/auth/cloud-platform";
+    private static final String PRIVATE_KEY_REFERENCE = "${credential.private_key}";
     private static final String TERM_TYPE_NONE = "{\"query\": {\"term\": {\"auth_config.type\": \"none\"}}}";
     private static final String TERM_TYPE_OAUTH2 = "{\"query\": {\"term\": {\"auth_config.type\": \"oauth2\"}}}";
     private static final String EXISTS_SCOPE = "{\"query\": {\"exists\": {\"field\": \"auth_config.scope\"}}}";
@@ -418,9 +431,112 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
         }
     }
 
+    /**
+     * The JWT bearer grant on http: a configuration with a jwt block and client_auth_method none is stored and returned
+     * with the defaults filled in and without the key, which the credential holds; the block's rules and the key's form
+     * are checked on write.
+     */
+    @SuppressWarnings("unchecked")
+    public void testJwtBearerWritePathsAndRefusals() throws Exception {
+        byte[] encoded = generatedRsaKey();
+        String pem = pem("PRIVATE KEY", encoded);
+        String jwtBearer = jwtBearer(", \"additional_claims\": {\"scope\": \"" + SCOPE_CLAIM + "\"}");
+        updateClusterSettings(AUTH_ENABLED, true);
+        try {
+            String c1 = registerConnector(httpConnector(PARAMETERS, jwtBearer, privateKeyCredential(pem)));
+            String getBody = EntityUtils.toString(request("GET", CONNECTORS + c1, "").getEntity(), StandardCharsets.UTF_8);
+            assertFalse("the key stays in the credential", getBody.contains("PRIVATE KEY"));
+            Map<String, Object> created = (Map<String, Object>) XContentHelper
+                .convertToMap(JsonXContent.jsonXContent, getBody, true)
+                .get("auth_config");
+            assertEquals(List.of("type", "token_url", "grant_type", "client_auth_method", "jwt"), new ArrayList<>(created.keySet()));
+            assertEquals(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER, created.get("grant_type"));
+            assertEquals("none", created.get("client_auth_method"));
+            Map<String, Object> jwt = (Map<String, Object>) created.get("jwt");
+            assertEquals(
+                List.of("issuer", "signing_alg", "lifetime_seconds", "additional_claims", "private_key"),
+                new ArrayList<>(jwt.keySet())
+            );
+            assertEquals(ISSUER, jwt.get("issuer"));
+            assertEquals("RS256", jwt.get("signing_alg"));
+            assertEquals(60, jwt.get("lifetime_seconds"));
+            assertEquals(Map.of("scope", SCOPE_CLAIM), jwt.get("additional_claims"));
+            assertEquals(PRIVATE_KEY_REFERENCE, jwt.get("private_key"));
+            Map<String, Object> stored = storedCredential(c1);
+            assertEquals(Set.of("private_key"), stored.keySet());
+            assertNotEquals("the credential is stored encrypted", pem, stored.get("private_key"));
+
+            // The GET body sent back without credential is written.
+            updateConnector(c1, getBody);
+            assertEquals(created, authConfigOf(getConnector(c1)));
+
+            // The block's rules, checked as the request is parsed.
+            Map<String, String> refusals = new LinkedHashMap<>();
+            refusals.put("{" + JWT_BEARER_MEMBERS + "}", OAuth2AuthConfig.JWT_REQUIRED_MESSAGE);
+            refusals.put(jwtBearer("").replace("\"none\"", "\"client_secret_post\""), OAuth2AuthConfig.JWT_BEARER_NEEDS_NONE_MESSAGE);
+            refusals.put(jwtBearer(", \"additional_claims\": {\"iss\": \"other\"}"), JwtSpec.reservedClaimMessage("iss"));
+            refusals.put(jwtBearer(", \"signing_alg\": \"HS256\""), JwtSpec.SIGNING_ALG_MESSAGE);
+            refusals.put(jwtBearer(", \"signing_alg\": \"ES256\""), JwtSpec.signingAlgNotSupportedMessage("ES256"));
+            for (Map.Entry<String, String> refusal : refusals.entrySet()) {
+                assertRejected(
+                    RestStatus.BAD_REQUEST,
+                    refusal.getValue(),
+                    () -> createConnector(httpConnector(PARAMETERS, refusal.getKey(), privateKeyCredential(pem)))
+                );
+            }
+            // A key in another form is refused while the request credential is still plaintext: on create and on an
+            // update that supplies the credential.
+            String pkcs1 = privateKeyCredential(pem("RSA PRIVATE KEY", encoded));
+            assertRejected(
+                RestStatus.BAD_REQUEST,
+                PrivateKeys.INVALID_MESSAGE,
+                () -> createConnector(httpConnector(PARAMETERS, jwtBearer, pkcs1))
+            );
+            assertRejected(
+                RestStatus.BAD_REQUEST,
+                PrivateKeys.INVALID_MESSAGE,
+                () -> updateConnector(c1, "{\"credential\": " + pkcs1 + "}")
+            );
+            assertEquals(stored, storedCredential(c1));
+        } finally {
+            updateClusterSettings(AUTH_ENABLED, (Object) null);
+        }
+    }
+
     /** An oauth2 object of {@link #OAUTH2_MEMBERS} followed by {@code moreMembers}. */
     private static String oauth2(String moreMembers) {
         return "{" + OAUTH2_MEMBERS + moreMembers + "}";
+    }
+
+    /** A JWT bearer object of {@link #JWT_BEARER_MEMBERS} whose jwt block has the issuer, the key reference and {@code moreJwtMembers}. */
+    private static String jwtBearer(String moreJwtMembers) {
+        return "{"
+            + JWT_BEARER_MEMBERS
+            + ", \"jwt\": {\"issuer\": \""
+            + ISSUER
+            + "\", \"private_key\": \""
+            + PRIVATE_KEY_REFERENCE
+            + "\""
+            + moreJwtMembers
+            + "}}";
+    }
+
+    /** A credential holding {@code pem} under the key the jwt block references, its line breaks escaped for JSON. */
+    private static String privateKeyCredential(String pem) {
+        return "{\"private_key\": \"" + pem.replace("\n", "\\n") + "\"}";
+    }
+
+    /** The PKCS#8 encoding of a freshly generated RSA key. */
+    private static byte[] generatedRsaKey() throws GeneralSecurityException {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair().getPrivate().getEncoded();
+    }
+
+    /** {@code encoded} as a PEM document under {@code label}, with the body in 64-character lines as key files have it. */
+    private static String pem(String label, byte[] encoded) {
+        String body = Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(encoded);
+        return "-----BEGIN " + label + "-----\n" + body + "\n-----END " + label + "-----\n";
     }
 
     /** The token_response GET returns for a request that set only {@code default_ttl_seconds}: the full typed form. */

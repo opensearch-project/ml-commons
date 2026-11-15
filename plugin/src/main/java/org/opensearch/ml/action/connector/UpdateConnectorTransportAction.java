@@ -272,8 +272,6 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 ? AuthConfigValidator.keysOf(requestCredential)
                                 : storedKeys;
                             try {
-                                // A private key the request credential holds is parsed while it is plaintext.
-                                AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), requestCredential);
                                 if (AuthConfigValidator
                                     .validateOrGrandfather(
                                         connector,
@@ -289,6 +287,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                             connectorId
                                         );
                                 }
+                                // A private key the request credential holds is parsed while it is plaintext.
+                                AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), requestCredential);
                             } catch (IllegalArgumentException e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);

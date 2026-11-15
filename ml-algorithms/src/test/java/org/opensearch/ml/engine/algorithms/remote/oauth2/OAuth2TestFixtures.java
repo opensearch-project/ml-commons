@@ -8,13 +8,20 @@ package org.opensearch.ml.engine.algorithms.remote.oauth2;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
+import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE;
+import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.PublicKey;
 import java.util.ArrayDeque;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -123,6 +130,84 @@ public final class OAuth2TestFixtures {
         return snapshot(Map.of("client_secret", CLIENT_SECRET));
     }
 
+    /** The issuer of the jwt-bearer configurations: a service account. */
+    public static final String ISSUER = "svc@project.iam.gserviceaccount.com";
+    /** The credential key the jwt-bearer configurations reference for their private key. */
+    public static final String PRIVATE_KEY_KEY = "private_key";
+    /** A key in a form the signer refuses, PKCS#1; its body looks like key material that no message or log line may echo. */
+    public static final String PKCS1_PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKnever-echoed\n-----END RSA PRIVATE KEY-----";
+
+    /**
+     * A jwt-bearer configuration for {@link #PUBLIC_TOKEN_URL}: the grant, {@code client_auth_method} none, the extra
+     * members {@code members} (single-quoted JSON) and a jwt block with the issuer {@link #ISSUER}, the key referenced as
+     * {@code ${credential.private_key}} and the extra block members {@code jwtMembers}, as JSON.
+     */
+    public static String jwtBearerBlock(String members, String jwtMembers) {
+        return json(
+            "{'type':'oauth2','token_url':'"
+                + PUBLIC_TOKEN_URL
+                + "','grant_type':'"
+                + GRANT_TYPE_JWT_BEARER
+                + "','client_auth_method':'"
+                + CLIENT_AUTH_METHOD_NONE
+                + "'"
+                + (members.isEmpty() ? "" : "," + members)
+                + ",'jwt':{'issuer':'"
+                + ISSUER
+                + "','private_key':'${credential."
+                + PRIVATE_KEY_KEY
+                + "}'"
+                + (jwtMembers.isEmpty() ? "" : "," + jwtMembers)
+                + "}}"
+        );
+    }
+
+    /** The parsed {@link #jwtBearerBlock}. */
+    public static OAuth2AuthConfig jwtBearerConfig(String members, String jwtMembers) {
+        return parse(jwtBearerBlock(members, jwtMembers));
+    }
+
+    /** The smallest jwt-bearer configuration: no client id, no subject, no audience, the default algorithm and lifetime. */
+    public static OAuth2AuthConfig jwtBearerConfig() {
+        return jwtBearerConfig("", "");
+    }
+
+    /** Generated once, since key generation is slow; loaded only by the tests that sign. */
+    private static final class Keys {
+        static final KeyPair RSA = generate();
+
+        private static KeyPair generate() {
+            try {
+                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+                generator.initialize(2048);
+                return generator.generateKeyPair();
+            } catch (GeneralSecurityException e) {
+                throw new AssertionError(e);
+            }
+        }
+    }
+
+    /** The public half of the key {@link #rsaPkcs8Pem()} holds, for verifying what it signed. */
+    public static PublicKey rsaPublicKey() {
+        return Keys.RSA.getPublic();
+    }
+
+    /** An unencrypted PKCS#8 PEM document holding an RSA key, with its body in 64-character lines as a key file has it. */
+    public static String rsaPkcs8Pem() {
+        String body = Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(Keys.RSA.getPrivate().getEncoded());
+        return "-----BEGIN PRIVATE KEY-----\n" + body + "\n-----END PRIVATE KEY-----\n";
+    }
+
+    /** The credential the jwt-bearer configurations reference: {@link #PRIVATE_KEY_KEY} holding {@code pem}. */
+    public static Map<String, String> privateKeyCredential(String pem) {
+        return Map.of(PRIVATE_KEY_KEY, pem);
+    }
+
+    /** The snapshot of {@link #privateKeyCredential} holding {@link #rsaPkcs8Pem()}. */
+    public static CredentialSnapshot privateKey() {
+        return snapshot(privateKeyCredential(rsaPkcs8Pem()));
+    }
+
     /** The header the predict action of {@link #connector} defines. */
     public static final Map<String, String> ACTION_HEADERS = Map.of("x-api-version", "1");
 
@@ -132,13 +217,18 @@ public final class OAuth2TestFixtures {
      * {@link #clientSecret} reads.
      */
     public static HttpConnector connector(OAuth2AuthConfig authConfig, String actionUrl) {
+        return connector(authConfig, actionUrl, Map.of("client_secret", CLIENT_SECRET));
+    }
+
+    /** {@link #connector(OAuth2AuthConfig, String)} whose credential, stored and decrypted alike, is {@code credential}. */
+    public static HttpConnector connector(OAuth2AuthConfig authConfig, String actionUrl, Map<String, String> credential) {
         HttpConnector connector = HttpConnector
             .builder()
             .name("c")
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
             .parameters(new HashMap<>())
-            .credential(Map.of("client_secret", CLIENT_SECRET))
+            .credential(credential)
             .authConfig(authConfig)
             .actions(
                 List
@@ -169,6 +259,11 @@ public final class OAuth2TestFixtures {
     /** {@link #connector} with a client_secret_post configuration for {@link #PUBLIC_TOKEN_URL}. */
     public static HttpConnector oauth2Connector(String actionUrl) {
         return connector(config(CLIENT_AUTH_METHOD_CLIENT_SECRET_POST), actionUrl);
+    }
+
+    /** {@link #connector} with {@link #jwtBearerConfig()} and a credential holding {@link #rsaPkcs8Pem()}. */
+    public static HttpConnector jwtBearerConnector(String actionUrl) {
+        return connector(jwtBearerConfig(), actionUrl, privateKeyCredential(rsaPkcs8Pem()));
     }
 
     /**

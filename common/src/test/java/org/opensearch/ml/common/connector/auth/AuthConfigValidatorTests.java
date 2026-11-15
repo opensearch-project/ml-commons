@@ -12,12 +12,15 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ACTION_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.GOOGLE_TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.SECRET_LOOKING;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.http;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearer;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearerBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.pem;
@@ -148,8 +151,9 @@ public class AuthConfigValidatorTests {
     }
 
     @Test
-    public void grantAndClientAuthMethod_onlyClientCredentialsWithASecret() {
+    public void grant_isClientCredentialsOrJwtBearer() {
         validate(http(oauth2Builder().grantType(OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS).build()));
+        assertEquals(jwtBearer(), validate(http(jwtBearer()), Set.of(PRIVATE_KEY_KEY), DEFAULT_TOKEN_ALLOWLIST));
         for (String grant : new String[] { "urn:ibm:params:oauth:grant-type:apikey", "Client_Credentials" }) {
             assertEquals(
                 grant,
@@ -157,11 +161,49 @@ public class AuthConfigValidatorTests {
                 fails(http(oauth2Builder().grantType(grant).build()))
             );
         }
-        // The jwt-bearer grant builds, with its block, and is refused here until the node can sign for it.
-        assertEquals(AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE, fails(http(jwtBearer()), Set.of(PRIVATE_KEY_KEY)));
+        assertEquals(
+            "auth_config.grant_type is not supported in this version; use client_credentials or urn:ietf:params:oauth:grant-type:jwt-bearer",
+            AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE
+        );
+    }
+
+    @Test
+    public void clientAuthMethodNone_isAdmittedOnlyWithTheJwtBearerGrant() {
         assertEquals(
             AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE,
             fails(http(oauth2Builder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE).clientSecret(null).build()))
+        );
+        assertEquals(
+            "auth_config.client_auth_method [none] is supported only with the jwt-bearer grant in this version",
+            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE
+        );
+    }
+
+    @Test
+    public void jwtBearer_needsNoClientIdOrSecret_andSharesTheTokenUrlActionAndClientConfigChecks() {
+        Set<String> keys = Set.of(PRIVATE_KEY_KEY);
+        // The client id, when there is one, is a form parameter; the block's key must be a credential key.
+        validate(http(jwtBearerBuilder().clientId("app").build()), keys, DEFAULT_TOKEN_ALLOWLIST);
+        validate(http(fullJwtBearer()), keys, DEFAULT_TOKEN_ALLOWLIST);
+        assertEquals(AuthConfigValidator.missingCredentialKeyMessage(PRIVATE_KEY_KEY), fails(http(jwtBearer()), Set.of("s")));
+
+        assertEquals(TokenEndpointAllowlist.NOT_ALLOWED_MESSAGE, fails(http(jwtBearer()), keys, NOTHING_ALLOWED));
+        assertEquals(
+            AuthConfigValidator.TOKEN_URL_DOT_SEGMENT_MESSAGE,
+            fails(http(jwtBearerBuilder().tokenUrl(GOOGLE_TOKEN_URL.replace("/token", "/./token")).build()), keys)
+        );
+        assertEquals(
+            AuthConfigValidator.AUTHORIZATION_HEADER_MESSAGE,
+            fails(http(parameters(), jwtBearer(), actions(Map.of("Authorization", "Bearer x"), ACTION_URL), null), keys)
+        );
+        assertEquals(
+            AuthConfigValidator.CLEARTEXT_ACTION_URL_MESSAGE,
+            fails(http(parameters(), jwtBearer(), actions(null, "http://api.openai.com/v1"), null), keys)
+        );
+        ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
+        assertEquals(
+            AuthConfigValidator.SKIP_SSL_VERIFICATION_MESSAGE,
+            fails(http(parameters(), jwtBearer(), actions(null, ACTION_URL), skip), keys)
         );
     }
 
