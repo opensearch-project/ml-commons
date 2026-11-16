@@ -14,8 +14,8 @@ on:
   merge_group:
     types: [checks_requested]
 
+# id-token is granted only to the jobs that assume ML_ROLE (see below).
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -49,7 +49,10 @@ jobs:
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
@@ -68,7 +71,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'merge_group' || github.event_name == 'push'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -81,7 +84,7 @@ jobs:
       - name: Build and Run Tests
         id: step-build-test-linux
         env:
-          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
+          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
         run: |
           chown -R 1000:1000 `pwd`
           su `id -un 1000` -c 'whoami && java -version &&
@@ -128,12 +131,15 @@ jobs:
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    permissions:
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
 
     steps:
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'merge_group' || github.event_name == 'push'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -198,7 +204,7 @@ jobs:
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
         env:
-          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
+          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
         run: |
           security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:${{ steps.genpass.outputs.password }} --insecure |grep opensearch-security|wc -l`
           if [ "$FETCH_MODEL_KEYS" = "true" ]; then
@@ -236,7 +242,10 @@ jobs:
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     needs: [spotless]
-    environment: ${{ github.event_name != 'pull_request' && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    permissions:
+      id-token: write
+      contents: read
     runs-on: windows-latest
 
     steps:
@@ -246,7 +255,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'merge_group' || github.event_name == 'push'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -260,7 +269,7 @@ jobs:
       - name: Build and Run Tests
         shell: bash
         env:
-          FETCH_MODEL_KEYS: ${{ github.event_name != 'pull_request' }}
+          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
         run: |
           if [ "$FETCH_MODEL_KEYS" = "true" ]; then
             OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
