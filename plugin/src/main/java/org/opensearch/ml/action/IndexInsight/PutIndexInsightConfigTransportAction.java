@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 import static org.opensearch.ml.helper.ConnectorAccessControlHelper.isAdmin;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import org.opensearch.action.ActionRequest;
@@ -22,9 +25,13 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.Configuration;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -101,6 +108,24 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             .tenantId(tenantId)
             .build();
 
+        String agentId = mlIndexInsightConfigPutRequest.getAgentId();
+        if (agentId == null) {
+            putIndexInsightConfig(indexInsightConfig, listener);
+            return;
+        }
+        // Check the agent exists, then store it where Index Insight reads it
+        client.execute(MLAgentGetAction.INSTANCE, new MLAgentGetRequest(agentId, true, tenantId), ActionListener.wrap(agentResponse -> {
+            mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
+                indexIndexInsightAgent(
+                    agentId,
+                    tenantId,
+                    ActionListener.wrap(r1 -> { putIndexInsightConfig(indexInsightConfig, listener); }, listener::onFailure)
+                );
+            }, listener::onFailure));
+        }, listener::onFailure));
+    }
+
+    private void putIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<AcknowledgedResponse> listener) {
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONFIG, ActionListener.wrap(r -> {
             indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
                 if (indexInsightConfig.getIsEnable()) {
@@ -117,6 +142,53 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             }, listener::onFailure));
         }, listener::onFailure));
 
+    }
+
+    private void indexIndexInsightAgent(String agentId, String tenantId, ActionListener<Boolean> listener) {
+        Instant now = Instant.now();
+        MLConfig agentConfig = MLConfig
+            .builder()
+            .type(INDEX_INSIGHT_AGENT_NAME)
+            .configuration(Configuration.builder().agentId(agentId).build())
+            .createTime(now)
+            .lastUpdateTime(now)
+            .tenantId(tenantId)
+            .build();
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .putDataObjectAsync(
+                    PutDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .index(ML_CONFIG_INDEX)
+                        .dataObject(agentConfig)
+                        .id(INDEX_INSIGHT_AGENT_NAME)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to index index insight agent config", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            IndexResponse indexResponse = r.indexResponse();
+                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED
+                                || indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                                listener.onResponse(true);
+                            } else {
+                                listener.onFailure(new RuntimeException("Failed to put index insight agent config"));
+                            }
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            log.error("Failed to put index insight agent config", e);
+            listener.onFailure(e);
+        }
     }
 
     private void indexIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<Boolean> listener) {

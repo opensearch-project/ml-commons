@@ -7,12 +7,15 @@ package org.opensearch.ml.action.IndexInsight;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.util.Optional;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -23,6 +26,8 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
@@ -106,10 +111,10 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
-                                    MLIndexInsightConfigGetResponse mlIndexInsightConfigGetResponse = new MLIndexInsightConfigGetResponse(
-                                        indexInsightConfig
-                                    );
-                                    listener.onResponse(mlIndexInsightConfigGetResponse);
+                                    getIndexInsightAgentId(mlIndexInsightConfigGetRequest.getTenantId(), ActionListener.wrap(agentId -> {
+                                        IndexInsightConfig configWithAgent = indexInsightConfig.toBuilder().agentId(agentId).build();
+                                        listener.onResponse(new MLIndexInsightConfigGetResponse(configWithAgent));
+                                    }, listener::onFailure));
                                 } catch (Exception e) {
                                     listener.onFailure(e);
                                 }
@@ -126,5 +131,50 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
             listener.onFailure(e);
         }
 
+    }
+
+    /**
+     * Gets the agent id from the ML config document os_index_insight_agent, which is where Index Insight reads it.
+     * Responds with null when the document or the ML config index doesn't exist.
+     */
+    private void getIndexInsightAgentId(String tenantId, ActionListener<String> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .getDataObjectAsync(
+                    GetDataObjectRequest.builder().tenantId(tenantId).index(ML_CONFIG_INDEX).id(INDEX_INSIGHT_AGENT_NAME).build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                            listener.onResponse(null);
+                        } else {
+                            log.error("Failed to get index insight agent config", cause);
+                            listener.onFailure(cause);
+                        }
+                        return;
+                    }
+                    try {
+                        GetResponse getResponse = r.getResponse();
+                        if (getResponse == null || !getResponse.isExists()) {
+                            listener.onResponse(null);
+                            return;
+                        }
+                        try (
+                            XContentParser parser = jsonXContent
+                                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
+                        ) {
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            MLConfig mlConfig = MLConfig.parse(parser);
+                            listener.onResponse(mlConfig.getConfiguration() == null ? null : mlConfig.getConfiguration().getAgentId());
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                });
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 }

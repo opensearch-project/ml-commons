@@ -9,9 +9,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.io.IOException;
@@ -23,6 +28,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
@@ -36,12 +42,18 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
+import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -449,6 +461,123 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
             argumentCaptor.getValue().getMessage(),
             "You don't have permission to put index insight config. Please contact admin user."
         );
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_WithAgentId() {
+        MLIndexInsightConfigPutRequest request = new MLIndexInsightConfigPutRequest(false, null, "agent-1");
+        mockAgentGet(true);
+        mockInitIndices();
+        mockPut();
+
+        putIndexInsightConfigTransportAction.doExecute(null, request, actionListener);
+
+        ArgumentCaptor<MLAgentGetRequest> agentGetCaptor = ArgumentCaptor.forClass(MLAgentGetRequest.class);
+        verify(client).execute(eq(MLAgentGetAction.INSTANCE), agentGetCaptor.capture(), any());
+        assertEquals("agent-1", agentGetCaptor.getValue().getAgentId());
+        verify(mlIndicesHandler).initMLConfigIndex(any());
+
+        ArgumentCaptor<PutDataObjectRequest> putCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        verify(sdkClient, times(2)).putDataObjectAsync(putCaptor.capture());
+        PutDataObjectRequest agentPut = putCaptor.getAllValues().get(0);
+        assertEquals(ML_CONFIG_INDEX, agentPut.index());
+        assertEquals(INDEX_INSIGHT_AGENT_NAME, agentPut.id());
+        MLConfig agentConfig = (MLConfig) agentPut.dataObject();
+        assertEquals(INDEX_INSIGHT_AGENT_NAME, agentConfig.getType());
+        assertEquals("agent-1", agentConfig.getConfiguration().getAgentId());
+        assertEquals(ML_INDEX_INSIGHT_CONFIG_INDEX, putCaptor.getAllValues().get(1).index());
+
+        ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().isAcknowledged());
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_AgentNotFound() {
+        MLIndexInsightConfigPutRequest request = new MLIndexInsightConfigPutRequest(true, null, "missing-agent");
+        mockAgentGet(false);
+        mockInitIndices();
+        mockPut();
+
+        putIndexInsightConfigTransportAction.doExecute(null, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find agent with the provided agent id: missing-agent", argumentCaptor.getValue().getMessage());
+        verify(mlIndicesHandler, never()).initMLConfigIndex(any());
+        verify(sdkClient, never()).putDataObjectAsync(any());
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_WithAgentId_AgentConfigPutFailure() {
+        MLIndexInsightConfigPutRequest request = new MLIndexInsightConfigPutRequest(true, null, "agent-1");
+        mockAgentGet(true);
+        mockInitIndices();
+        when(sdkClient.putDataObjectAsync(any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("fail to put agent config")));
+
+        putIndexInsightConfigTransportAction.doExecute(null, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("fail to put agent config", argumentCaptor.getValue().getMessage());
+        verify(sdkClient, times(1)).putDataObjectAsync(any());
+        verify(mlIndicesHandler, never()).initMLIndexIfAbsent(eq(MLIndex.INDEX_INSIGHT_CONFIG), any());
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_WithoutAgentId_DoesNotTouchAgentConfig() {
+        mockInitIndices();
+        mockPut();
+
+        putIndexInsightConfigTransportAction.doExecute(null, new MLIndexInsightConfigPutRequest(false, null), actionListener);
+
+        verify(client, never()).execute(eq(MLAgentGetAction.INSTANCE), any(), any());
+        verify(mlIndicesHandler, never()).initMLConfigIndex(any());
+        ArgumentCaptor<PutDataObjectRequest> putCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        verify(sdkClient, times(1)).putDataObjectAsync(putCaptor.capture());
+        assertEquals(ML_INDEX_INSIGHT_CONFIG_INDEX, putCaptor.getValue().index());
+        verify(actionListener).onResponse(any());
+    }
+
+    private void mockAgentGet(boolean exists) {
+        doAnswer(invocation -> {
+            ActionListener<MLAgentGetResponse> listener = invocation.getArgument(2);
+            if (exists) {
+                listener.onResponse(mock(MLAgentGetResponse.class));
+            } else {
+                MLAgentGetRequest agentGetRequest = invocation.getArgument(1);
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Failed to find agent with the provided agent id: " + agentGetRequest.getAgentId(),
+                            RestStatus.NOT_FOUND
+                        )
+                    );
+            }
+            return null;
+        }).when(client).execute(eq(MLAgentGetAction.INSTANCE), any(), any());
+    }
+
+    private void mockInitIndices() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+    }
+
+    private void mockPut() {
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
+        when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(sdkPutResponse));
     }
 
 }
