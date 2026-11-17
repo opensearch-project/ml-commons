@@ -48,9 +48,15 @@ These blueprints include pre- and post-processing functions, suitable when you n
 
 - OpenAI: 
   - [text-embedding-ada-002](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/openai_connector_embedding_blueprint.md)
-  
-- VertexAI
-  - [embedding](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_connector_embedding_blueprint.md)
+
+- Google Gemini (AI Studio, API key)
+  - chat: [gemini-2.0-flash](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/google_gemini_connector_chat_blueprint.md)
+  - text embedding: [gemini-embedding-001](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/google_gemini_connector_embedding_blueprint.md)
+
+- VertexAI (`google_cloud` protocol)
+  - [embedding](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_embedding_blueprint.md)
+  - [Gemini generateContent](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_gemini_blueprint.md)
+  - [legacy embedding (static token)](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_connector_embedding_blueprint.md)
 
 - Yandex Cloud
   - text embedding: [text-search-doc & text-search-query](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/yandexcloud_connector_embedding_legacy_blueprint.md) 
