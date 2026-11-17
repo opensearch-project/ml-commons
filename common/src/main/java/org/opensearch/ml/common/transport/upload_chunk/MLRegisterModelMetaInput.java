@@ -401,19 +401,19 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                     name = parser.text();
                     break;
                 case MLModel.MODEL_ID_FIELD:
-                    modelId = parser.text();
+                    modelId = parser.textOrNull();
                     break;
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text());
                     break;
                 case MODEL_GROUP_ID_FIELD:
-                    modelGroupId = parser.text();
+                    modelGroupId = parser.textOrNull();
                     break;
                 case VERSION_FIELD:
                     version = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case IS_ENABLED_FIELD:
                     isEnabled = parser.booleanValue();
