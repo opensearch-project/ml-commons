@@ -91,33 +91,48 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             if (getResponse.isExists()) {
                 handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
-                SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
-                sdkClient
-                    .searchDataObjectAsync(
-                        SearchDataObjectRequest
-                            .builder()
-                            .tenantId(tenantId)
-                            .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
-                            .searchSourceBuilder(patternSourceBuilder)
-                            .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
-                        } else {
-                            SearchResponse searchResponse = r.searchResponse();
-                            SearchHit[] hits = searchResponse.getHits().getHits();
-                            Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
-                            if (Objects.isNull(mappedPatternSource)) {
-                                beginGeneration(tenantId, listener);
-                            } else {
-                                handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
-                            }
-                        }
-                    });
+                searchPatternIndexInsight(tenantId, ActionListener.wrap(hits -> {
+                    Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
+                    if (Objects.isNull(mappedPatternSource)) {
+                        beginGeneration(tenantId, listener);
+                    } else {
+                        handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
+                    }
+                }, listener::onFailure));
             }
         }, listener::onFailure));
+    }
+
+    private void searchPatternIndexInsight(String tenantId, ActionListener<SearchHit[]> listener) {
+        SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .searchDataObjectAsync(
+                    SearchDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
+                        .searchSourceBuilder(patternSourceBuilder)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to search index insight documents", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            SearchResponse searchResponse = r.searchResponse();
+                            listener.onResponse(searchResponse.getHits().getHits());
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     protected void handleExistingDoc(Map<String, Object> source, String tenantId, ActionListener<IndexInsight> listener) {
