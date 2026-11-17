@@ -14,3 +14,26 @@ resource_types:
       allowed_actions:
         - "cluster:admin/opensearch/ml/*"
         - "cluster:admin/security/resource/share"
+
+  ml-model:
+    ml_read_only:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/models/get"
+        - "cluster:admin/opensearch/ml/predict"
+        - "cluster:admin/opensearch/ml/predict/stream"
+
+    ml_read_write:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/models/get"
+        - "cluster:admin/opensearch/ml/models/update"
+        - "cluster:admin/opensearch/ml/models/update_cache"
+        - "cluster:admin/opensearch/ml/predict"
+        - "cluster:admin/opensearch/ml/predict/stream"
+        - "cluster:admin/opensearch/ml/deploy_model"
+        - "cluster:admin/opensearch/ml/undeploy_model"
+        - "cluster:admin/opensearch/ml/undeploy_models"
+
+    ml_full_access:
+      allowed_actions:
+        - "cluster:admin/opensearch/ml/*"
+        - "cluster:admin/security/resource/share"
