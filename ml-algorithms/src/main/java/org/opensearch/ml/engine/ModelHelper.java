@@ -84,6 +84,7 @@ public class ModelHelper {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         String modelGroupId = registerModelInput.getModelGroupId();
         MLDeploySetting mlDeploySetting = registerModelInput.getDeploySetting();
+        String provisionedBy = registerModelInput.getProvisionedBy();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
 
@@ -119,7 +120,8 @@ public class ModelHelper {
                     .isHidden(isHidden)
                     .modelGroupId(modelGroupId)
                     .functionName(FunctionName.from((functionName)))
-                    .deploySetting(mlDeploySetting);
+                    .deploySetting(mlDeploySetting)
+                    .provisionedBy(provisionedBy);
 
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
