@@ -20,8 +20,10 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
@@ -1407,6 +1409,30 @@ public class AgentUtilsTest extends MLStaticMockBase {
         AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
 
         verify(listener).onResponse(Collections.emptyList());
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_EmptyMcpConnectorList() {
+        MLAgent mlAgent = mockAgent("[]", "tenant");
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+
+        verify(listener).onResponse(Collections.emptyList());
+        verify(listener, never()).onFailure(any());
+        verifyNoInteractions(sdkClient);
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NullMcpConnectorList() {
+        MLAgent mlAgent = mockAgent("null", "tenant");
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+
+        verify(listener).onResponse(Collections.emptyList());
+        verify(listener, never()).onFailure(any());
+        verifyNoInteractions(sdkClient);
     }
 
     @Test
