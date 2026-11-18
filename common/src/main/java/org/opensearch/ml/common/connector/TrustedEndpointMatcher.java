@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -53,20 +54,29 @@ final class TrustedEndpointMatcher {
 
     static Pattern compile(String regex) {
         Pattern pattern = PATTERN_CACHE.get(regex);
-        if (pattern == null) {
-            if (PATTERN_CACHE.size() >= MAX_CACHED_PATTERNS) {
-                PATTERN_CACHE.clear();
-            }
-            pattern = PATTERN_CACHE.computeIfAbsent(regex, Pattern::compile);
+        if (pattern != null) {
+            return pattern;
         }
-        return pattern;
+        // A miss only happens after the setting changes, so taking a lock here keeps the bound exact without slowing
+        // down the cached path.
+        synchronized (PATTERN_CACHE) {
+            pattern = PATTERN_CACHE.get(regex);
+            if (pattern == null) {
+                if (PATTERN_CACHE.size() >= MAX_CACHED_PATTERNS) {
+                    PATTERN_CACHE.clear();
+                }
+                pattern = Pattern.compile(regex);
+                PATTERN_CACHE.put(regex, pattern);
+            }
+            return pattern;
+        }
     }
 
     static int cachedPatternCount() {
         return PATTERN_CACHE.size();
     }
 
-    private static final class MatchBudgetExceededException extends RuntimeException {
+    static final class MatchBudgetExceededException extends RuntimeException {
         MatchBudgetExceededException() {
             super(null, null, false, false);
         }
@@ -74,38 +84,49 @@ final class TrustedEndpointMatcher {
 
     /**
      * A CharSequence that throws once more than {@code budget} characters have been read. java.util.regex reads the
-     * input only through charAt, so this bounds the work of a single match. Not thread-safe; use one per match.
+     * input only through charAt, so this bounds the work of a single match. A subsequence shares the budget of the
+     * sequence it came from, so reads through it are counted too. Not thread-safe; use one per match.
      */
-    private static final class BudgetedCharSequence implements CharSequence {
+    static final class BudgetedCharSequence implements CharSequence {
         private final String value;
-        private long remaining;
+        private final int start;
+        private final int end;
+        private final long[] remaining;
 
         BudgetedCharSequence(String value, long budget) {
+            this(value, 0, value.length(), new long[] { budget });
+        }
+
+        private BudgetedCharSequence(String value, int start, int end, long[] remaining) {
             this.value = value;
-            this.remaining = budget;
+            this.start = start;
+            this.end = end;
+            this.remaining = remaining;
         }
 
         @Override
         public char charAt(int index) {
-            if (--remaining < 0) {
+            Objects.checkIndex(index, length());
+            if (--remaining[0] < 0) {
                 throw new MatchBudgetExceededException();
             }
-            return value.charAt(index);
+            return value.charAt(start + index);
         }
 
         @Override
         public int length() {
-            return value.length();
+            return end - start;
         }
 
         @Override
         public CharSequence subSequence(int start, int end) {
-            return value.subSequence(start, end);
+            Objects.checkFromToIndex(start, end, length());
+            return new BudgetedCharSequence(value, this.start + start, this.start + end, remaining);
         }
 
         @Override
         public String toString() {
-            return value;
+            return value.substring(start, end);
         }
     }
 }

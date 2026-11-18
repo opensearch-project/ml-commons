@@ -5,11 +5,15 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.regex.PatternSyntaxException;
 
 import org.junit.Test;
@@ -66,5 +70,54 @@ public class TrustedEndpointMatcherTest {
             assertTrue(TrustedEndpointMatcher.cachedPatternCount() <= TrustedEndpointMatcher.MAX_CACHED_PATTERNS);
         }
         assertTrue(TrustedEndpointMatcher.matches(OPENAI_REGEX, "https://api.openai.com/v1/chat/completions"));
+    }
+
+    @Test
+    public void compile_cacheIsBoundedUnderConcurrentMisses() throws Exception {
+        int threads = 8;
+        CountDownLatch start = new CountDownLatch(1);
+        List<Thread> workers = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            int offset = t * TrustedEndpointMatcher.MAX_CACHED_PATTERNS;
+            Thread worker = new Thread(() -> {
+                try {
+                    start.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                for (int i = 0; i < TrustedEndpointMatcher.MAX_CACHED_PATTERNS; i++) {
+                    TrustedEndpointMatcher.compile("^https://concurrent-" + (offset + i) + "\\.example\\.com/.*$");
+                }
+            });
+            workers.add(worker);
+            worker.start();
+        }
+        start.countDown();
+        for (Thread worker : workers) {
+            worker.join();
+        }
+        assertTrue(TrustedEndpointMatcher.cachedPatternCount() <= TrustedEndpointMatcher.MAX_CACHED_PATTERNS);
+    }
+
+    @Test
+    public void budgetedCharSequence_subSequenceSharesBudget() {
+        TrustedEndpointMatcher.BudgetedCharSequence value = new TrustedEndpointMatcher.BudgetedCharSequence("abcdef", 3);
+        CharSequence sub = value.subSequence(1, 4);
+        assertEquals(3, sub.length());
+        assertEquals("bcd", sub.toString());
+
+        assertEquals('b', sub.charAt(0));
+        assertEquals('a', value.charAt(0));
+        assertEquals('d', sub.charAt(2));
+        assertThrows(TrustedEndpointMatcher.MatchBudgetExceededException.class, () -> sub.charAt(1));
+        assertThrows(TrustedEndpointMatcher.MatchBudgetExceededException.class, () -> value.charAt(1));
+    }
+
+    @Test
+    public void budgetedCharSequence_rejectsOutOfRangeIndexes() {
+        CharSequence sub = new TrustedEndpointMatcher.BudgetedCharSequence("abcdef", 100).subSequence(1, 4);
+        assertThrows(IndexOutOfBoundsException.class, () -> sub.charAt(3));
+        assertThrows(IndexOutOfBoundsException.class, () -> sub.subSequence(2, 5));
     }
 }
