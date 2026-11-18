@@ -1677,8 +1677,6 @@ public class MachineLearningPlugin extends Plugin
             .add(new SystemIndexDescriptor(ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX, "ML Commons Context Management Index "));
         systemIndexDescriptors
             .add(new SystemIndexDescriptor(ML_AGENTIC_SEARCH_TEMPLATES_INDEX, "ML Commons Agentic Search Templates Index"));
-        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_INDEX_INSIGHT_CONFIG_INDEX, "ML Commons Index Insight Config Index"));
-        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_INDEX_INSIGHT_STORAGE_INDEX, "ML Commons Index Insight Storage Index"));
 
         return systemIndexDescriptors;
     }

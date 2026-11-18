@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -283,7 +282,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         Collection<SystemIndexDescriptor> descriptors = plugin.getSystemIndexDescriptors(settings);
         assertNotNull(descriptors);
-        assertEquals(18, descriptors.size()); // Plugin defines 18 system indices
+        assertEquals(16, descriptors.size()); // Plugin defines 16 system indices
 
         // Verify we have system index descriptors
         assertFalse(descriptors.isEmpty());
@@ -291,18 +290,6 @@ public class MachineLearningPluginTests {
             assertNotNull(descriptor.getIndexPattern());
             assertTrue(descriptor.getIndexPattern().startsWith(".plugins-ml") || descriptor.getIndexPattern().startsWith(".plugins-mcp"));
         }
-    }
-
-    @Test
-    public void testGetSystemIndexDescriptorsRegistersIndexInsightIndices() {
-        Set<String> patterns = plugin
-            .getSystemIndexDescriptors(Settings.EMPTY)
-            .stream()
-            .map(SystemIndexDescriptor::getIndexPattern)
-            .collect(Collectors.toSet());
-
-        assertTrue(patterns.contains(CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX));
-        assertTrue(patterns.contains(CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX));
     }
 
     @Test
