@@ -286,18 +286,19 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
         if (hasAccessControlChange(input)) {
             if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
-                throw new IllegalArgumentException("Only owner or admin can update access control data.");
+                throw new OpenSearchStatusException("Only owner or admin can update access control data.", RestStatus.FORBIDDEN);
             }
         }
         if (!modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
-            throw new IllegalArgumentException("You don't have permission to update this model group.");
+            throw new OpenSearchStatusException("You don't have permission to update this model group.", RestStatus.FORBIDDEN);
         } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
             && !modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
-            throw new IllegalArgumentException(
-                "You don't have the specified backend role to update this model group. For more information, contact your administrator."
+            throw new OpenSearchStatusException(
+                "You don't have the specified backend role to update this model group. For more information, contact your administrator.",
+                RestStatus.FORBIDDEN
             );
         }
         AccessMode accessMode = input.getModelAccessMode();
