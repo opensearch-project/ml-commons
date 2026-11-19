@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -27,6 +28,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.core.xcontent.XContentParserUtils;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.agenticsearch.SearchTemplateFillToolValidator;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -101,6 +103,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
 
@@ -111,13 +114,19 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     log.error("Failed to get ML Agent {}", agentId, cause);
-                    wrappedListener.onFailure(cause);
+                    if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
+                        wrappedListener
+                            .onFailure(new OpenSearchStatusException("Failed to get agent with ID " + agentId, RestStatus.NOT_FOUND));
+                    } else {
+                        wrappedListener.onFailure(cause);
+                    }
                 } else {
                     try {
                         GetResponse getResponse = r.getResponse();
                         if (getResponse == null || !getResponse.isExists()) {
                             wrappedListener
                                 .onFailure(new OpenSearchStatusException("Failed to get agent with ID " + agentId, RestStatus.NOT_FOUND));
+                            return;
                         }
                         XContentParser parser = JsonXContent.jsonXContent
                             .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
@@ -135,7 +144,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                                         )
                                     );
                             } else {
-                                updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
+                                updateAgent(agentId, tenantId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
                             }
                         } else {
                             log.error("Failed to validate tenant for Agent ID {}", agentId);
@@ -151,6 +160,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
 
     private void updateAgent(
         String agentId,
+        String tenantId,
         MLAgentUpdateInput updateInput,
         MLAgent originalAgent,
         ActionListener<UpdateResponse> wrappedListener
@@ -164,6 +174,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
+            .tenantId(tenantId)
             .dataObject(updatedAgent)
             .build();
 
@@ -178,8 +189,10 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                     UpdateResponse updateResponse = r.updateResponse();
                     if (updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                         log.info("Successfully updated ML agent {}", agentId);
-                        wrappedListener.onResponse(updateResponse);
+                    } else {
+                        log.warn("ML agent {} update finished with result {}", agentId, updateResponse.getResult());
                     }
+                    wrappedListener.onResponse(updateResponse);
                 } catch (Exception e) {
                     log.error("Failed to update ML agent {}", agentId, e);
                     wrappedListener.onFailure(e);
