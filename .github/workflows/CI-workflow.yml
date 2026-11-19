@@ -1,8 +1,12 @@
 name: Build and Test ml-commons
 # Pull requests run on `pull_request`, so PR code never gets ML_ROLE or the model API keys
-# and needs no manual approval. Remote-model ITs skip themselves when the keys are absent.
-# Merge queue (`merge_group`) and `push` runs fetch the keys and run the full suite, so the
-# secret-using tests only ever run on reviewed code and still block a merge when they fail.
+# and no environment approval is needed. Remote-model ITs skip themselves when the keys
+# are absent. Only merge queue (`merge_group`) runs fetch the keys and run the full suite,
+# so the secret-using tests only run on reviewed code merged with the current base branch,
+# and a failing required check removes the PR from the queue. `push` runs build and test
+# without keys (the queue already ran the keyed suite on the commit it merges) and keep
+# the post-merge coverage upload. This assumes the merge queue is required on every branch
+# that runs this file; on a branch without one, the remote-model ITs don't run.
 on:
   push:
     branches:
@@ -14,7 +18,10 @@ on:
   merge_group:
     types: [checks_requested]
 
-# id-token is granted only to the jobs that assume ML_ROLE (see below).
+# id-token: write is set only on the three keyed jobs (see below). Permissions can't be
+# conditional, so any run of those jobs can mint an OIDC token, but only merge_group runs
+# use the environment and call configure-aws-credentials. ML_ROLE trusts only environment
+# subjects, so a token from a pull_request or push run can't assume it.
 permissions:
   contents: read
 
@@ -49,7 +56,7 @@ jobs:
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ github.event_name == 'merge_group' && 'ml-commons-cicd-env' || '' }}
     permissions:
       id-token: write
       contents: read
@@ -71,7 +78,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name == 'merge_group' || github.event_name == 'push'
+        if: github.event_name == 'merge_group'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -84,7 +91,7 @@ jobs:
       - name: Build and Run Tests
         id: step-build-test-linux
         env:
-          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
+          FETCH_MODEL_KEYS: ${{ github.event_name == 'merge_group' }}
         run: |
           chown -R 1000:1000 `pwd`
           su `id -un 1000` -c 'whoami && java -version &&
@@ -92,7 +99,7 @@ jobs:
                                  OPENAI_KEY=`aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text` && echo "::add-mask::$OPENAI_KEY" && export OPENAI_KEY &&
                                  COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` && echo "::add-mask::$COHERE_KEY" && export COHERE_KEY;
                                elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
-                                 echo "pull_request run: model API keys not loaded, remote-model ITs will skip";
+                                 echo "model API keys not loaded (keys are only fetched in the merge queue), remote-model ITs will skip";
                                else
                                  echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS" && exit 1;
                                fi &&
@@ -131,7 +138,7 @@ jobs:
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ github.event_name == 'merge_group' && 'ml-commons-cicd-env' || '' }}
     permissions:
       id-token: write
       contents: read
@@ -139,7 +146,7 @@ jobs:
 
     steps:
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name == 'merge_group' || github.event_name == 'push'
+        if: github.event_name == 'merge_group'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -204,7 +211,7 @@ jobs:
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
         env:
-          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
+          FETCH_MODEL_KEYS: ${{ github.event_name == 'merge_group' }}
         run: |
           security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:${{ steps.genpass.outputs.password }} --insecure |grep opensearch-security|wc -l`
           if [ "$FETCH_MODEL_KEYS" = "true" ]; then
@@ -214,7 +221,7 @@ jobs:
             echo "::add-mask::$COHERE_KEY"
             export OPENAI_KEY COHERE_KEY
           elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
-            echo "pull_request run: model API keys not loaded, remote-model ITs will skip"
+            echo "model API keys not loaded (keys are only fetched in the merge queue), remote-model ITs will skip"
           else
             echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS"
             exit 1
@@ -242,7 +249,7 @@ jobs:
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     needs: [spotless]
-    environment: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') && 'ml-commons-cicd-env' || '' }}
+    environment: ${{ github.event_name == 'merge_group' && 'ml-commons-cicd-env' || '' }}
     permissions:
       id-token: write
       contents: read
@@ -255,7 +262,7 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        if: github.event_name == 'merge_group' || github.event_name == 'push'
+        if: github.event_name == 'merge_group'
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -269,7 +276,7 @@ jobs:
       - name: Build and Run Tests
         shell: bash
         env:
-          FETCH_MODEL_KEYS: ${{ (github.event_name == 'merge_group' || github.event_name == 'push') }}
+          FETCH_MODEL_KEYS: ${{ github.event_name == 'merge_group' }}
         run: |
           if [ "$FETCH_MODEL_KEYS" = "true" ]; then
             OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
@@ -278,7 +285,7 @@ jobs:
             echo "::add-mask::$COHERE_KEY"
             export OPENAI_KEY COHERE_KEY
           elif [ "$FETCH_MODEL_KEYS" = "false" ]; then
-            echo "pull_request run: model API keys not loaded, remote-model ITs will skip"
+            echo "model API keys not loaded (keys are only fetched in the merge queue), remote-model ITs will skip"
           else
             echo "unexpected FETCH_MODEL_KEYS=$FETCH_MODEL_KEYS"
             exit 1
