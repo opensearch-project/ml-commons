@@ -644,6 +644,36 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         });
     }
 
+    public void test_UpdatePrivateModelGroupOfAnotherUser_returnsForbidden() throws IOException {
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("user1PrivateModelGroup", null, AccessMode.PRIVATE, null);
+        registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
+            mlUpdateModelGroupInput = createUpdateModelGroupInput(modelGroupId, "name", "description", null, null, null);
+            ResponseException e = expectThrows(
+                ResponseException.class,
+                () -> updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to update this model group."));
+
+            // Sending access control fields hits the owner/admin check first, which should also be a 403
+            mlUpdateModelGroupInput = createUpdateModelGroupInput(
+                modelGroupId,
+                "name",
+                "description",
+                Arrays.asList("IT"),
+                AccessMode.RESTRICTED,
+                null
+            );
+            e = expectThrows(
+                ResponseException.class,
+                () -> updateModelGroup(user2Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("Only owner or admin can update access control data."));
+        });
+    }
+
     public void test_RegisterModelGroupOnAccessControlDisabledCluster() throws IOException {
         disableModelAccessControl(false);
         mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", null, null, null);
