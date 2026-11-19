@@ -313,23 +313,29 @@ public class RestActionUtils {
         if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
             || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
             log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
-            final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
-            final SearchResponse emptySearchResponse = new SearchResponse(
-                internalSearchResponse,
-                null,
-                0,
-                0,
-                0,
-                0,
-                null,
-                new ShardSearchFailure[] {},
-                SearchResponse.Clusters.EMPTY,
-                null
-            );
-            listener.onResponse(emptySearchResponse);
+            listener.onResponse(emptySearchResponse());
         } else {
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * A search response with no hits, for a search that has nothing to search: its index does not exist yet, or the
+     * request names no index at all.
+     */
+    public static SearchResponse emptySearchResponse() {
+        return new SearchResponse(
+            InternalSearchResponse.empty(),
+            null,
+            0,
+            0,
+            0,
+            0,
+            null,
+            new ShardSearchFailure[] {},
+            SearchResponse.Clusters.EMPTY,
+            null
+        );
     }
 
     /**

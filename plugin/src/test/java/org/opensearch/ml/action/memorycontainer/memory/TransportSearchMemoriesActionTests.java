@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
@@ -41,6 +42,8 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -1314,7 +1317,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
+            .configuration(longTermEnabledConfiguration())
             .build();
         SearchResponse mockSearchResponse = mock(SearchResponse.class);
         doAnswer(invocation -> {
@@ -1360,5 +1363,86 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
         verify(memoryContainerHelper, never()).getMemoryContainer(any(), any(), any());
         verify(memoryContainerHelper, never()).searchData(any(), any(), any());
+    }
+
+    private static MemoryConfiguration longTermEnabledConfiguration() {
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("test-id")
+            .enabled(true)
+            .type(MemoryStrategyType.SEMANTIC)
+            .namespace(List.of("test-namespace"))
+            .build();
+        return MemoryConfiguration
+            .builder()
+            .indexPrefix("test-memory-index")
+            .disableHistory(false)
+            .llmId("test-llm-id")
+            .strategies(List.of(strategy))
+            .build();
+    }
+
+    @Test
+    public void testDoExecute_MemoryTypeWithoutIndex_ReturnsEmptyResult() {
+        // No LLM and no strategies, so the container has no long-term or history index.
+        MLMemoryContainer noLongTerm = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
+            .build();
+        MLMemoryContainer sessionsDisabled = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableSession(true).build())
+            .build();
+        Map<MemoryType, MLMemoryContainer> cases = Map
+            .of(MemoryType.LONG_TERM, noLongTerm, MemoryType.HISTORY, noLongTerm, MemoryType.SESSIONS, sessionsDisabled);
+        for (Map.Entry<MemoryType, MLMemoryContainer> testCase : cases.entrySet()) {
+            MemoryType memoryType = testCase.getKey();
+            MLMemoryContainer container = testCase.getValue();
+            String memoryContainerId = "container-" + memoryType;
+            MLSearchMemoriesInput input = MLSearchMemoriesInput
+                .builder()
+                .memoryContainerId(memoryContainerId)
+                .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
+                .memoryType(memoryType)
+                .build();
+            MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+            doAnswer(invocation -> {
+                ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+                listener.onResponse(container);
+                return null;
+            }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+            when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(container))).thenReturn(true);
+            @SuppressWarnings("unchecked")
+            ActionListener<SearchResponse> listener = mock(ActionListener.class);
+
+            transportSearchMemoriesAction.doExecute(task, request, listener);
+
+            ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
+            verify(listener, times(1)).onResponse(responseCaptor.capture());
+            verify(listener, never()).onFailure(any());
+            assertEquals(0, responseCaptor.getValue().getHits().getHits().length);
+        }
+        verify(memoryContainerHelper, never()).searchData(any(), any(SearchDataObjectRequest.class), any());
+    }
+
+    @Test
+    public void testDoExecute_NullMemoryType() {
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
+            .build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        transportSearchMemoriesAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+        assertTrue(errorCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Memory type is required", errorCaptor.getValue().getMessage());
+        verify(memoryContainerHelper, never()).getMemoryContainer(any(), any(), any());
     }
 }
