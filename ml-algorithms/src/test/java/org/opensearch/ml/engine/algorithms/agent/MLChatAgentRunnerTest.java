@@ -53,6 +53,7 @@ import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -1730,5 +1731,64 @@ public class MLChatAgentRunnerTest {
         mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, null);
 
         Mockito.verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    /** A Bedrock Converse response from Claude with reasoning: the reasoning block comes before the text. */
+    private static Map<String, Object> converseResponseWithReasoning(String text) {
+        Map<String, Object> reasoning = Map
+            .of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+        return Map
+            .of(
+                "output",
+                Map.of("message", Map.of("role", "assistant", "content", List.of(reasoning, Map.of("text", text)))),
+                "stopReason",
+                "end_turn"
+            );
+    }
+
+    @Test
+    public void testExtractSummaryFromResponse_ConverseResponseWithReasoningFirst() {
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(converseResponseWithReasoning("The summary")).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+        MLTaskResponse response = MLTaskResponse
+            .builder()
+            .output(ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build())
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("llm_response_filter", "$.output.message.content[0].text");
+        assertEquals("The summary", mlChatAgentRunner.extractSummaryFromResponse(response, params));
+    }
+
+    @Test
+    public void testGenerateLLMSummary_LeavesOutInteractionsAndToolConfig() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("tool_configs", ", \"toolConfig\": {}")).build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("llm_response_filter", "$.output.message.content[0].text");
+        parameters.put(MLChatAgentRunner.INTERACTIONS, ", {\"role\":\"assistant\",\"content\":[{\"reasoningContent\":{}}]}");
+        parameters.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
+        List<ModelTensors> steps = List
+            .of(ModelTensors.builder().mlModelTensors(List.of(ModelTensor.builder().name("response").result("step 1").build())).build());
+
+        Mockito.reset(client);
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(converseResponseWithReasoning("The summary")).build();
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+            listener
+                .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build()).build());
+            return null;
+        }).when(client).execute(any(ActionType.class), requestCaptor.capture(), isA(ActionListener.class));
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
+
+        mlChatAgentRunner.generateLLMSummary(steps, llmSpec, "tenant", "question", parameters, listener, null, null);
+
+        verify(listener).onResponse("The summary");
+        RemoteInferenceInputDataSet dataSet = (RemoteInferenceInputDataSet) requestCaptor.getValue().getMlInput().getInputDataset();
+        Map<String, String> sent = dataSet.getParameters();
+        assertEquals("", sent.get(MLChatAgentRunner.INTERACTIONS));
+        assertEquals("", sent.get("tool_configs"));
+        assertTrue(sent.get("prompt").contains("step 1"));
     }
 }

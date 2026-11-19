@@ -28,6 +28,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.RESPONSE_FORMAT_INSTRUCTION;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CONFIGS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
@@ -114,7 +115,6 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.reflect.TypeToken;
-import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -1572,6 +1572,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 summaryParams.putAll(llmSpec.getParameters());
             }
             summaryParams.putAll(parameter);
+            // The completed steps go into the prompt as text. Leave out the tool-use messages and the tool config:
+            // this request has a new system prompt and user message, so Claude rejects the signed thinking blocks
+            // those messages carry, and with the tools still offered the model could answer with another tool call.
+            summaryParams.put(INTERACTIONS, "");
+            summaryParams.put(TOOL_CONFIGS, "");
 
             // Convert ModelTensors to strings before joining, skip session/interaction IDs
             List<String> stepStrings = new ArrayList<>();
@@ -1675,7 +1680,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
 
             if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, params.get(LLM_RESPONSE_FILTER));
+                Object outputObj = AgentUtils.readLLMResponse(dataMap, params.get(LLM_RESPONSE_FILTER));
                 if (outputObj != null) {
                     return String.valueOf(outputObj).trim();
                 }
