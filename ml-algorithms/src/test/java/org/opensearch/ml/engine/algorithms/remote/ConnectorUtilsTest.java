@@ -217,6 +217,114 @@ public class ConnectorUtilsTest {
         assertEquals(4, tensors.getMlModelTensors().get(0).getDataAsMap().size());
     }
 
+    private Connector voyageConnector(String postProcessFunction) {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://api.voyageai.com/v1/embeddings")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .postProcessFunction(postProcessFunction)
+            .build();
+        return HttpConnector
+            .builder()
+            .name("voyage connector")
+            .version("1")
+            .protocol("http")
+            .parameters(new HashMap<>())
+            .actions(Arrays.asList(predictAction))
+            .build();
+    }
+
+    @Test
+    public void processOutput_VoyageEmbedding_MultipleInputsKeepOrder() throws IOException {
+        String modelResponse = "{\"object\":\"list\",\"data\":["
+            + "{\"object\":\"embedding\",\"embedding\":[0.1,0.2],\"index\":0},"
+            + "{\"object\":\"embedding\",\"embedding\":[0.3,0.4],\"index\":1}],"
+            + "\"model\":\"voyage-4-lite\",\"usage\":{\"total_tokens\":4}}";
+        ModelTensors tensors = ConnectorUtils
+            .processOutput(
+                PREDICT.name(),
+                modelResponse,
+                voyageConnector(MLPostProcessFunction.VOYAGE_EMBEDDING),
+                scriptService,
+                ImmutableMap.of(),
+                null
+            );
+        assertEquals(2, tensors.getMlModelTensors().size());
+        assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
+        assertEquals(0.1, tensors.getMlModelTensors().get(0).getData()[0]);
+        assertEquals(0.3, tensors.getMlModelTensors().get(1).getData()[0]);
+    }
+
+    @Test
+    public void processOutput_VoyageRerank_ScoresFollowInputOrder() throws IOException {
+        // Voyage returns the results sorted by score; the tensors must be in the order of the input documents.
+        // long decimals are what the live API returns, and JsonPath parses them as BigDecimal
+        String modelResponse = "{\"object\":\"list\",\"data\":["
+            + "{\"relevance_score\":0.9,\"index\":2},"
+            + "{\"relevance_score\":0.5,\"index\":0},"
+            + "{\"relevance_score\":0.1234567890123456789,\"index\":1}],"
+            + "\"model\":\"rerank-3\",\"usage\":{\"total_tokens\":30}}";
+        ModelTensors tensors = ConnectorUtils
+            .processOutput(
+                PREDICT.name(),
+                modelResponse,
+                voyageConnector(MLPostProcessFunction.VOYAGE_RERANK),
+                scriptService,
+                ImmutableMap.of(),
+                null
+            );
+        assertEquals(3, tensors.getMlModelTensors().size());
+        assertEquals("similarity", tensors.getMlModelTensors().get(0).getName());
+        assertEquals(0.5, tensors.getMlModelTensors().get(0).getData()[0]);
+        assertEquals(0.1234567890123456789, tensors.getMlModelTensors().get(1).getData()[0].doubleValue(), 1e-12);
+        assertEquals(0.9, tensors.getMlModelTensors().get(2).getData()[0]);
+    }
+
+    @Test
+    public void processOutput_VoyageRerank_ResultWithoutScoreIsRejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("The rerank result should contain index and relevance_score.");
+        String modelResponse = "{\"object\":\"list\",\"data\":[{\"index\":0}],\"model\":\"rerank-3\"}";
+        ConnectorUtils
+            .processOutput(
+                PREDICT.name(),
+                modelResponse,
+                voyageConnector(MLPostProcessFunction.VOYAGE_RERANK),
+                scriptService,
+                ImmutableMap.of(),
+                null
+            );
+    }
+
+    @Test
+    public void processInput_VoyageRerankPreProcess_RejectsTextDocsInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("This pre_process_function can only support TextSimilarityInputDataSet");
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://api.voyageai.com/v1/rerank")
+            .requestBody("{\"query\": \"${parameters.query}\"}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_SIMILARITY_TO_VOYAGE_RERANK_INPUT)
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("voyage rerank")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .inputDataset(TextDocsInputDataSet.builder().docs(Arrays.asList("a", "b")).build())
+            .build();
+        ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
+    }
+
     @Test
     public void processOutput_PostprocessFunction() throws IOException {
         String postprocessResult =

@@ -39,8 +39,9 @@ public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunctio
         if (rerankResults.size() > 0) {
             Double[] scores = new Double[rerankResults.size()];
             for (int i = 0; i < rerankResults.size(); i++) {
-                Integer index = (Integer) rerankResults.get(i).get("index");
-                scores[index] = (Double) rerankResults.get(i).get("relevance_score");
+                // JSON parsers may return any Number type here, e.g. BigDecimal for long decimals such as 0.8563092947006226
+                int index = ((Number) rerankResults.get(i).get("index")).intValue();
+                scores[index] = ((Number) rerankResults.get(i).get("relevance_score")).doubleValue();
             }
 
             for (int i = 0; i < scores.length; i++) {

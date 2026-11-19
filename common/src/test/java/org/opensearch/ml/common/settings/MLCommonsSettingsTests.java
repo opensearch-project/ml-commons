@@ -320,6 +320,22 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsAllowVoyageApi() {
+        assertTrue(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com/v1/embeddings"));
+        assertTrue(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com/v1/rerank"));
+        assertTrue(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com/v1/contextualizedembeddings"));
+        assertTrue(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com/v1/multimodalembeddings"));
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsRejectVoyageLookalikeHosts() {
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com.attacker.example/v1/embeddings"));
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://api.voyageai.com@attacker.example/v1/embeddings"));
+        assertFalse(matchesAnyDefaultTrustedEndpoint("https://evil-api.voyageai.com/v1/embeddings"));
+        assertFalse(matchesAnyDefaultTrustedEndpoint("http://api.voyageai.com/v1/embeddings"));
+    }
+
+    @Test
     public void testTrustedConnectorEndpointsRegexDefaultsAllowRegionalVertexAi() {
         assertTrue(
             matchesAnyDefaultTrustedEndpoint(

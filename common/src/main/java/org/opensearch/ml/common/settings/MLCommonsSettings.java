@@ -297,6 +297,7 @@ public final class MLCommonsSettings {
                     "^https://api\\.sagemaker\\.[a-z]{2,4}-[a-z]+(-[a-z]+)?-[0-9]+\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
+                    "^https://api\\.voyageai\\.com/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
                     "^https://generativelanguage\\.googleapis\\.com/.*$",
                     // Vertex AI joins the region to the host with a hyphen (us-central1-aiplatform.googleapis.com)
