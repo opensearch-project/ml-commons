@@ -60,6 +60,7 @@ import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -85,6 +86,7 @@ import lombok.extern.log4j.Log4j2;
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     final Client client;
     private final SdkClient sdkClient;
+    private final MLIndicesHandler mlIndicesHandler;
     final ClusterService clusterService;
     final ModelAccessControlHelper modelAccessControlHelper;
     final ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -107,7 +109,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         Settings settings,
         ClusterService clusterService,
         MLEngine mlEngine,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLIndicesHandler mlIndicesHandler
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -119,6 +122,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mlIndicesHandler = mlIndicesHandler;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -578,6 +582,31 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void updateModelWithRegisteringToAnotherModelGroup(
+        String modelId,
+        String newModelGroupId,
+        String tenantId,
+        User user,
+        MLUpdateModelInput updateModelInput,
+        ActionListener<UpdateResponse> wrappedListener,
+        boolean isUpdateModelCache
+    ) {
+        // Bring the model index mapping up to date before writing to it. After an upgrade the mapping is
+        // otherwise upgraded lazily (sync-up job, register), and an update that writes a field the old
+        // mapping lacks (e.g. model_config.additional_config) would add it with a dynamic mapping that
+        // conflicts with the new one, after which the mapping can no longer be upgraded.
+        mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexReady -> {
+            if (!indexReady) {
+                wrappedListener.onFailure(new OpenSearchStatusException("Failed to init ML model index", RestStatus.INTERNAL_SERVER_ERROR));
+                return;
+            }
+            writeModelUpdate(modelId, newModelGroupId, tenantId, user, updateModelInput, wrappedListener, isUpdateModelCache);
+        }, e -> {
+            log.error("Failed to init ML model index before updating model {}", modelId, e);
+            wrappedListener.onFailure(e);
+        }));
+    }
+
+    private void writeModelUpdate(
         String modelId,
         String newModelGroupId,
         String tenantId,
