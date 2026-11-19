@@ -7,6 +7,7 @@ package org.opensearch.ml.common.settings;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.Property;
 import org.junit.Test;
+import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
@@ -363,6 +365,59 @@ public class MLCommonsSettingsTests {
     public void testDynamicBatchingMemoryFractionRejectsAboveMaximum() {
         MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION
             .get(Settings.builder().put(MLCommonsSettings.ML_COMMONS_DYNAMIC_BATCHING_MEMORY_FRACTION.getKey(), 0.11).build());
+    }
+
+    @Test
+    public void testValidateRegexSafety_nestedZeroWidthRepetition_throwsException() {
+        List<String> invalidRegex = List.of("^https://host/(?:(?:){2147483647}){2147483647}.*$");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                .get(
+                    Settings
+                        .builder()
+                        .putList(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), invalidRegex)
+                        .build()
+                )
+        );
+        assertTrue(e.getMessage().contains("repeats too many times"));
+    }
+
+    @Test
+    public void testMaxRepetitionMinimum() {
+        assertEquals(1L, MLCommonsSettings.maxRepetitionMinimum("^https://api\\.openai\\.com/.*$"));
+        assertEquals(5L, MLCommonsSettings.maxRepetitionMinimum("^https://([a-z0-9-]+\\.){5}example\\.com$"));
+        assertEquals(6L, MLCommonsSettings.maxRepetitionMinimum("^(?:(?:a){2,}){3,9}$"));
+        // Stacked quantifiers multiply, sequential ones do not
+        assertEquals(10_000L, MLCommonsSettings.maxRepetitionMinimum("(?:){100}{100}"));
+        assertEquals(100L, MLCommonsSettings.maxRepetitionMinimum("(?:){100}(?:){100}"));
+        // Lazy and possessive suffixes are not literals
+        assertEquals(10_000L, MLCommonsSettings.maxRepetitionMinimum("(?:(?:){100}?){100}+"));
+        // Braces that are escaped, quoted, inside a character class or not a counted repetition are ignored
+        assertEquals(1L, MLCommonsSettings.maxRepetitionMinimum("(?:a\\{5000})\\{5000}"));
+        assertEquals(1L, MLCommonsSettings.maxRepetitionMinimum("\\Q(a){5000}\\E"));
+        assertEquals(1L, MLCommonsSettings.maxRepetitionMinimum("([{]){x}"));
+        assertEquals(1L, MLCommonsSettings.maxRepetitionMinimum("\\p{L}+"));
+        // Capped just above the limit instead of overflowing
+        assertEquals(
+            MLCommonsSettings.MAX_REPETITION_MINIMUM + 1,
+            MLCommonsSettings.maxRepetitionMinimum("(?:(?:(?:){2147483647}){2147483647}){2147483647}")
+        );
+    }
+
+    @Test
+    public void testValidateRegexSafety_defaultPatternsStayValid() {
+        for (Setting<List<String>> setting : List
+            .of(
+                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_PRIVATE_ENDPOINTS_REGEX
+            )) {
+            List<String> defaults = setting.getDefault(Settings.EMPTY);
+            assertEquals(defaults, setting.get(Settings.builder().putList(setting.getKey(), defaults).build()));
+            for (String regex : defaults) {
+                assertTrue(regex, MLCommonsSettings.maxRepetitionMinimum(regex) <= 2);
+            }
+        }
     }
 
     @Test
