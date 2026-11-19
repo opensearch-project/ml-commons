@@ -32,9 +32,12 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRU
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Spliterator;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -50,7 +53,10 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
+    // Replaced as a whole on every update, so a reader sees either the old or the new list, never a mix of both.
     private volatile List<String> trustedConnectorEndpointsRegex;
+    // Read-only view of the current list. Deployed remote models keep this view, so they pick up setting changes.
+    private final List<String> trustedConnectorEndpointsRegexView = new TrustedConnectorEndpointsRegexView();
 
     private volatile Boolean isControllerEnabled;
     private volatile Boolean isBatchIngestionEnabled;
@@ -99,7 +105,7 @@ public class MLFeatureEnabledSetting {
         isAgenticSearchTemplateEnabled = ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
-        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        trustedConnectorEndpointsRegex = distinct(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings));
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
@@ -139,7 +145,7 @@ public class MLFeatureEnabledSetting {
             .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled = it);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = distinct(it));
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
         clusterService
             .getClusterSettings()
@@ -227,9 +233,38 @@ public class MLFeatureEnabledSetting {
         return isConnectorPrivateIpEnabled;
     }
 
+    /**
+     * Returns a read-only live view of the trusted connector endpoints regex, reflecting later setting updates.
+     */
     public List<String> getTrustedConnectorEndpointsRegex() {
-        List<String> current = trustedConnectorEndpointsRegex;
-        return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
+        return trustedConnectorEndpointsRegexView;
+    }
+
+    private static List<String> distinct(List<String> regexes) {
+        return List.copyOf(new LinkedHashSet<>(regexes));
+    }
+
+    private final class TrustedConnectorEndpointsRegexView extends AbstractList<String> {
+        @Override
+        public String get(int index) {
+            return trustedConnectorEndpointsRegex.get(index);
+        }
+
+        @Override
+        public int size() {
+            return trustedConnectorEndpointsRegex.size();
+        }
+
+        // Iterate a single snapshot so a loop never sees part of the old list and part of the new one.
+        @Override
+        public Iterator<String> iterator() {
+            return trustedConnectorEndpointsRegex.iterator();
+        }
+
+        @Override
+        public Spliterator<String> spliterator() {
+            return trustedConnectorEndpointsRegex.spliterator();
+        }
     }
 
     /**

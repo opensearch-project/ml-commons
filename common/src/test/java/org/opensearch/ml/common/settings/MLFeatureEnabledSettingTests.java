@@ -7,11 +7,14 @@ package org.opensearch.ml.common.settings;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.Before;
@@ -416,5 +419,124 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
 
         assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDefaultValue() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+
+        assertEquals(
+            MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY),
+            setting.getTrustedConnectorEndpointsRegex()
+        );
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexIsReadOnly() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+
+        assertThrows(UnsupportedOperationException.class, () -> setting.getTrustedConnectorEndpointsRegex().add("^.*$"));
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDynamicUpdateReachesPreviouslyReturnedList() {
+        Settings settings = Settings
+            .builder()
+            .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://a\\.com/.*$", "^https://b\\.com/.*$")
+            .build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Deployed remote models keep the list they were given at deploy time.
+        List<String> heldByDeployedModel = setting.getTrustedConnectorEndpointsRegex();
+        assertEquals(List.of("^https://a\\.com/.*$", "^https://b\\.com/.*$"), heldByDeployedModel);
+
+        // Overlapping update: one pattern removed, one kept, one added.
+        mockClusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://b\\.com/.*$", "^https://c\\.com/.*$")
+                    .build()
+            );
+        assertEquals(List.of("^https://b\\.com/.*$", "^https://c\\.com/.*$"), heldByDeployedModel);
+
+        // Disjoint update.
+        mockClusterSettings
+            .applySettings(
+                Settings.builder().putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://d\\.com/.*$").build()
+            );
+        assertEquals(List.of("^https://d\\.com/.*$"), heldByDeployedModel);
+        assertEquals(List.of("^https://d\\.com/.*$"), setting.getTrustedConnectorEndpointsRegex());
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDynamicUpdateToEmpty() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+        List<String> heldByDeployedModel = setting.getTrustedConnectorEndpointsRegex();
+        assertFalse(heldByDeployedModel.isEmpty());
+
+        mockClusterSettings.applySettings(Settings.builder().putList("plugins.ml_commons.trusted_connector_endpoints_regex").build());
+
+        assertTrue(heldByDeployedModel.isEmpty());
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDynamicUpdateDropsDuplicates() {
+        Settings settings = Settings
+            .builder()
+            .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://a\\.com/.*$")
+            .build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        mockClusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://b\\.com/.*$", "^https://b\\.com/.*$")
+                    .build()
+            );
+
+        assertEquals(List.of("^https://b\\.com/.*$"), setting.getTrustedConnectorEndpointsRegex());
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexDynamicUpdateKeepsConfiguredOrder() {
+        Settings settings = Settings
+            .builder()
+            .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://a\\.com/.*$")
+            .build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        List<String> heldByDeployedModel = setting.getTrustedConnectorEndpointsRegex();
+
+        mockClusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://b\\.com/.*$", "^https://a\\.com/.*$")
+                    .build()
+            );
+
+        assertEquals(List.of("^https://b\\.com/.*$", "^https://a\\.com/.*$"), heldByDeployedModel);
+    }
+
+    @Test
+    public void testTrustedConnectorEndpointsRegexIterationUsesOneSnapshot() {
+        Settings settings = Settings
+            .builder()
+            .putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://a\\.com/.*$", "^https://b\\.com/.*$")
+            .build();
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // An update that lands while a request is checking its URL doesn't change the patterns that check sees.
+        Iterator<String> inFlight = setting.getTrustedConnectorEndpointsRegex().iterator();
+        assertEquals("^https://a\\.com/.*$", inFlight.next());
+        mockClusterSettings
+            .applySettings(
+                Settings.builder().putList("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://c\\.com/.*$").build()
+            );
+        assertEquals("^https://b\\.com/.*$", inFlight.next());
+        assertFalse(inFlight.hasNext());
+
+        assertEquals(List.of("^https://c\\.com/.*$"), setting.getTrustedConnectorEndpointsRegex());
     }
 }
