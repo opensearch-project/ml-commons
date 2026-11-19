@@ -1,0 +1,65 @@
+[
+  {
+    "_id": "ABJWEKEBsQOuewrPZN15",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "Authorization": "Bearer ${credential.openAI_key}"
+          },
+          "method": "POST",
+          "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }",
+          "url": "https://${parameters.endpoint}/v1/chat/completions"
+        }
+      ],
+      "created_time": 1791275459704,
+      "credential": {
+        "openAI_key": "AgV4n6cq8A2TRgPGv4TDORBZN7rRbGZHkqi9GX4K6+Pck3wAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREE3ckprK29jUmpDanJvMldEYld5V2dRbU01azBPUURQek1EdkFuZ1ZsR0ZMakZNYTdhNnZKOVdNSDI5YzkzellTQT09AAEABkN1c3RvbQAUAAAAgAAAAAy04MnfJkYaGSt5ypgAMBjJ7i54zihZL9taf3zd9nroTxk9OwNXY9DTpI9XaWvwAcw4ZtfKuBLaesMJ0BnsJgIAABAAnxyp7bx32Wb66+uK3ZBtMPeHNUKzy1JbHCYOk7enY3IC6A3CVebowj1uQtEONnLq/////wAAAAEAAAAAAAAAAAAAAAEAAAAQjmlWROyNbZp8SNWqZQyat6eUx/DYL+9epBbaOFIdOHgAZzBlAjEAtYjezZ75mUg6jp1GHAyl0UFguEBXBsP2X7rjt7sUufNZOIH0D91vCA+I07kbfCZpAjALVQM+nxzAQXjkunUSande3MZeo6gRC13VbvMUbBB5/a4nCxTzOqSDT57J3XUGlpY="
+      },
+      "description": "fixture, dummy creds",
+      "last_updated_time": 1791275459704,
+      "name": "compat-openai-chat",
+      "parameters": {
+        "endpoint": "api.openai.com",
+        "model": "gpt-4o-mini"
+      },
+      "protocol": "http",
+      "version": "1"
+    }
+  },
+  {
+    "_id": "_xJWEKEBsQOuewrPZNxP",
+    "_source": {
+      "actions": [
+        {
+          "action_type": "PREDICT",
+          "headers": {
+            "content-type": "application/json",
+            "x-amz-content-sha256": "required"
+          },
+          "method": "POST",
+          "post_process_function": "connector.post_process.bedrock.embedding",
+          "pre_process_function": "connector.pre_process.bedrock.embedding",
+          "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+          "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v2:0/invoke"
+        }
+      ],
+      "created_time": 1791275459660,
+      "credential": {
+        "access_key": "AgV4Xz8H6YjgwfIOfr8547oVxtA5bFffK+MXaT5DHDHu8eYAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREE3UkdERDdCUXI1K1kzT1E0aGxqZVAwQXprQjc5a2VSTWtBaUROeURuUjdPaHJWNVRaWEVwNE1GOUJCMEs0Qlh4Zz09AAEABkN1c3RvbQAUAAAAgAAAAAz7RhTj4pquSoANfygAMPH7K53bUxreE2NxTgVfcFvM6NqZlZON/jz9zSIeGyudR0ippcv8rmlL4dSPlr+EagIAABAAgptgcVq95KKA+5KfGF7YrLyXMFSx50AHgHYC078Wue2CxDmokC4JeV+u05eolADP/////wAAAAEAAAAAAAAAAAAAAAEAAAAUNFdb7xQVpLLAZc/alR/9oPmPTjqjuzmX2Usnc8YlZSrDcXBuAGcwZQIxANU+TgvNzqO0HLZQ0OnmnUe2n6rEvuc6LIy/LKMqWt5l8KOUvftJ5jOAXJrSmsaGXgIwde8CzJPTePcvxfWZh/HJYxFEiTMJyvais1k4IpBmkf1iQLQ4/JubM5bBzwDCTUBg",
+        "secret_key": "AgV4ofFqRGYG5jzByj4y39Y8/fQgHnDtN5dz2zRiMZ65pm8AXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREEvZnhMc1p2aC8zSm9lMUNmTWNBTHZiNEZYd2xMKzd5RlhrRDRNaWl3SkdNRDJtQ05uN2hLamdDRUlPWjZoalpEZz09AAEABkN1c3RvbQAUAAAAgAAAAAy7Hm6YnRxkIRM7uq0AMK3AS2o5L4b29UfOJELSm4W1k3Yil3xBPxQe3+T8ma+ti5ygvLNpZTaiij/9FC4mQwIAABAAUAzJMxU6HQ0Mw/ZK6TDKYxZXZsuMq5y9EgipkABI3HFKr43Dy6E7QET3+Lo5d02y/////wAAAAEAAAAAAAAAAAAAAAEAAAAULQjr/3bbmxJA1pCoNNnzyr8pv7nusjyPqyI6THqE/BytpCIhAGcwZQIwdpfB3dXnUfYUcq1FGXeOCCTzpytFfCvoUc6zm64tXyp5jejpF3p5dOyGmbw9uy/UAjEAxDTofIYX1GpVSuSMSf6X0dohFKl1JgkjfVkua93a2q5ldBUKLOC6erifJEyc++RN",
+        "session_token": "AgV4xNxurpbtRk2kZWZP2F8WUqNsZKn6OM6MFNNgVCfft7QAXwABABVhd3MtY3J5cHRvLXB1YmxpYy1rZXkAREExY3pRMUVPSHhobG5vSzhUbVlQY2JZYjNjZmgvZWhSSjlsdHY4QzZLZ2laa2pKNjE4RCt0OWcxd3QrSWd2TlVnQT09AAEABkN1c3RvbQAUAAAAgAAAAAwJPRnINYo+QOUvlXUAMHAE/G/N7ZSpoWSQpBbSq0zRQMZyEEGtDTZ15X5/1lIa4oddHc8x8LMrWsnUDU8W9QIAABAAJBEzJckheI+nFm+oJTGMKwqLpE3RoU5Eg2Giyqq4UCpg+xbkjFYeIJrK/lNus3ll/////wAAAAEAAAAAAAAAAAAAAAEAAAATOdBR1YYsXIqFtUM6Q6tcC3BQ9V6mToHAIERCSrPd4wyDkT8AZzBlAjEAx98CwxZnvcTJQiqAcGHf9J3PwtBiQfHCFjfRdgXMIvf5y1vqTNHO8PZCH7wfPVyqAjBcQfqqKLGAeDdncGZvt72XamIGy6iloaqCL2CpH+XAdWRJuZcE00+xwU1PV38LZ70="
+      },
+      "description": "fixture, dummy creds",
+      "last_updated_time": 1791275459660,
+      "name": "compat-bedrock-titan-embed",
+      "parameters": {
+        "region": "us-east-1",
+        "service_name": "bedrock"
+      },
+      "protocol": "aws_sigv4",
+      "version": "1"
+    }
+  }
+]
