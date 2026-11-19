@@ -74,7 +74,10 @@ public class RemoteModelConfig extends BaseModelConfig {
             null,
             null
         );
-        if (validate) {
+        // additional_config arrived together with the space_type requirement (#3786, 3.1.0), so a stored
+        // document that has it was written under that rule and is still held to it. Only documents written
+        // before 3.1, which have no additional_config at all, are read back without validation (#4999).
+        if (validate || additionalConfig != null) {
             validateTextEmbeddingConfig();
         }
     }
@@ -85,7 +88,8 @@ public class RemoteModelConfig extends BaseModelConfig {
 
     /**
      * Parses a remote model config. Pass {@code validate = false} when reading back a stored
-     * model document, which may predate the space_type requirement (issue #4999).
+     * model document, which may predate the space_type requirement (issue #4999). Validation still
+     * runs when the document has {@code additional_config}, i.e. it was written by 3.1 or later.
      */
     public static RemoteModelConfig parse(XContentParser parser, boolean validate) throws IOException {
         String modelType = null;
