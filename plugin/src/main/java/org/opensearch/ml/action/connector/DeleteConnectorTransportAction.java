@@ -28,7 +28,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
@@ -107,7 +106,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         if (isAllowed) {
             checkForModelsUsingConnector(connectorId, tenantId, actionListener);
         } else {
-            actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
+            actionListener.onFailure(new OpenSearchStatusException("You are not allowed to delete this connector", RestStatus.FORBIDDEN));
         }
     }
 

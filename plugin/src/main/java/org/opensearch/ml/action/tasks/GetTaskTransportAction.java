@@ -71,7 +71,6 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -391,7 +390,12 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     actionListener
-                                        .onFailure(new MLValidationException("You don't have permission to access this batch job"));
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "You don't have permission to access this batch job",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
                                 } else {
                                     if (model.getConnector() != null) {
                                         Connector connector = model.getConnector();
