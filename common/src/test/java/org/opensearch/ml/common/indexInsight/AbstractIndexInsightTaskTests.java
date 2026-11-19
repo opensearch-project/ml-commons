@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.*;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -60,6 +61,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 public class AbstractIndexInsightTaskTests {
+
+    private static final String CALLER_TRANSIENT = "test_caller";
 
     private Client client;
     private SdkClient sdkClient;
@@ -196,8 +199,8 @@ public class AbstractIndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-tenant", listener);
 
-        // Verify prerequisite task execution: 5 threadPool calls indicate both prerequisite and main task ran
-        verify(client, times(5)).threadPool();
+        // Verify prerequisite task execution: 6 threadPool calls indicate both prerequisite and main task ran
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -226,7 +229,7 @@ public class AbstractIndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-tenant", listener);
 
-        verify(client, times(5)).threadPool();
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -240,7 +243,7 @@ public class AbstractIndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-tenant", listener);
 
-        verify(client, times(5)).threadPool();
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -314,6 +317,65 @@ public class AbstractIndexInsightTaskTests {
         assertEquals("test-index", result.getIndex());
         assertEquals("pattern matched content", result.getContent());
         assertEquals(IndexInsightTaskStatus.COMPLETED, result.getStatus());
+    }
+
+    @Test
+    public void testExecute_PatternSearchRunsInSystemContext() throws IOException {
+        mockGetFailToGet(sdkClient, "");
+        threadContext.putTransient(CALLER_TRANSIENT, "reader");
+
+        XContentBuilder sourceContent = XContentBuilder
+            .builder(XContentType.JSON.xContent())
+            .startObject()
+            .field(IndexInsight.INDEX_NAME_FIELD, "test-*")
+            .field(IndexInsight.TASK_TYPE_FIELD, "FIELD_DESCRIPTION")
+            .field(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString())
+            .field(IndexInsight.CONTENT_FIELD, "pattern matched content")
+            .field(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600)
+            .endObject();
+        SearchHit patternHit = new SearchHit(0, "pattern-doc", Map.of(), Map.of());
+        patternHit.sourceRef(BytesReference.bytes(sourceContent));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { patternHit }, new TotalHits(1, Relation.EQUAL_TO), 1.0f);
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        SearchDataObjectResponse sdkResponse = mock(SearchDataObjectResponse.class);
+        when(sdkResponse.searchResponse()).thenReturn(searchResponse);
+
+        List<Object> callerDuringSearch = new ArrayList<>();
+        when(sdkClient.searchDataObjectAsync(any())).thenAnswer(invocation -> {
+            callerDuringSearch.add(threadContext.getTransient(CALLER_TRANSIENT));
+            return CompletableFuture.completedFuture(sdkResponse);
+        });
+
+        List<Object> callerAfterSearch = new ArrayList<>();
+        ActionListener<IndexInsight> listener = ActionListener
+            .wrap(r -> callerAfterSearch.add(threadContext.getTransient(CALLER_TRANSIENT)), e -> {});
+        task.execute("test-tenant", listener);
+
+        // The storage index is searched in the system context, and the caller's context is back afterwards
+        assertEquals(Collections.singletonList(null), callerDuringSearch);
+        assertEquals(List.of("reader"), callerAfterSearch);
+    }
+
+    @Test
+    public void testExecute_PatternSearchFailure() {
+        mockGetFailToGet(sdkClient, "");
+        threadContext.putTransient(CALLER_TRANSIENT, "reader");
+        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new OpenSearchStatusException("search failed", RestStatus.INTERNAL_SERVER_ERROR));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+
+        List<Object> callerOnFailure = new ArrayList<>();
+        List<Exception> failures = new ArrayList<>();
+        task.execute("test-tenant", ActionListener.wrap(r -> {}, e -> {
+            callerOnFailure.add(threadContext.getTransient(CALLER_TRANSIENT));
+            failures.add(e);
+        }));
+
+        assertEquals(1, failures.size());
+        assertEquals("search failed", failures.get(0).getMessage());
+        assertEquals(List.of("reader"), callerOnFailure);
+        verify(sdkClient, never()).putDataObjectAsync(any());
     }
 
     @Test
