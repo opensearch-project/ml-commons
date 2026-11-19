@@ -146,7 +146,9 @@ public class Interaction implements Writeable, ToXContentObject, Message {
         String id = in.readString();
         Instant createTime = in.readInstant();
         Instant updatedTime = null;
-        if (in.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
+        if (in.getVersion().onOrAfter(CommonValue.VERSION_3_11_0)) {
+            updatedTime = in.readOptionalInstant();
+        } else if (in.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
             updatedTime = in.readInstant();
         }
         String conversationId = in.readString();
@@ -179,8 +181,11 @@ public class Interaction implements Writeable, ToXContentObject, Message {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeInstant(createTime);
-        if (updatedTime != null && out.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
-            out.writeInstant(updatedTime);
+        if (out.getVersion().onOrAfter(CommonValue.VERSION_3_11_0)) {
+            out.writeOptionalInstant(updatedTime);
+        } else if (out.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
+            // Nodes before 3.11 always read an instant here, so fall back to the create time when there is no update time
+            out.writeInstant(updatedTime != null ? updatedTime : createTime);
         }
         out.writeString(conversationId);
         out.writeString(input);
