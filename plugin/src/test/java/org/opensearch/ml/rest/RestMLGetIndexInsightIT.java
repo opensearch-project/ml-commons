@@ -6,6 +6,8 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.hc.core5.http.ParseException;
@@ -114,6 +116,46 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
             );
         assertEquals(gson.fromJson((String) indexInsight.get("content"), Map.class), targetContent);
 
+    }
+
+    public void testIndexInsightTool_withDefaultInputSchemaParameters() throws IOException, ParseException, InterruptedException {
+        enableSettings();
+        TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_plugins/_ml/index_insight_config",
+                null,
+                TestHelper.toHttpEntity("{\"is_enable\": true}"),
+                null
+            );
+        createIndexAndPutDoc();
+
+        // Fill in the parameters the way an LLM does: with the names from the tool's default input schema
+        Response toolsResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tools", null, (String) null, null);
+        List<Map<String, Object>> tools = gson.fromJson(TestHelper.httpEntityToString(toolsResponse.getEntity()), List.class);
+        Map<String, Object> indexInsightTool = tools.stream().filter(t -> "IndexInsightTool".equals(t.get("name"))).findFirst().get();
+        String inputSchema = (String) ((Map<String, Object>) indexInsightTool.get("attributes")).get("input_schema");
+        Map<String, Object> properties = (Map<String, Object>) gson.fromJson(inputSchema, Map.class).get("properties");
+        Map<String, String> parameters = new HashMap<>();
+        properties.forEach((name, property) -> {
+            List<String> allowedValues = (List<String>) ((Map<String, Object>) property).get("enum");
+            parameters.put(name, allowedValues == null ? "target_index" : "STATISTICAL_DATA");
+        });
+
+        String agentId = createAgent("""
+            {
+              "name": "index insight tool agent",
+              "type": "flow",
+              "tools": [{"type": "IndexInsightTool"}]
+            }
+            """);
+        String result = executeAgent(agentId, gson.toJson(Map.of("parameters", parameters)));
+
+        Map<String, Object> indexInsight = gson.fromJson(result, Map.class);
+        assertEquals("target_index", indexInsight.get("index_name"));
+        assertEquals("STATISTICAL_DATA", indexInsight.get("task_type"));
+        assertEquals("COMPLETED", indexInsight.get("status"));
     }
 
     private void createIndexAndPutDoc() throws IOException, InterruptedException {

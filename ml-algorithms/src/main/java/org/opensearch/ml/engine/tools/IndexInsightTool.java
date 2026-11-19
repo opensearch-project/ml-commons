@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -42,6 +43,7 @@ public class IndexInsightTool implements Tool {
 
     public IndexInsightTool(Client client) {
         this.client = client;
+        this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
     @VisibleForTesting
@@ -51,22 +53,12 @@ public class IndexInsightTool implements Tool {
     public static final String STRICT_FIELD = "strict";
 
     public static final String DEFAULT_INPUT_SCHEMA = """
-                {
-                    "type": "object",
-                    "properties": {
-                        "index": {
-                            "type": "string",
-                            "description": "OpenSearch index name"
-                        },
-                        "question": {
-                            "type": "string",
-                            "description": "Natural language question to query data from opensearch index"
-                        }
-                    }
-                },
-                "strict": false
-              }
-        """;
+        {"type":"object",\
+        "properties":{\
+        "indexName":{"type":"string","description":"OpenSearch index name"},\
+        "taskType":{"type":"string","enum":["STATISTICAL_DATA","FIELD_DESCRIPTION","LOG_RELATED_INDEX_CHECK"],\
+        "description":"The type of index insight to get"}},\
+        "required":["indexName","taskType"]}""";
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
