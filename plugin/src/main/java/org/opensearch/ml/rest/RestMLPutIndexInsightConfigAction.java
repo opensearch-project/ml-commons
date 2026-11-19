@@ -61,7 +61,7 @@ public class RestMLPutIndexInsightConfigAction extends BaseRestHandler {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
-        return new MLIndexInsightConfigPutRequest(indexInsightConfig.getIsEnable(), tenantId);
+        IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser, true);
+        return new MLIndexInsightConfigPutRequest(indexInsightConfig.getIsEnable(), tenantId, indexInsightConfig.getAgentId());
     }
 }

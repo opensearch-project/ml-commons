@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.indexInsight;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -22,21 +23,28 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import lombok.Builder;
 import lombok.Getter;
 
-@Builder
 @Getter
 public class MLIndexInsightConfigPutRequest extends ActionRequest {
     private Boolean isEnable;
     private String tenantId;
+    private String agentId;
 
     public MLIndexInsightConfigPutRequest(Boolean isEnable, String tenantId) {
+        this(isEnable, tenantId, null);
+    }
+
+    @Builder
+    public MLIndexInsightConfigPutRequest(Boolean isEnable, String tenantId, String agentId) {
         this.isEnable = isEnable;
         this.tenantId = tenantId;
+        this.agentId = agentId;
     }
 
     public MLIndexInsightConfigPutRequest(StreamInput in) throws IOException {
         super(in);
         this.isEnable = in.readBoolean();
         this.tenantId = in.readOptionalString();
+        this.agentId = in.getVersion().onOrAfter(VERSION_3_11_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -44,6 +52,9 @@ public class MLIndexInsightConfigPutRequest extends ActionRequest {
         super.writeTo(out);
         out.writeBoolean(this.isEnable);
         out.writeOptionalString(tenantId);
+        if (out.getVersion().onOrAfter(VERSION_3_11_0)) {
+            out.writeOptionalString(agentId);
+        }
     }
 
     public static MLIndexInsightConfigPutRequest fromActionRequest(ActionRequest actionRequest) {
@@ -68,6 +79,9 @@ public class MLIndexInsightConfigPutRequest extends ActionRequest {
 
         if (this.isEnable == null) {
             exception = addValidationError("Index Insight config's isEnable can't be null", exception);
+        }
+        if (this.agentId != null && this.agentId.isBlank()) {
+            exception = addValidationError("Index Insight config's agent_id can't be blank", exception);
         }
 
         return exception;

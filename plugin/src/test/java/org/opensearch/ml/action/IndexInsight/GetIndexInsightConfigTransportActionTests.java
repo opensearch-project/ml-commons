@@ -6,11 +6,17 @@
 package org.opensearch.ml.action.IndexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -26,9 +32,11 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
@@ -182,6 +190,84 @@ public class GetIndexInsightConfigTransportActionTests {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(argumentCaptor.getValue().getMessage(), "Fail to get context");
+    }
+
+    @Test
+    public void testGetIndexInsightConfig_WithAgentId() {
+        mockConfigGet(CompletableFuture.completedFuture(sdkResponse(true, "{\"is_enable\":true}")));
+        mockAgentGet(
+            CompletableFuture
+                .completedFuture(sdkResponse(true, "{\"type\":\"os_index_insight_agent\",\"configuration\":{\"agent_id\":\"agent-1\"}}"))
+        );
+
+        getIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigGetRequest, actionListener);
+        ArgumentCaptor<MLIndexInsightConfigGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue().getIndexInsightConfig().getIsEnable());
+        assertEquals("agent-1", argumentCaptor.getValue().getIndexInsightConfig().getAgentId());
+    }
+
+    @Test
+    public void testGetIndexInsightConfig_AgentDocMissing() {
+        mockConfigGet(CompletableFuture.completedFuture(sdkResponse(true, "{\"is_enable\":true}")));
+        mockAgentGet(CompletableFuture.completedFuture(sdkResponse(false, null)));
+
+        getIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigGetRequest, actionListener);
+        ArgumentCaptor<MLIndexInsightConfigGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue().getIndexInsightConfig().getIsEnable());
+        assertNull(argumentCaptor.getValue().getIndexInsightConfig().getAgentId());
+    }
+
+    @Test
+    public void testGetIndexInsightConfig_MLConfigIndexMissing() {
+        mockConfigGet(CompletableFuture.completedFuture(sdkResponse(true, "{\"is_enable\":true}")));
+        mockAgentGet(CompletableFuture.failedFuture(new IndexNotFoundException(".plugins-ml-config")));
+
+        getIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigGetRequest, actionListener);
+        ArgumentCaptor<MLIndexInsightConfigGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertNull(argumentCaptor.getValue().getIndexInsightConfig().getAgentId());
+    }
+
+    @Test
+    public void testGetIndexInsightConfig_AgentDocGetFailure() {
+        mockConfigGet(CompletableFuture.completedFuture(sdkResponse(true, "{\"is_enable\":true}")));
+        mockAgentGet(CompletableFuture.failedFuture(new RuntimeException("fail to get agent config")));
+
+        getIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigGetRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+        assertEquals("fail to get agent config", argumentCaptor.getValue().getMessage());
+    }
+
+    private GetDataObjectResponse sdkResponse(boolean exists, String source) {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(exists);
+        when(getResponse.getSourceAsString()).thenReturn(source);
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+        return sdkResponse;
+    }
+
+    private void mockConfigGet(CompletableFuture<GetDataObjectResponse> future) {
+        when(
+            sdkClient.getDataObjectAsync(argThat((GetDataObjectRequest r) -> r != null && ML_INDEX_INSIGHT_CONFIG_INDEX.equals(r.index())))
+        ).thenReturn(future);
+    }
+
+    private void mockAgentGet(CompletableFuture<GetDataObjectResponse> future) {
+        when(
+            sdkClient
+                .getDataObjectAsync(
+                    argThat(
+                        (GetDataObjectRequest r) -> r != null
+                            && ML_CONFIG_INDEX.equals(r.index())
+                            && INDEX_INSIGHT_AGENT_NAME.equals(r.id())
+                    )
+                )
+        ).thenReturn(future);
     }
 
 }
