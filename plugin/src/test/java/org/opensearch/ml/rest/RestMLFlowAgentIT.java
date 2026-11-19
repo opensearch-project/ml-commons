@@ -13,6 +13,7 @@ import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
@@ -69,6 +70,44 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
         String result = (String) responseMap.get("result");
         assertNotNull(result);
         assertTrue(result.contains("\"_source\":{\"petal_length_in_cm\""));
+    }
+
+    public void testUpdateAgent() throws IOException {
+        Response response = registerAgentWithListIndexTool();
+        String agentId = (String) parseResponseToMap(response).get("agent_id");
+
+        response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_plugins/_ml/agents/" + agentId,
+                null,
+                TestHelper.toHttpEntity("{\"name\": \"Updated_ListIndexTool_Agent\"}"),
+                null
+            );
+        assertEquals("updated", parseResponseToMap(response).get("result"));
+
+        response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/agents/" + agentId, null, "", null);
+        assertEquals("Updated_ListIndexTool_Agent", parseResponseToMap(response).get("name"));
+    }
+
+    public void testUpdateAgent_NotFound() throws IOException {
+        ResponseException exception = expectThrows(
+            ResponseException.class,
+            () -> TestHelper
+                .makeRequest(
+                    client(),
+                    "PUT",
+                    "/_plugins/_ml/agents/agent_does_not_exist",
+                    null,
+                    TestHelper.toHttpEntity("{\"name\": \"Updated_Agent\"}"),
+                    null
+                )
+        );
+        assertEquals(404, exception.getResponse().getStatusLine().getStatusCode());
+        assertTrue(
+            TestHelper.httpEntityToString(exception.getResponse().getEntity()).contains("Failed to get agent with ID agent_does_not_exist")
+        );
     }
 
     public static Response registerAgentWithListIndexTool() throws IOException {
