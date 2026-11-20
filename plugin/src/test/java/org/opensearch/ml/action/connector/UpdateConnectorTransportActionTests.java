@@ -356,6 +356,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
         assertEquals(
             "You don't have permission to update the connector, connector id: test_connector_id",
             argumentCaptor.getValue().getMessage()
