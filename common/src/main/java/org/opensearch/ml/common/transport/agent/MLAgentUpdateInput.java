@@ -8,7 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
@@ -146,7 +146,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         appType = in.readOptionalString();
         tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         toolSelectionResets = Set.of();
-        if (streamInputVersion.onOrAfter(VERSION_3_10_0)) {
+        if (streamInputVersion.onOrAfter(VERSION_3_11_0)) {
             if (in.readBoolean()) {
                 toolSelection = new MLToolSelectionConfig(in);
             }
@@ -251,7 +251,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_10_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_11_0)) {
             out.writeBoolean(toolSelection != null);
             if (toolSelection != null) {
                 toolSelection.writeTo(out);

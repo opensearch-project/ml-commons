@@ -9,7 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse.AGENT_ID_FIELD;
@@ -70,8 +70,8 @@ public class MLAgent implements ToXContentObject, Writeable {
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONTEXT_MANAGEMENT = CommonValue.VERSION_3_5_0;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CUSTOM_AGENT_ID = VERSION_3_9_0;
-    // 3.9.0 is already cut, so the tool_selection field ships in 3.10.0.
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_SELECTION = VERSION_3_10_0;
+    // 3.10.0 is already cut, so the tool_selection field ships in 3.11.0.
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_SELECTION = VERSION_3_11_0;
 
     private String name;
     private String type;

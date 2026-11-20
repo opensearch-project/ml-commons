@@ -1112,12 +1112,12 @@ public class MLAgentTest {
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
-        // opensearch.version is 3.9.0-SNAPSHOT, so Version.CURRENT predates the 3.10.0 gate.
-        // Set the stream version explicitly to exercise the write and read paths.
-        out.setVersion(CommonValue.VERSION_3_10_0);
+        // Pin the stream version to the 3.11.0 gate so the test keeps exercising the write and read paths
+        // whatever opensearch.version the build uses.
+        out.setVersion(CommonValue.VERSION_3_11_0);
         agent.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        in.setVersion(CommonValue.VERSION_3_10_0);
+        in.setVersion(CommonValue.VERSION_3_11_0);
         MLAgent restored = new MLAgent(in);
 
         assertNotNull(restored.getToolSelection());
@@ -1136,10 +1136,10 @@ public class MLAgentTest {
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
-        out.setVersion(CommonValue.VERSION_3_10_0);
+        out.setVersion(CommonValue.VERSION_3_11_0);
         agent.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        in.setVersion(CommonValue.VERSION_3_10_0);
+        in.setVersion(CommonValue.VERSION_3_11_0);
         assertNull(new MLAgent(in).getToolSelection());
     }
 
@@ -1207,7 +1207,7 @@ public class MLAgentTest {
 
     @Test
     public void toolSelection_NotWrittenToOlderNodes() throws IOException {
-        // A 3.9.0 node never reads the field, so writing it would desync the stream.
+        // A 3.10.0 node never reads the field, so writing it would desync the stream.
         MLAgent agent = MLAgent
             .builder()
             .name("test_agent")
@@ -1217,11 +1217,11 @@ public class MLAgentTest {
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
-        out.setVersion(CommonValue.VERSION_3_9_0);
+        out.setVersion(CommonValue.VERSION_3_10_0);
         agent.writeTo(out);
 
         StreamInput in = out.bytes().streamInput();
-        in.setVersion(CommonValue.VERSION_3_9_0);
+        in.setVersion(CommonValue.VERSION_3_10_0);
         MLAgent restored = new MLAgent(in);
         assertNull(restored.getToolSelection());
         // The rest of the agent must survive intact, proving the stream stayed in sync.

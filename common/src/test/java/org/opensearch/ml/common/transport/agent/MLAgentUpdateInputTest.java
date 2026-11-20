@@ -13,7 +13,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -1206,10 +1206,10 @@ public class MLAgentUpdateInputTest {
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
-        out.setVersion(VERSION_3_10_0);
+        out.setVersion(VERSION_3_11_0);
         input.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        in.setVersion(VERSION_3_10_0);
+        in.setVersion(VERSION_3_11_0);
         assertEquals(Set.of(MLToolSelectionConfig.EMBEDDING_MODEL_ID_FIELD), new MLAgentUpdateInput(in).getToolSelectionResets());
 
         assertTrue(serializationWithToXContent(input).contains("\"tool_selection\":{\"top_k\":4,\"embedding_model_id\":null}"));
@@ -1237,19 +1237,19 @@ public class MLAgentUpdateInputTest {
             .build();
 
         BytesStreamOutput current = new BytesStreamOutput();
-        current.setVersion(VERSION_3_10_0);
+        current.setVersion(VERSION_3_11_0);
         input.writeTo(current);
         StreamInput currentIn = current.bytes().streamInput();
-        currentIn.setVersion(VERSION_3_10_0);
+        currentIn.setVersion(VERSION_3_11_0);
         MLAgentUpdateInput read = new MLAgentUpdateInput(currentIn);
         assertEquals(toolSelection, read.getToolSelection());
         assertEquals("tenant", read.getTenantId());
 
         BytesStreamOutput older = new BytesStreamOutput();
-        older.setVersion(VERSION_3_9_0);
+        older.setVersion(VERSION_3_10_0);
         input.writeTo(older);
         StreamInput olderIn = older.bytes().streamInput();
-        olderIn.setVersion(VERSION_3_9_0);
+        olderIn.setVersion(VERSION_3_10_0);
         MLAgentUpdateInput readOlder = new MLAgentUpdateInput(olderIn);
         assertNull(readOlder.getToolSelection());
         assertEquals("tenant", readOlder.getTenantId());
