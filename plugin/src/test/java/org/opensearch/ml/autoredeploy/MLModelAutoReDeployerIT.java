@@ -30,6 +30,8 @@ public class MLModelAutoReDeployerIT extends MLCommonsRestTestCase {
         String registerFirstModelTaskId = registerModel(requestBody);
         String registerSecondModelTaskId = registerModel(requestBody);
         waitForTask(registerFirstModelTaskId, MLTaskState.COMPLETED);
+        // The second task carries a model_id only once its registration completes; both deploys below then go out back to back.
+        waitForTask(registerSecondModelTaskId, MLTaskState.COMPLETED);
         getTask(client(), registerFirstModelTaskId, response -> {
             String firstModelId = (String) response.get(MODEL_ID_FIELD);
             try {
