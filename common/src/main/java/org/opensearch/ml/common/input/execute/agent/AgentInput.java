@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.input.execute.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -201,7 +201,7 @@ public class AgentInput implements Writeable {
         toolCall.setId(id);
         toolCall.setType(type);
         toolCall.setFunction(function);
-        if (in.getVersion().onOrAfter(VERSION_3_10_0)) {
+        if (in.getVersion().onOrAfter(VERSION_3_11_0)) {
             toolCall.setThoughtSignature(in.readOptionalString());
         }
         return toolCall;
@@ -826,7 +826,7 @@ public class AgentInput implements Writeable {
         out.writeString(toolCall.getId());
         out.writeString(toolCall.getType());
         writeToolFunction(out, toolCall.getFunction());
-        if (out.getVersion().onOrAfter(VERSION_3_10_0)) {
+        if (out.getVersion().onOrAfter(VERSION_3_11_0)) {
             out.writeOptionalString(toolCall.getThoughtSignature());
         }
     }

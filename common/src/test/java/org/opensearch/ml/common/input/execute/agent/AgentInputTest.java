@@ -11,14 +11,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_10_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -907,15 +907,15 @@ public class AgentInputTest {
     }
 
     @Test
-    public void testThoughtSignatureIsParsedAndStreamedFrom310() throws IOException {
+    public void testThoughtSignatureIsParsedAndStreamedFrom311() throws IOException {
         AgentInput parsed = parseMessages(SIGNED_TOOL_CALL);
         assertEquals("sig==", firstToolCall(parsed).getThoughtSignature());
 
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(VERSION_3_10_0);
+        output.setVersion(VERSION_3_11_0);
         parsed.writeTo(output);
         StreamInput input = output.bytes().streamInput();
-        input.setVersion(VERSION_3_10_0);
+        input.setVersion(VERSION_3_11_0);
 
         assertEquals("sig==", firstToolCall(new AgentInput(input)).getThoughtSignature());
     }
@@ -923,10 +923,10 @@ public class AgentInputTest {
     @Test
     public void testThoughtSignatureIsNotSentToOlderNodes() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(VERSION_3_9_0);
+        output.setVersion(Version.fromString("3.10.0"));
         parseMessages(SIGNED_TOOL_CALL).writeTo(output);
         StreamInput input = output.bytes().streamInput();
-        input.setVersion(VERSION_3_9_0);
+        input.setVersion(Version.fromString("3.10.0"));
 
         AgentInput read = new AgentInput(input);
 
