@@ -128,7 +128,17 @@ public class BatchInferenceExecutor {
                 listener.onFailure(e);
             }
         };
-        predictor.asyncPredict(input, validatingListener, channel);
+        callModelOnce(modelId, predictor, input, validatingListener);
+    }
+
+    private static void callModelOnce(String modelId, Predictable predictor, MLInput input, ActionListener<MLTaskResponse> listener) {
+        ActionListener<MLTaskResponse> once = ActionListener.notifyOnce(listener);
+        try {
+            predictor.asyncPredict(input, once, null);
+        } catch (Exception e) {
+            log.error("Model call for model {} threw", modelId, e);
+            once.onFailure(e);
+        }
     }
 
     private void dispatchBatches(
@@ -158,7 +168,7 @@ public class BatchInferenceExecutor {
         for (int i = 0; i < total; i++) {
             int index = i;
             List<BatchItem> batch = batches.get(i);
-            ActionListener<MLTaskResponse> subListener = ActionListener.wrap(response -> {
+            ActionListener<MLTaskResponse> subListener = ActionListener.notifyOnce(ActionListener.wrap(response -> {
                 try {
                     MLOutput output = response.getOutput();
                     // A sub-batch whose result count does not match its item count is a failure, not a result:
@@ -193,7 +203,7 @@ public class BatchInferenceExecutor {
                         complete(failures, results, handler, listener);
                     }
                 }
-            });
+            }));
             try {
                 MLInput subInput = handler.merge(input, batch);
                 predictor.asyncPredict(subInput, subListener, channel);
