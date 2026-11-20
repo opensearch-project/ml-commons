@@ -55,7 +55,7 @@ public class MLAgentModelSpec implements ToXContentObject {
             ConnectorClientConfig.RETRY_TIMEOUT_SECONDS_FIELD,
             ConnectorClientConfig.RETRY_BACKOFF_POLICY_FIELD
         );
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_3_10_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_3_11_0;
 
     private final String modelId;
     private final String modelProvider;

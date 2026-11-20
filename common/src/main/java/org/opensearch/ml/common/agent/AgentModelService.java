@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.agent;
 
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
@@ -31,9 +32,30 @@ public class AgentModelService {
         ModelProvider provider = ModelProviderFactory.getProvider(modelSpec.getModelProvider());
 
         Connector connector = provider.createConnector(modelSpec.getModelId(), modelSpec.getCredential(), modelSpec.getModelParameters());
-        applyClientConfigOverrides(connector.getConnectorClientConfig(), modelSpec.getClientConfig());
+        applyClientConfig(connector, modelSpec.getClientConfig());
 
         return provider.createModelInput(modelSpec.getModelId(), connector, modelSpec.getModelParameters());
+    }
+
+    /**
+     * Applies the agent's client_config to the auto-created connector. A connector created without a client
+     * config gets one with the default values first, so the agent's overrides are never silently dropped.
+     *
+     * @param connector the auto-created connector, modified in place
+     * @param overrides the agent's client_config, or null to keep the connector as it is
+     * @throws IllegalArgumentException if the connector has no client config and can't be given one
+     */
+    static void applyClientConfig(Connector connector, ConnectorClientConfig overrides) {
+        if (overrides == null) {
+            return;
+        }
+        if (connector.getConnectorClientConfig() == null) {
+            if (!(connector instanceof AbstractConnector abstractConnector)) {
+                throw new IllegalArgumentException("client_config isn't supported for this model provider's connector");
+            }
+            abstractConnector.setConnectorClientConfig(new ConnectorClientConfig());
+        }
+        applyClientConfigOverrides(connector.getConnectorClientConfig(), overrides);
     }
 
     /**

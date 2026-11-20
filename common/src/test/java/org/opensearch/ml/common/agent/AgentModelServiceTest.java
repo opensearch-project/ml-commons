@@ -15,7 +15,10 @@ import java.util.stream.Stream;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.execute.agent.ModelProviderType;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -310,5 +313,28 @@ public class AgentModelServiceTest {
         ConnectorClientConfig target = new ConnectorClientConfig();
         AgentModelService.applyClientConfigOverrides(target, null);
         assertEquals(new ConnectorClientConfig(), target);
+    }
+
+    @Test
+    public void testClientConfigIsKeptWhenTheConnectorHasNone() {
+        // A provider connector created without a client config must not drop the agent's overrides.
+        Connector connector = HttpConnector.builder().name("c").protocol(ConnectorProtocols.HTTP).build();
+        assertNull(connector.getConnectorClientConfig());
+
+        AgentModelService.applyClientConfig(connector, ConnectorClientConfig.builder().readTimeout(120).build());
+
+        ConnectorClientConfig config = connector.getConnectorClientConfig();
+        assertEquals(Integer.valueOf(120), config.getReadTimeout());
+        assertEquals(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE, config.getConnectionTimeout());
+        assertEquals(ConnectorClientConfig.MAX_RETRY_TIMES_DEFAULT_VALUE, config.getMaxRetryTimes());
+    }
+
+    @Test
+    public void testNoClientConfigLeavesTheConnectorUnchanged() {
+        Connector connector = HttpConnector.builder().name("c").protocol(ConnectorProtocols.HTTP).build();
+
+        AgentModelService.applyClientConfig(connector, null);
+
+        assertNull(connector.getConnectorClientConfig());
     }
 }

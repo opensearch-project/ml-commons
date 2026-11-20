@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -632,15 +633,18 @@ public class MLAgentModelSpecTest {
             .clientConfig(ConnectorClientConfig.builder().readTimeout(120).build())
             .build();
         BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_11_0);
         original.writeTo(output);
-        MLAgentModelSpec deserialized = new MLAgentModelSpec(output.bytes().streamInput());
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(CommonValue.VERSION_3_11_0);
+        MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
         assertEquals(Integer.valueOf(120), deserialized.getClientConfig().getReadTimeout());
         assertNull(deserialized.getClientConfig().getMaxRetryTimes());
     }
 
     @Test
     public void testStreamSerialization_ClientConfigNotSentToOlderNodes() throws IOException {
-        // A 3.9 node doesn't know the field: it is neither written to nor read from its streams.
+        // A 3.10 node doesn't know the field: it is neither written to nor read from its streams.
         MLAgentModelSpec original = MLAgentModelSpec
             .builder()
             .modelId("m")
@@ -649,10 +653,10 @@ public class MLAgentModelSpecTest {
             .clientConfig(ConnectorClientConfig.builder().readTimeout(120).build())
             .build();
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_3_9_0);
+        output.setVersion(Version.fromString("3.10.0"));
         original.writeTo(output);
         StreamInput input = output.bytes().streamInput();
-        input.setVersion(CommonValue.VERSION_3_9_0);
+        input.setVersion(Version.fromString("3.10.0"));
         MLAgentModelSpec deserialized = new MLAgentModelSpec(input);
         assertNull(deserialized.getClientConfig());
         assertEquals(Map.of("k", "v"), deserialized.getModelParameters());
