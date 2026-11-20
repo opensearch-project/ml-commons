@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.AccessController;
@@ -26,8 +27,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
@@ -63,6 +66,18 @@ public class ModelHelper {
     private static final Pattern FULLY_QUALIFIED_CLASS_NAME = Pattern.compile("^([a-zA-Z_$][\\w$]*\\.)+[A-Z][\\w$]*$");
     private static final String ALLOWED_CLASS_PREFIX = "ai.djl.";
     private static final String SERVING_PROPERTIES_FILE_NAME = "serving.properties";
+    // TorchScript file ops, matched as bare identifiers to catch every spelling.
+    private static final Pattern DISALLOWED_TORCHSCRIPT_OPS = Pattern.compile("\\b(from_file|save|load_tensor)\\b");
+    // Allowed torch.ops/torch.classes namespaces. The separator allows whitespace, line continuations and comments,
+    // and is possessive to keep matching linear.
+    private static final String TORCHSCRIPT_TOKEN_SEPARATOR = "(?:\\s|\\\\|#[^\\n]*+)*+";
+    private static final Pattern TORCHSCRIPT_NAMESPACE_REFERENCE = Pattern
+        .compile("\\b(?:ops|classes)" + TORCHSCRIPT_TOKEN_SEPARATOR + "\\." + TORCHSCRIPT_TOKEN_SEPARATOR + "([A-Za-z_]\\w*)");
+    // Custom class references in pickled module state (data.pkl, constants.pkl), stored as plain text.
+    private static final Pattern TORCHSCRIPT_PICKLED_CLASS_REFERENCE = Pattern.compile("\\btorch\\.classes\\.([A-Za-z_]\\w*)");
+    private static final Set<String> ALLOWED_TORCHSCRIPT_NAMESPACES = Set.of("aten", "prim", "quantized");
+    // Max TorchScript source and pickle bytes read per archive.
+    private static final long MAX_TORCHSCRIPT_SOURCE_BYTES = 16L * 1024 * 1024;
     private final MLEngine mlEngine;
 
     public ModelHelper(MLEngine mlEngine) {
@@ -399,8 +414,73 @@ public class ModelHelper {
     }
 
     /**
+     * Rejects TorchScript archives whose code/ sources call filesystem ops, or whose sources or pickles reference
+     * disallowed namespaces; these would run in the OpenSearch process during torch::jit::load (e.g. via
+     * __setstate__). Fails closed: anything that isn't a zip with
+     * code/ sources (e.g. flatbuffer) is rejected, since its code can't be scanned.
+     */
+    private static void verifyTorchScriptArchive(File modelFile) throws IOException {
+        String fileName = modelFile.getName();
+        try (ZipFile zipFile = new ZipFile(modelFile)) {
+            boolean hasSource = false;
+            long remainingBytes = MAX_TORCHSCRIPT_SOURCE_BYTES;
+            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String entryName = entry.getName();
+                boolean isSource = entryName.endsWith(".py");
+                boolean isPickle = entryName.endsWith(".pkl");
+                if (!isSource && !isPickle) {
+                    continue;
+                }
+                hasSource |= isSource && entryName.contains("/code/");
+                byte[] content;
+                try (InputStream in = zipFile.getInputStream(entry)) {
+                    content = in.readNBytes((int) remainingBytes + 1);
+                }
+                remainingBytes -= content.length;
+                if (remainingBytes < 0) {
+                    throw new IllegalArgumentException("TorchScript model " + fileName + " source exceeds the size limit");
+                }
+                if (isSource) {
+                    verifyTorchScriptSource(new String(content, StandardCharsets.UTF_8), entryName);
+                } else {
+                    verifyTorchScriptNamespaces(
+                        TORCHSCRIPT_PICKLED_CLASS_REFERENCE.matcher(new String(content, StandardCharsets.ISO_8859_1)),
+                        entryName
+                    );
+                }
+            }
+            if (!hasSource) {
+                throw new IllegalArgumentException("Model file " + fileName + " is not a TorchScript archive: no code/ entries");
+            }
+        } catch (ZipException e) {
+            throw new IllegalArgumentException("Model file " + fileName + " is not a valid TorchScript zip archive: " + e.getMessage());
+        }
+    }
+
+    private static void verifyTorchScriptSource(String source, String entryName) {
+        Matcher opMatcher = DISALLOWED_TORCHSCRIPT_OPS.matcher(source);
+        if (opMatcher.find()) {
+            throw new IllegalArgumentException("TorchScript model uses disallowed operation: " + opMatcher.group() + " in " + entryName);
+        }
+        verifyTorchScriptNamespaces(TORCHSCRIPT_NAMESPACE_REFERENCE.matcher(source), entryName);
+    }
+
+    private static void verifyTorchScriptNamespaces(Matcher namespaceMatcher, String entryName) {
+        while (namespaceMatcher.find()) {
+            if (!ALLOWED_TORCHSCRIPT_NAMESPACES.contains(namespaceMatcher.group(1))) {
+                throw new IllegalArgumentException(
+                    "TorchScript model uses disallowed operation namespace: " + namespaceMatcher.group(1) + " in " + entryName
+                );
+            }
+        }
+    }
+
+    /**
      * Validate an unzipped model directory before DJL loads it. Rejects archives that
-     * carry executable files or a serving.properties that points DJL at a non-DJL class.
+     * carry executable files, a serving.properties that points DJL at a non-DJL class,
+     * or TorchScript code that accesses the filesystem.
      */
     public static void verifyModelDirSafety(Path modelDir) throws IOException {
         File[] files = modelDir.toFile().listFiles();
@@ -417,6 +497,11 @@ public class ModelHelper {
                 try (InputStream in = Files.newInputStream(file.toPath())) {
                     verifyServingProperties(in);
                 }
+            }
+            String name = file.getName();
+            if (name.toLowerCase(Locale.ROOT).endsWith(PYTORCH_FILE_EXTENSION)
+                || name.equalsIgnoreCase(modelDir.getFileName().toString())) {
+                verifyTorchScriptArchive(file);
             }
         }
     }
