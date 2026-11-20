@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.FailedNodeException;
@@ -50,6 +51,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -514,6 +516,23 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
         verify(actionListener).onFailure(isA(IllegalArgumentException.class));
+    }
+
+    public void testDoExecute_noPermissionToUndeploy_returnsForbidden() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(7);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
+        transportUndeployModelsAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        assertEquals("No permission to undeploy model " + modelIds[0], argumentCaptor.getValue().getMessage());
+        verify(client, never()).execute(any(), any(), any());
     }
 
     public void testDoExecute_getModel_exception() {
