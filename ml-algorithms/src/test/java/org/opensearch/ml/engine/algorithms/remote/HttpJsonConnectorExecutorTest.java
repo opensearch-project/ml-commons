@@ -49,7 +49,6 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -624,6 +623,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
 
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         StreamPredictActionListener<MLTaskResponse, ?> streamActionListener = mock(StreamPredictActionListener.class);
 
         Map<String, String> parameters = ImmutableMap.of("_llm_interface", "invalid_interface", "input", "test input");
@@ -634,8 +634,44 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(streamActionListener, times(1)).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Unsupported llm interface: invalid_interface", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_MissingLlmInterface() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://openai.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
+        StreamPredictActionListener<MLTaskResponse, ?> streamActionListener = mock(StreamPredictActionListener.class);
+
+        executor
+            .invokeRemoteServiceStream(
+                PREDICT.name(),
+                createMLInput(),
+                ImmutableMap.of("input", "test input"),
+                "{\"input\": \"test input\"}",
+                new ExecutionContext(0),
+                streamActionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(streamActionListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("_llm_interface is required for streaming", captor.getValue().getMessage());
     }
 
     @Test

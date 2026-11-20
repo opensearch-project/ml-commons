@@ -67,7 +67,6 @@ import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.MLResultDataType;
@@ -1157,7 +1156,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
         AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
         MLInput mlInput = mock(MLInput.class);
-        Map<String, String> parameters = Map.of("llm_interface", "invalid_interface", "model", "claude-v2", "inputs", "test input");
+        Map<String, String> parameters = Map.of(LLM_INTERFACE, "invalid_interface", "model", "claude-v2", "inputs", "test input");
         String payload = "test payload";
         ExecutionContext executionContext = new ExecutionContext(123);
         StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
@@ -1166,8 +1165,62 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Unsupported llm interface: invalid_interface", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_MissingLlmInterface() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        Map<String, String> parameters = Map.of("model", "claude-v2", "inputs", "test input");
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor
+            .invokeRemoteServiceStream(
+                "predict",
+                mock(MLInput.class),
+                parameters,
+                "test payload",
+                new ExecutionContext(123),
+                actionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("_llm_interface is required for streaming", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_BlankLlmInterface() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        Map<String, String> parameters = Map.of(LLM_INTERFACE, "  ", "model", "claude-v2", "inputs", "test input");
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor
+            .invokeRemoteServiceStream(
+                "predict",
+                mock(MLInput.class),
+                parameters,
+                "test payload",
+                new ExecutionContext(123),
+                actionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("_llm_interface is required for streaming", captor.getValue().getMessage());
     }
 
     @Test
