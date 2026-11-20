@@ -627,6 +627,23 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         });
     }
 
+    public void test_RegisterModelIntoPrivateModelGroupOfAnotherUser_returnsForbidden() throws IOException {
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("user1PrivateModelGroup", null, AccessMode.PRIVATE, null);
+        registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
+            // Access is checked before the connector is used, so any connector ID will do
+            String registerModelInput = "{\"name\":\"user2-model\",\"function_name\":\"remote\",\"model_group_id\":\""
+                + modelGroupId
+                + "\",\"connector_id\":\"any-connector-id\"}";
+            ResponseException e = expectThrows(
+                ResponseException.class,
+                () -> TestHelper.makeRequest(user2Client, "POST", "/_plugins/_ml/models/_register", null, registerModelInput, null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permissions to perform this operation on this model."));
+        });
+    }
+
     public void test_UpdatePrivateModelGroupOfAnotherUser_returnsForbidden() throws IOException {
         mlRegisterModelGroupInput = createRegisterModelGroupInput("user1PrivateModelGroup", null, AccessMode.PRIVATE, null);
         registerModelGroup(user1Client, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
