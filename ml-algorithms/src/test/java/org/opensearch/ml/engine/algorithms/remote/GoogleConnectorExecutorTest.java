@@ -200,7 +200,10 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
         );
 
         executor.invokeRemoteServiceStream(PREDICT.name(), null, params, "{}", null, streamListener);
-        Mockito.verify(streamListener, times(1)).onFailure(Mockito.any(Exception.class));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(streamListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Unsupported llm interface: totally_unsupported", captor.getValue().getMessage());
     }
 
     @Test
@@ -215,7 +218,10 @@ public class GoogleConnectorExecutorTest extends MLStaticMockBase {
         );
 
         executor.invokeRemoteServiceStream(PREDICT.name(), null, new HashMap<>(), "{}", null, streamListener);
-        Mockito.verify(streamListener, times(1)).onFailure(Mockito.any(Exception.class));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        Mockito.verify(streamListener, times(1)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("_llm_interface is required for streaming", captor.getValue().getMessage());
     }
 
     @Test

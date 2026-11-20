@@ -182,12 +182,18 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
 
             String llmInterface = parameters.get(LLM_INTERFACE);
+            if (llmInterface == null) {
+                throw new IllegalArgumentException(LLM_INTERFACE + " is required for streaming");
+            }
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
             validateLLMInterface(llmInterface);
 
             StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null, parameters);
             handler.startStream(action, parameters, payload, actionListener);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid streaming request", e);
+            actionListener.onFailure(e);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
             actionListener.onFailure(new MLException("Fail to execute streaming", e));

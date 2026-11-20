@@ -227,6 +227,9 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
                     new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
                 );
             handler.startStream(action, parameters, payload, actionListener);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid google_cloud streaming request", e);
+            actionListener.onFailure(e);
         } catch (Exception e) {
             log.error("Failed to execute google_cloud streaming", e);
             actionListener.onFailure(new MLException("Fail to execute google_cloud streaming", e));
