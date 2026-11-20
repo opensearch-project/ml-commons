@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.common.settings.Settings;
@@ -28,6 +29,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -192,6 +194,8 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     public void test_ExceptionFailedToIndexModelGroup() {

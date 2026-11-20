@@ -24,6 +24,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -36,6 +37,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -189,6 +191,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
         assertEquals("Only owner or admin can update access control data.", argumentCaptor.getValue().getMessage());
     }
 
@@ -200,6 +204,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
         assertEquals(
             "You don't have the specified backend role to update this model group. For more information, contact your administrator.",
             argumentCaptor.getValue().getMessage()
@@ -215,6 +221,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
         assertEquals("You don't have permission to update this model group.", argumentCaptor.getValue().getMessage());
     }
 
