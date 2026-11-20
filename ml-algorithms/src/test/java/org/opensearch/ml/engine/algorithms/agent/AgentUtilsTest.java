@@ -28,6 +28,7 @@ import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -4139,5 +4140,294 @@ public class AgentUtilsTest extends MLStaticMockBase {
         logMetric.setAccessible(true);
         // Three kvPairs (odd) — the last "orphan-key" has no value and should be dropped
         logMetric.invoke(null, false, "TestMetric", new Object[] { "key1", "val1", "orphan-key" });
+    }
+
+    // ==================== cleanSchemaForGemini ====================
+
+    private static Map<String, Object> cleanedForGemini(String schema) {
+        return gson.fromJson(AgentUtils.cleanSchemaForGemini(schema), Map.class);
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_InlinesRefFromDefsAsReceivedFromMcp() {
+        // GetAgenticMemoryTool's schema as opensearch-mcp-server-py serves it: "$ref" into a "defs" block.
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"memory_container_id\":{\"type\":\"string\"},"
+            + "\"type\":{\"$ref\":\"#/$defs/MemoryType\",\"description\":\"The memory type.\"}},"
+            + "\"required\":[\"memory_container_id\",\"type\"],"
+            + "\"defs\":{\"MemoryType\":{\"description\":\"Agentic memory types.\",\"enum\":[\"sessions\",\"working\"],\"type\":\"string\"}}}";
+
+        String cleaned = AgentUtils.cleanSchemaForGemini(schema);
+
+        assertFalse(cleaned.contains("$ref"));
+        assertFalse(cleaned.contains("defs"));
+        Map<String, Object> type = (Map<String, Object>) ((Map<String, Object>) cleanedForGemini(schema).get("properties")).get("type");
+        assertEquals("string", type.get("type"));
+        assertEquals(List.of("sessions", "working"), type.get("enum"));
+        assertEquals("The memory type.", type.get("description"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ResolvesDollarDefsAndDefinitions() {
+        for (String block : List.of("$defs", "definitions")) {
+            String schema = "{\"type\":\"object\",\"properties\":{\"x\":{\"$ref\":\"#/"
+                + block
+                + "/X\"}},"
+                + "\""
+                + block
+                + "\":{\"X\":{\"type\":\"integer\"}}}";
+            Map<String, Object> x = (Map<String, Object>) ((Map<String, Object>) cleanedForGemini(schema).get("properties")).get("x");
+            assertEquals(block, "integer", x.get("type"));
+        }
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_RemovesAdditionalPropertiesAtEverySchemaPosition() {
+        String schema = "{\"type\":\"object\",\"additionalProperties\":false,\"$schema\":\"http://json-schema.org/draft-07/schema#\","
+            + "\"properties\":{"
+            + "\"filter\":{\"anyOf\":[{\"type\":\"object\",\"additionalProperties\":true},{\"type\":\"null\"}]},"
+            + "\"rows\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"additionalProperties\":{\"type\":\"string\"}}}}}";
+
+        String cleaned = AgentUtils.cleanSchemaForGemini(schema);
+
+        assertFalse(cleaned.contains("additionalProperties"));
+        assertFalse(cleaned.contains("$schema"));
+        assertTrue(cleaned.contains("anyOf"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_LeavesAPropertyNamedLikeAKeyword() {
+        String schema = "{\"type\":\"object\",\"properties\":{\"additionalProperties\":{\"type\":\"boolean\"}}}";
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+        assertTrue(properties.containsKey("additionalProperties"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_RecursiveOrUnknownRefBecomesAnObject() {
+        String recursive = "{\"type\":\"object\",\"properties\":{\"node\":{\"$ref\":\"#/$defs/Node\"}},"
+            + "\"$defs\":{\"Node\":{\"type\":\"object\",\"properties\":{\"child\":{\"$ref\":\"#/$defs/Node\"}}}}}";
+        String cleaned = AgentUtils.cleanSchemaForGemini(recursive);
+        assertFalse(cleaned.contains("$ref"));
+
+        String unknown = "{\"type\":\"object\",\"properties\":{\"x\":{\"$ref\":\"https://example.com/schema.json\"}}}";
+        Map<String, Object> x = (Map<String, Object>) ((Map<String, Object>) cleanedForGemini(unknown).get("properties")).get("x");
+        assertEquals("object", x.get("type"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_SelfReferenceIsExpandedOnce() {
+        // A tree node with left/right children: each self-reference becomes an object schema one level down.
+        String tree = "{\"$ref\":\"#/$defs/Node\",\"$defs\":{\"Node\":{\"type\":\"object\",\"properties\":{"
+            + "\"value\":{\"type\":\"string\"},\"left\":{\"$ref\":\"#/$defs/Node\"},\"right\":{\"$ref\":\"#/$defs/Node\"}}}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(tree).get("properties");
+
+        assertEquals(Map.of("type", "string"), properties.get("value"));
+        assertEquals(Map.of("type", "object"), properties.get("left"));
+        assertEquals(Map.of("type", "object"), properties.get("right"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ManySelfReferencesStaySmall() {
+        String schema = "{\"$defs\":{\"N\":{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/N\"},"
+            + "\"b\":{\"$ref\":\"#/$defs/N\"},\"c\":{\"$ref\":\"#/$defs/N\"},\"d\":{\"$ref\":\"#/$defs/N\"}}}},\"$ref\":\"#/$defs/N\"}";
+
+        String cleaned = AgentUtils.cleanSchemaForGemini(schema);
+
+        assertTrue(cleaned.length() < 1_000);
+        assertFalse(cleaned.contains("$ref"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_MutualRecursionStopsAtTheRepeat() {
+        String schema = "{\"$ref\":\"#/$defs/A\",\"$defs\":{"
+            + "\"A\":{\"type\":\"object\",\"properties\":{\"b\":{\"$ref\":\"#/$defs/B\"}}},"
+            + "\"B\":{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/A\"}}}}}";
+
+        Map<String, Object> b = (Map<String, Object>) ((Map<String, Object>) cleanedForGemini(schema).get("properties")).get("b");
+
+        assertEquals(Map.of("type", "object"), ((Map<String, Object>) b.get("properties")).get("a"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_NonObjectInputFallsBack() {
+        assertNull(AgentUtils.cleanSchemaForGemini(null));
+        assertEquals("", AgentUtils.cleanSchemaForGemini(""));
+        assertEquals("not json", AgentUtils.cleanSchemaForGemini("not json"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_KeepsOnlyGeminiSchemaFields() {
+        // As Pydantic emits them: oneOf for a union, const for a Literal, allOf around a described reference.
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"mode\":{\"const\":\"fast\",\"description\":\"Mode.\"},"
+            + "\"value\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\",\"exclusiveMinimum\":0}]},"
+            + "\"range\":{\"allOf\":[{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"integer\"}},\"required\":[\"from\"]}],"
+            + "\"properties\":{\"to\":{\"type\":\"integer\"}},\"required\":[\"to\"]},"
+            + "\"other\":{\"type\":\"string\",\"not\":{\"const\":\"x\"},\"examples\":[\"a\"],\"readOnly\":true},"
+            + "\"const\":{\"type\":\"boolean\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "string", "enum", List.of("fast"), "description", "Mode."), properties.get("mode"));
+        Map<String, Object> value = (Map<String, Object>) properties.get("value");
+        assertEquals(List.of(Map.of("type", "string"), Map.of("type", "integer")), value.get("anyOf"));
+        assertFalse(value.containsKey("oneOf"));
+        Map<String, Object> range = (Map<String, Object>) properties.get("range");
+        assertEquals(Set.of("from", "to"), ((Map<String, Object>) range.get("properties")).keySet());
+        assertEquals(List.of("to", "from"), range.get("required"));
+        assertFalse(range.containsKey("allOf"));
+        assertEquals(Map.of("type", "string"), properties.get("other"));
+        // A property named like a keyword is a property, not a keyword
+        assertEquals(Map.of("type", "boolean"), properties.get("const"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ResolvesTheFullPointer() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"$ref\":\"#/definitions/Item\"},\"b\":{\"$ref\":\"#/$defs/Item\"},"
+            + "\"x\":{\"type\":\"boolean\"},\"y\":{\"$ref\":\"#/properties/x\"}},"
+            + "\"$defs\":{\"Item\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"}},"
+            + "\"definitions\":{\"Item\":{\"type\":\"integer\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "integer"), properties.get("a"));
+        assertEquals(Map.of("type", "string"), properties.get("b"));
+        assertEquals(Map.of("type", "boolean"), properties.get("y"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_ResolvesNestedDefinitions() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"type\":\"object\",\"$defs\":{\"B\":{\"type\":\"number\"}}},"
+            + "\"b\":{\"$ref\":\"#/properties/a/$defs/B\"}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "number"), properties.get("b"));
+        assertEquals(Map.of("type", "object"), properties.get("a"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_FanOutDefinitionsStayBounded() {
+        // D0 -> {x: D1, y: D1, z: D1}, D1 -> {x: D2, ...}: inlining every use would make 3^8 copies of the leaf.
+        StringBuilder defs = new StringBuilder();
+        for (int i = 0; i < 8; i++) {
+            String next = "{\"$ref\":\"#/$defs/D" + (i + 1) + "\"}";
+            defs
+                .append("\"D")
+                .append(i)
+                .append("\":{\"type\":\"object\",\"properties\":{\"x\":")
+                .append(next)
+                .append(",\"y\":")
+                .append(next)
+                .append(",\"z\":")
+                .append(next)
+                .append("}},");
+        }
+        defs.append("\"D8\":{\"type\":\"string\"}");
+        String schema = "{\"$ref\":\"#/$defs/D0\",\"$defs\":{" + defs + "}}";
+
+        String cleaned = AgentUtils.cleanSchemaForGemini(schema);
+
+        assertFalse(cleaned.contains("$ref"));
+        assertTrue("length " + cleaned.length(), cleaned.length() < 100_000);
+        assertEquals("object", cleanedForGemini(schema).get("type"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_LargeDefinitionsUnderTheBudgetAreKeptAtTheRoot() {
+        // Root $ref Req, whose 3 properties each reference Big (292 objects): 879 objects in all, under the budget.
+        // Charging Big's copies again inside Req's size used to collapse the whole schema to {type: object}.
+        StringBuilder bigProperties = new StringBuilder();
+        for (int i = 0; i < 290; i++) {
+            bigProperties.append(i == 0 ? "" : ",").append("\"f").append(i).append("\":{\"type\":\"string\"}");
+        }
+        String schema = "{\"$ref\":\"#/$defs/Req\",\"$defs\":{"
+            + "\"Big\":{\"type\":\"object\",\"properties\":{"
+            + bigProperties
+            + "}},"
+            + "\"Req\":{\"type\":\"object\",\"properties\":{"
+            + "\"p1\":{\"$ref\":\"#/$defs/Big\"},\"p2\":{\"$ref\":\"#/$defs/Big\"},\"p3\":{\"$ref\":\"#/$defs/Big\"}}}}}";
+
+        Map<String, Object> cleaned = cleanedForGemini(schema);
+
+        assertEquals("object", cleaned.get("type"));
+        Map<String, Object> properties = (Map<String, Object>) cleaned.get("properties");
+        for (String name : List.of("p1", "p2", "p3")) {
+            Map<String, Object> big = (Map<String, Object>) properties.get(name);
+            assertEquals(name, 290, ((Map<String, Object>) big.get("properties")).size());
+        }
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_MutualRecursionResolvesEachReferenceFresh() {
+        // B is first cleaned inside A, where A is cut; root.b must not reuse that shallower B.
+        String schema = "{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/A\"},\"b\":{\"$ref\":\"#/$defs/B\"}},"
+            + "\"$defs\":{"
+            + "\"A\":{\"type\":\"object\",\"properties\":{\"b\":{\"$ref\":\"#/$defs/B\"}}},"
+            + "\"B\":{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/A\"}}}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        Map<String, Object> bA = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) properties.get("b")).get("properties"))
+            .get("a");
+        assertEquals(Map.of("type", "object"), ((Map<String, Object>) bA.get("properties")).get("b"));
+        Map<String, Object> aB = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) properties.get("a")).get("properties"))
+            .get("b");
+        assertEquals(Map.of("type", "object"), ((Map<String, Object>) aB.get("properties")).get("a"));
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_DepthCutIsNotReusedAtAShallowerReference() {
+        // D1 -> D2 -> ... -> D12: from the root, D11 is past the depth limit, but a root-level $ref D10 is shallow.
+        StringBuilder defs = new StringBuilder();
+        for (int i = 1; i < 12; i++) {
+            defs.append("\"D").append(i).append("\":{\"type\":\"object\",\"properties\":{\"next\":{\"$ref\":\"#/$defs/D");
+            defs.append(i + 1).append("\"}}},");
+        }
+        defs.append("\"D12\":{\"type\":\"object\",\"properties\":{\"leaf\":{\"type\":\"string\"}}}");
+        String schema = "{\"type\":\"object\",\"properties\":{\"chain\":{\"$ref\":\"#/$defs/D1\"},\"shallow\":{\"$ref\":\"#/$defs/D10\"}},"
+            + "\"$defs\":{"
+            + defs
+            + "}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        Map<String, Object> node = (Map<String, Object>) properties.get("shallow");
+        for (int i = 0; i < 2; i++) {
+            node = (Map<String, Object>) ((Map<String, Object>) node.get("properties")).get("next");
+        }
+        assertEquals(Map.of("type", "string"), ((Map<String, Object>) node.get("properties")).get("leaf"));
+        Map<String, Object> chain = (Map<String, Object>) properties.get("chain");
+        for (int i = 0; i < 10; i++) {
+            chain = (Map<String, Object>) ((Map<String, Object>) chain.get("properties")).get("next");
+        }
+        assertEquals("D11 is past the depth limit from the root", Map.of("type", "object"), chain);
+    }
+
+    @Test
+    public void testCleanSchemaForGemini_TypeListsEnumsAndConstsGeminiAccepts() {
+        String schema = "{\"type\":\"object\",\"properties\":{"
+            + "\"a\":{\"type\":[\"string\",\"null\"]},"
+            + "\"b\":{\"type\":[\"null\",\"integer\"]},"
+            + "\"c\":{\"type\":[\"string\",\"integer\"]},"
+            + "\"d\":{\"type\":\"string\",\"enum\":[1,2]},"
+            + "\"e\":{\"type\":\"integer\",\"enum\":[1,2],\"description\":\"Level.\"},"
+            + "\"f\":{\"enum\":[\"x\",null]},"
+            + "\"g\":{\"const\":5},"
+            + "\"h\":{\"const\":true}}}";
+
+        Map<String, Object> properties = (Map<String, Object>) cleanedForGemini(schema).get("properties");
+
+        assertEquals(Map.of("type", "string", "nullable", true), properties.get("a"));
+        assertEquals(Map.of("type", "integer", "nullable", true), properties.get("b"));
+        assertEquals("a union of types leaves the type open", Map.of(), properties.get("c"));
+        assertEquals(Map.of("type", "string", "enum", List.of("1", "2")), properties.get("d"));
+        assertEquals(Map.of("type", "integer", "description", "Level. Allowed values: 1, 2."), properties.get("e"));
+        assertEquals(Map.of("enum", List.of("x"), "nullable", true), properties.get("f"));
+        assertEquals(Map.of("type", "integer", "description", "Allowed values: 5."), properties.get("g"));
+        assertEquals(Map.of("type", "boolean", "description", "Allowed values: true."), properties.get("h"));
     }
 }

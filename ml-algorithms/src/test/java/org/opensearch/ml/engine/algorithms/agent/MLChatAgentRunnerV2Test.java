@@ -80,6 +80,8 @@ public class MLChatAgentRunnerV2Test {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        // parseToUnifiedMessages is concrete: let it delegate to the stubbed parseToUnifiedMessage, as in production.
+        when(modelProvider.parseToUnifiedMessages(anyString())).thenCallRealMethod();
         settings = Settings.builder().build();
         runner = new MLChatAgentRunnerV2(client, settings, clusterService, xContentRegistry, toolFactories, sdkClient, encryptor);
 

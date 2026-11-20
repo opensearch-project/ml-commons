@@ -8,14 +8,17 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -884,5 +887,51 @@ public class AgentInputTest {
 
         // Verify final assistant message
         assertEquals("assistant", deserializedMessages.get(3).getRole());
+    }
+
+    private static AgentInput parseMessages(String json) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return new AgentInput(parser);
+    }
+
+    private static final String SIGNED_TOOL_CALL =
+        "[{\"role\":\"assistant\",\"content\":[],\"toolCalls\":[{\"id\":\"t\",\"type\":\"function\","
+            + "\"function\":{\"name\":\"t\",\"arguments\":\"{}\"},\"thoughtSignature\":\"sig==\"}]}]";
+
+    @SuppressWarnings("unchecked")
+    private static ToolCall firstToolCall(AgentInput input) {
+        return ((List<Message>) input.getInput()).get(0).getToolCalls().get(0);
+    }
+
+    @Test
+    public void testThoughtSignatureIsParsedAndStreamedFrom311() throws IOException {
+        AgentInput parsed = parseMessages(SIGNED_TOOL_CALL);
+        assertEquals("sig==", firstToolCall(parsed).getThoughtSignature());
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(VERSION_3_11_0);
+        parsed.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(VERSION_3_11_0);
+
+        assertEquals("sig==", firstToolCall(new AgentInput(input)).getThoughtSignature());
+    }
+
+    @Test
+    public void testThoughtSignatureIsNotSentToOlderNodes() throws IOException {
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(Version.fromString("3.10.0"));
+        parseMessages(SIGNED_TOOL_CALL).writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(Version.fromString("3.10.0"));
+
+        AgentInput read = new AgentInput(input);
+
+        assertNull(firstToolCall(read).getThoughtSignature());
+        assertEquals("t", firstToolCall(read).getFunction().getName());
+        assertEquals(0, input.available());
     }
 }

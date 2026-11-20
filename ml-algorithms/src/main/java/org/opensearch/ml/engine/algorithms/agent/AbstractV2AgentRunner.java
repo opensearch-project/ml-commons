@@ -430,11 +430,11 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
             if (messageJson != null && !messageJson.isEmpty()) {
                 try {
                     // Parse the complete provider-specific message (includes role + content with toolResult structure)
-                    Message message = modelProvider.parseToUnifiedMessage(messageJson);
-                    if (message != null) {
-                        messages.add(message);
+                    List<Message> parsed = modelProvider.parseToUnifiedMessages(messageJson);
+                    if (!parsed.isEmpty()) {
+                        messages.addAll(parsed);
                     } else {
-                        log.warn("ModelProvider returned null when parsing tool result JSON: {}", messageJson);
+                        log.warn("ModelProvider returned no message when parsing tool result JSON: {}", messageJson);
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse tool result JSON: {}", messageJson, e);
@@ -460,10 +460,7 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         List<Message> messages = new ArrayList<>();
         for (String interactionJson : toolInteractionJsonList) {
             try {
-                Message msg = modelProvider.parseToUnifiedMessage(interactionJson);
-                if (msg != null) {
-                    messages.add(msg);
-                }
+                messages.addAll(modelProvider.parseToUnifiedMessages(interactionJson));
             } catch (Exception e) {
                 log.warn("Failed to parse tool interaction message for persistence: {}", interactionJson, e);
             }
