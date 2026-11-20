@@ -774,6 +774,57 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    // Feature flag for connector auth_config blocks whose type is not "none". Disabled by default (opt-in).
+    //
+    // Enable it only after every node in the cluster runs a release that contains this setting: older nodes do not
+    // support auth_config.
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_AUTH_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.auth_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE =
+        "Connector auth_config is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey();
+
+    // Token endpoints a connector auth_config token_url may name. Patterns are matched against the canonical URL:
+    // https, lower-case host, no default port, then the path as written. The defaults fix the host with literal
+    // domains or explicit label classes and restrict the path.
+    //
+    // Unlike the inference endpoint lists, a pattern with a wildcard in the host position is rejected rather than
+    // logged: such a pattern lets a URL whose real host is elsewhere match. This setting has no values persisted
+    // before the check existed, so rejecting cannot break a restart.
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_oauth2_token_endpoints_regex",
+            ImmutableList
+                .of(
+                    "^https://login\\.microsoftonline\\.com/[A-Za-z0-9][A-Za-z0-9.-]*/oauth2/v2\\.0/token$",
+                    "^https://oauth2\\.googleapis\\.com/token$",
+                    "^https://iam\\.cloud\\.ibm\\.com/identity/token$",
+                    "^https://[a-z0-9-]+\\.okta\\.com/oauth2/[A-Za-z0-9]+/v1/token$",
+                    "^https://login\\.salesforce\\.com/services/oauth2/token$",
+                    "^https://[a-z0-9-]+\\.my\\.salesforce\\.com/services/oauth2/token$",
+                    "^https://accounts\\.cloud\\.databricks\\.com/oidc/accounts/[a-z0-9-]+/v1/token$"
+                ),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                        if (authorityContainsWildcard(authorityPart(regex))) {
+                            throw new IllegalArgumentException(
+                                "Trusted OAuth2 token endpoint pattern \""
+                                    + regex
+                                    + "\" uses a wildcard in the host position that can match path or query characters;"
+                                    + " write the host with literal labels or [a-z0-9-]+"
+                            );
+                        }
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     /**
      * Operators may persist patterns that let the host position match path or query characters.
      * Rejecting those on restart would break the cluster, so this only warns.
