@@ -20,7 +20,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.Version;
 import org.opensearch.cluster.ClusterState;
@@ -357,13 +356,12 @@ public class ConnectorProtocolValidator {
         if (actions == null || clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
             return null;
         }
-        StringSubstitutor substitutor = new StringSubstitutor(parameters == null ? Map.of() : parameters, "${parameters.", "}");
         for (ConnectorAction action : actions) {
             String url = action == null ? null : action.getUrl();
             if (url == null) {
                 continue;
             }
-            String resolved = substitutor.replace(url);
+            String resolved = Connector.substituteParameters(url, parameters);
             if (CLEARTEXT_URL.matcher(resolved).find()) {
                 return resolved.trim();
             }

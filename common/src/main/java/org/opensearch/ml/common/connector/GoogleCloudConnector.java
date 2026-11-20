@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -140,7 +139,7 @@ public class GoogleCloudConnector extends HttpConnector {
         super.validateConnectorURL(urlRegexes);
         for (ConnectorAction action : actions) {
             if (action.getActionType() == ConnectorAction.ActionType.BATCH_PREDICT && action.getUrl() != null) {
-                String url = new StringSubstitutor(parameters, "${parameters.", "}").replace(action.getUrl());
+                String url = Connector.substituteParameters(action.getUrl(), parameters);
                 if (!VERTEX_API_VERSION_PATTERN.matcher(url).find()) {
                     throw new IllegalArgumentException(
                         "Vertex AI batch_predict endpoint must contain a '/v1/' or '/v1beta<N>/' path segment, got: " + url

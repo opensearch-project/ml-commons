@@ -17,6 +17,7 @@ import java.util.Map;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
@@ -38,12 +39,12 @@ public class StreamingHandlerFactory {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, parameters, StreamingAddressPolicy.DEFAULT);
+        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, parameters, ConnectorAddressValidator.DEFAULT);
     }
 
     /**
-     * @param addressPolicy applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
-     *                      validates addresses itself
+     * @param addressValidator applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
+     *                         validates addresses itself
      */
     public static StreamingHandler createHandler(
         String llmInterface,
@@ -51,7 +52,7 @@ public class StreamingHandlerFactory {
         SdkAsyncHttpClient httpClient,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        StreamingAddressPolicy addressPolicy
+        ConnectorAddressValidator addressValidator
     ) {
         switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
@@ -59,7 +60,7 @@ public class StreamingHandlerFactory {
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
             case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -88,8 +89,8 @@ public class StreamingHandlerFactory {
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        StreamingAddressPolicy addressPolicy
+        ConnectorAddressValidator addressValidator
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator);
     }
 }

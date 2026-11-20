@@ -46,6 +46,11 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
  */
 public interface Connector extends ToXContentObject, Writeable {
 
+    String ACTION_URL_HOST_CHANGED_MESSAGE = "The scheme, host and port of a connector action URL come from the connector's own "
+        + "parameters; request parameters cannot change them. Store the parameters that set them on the connector, or on the "
+        + "model for a connector defined inside it";
+    String URL_PARAMETER_CYCLE_MESSAGE = "Connector URL parameters refer to each other in a cycle";
+
     String getName();
 
     String getTenantId();
@@ -221,9 +226,22 @@ public interface Connector extends ToXContentObject, Writeable {
         }
         Map<String, String> parameters = getParameters();
         for (ConnectorAction action : getActions()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            String url = substitutor.replace(action.getUrl());
+            String url = substituteParameters(action.getUrl(), parameters);
             validateResolvedEndpoint(fillPathPlaceholders(url), urlRegexes);
+        }
+    }
+
+    /**
+     * url with its {@code ${parameters.*}} placeholders replaced from parameters, which may be null. A cycle is reported
+     * without naming the parameters.
+     * @throws IllegalArgumentException with URL_PARAMETER_CYCLE_MESSAGE when the parameters refer to each other in a cycle
+     */
+    static String substituteParameters(String url, Map<String, String> parameters) {
+        try {
+            return new StringSubstitutor(parameters, "${parameters.", "}").replace(url);
+        } catch (IllegalStateException e) {
+            // StringSubstitutor reports a cycle this way, with a message that names the parameters; neither is passed on.
+            throw new IllegalArgumentException(URL_PARAMETER_CYCLE_MESSAGE);
         }
     }
 
@@ -236,19 +254,26 @@ public interface Connector extends ToXContentObject, Writeable {
         if (url == null) {
             return null;
         }
-        int schemeEnd = url.indexOf("://");
-        if (schemeEnd < 0) {
+        int end = authorityEnd(url);
+        if (end < 0) {
             return url;
         }
-        int authorityEnd = url.length();
+        return url.substring(0, end) + url.substring(end).replaceAll("\\$\\{parameters\\.[^}]*\\}", "0");
+    }
+
+    /** Index at which the authority of url ends (first '/', '?' or '#' after "://"), or -1 without "://". */
+    private static int authorityEnd(String url) {
+        int schemeEnd = url.indexOf("://");
+        if (schemeEnd < 0) {
+            return -1;
+        }
         for (int i = schemeEnd + 3; i < url.length(); i++) {
             char c = url.charAt(i);
             if (c == '/' || c == '?' || c == '#') {
-                authorityEnd = i;
-                break;
+                return i;
             }
         }
-        return url.substring(0, authorityEnd) + url.substring(authorityEnd).replaceAll("\\$\\{parameters\\.[^}]*\\}", "0");
+        return url.length();
     }
 
     /**
@@ -264,7 +289,47 @@ public interface Connector extends ToXContentObject, Writeable {
             + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
     }
 
-    default void validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
+    /**
+     * The URL of action resolved with the request parameters, after the checks of validateResolvedEndpoint. Its scheme, host
+     * and port must be the ones the connector's own parameters give: request parameters may fill the path and query, not
+     * change where the request goes. Build the request from the returned URI.
+     */
+    default URI resolveActionEndpoint(String action, Map<String, String> parameters, List<String> urlRegexes) {
+        URI endpoint = validateResolvedEndpoint(getActionEndpoint(action, parameters), urlRegexes);
+        URI stored = storedOrigin(action);
+        if (stored == null || !origin(endpoint).equals(origin(stored))) {
+            logRejectedUrl(endpoint.toString());
+            throw new IllegalArgumentException(ACTION_URL_HOST_CHANGED_MESSAGE);
+        }
+        return endpoint;
+    }
+
+    /**
+     * Scheme and authority of the action URL resolved with the connector's own parameters, or null when they give no
+     * scheme or host; the rest of the URL is not read.
+     */
+    private URI storedOrigin(String action) {
+        String url = getActionEndpoint(action, getParameters());
+        int end = authorityEnd(url);
+        try {
+            URI uri = new URI(end < 0 ? url : url.substring(0, end));
+            if (uri.getScheme() != null && uri.getHost() != null) {
+                return uri;
+            }
+        } catch (URISyntaxException e) {
+            // a placeholder left in the scheme or authority
+        }
+        return null;
+    }
+
+    /** Lower-case scheme and host, and the port with the scheme's default filled in. */
+    private static String origin(URI uri) {
+        String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
+        int port = uri.getPort() != -1 ? uri.getPort() : "https".equals(scheme) ? 443 : 80;
+        return scheme + "://" + uri.getHost().toLowerCase(Locale.ROOT) + ":" + port;
+    }
+
+    default URI validateResolvedEndpoint(String resolvedUrl, List<String> urlRegexes) {
         if (urlRegexes == null || urlRegexes.isEmpty()) {
             throw new IllegalArgumentException(
                 "Trusted connector endpoints regex is not configured. Please set plugins.ml_commons.trusted_connector_endpoints_regex."
@@ -309,7 +374,7 @@ public interface Connector extends ToXContentObject, Writeable {
             Pattern pattern = Pattern.compile(urlRegex);
             Matcher matcher = pattern.matcher(canonical);
             if (matcher.matches()) {
-                return;
+                return uri;
             }
         }
         logRejectedUrl(resolvedUrl);
