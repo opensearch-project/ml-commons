@@ -8,6 +8,7 @@ package org.opensearch.ml.engine;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -601,6 +602,40 @@ public class MLEngineTest extends MLStaticMockBase {
             parser.nextToken();
 
             HttpConnector connector = new HttpConnector("http", parser);
+            ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
+                assertNotNull(credential);
+                assertEquals(credential.get("key"), "test_key_value");
+                assertEquals(credential.get("region"), null);
+            }, e -> { fail("Failed to get credential"); });
+            mlEngine.getConnectorCredential(connector, credentialListener);
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.encrypt(List.of("test_key_value"), null, resultListener);
+    }
+
+    @Test
+    public void testGetConnectorCredentialWithoutParameters() throws IOException {
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"credential\":{\"key\":\""
+                + r.getFirst()
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
+
+            HttpConnector connector = new HttpConnector("http", parser);
+            assertNull(connector.getParameters());
             ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
                 assertNotNull(credential);
                 assertEquals(credential.get("key"), "test_key_value");
