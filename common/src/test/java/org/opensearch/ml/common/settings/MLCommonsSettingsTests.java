@@ -320,6 +320,11 @@ public class MLCommonsSettingsTests {
     }
 
     @Test
+    public void testTrustedConnectorEndpointsRegexDefaultsAllowAnthropicMessagesDefaultEndpoint() {
+        assertTrue(matchesAnyDefaultTrustedEndpoint(org.opensearch.ml.common.agent.AnthropicMessagesModelProvider.DEFAULT_ENDPOINT));
+    }
+
+    @Test
     public void testTrustedConnectorEndpointsRegexDefaultsAllowRegionalVertexAi() {
         assertTrue(
             matchesAnyDefaultTrustedEndpoint(

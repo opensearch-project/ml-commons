@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 import static org.opensearch.ml.common.CommonValue.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_ANTHROPIC_V1_MESSAGES;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
@@ -103,6 +104,15 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 listener
                     .onFailure(
                         new IllegalArgumentException("AG-UI streaming is not yet supported for the Gemini (google_cloud) LLM interface")
+                    );
+                return;
+            }
+
+            // The Anthropic Messages interface is non-streaming only, and AG-UI always streams.
+            if (LLM_INTERFACE_ANTHROPIC_V1_MESSAGES.equals(llmInterface)) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException("AG-UI streaming is not yet supported for the Anthropic Messages LLM interface")
                     );
                 return;
             }
