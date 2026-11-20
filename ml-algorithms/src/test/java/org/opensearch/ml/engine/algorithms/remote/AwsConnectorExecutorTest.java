@@ -1197,6 +1197,33 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testInvokeRemoteServiceStream_BlankLlmInterface() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        Map<String, String> parameters = Map.of(LLM_INTERFACE, "  ", "model", "claude-v2", "inputs", "test input");
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor
+            .invokeRemoteServiceStream(
+                "predict",
+                mock(MLInput.class),
+                parameters,
+                "test payload",
+                new ExecutionContext(123),
+                actionListener
+            );
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("_llm_interface is required for streaming", captor.getValue().getMessage());
+    }
+
+    @Test
     public void testInvokeRemoteServiceStream_With_SkipSslVerification_True() {
         try (MockedStatic<MLHttpClientFactory> mockedFactory = mockStatic(MLHttpClientFactory.class)) {
             ConnectorClientConfig clientConfig = ConnectorClientConfig

@@ -207,7 +207,7 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
             connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
 
             String llmInterface = parameters.get(LLM_INTERFACE);
-            if (llmInterface == null) {
+            if (llmInterface == null || llmInterface.isBlank()) {
                 throw new IllegalArgumentException(LLM_INTERFACE + " is required for streaming");
             }
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface.trim().toLowerCase(Locale.ROOT));
