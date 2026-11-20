@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
@@ -919,11 +920,15 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
 
+        when(scriptService.compile(any(), any()))
+            .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"parameters\": {\"input\": \"processed input\"}}"));
+
+        // The connector has no parameters, so connector.getParameters() is null.
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("process_remote_inference_input", "true");
+        parameters.put(PROCESS_REMOTE_INFERENCE_INPUT, "true");
 
         RemoteInferenceInputDataSet result = ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, parameters, scriptService);
-        assertNotNull(result);
+        assertEquals("processed input", result.getParameters().get("input"));
     }
 
     @Test
