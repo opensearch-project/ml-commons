@@ -162,7 +162,7 @@ The test runner JVM will start suspended and wait for a debugger to attach to `l
 ## GitHub CI/CD workflow Approval
 CI runs on every pull request (PR). Runs on PRs from forks by users who are not members of the opensearch-project GitHub organization (or collaborators on this repository) wait until a maintainer clicks "Approve and run workflows" (an organization-wide setting); other PR runs start right away. PR runs have no access to the AWS role (used by the Bedrock tests) or the OpenAI and Cohere API keys, so integration tests that call a remote model skip themselves on PRs.
 
-Those tests run with real credentials in the merge queue, after a maintainer has approved the PR and added it to the queue. If they fail, the PR is removed from the queue and is not merged. Push runs after the merge run the suite without credentials.
+Those tests run with real credentials in the merge queue, after a maintainer has approved the PR and added it to the queue. If they fail, the PR is removed from the queue and is not merged. The merge queue is enabled on `main`; pushes to `main` then run the suite without credentials, since the queue already ran it. Release branches have no merge queue, so pushes to them run the full suite with credentials after merge. Release branches created before this change keep the previous workflow: PR runs wait for approval of the `ml-commons-cicd-env-require-approval` environment, then run with credentials.
 
 For a list of current maintainers, please refer to [MAINTAINERS.md](https://github.com/opensearch-project/ml-commons/blob/main/MAINTAINERS.md).
 
