@@ -13,6 +13,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -25,7 +26,9 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -56,11 +59,14 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
@@ -624,6 +630,7 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             .build();
 
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(Arrays.asList("^http://openai\\.com/.*$"));
         StreamPredictActionListener<MLTaskResponse, ?> streamActionListener = mock(StreamPredictActionListener.class);
 
         Map<String, String> parameters = ImmutableMap.of("_llm_interface", "invalid_interface", "input", "test input");
@@ -634,8 +641,24 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(streamActionListener, times(1)).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof MLException);
-        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("Unsupported llm interface: invalid_interface", captor.getValue().getMessage());
+
+        // Any other failure is wrapped: here a request without the interface parameter.
+        StreamPredictActionListener<MLTaskResponse, ?> otherListener = mock(StreamPredictActionListener.class);
+        executor
+            .invokeRemoteServiceStream(
+                PREDICT.name(),
+                createMLInput(),
+                ImmutableMap.of("input", "test input"),
+                payload,
+                new ExecutionContext(0),
+                otherListener
+            );
+        ArgumentCaptor<Exception> wrapped = ArgumentCaptor.forClass(Exception.class);
+        verify(otherListener, times(1)).onFailure(wrapped.capture());
+        assertTrue(wrapped.getValue() instanceof MLException);
+        assertEquals("Fail to execute streaming", wrapped.getValue().getMessage());
     }
 
     @Test
@@ -1043,6 +1066,79 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
         assertTrue(String.valueOf(cause), cause instanceof IllegalArgumentException && cause.getMessage().contains("not matching"));
     }
 
+    private static final List<String> OPENAI_OR_EXAMPLE = List.of("^https://api\\.(openai|example)\\.com/.*$");
+
+    /** A connector whose host comes from its stored endpoint parameter; the model fills the path. */
+    private static Connector storedEndpointConnector() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/v1/${parameters.model}")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        return HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("endpoint", "api.openai.com"))
+            .credential(Map.of("api_key", "test-key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+    }
+
+    @Test
+    public void invokeRemoteService_requestParametersCannotChangeHost() {
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(storedEndpointConnector()));
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        doReturn(httpClient).when(executor).getHttpClient();
+        Map<String, String> parameters = Map.of("endpoint", "api.example.com", "model", "gpt-4o", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+        verify(httpClient, never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_requestParametersCannotChangeHost() {
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(storedEndpointConnector());
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        Map<String, String> parameters = Map
+            .of("endpoint", "api.example.com", "model", "gpt-4o", "_llm_interface", "openai/v1/chat/completions");
+
+        executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+    }
+
+    @Test
+    public void invokeRemoteService_sendsTheUriThatPassedTheChecks() {
+        Connector connector = storedEndpointConnector();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        doReturn(httpClient).when(executor).getHttpClient();
+        ArgumentCaptor<AsyncExecuteRequest> sent = ArgumentCaptor.forClass(AsyncExecuteRequest.class);
+        when(httpClient.execute(sent.capture())).thenReturn(CompletableFuture.completedFuture(null));
+        Map<String, String> parameters = Map.of("endpoint", "api.openai.com", "model", "gpt-4o", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+
+        assertEquals(connector.resolveActionEndpoint(PREDICT.name(), parameters, OPENAI_OR_EXAMPLE), sent.getValue().request().getUri());
+    }
+
     @Test
     public void invokeRemoteServiceStream_privateDestinationFollowsPrivateIpSetting() {
         ConnectorAction predictAction = ConnectorAction
@@ -1079,5 +1175,48 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
             String.valueOf(f2.getValue().getCause()),
             f2.getValue().getCause().getMessage().contains("trusted connector private endpoint")
         );
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_passesTheCheckedUriAndTheConnectorHeaders() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/v1/${parameters.model}")
+            .headers(Map.of("x-model", "${parameters.model}"))
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("endpoint", "api.openai.com"))
+            .credential(Map.of("api_key", "test-key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt(PREDICT.name(), (keys, tenantId, l) -> l.onResponse(keys), null, ActionListener.wrap(r -> {}, e -> {}));
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        StreamingHandler handler = mock(StreamingHandler.class);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        Map<String, String> parameters = Map
+            .of("endpoint", "api.openai.com", "model", "gpt-4o", "_llm_interface", "openai/v1/chat/completions");
+        try (MockedStatic<StreamingHandlerFactory> factory = mockStatic(StreamingHandlerFactory.class)) {
+            factory.when(() -> StreamingHandlerFactory.createHandler(any(), any(), any(), any(), any(), any(), any())).thenReturn(handler);
+
+            executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+        }
+
+        verify(handler)
+            .startStream(
+                org.mockito.ArgumentMatchers.eq(java.net.URI.create("https://api.openai.com/v1/gpt-4o")),
+                org.mockito.ArgumentMatchers.eq(Map.of("x-model", "gpt-4o")),
+                any(),
+                any(),
+                any()
+            );
     }
 }

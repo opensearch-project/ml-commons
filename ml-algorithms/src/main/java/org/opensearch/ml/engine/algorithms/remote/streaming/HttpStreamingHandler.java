@@ -14,7 +14,10 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.Proxy;
+import java.net.URI;
+import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -35,7 +38,7 @@ import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -43,6 +46,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
+import org.opensearch.ml.engine.algorithms.remote.ResolvedAddresses;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
@@ -59,12 +63,14 @@ import okhttp3.sse.EventSources;
 
 @Log4j2
 public class HttpStreamingHandler extends BaseStreamingHandler {
+    public static final String UNREADABLE_ERROR_BODY_MESSAGE = "SSE failure - unable to read error details";
 
     private final Connector connector;
     private OkHttpClient okHttpClient;
     private String llmInterface;
     private Map<String, String> parameters;
-    private final StreamingAddressPolicy addressPolicy;
+    private final ConnectorAddressValidator addressValidator;
+    private final Runnable onUnauthorized;
 
     public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
         this(llmInterface, connector, connectorClientConfig, null);
@@ -76,18 +82,23 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        this(llmInterface, connector, connectorClientConfig, parameters, StreamingAddressPolicy.DEFAULT);
+        this(llmInterface, connector, connectorClientConfig, parameters, ConnectorAddressValidator.DEFAULT, null);
     }
 
+    /**
+     * @param onUnauthorized run when the remote service answers 401, before the failure is reported; may be null
+     */
     public HttpStreamingHandler(
         String llmInterface,
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        StreamingAddressPolicy addressPolicy
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
         this.connector = connector;
-        this.addressPolicy = addressPolicy == null ? StreamingAddressPolicy.DEFAULT : addressPolicy;
+        this.addressValidator = addressValidator == null ? ConnectorAddressValidator.DEFAULT : addressValidator;
+        this.onUnauthorized = onUnauthorized;
         this.llmInterface = llmInterface;
         this.parameters = parameters;
 
@@ -131,7 +142,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
     @Override
     public void startStream(
-        String action,
+        URI endpoint,
+        Map<String, String> headers,
         Map<String, String> parameters,
         String payload,
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
@@ -139,11 +151,11 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         try {
             log.info("Creating SSE connection for streaming request");
             EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
-            Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
-            validateDestination(request.url());
+            Request request = ConnectorUtils.buildOKHttpStreamingRequest(endpoint, headers, payload);
+            InetAddress[] addresses = validateDestination(request.url());
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                EventSources.createFactory(okHttpClient).newEventSource(request, listener);
+                EventSources.createFactory(clientFor(addresses)).newEventSource(request, listener);
                 return null;
             });
 
@@ -153,18 +165,19 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         }
     }
 
-    /** The same address policy the non-streaming client applies, on the URL this client will connect to. */
-    private void validateDestination(HttpUrl url) {
-        MLHttpClientFactory
-            .validateConnectorEndpoint(
-                url.toString(),
-                url.scheme(),
-                url.host(),
-                url.port(),
-                addressPolicy.isPrivateIpEnabled(),
-                addressPolicy.getTrustedPrivateEndpoints(),
-                addressPolicy.getRestrictedIpPatterns()
-            );
+    /** The same address checks the non-streaming client applies, on the URL this stream will connect to. */
+    private InetAddress[] validateDestination(HttpUrl url) {
+        try {
+            return addressValidator.validate(url.toString(), url.scheme(), url.host(), url.port());
+        } catch (UnknownHostException e) {
+            throw new IllegalArgumentException("Remote inference host name could not be resolved: " + url.host(), e);
+        }
+    }
+
+    /** A client that connects only to {@code addresses}, the ones that passed validation, whatever DNS answers next. */
+    @VisibleForTesting
+    OkHttpClient clientFor(InetAddress[] addresses) {
+        return okHttpClient.newBuilder().dns(new ResolvedAddresses(addresses)).build();
     }
 
     @VisibleForTesting
@@ -272,16 +285,19 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 }
             } else if (response != null) {
                 // HTTP error (e.g., 400 Bad Request)
+                int statusCode = response.code();
+                RestStatus restStatus = RestStatus.fromCode(statusCode);
+                if (restStatus == null) {
+                    restStatus = RestStatus.INTERNAL_SERVER_ERROR;
+                }
+                if (restStatus == RestStatus.UNAUTHORIZED && onUnauthorized != null) {
+                    onUnauthorized.run();
+                }
                 try {
                     String errorBody = response.body() != null ? response.body().string() : "";
-                    int statusCode = response.code();
-                    RestStatus restStatus = RestStatus.fromCode(statusCode);
-                    if (restStatus == null) {
-                        restStatus = RestStatus.INTERNAL_SERVER_ERROR;
-                    }
                     streamActionListener.onFailure(new OpenSearchStatusException("Error from remote service: " + errorBody, restStatus));
                 } catch (IOException e) {
-                    streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
+                    streamActionListener.onFailure(new OpenSearchStatusException(UNREADABLE_ERROR_BODY_MESSAGE, restStatus));
                 }
             } else {
                 // Unknown failure

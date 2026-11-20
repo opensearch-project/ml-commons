@@ -7,6 +7,7 @@ package org.opensearch.ml.common.settings;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,8 @@ import org.junit.Test;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.common.connector.auth.AuthTestFixtures;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 
 public class MLFeatureEnabledSettingTests {
 
@@ -59,7 +62,10 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
+                    MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -319,6 +325,39 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.connector.vertexai_enabled", true).build());
 
         assertTrue(setting.isVertexAIConnectorEnabled());
+    }
+
+    @Test
+    public void testConnectorAuthSettingsDefaults() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+
+        assertFalse(setting.isConnectorAuthEnabled());
+        assertTrue(setting.getTrustedOAuth2TokenEndpoints().matches(AuthTestFixtures.TOKEN_URL));
+        assertFalse(setting.getTrustedOAuth2TokenEndpoints().matches("https://idp.corp.example/token"));
+        assertEquals(3600, setting.getOAuth2TokenCacheMaxSeconds());
+    }
+
+    @Test
+    public void testConnectorAuthSettingsDynamicUpdate() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+        TokenEndpointAllowlist before = setting.getTrustedOAuth2TokenEndpoints();
+
+        mockClusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .put("plugins.ml_commons.connector.auth_enabled", true)
+                    .putList("plugins.ml_commons.trusted_oauth2_token_endpoints_regex", "^https://idp\\.corp\\.example/token$")
+                    .put("plugins.ml_commons.connector.oauth2_token_cache_max_seconds", 600)
+                    .build()
+            );
+
+        assertTrue(setting.isConnectorAuthEnabled());
+        TokenEndpointAllowlist after = setting.getTrustedOAuth2TokenEndpoints();
+        assertNotSame(before, after);
+        assertTrue(after.matches("https://idp.corp.example/token"));
+        assertFalse(after.matches(AuthTestFixtures.TOKEN_URL));
+        assertEquals(600, setting.getOAuth2TokenCacheMaxSeconds());
     }
 
     @Test

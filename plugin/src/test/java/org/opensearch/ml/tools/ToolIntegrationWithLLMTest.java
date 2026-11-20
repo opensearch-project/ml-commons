@@ -153,7 +153,6 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
                 + "  \"service_name\": \"bedrock\",\n"
                 + "  \"anthropic_version\": \"bedrock-2023-05-31\",\n"
                 + "  \"endpoint\": \"bedrock.us-east-1.amazonaws.com\",\n"
-                + "  \"auth\": \"Sig_V4\",\n"
                 + "  \"content_type\": \"application/json\",\n"
                 + "  \"max_tokens_to_sample\": 8000,\n"
                 + "  \"temperature\": 0.0001,\n"

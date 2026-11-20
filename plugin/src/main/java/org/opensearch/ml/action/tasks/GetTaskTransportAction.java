@@ -85,6 +85,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.S3Utils;
@@ -137,6 +138,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     volatile Pattern remoteJobExpiredStatusRegexPattern;
     volatile Pattern remoteJobFailedStatusRegexPattern;
     private final MLEngine mlEngine;
+    private final AuthorizationProviderFactory authorizationProviderFactory;
 
     // private Map<String, String> decryptedCredential;
 
@@ -156,7 +158,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLModelManager mlModelManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        AuthorizationProviderFactory authorizationProviderFactory
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
@@ -171,6 +174,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlEngine = mlEngine;
+        this.authorizationProviderFactory = authorizationProviderFactory;
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -485,6 +489,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
+            connectorExecutor.setAuthorizationProviderFactory(authorizationProviderFactory);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(connector, mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);
