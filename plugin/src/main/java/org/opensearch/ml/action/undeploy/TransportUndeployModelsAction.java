@@ -143,7 +143,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 if (hasPermissionToUndeploy) {
                     undeployModels(targetNodeIds, modelIds, tenantId, listener);
                 } else {
-                    listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
+                    listener.onFailure(new OpenSearchStatusException("No permission to undeploy model " + modelId, RestStatus.FORBIDDEN));
                 }
             }, listener::onFailure));
         } else {
