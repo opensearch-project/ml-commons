@@ -8,12 +8,14 @@ package org.opensearch.ml.action.upload_chunk;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
@@ -120,7 +122,12 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
                     } else {
                         log.error("You don't have permissions to perform this operation on this model.");
                         listener
-                            .onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "You don't have permissions to perform this operation on this model.",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
                     }
                 }, e -> {
                     logException("Failed to validate model access", e, log);

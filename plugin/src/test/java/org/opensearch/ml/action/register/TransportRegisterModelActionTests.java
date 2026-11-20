@@ -316,6 +316,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     @Test
@@ -630,6 +632,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             "You don't have permission to use the connector provided, connector id: mockConnectorId",
             argumentCaptor.getValue().getMessage()
         );
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     @Test
@@ -1328,6 +1332,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
             argumentCaptor.getValue().getMessage()
         );
+        // A name clash is a request problem, so it stays a 400
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
     }
 
     @Test
