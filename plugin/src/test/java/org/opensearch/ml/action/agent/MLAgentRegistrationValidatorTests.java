@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSelectionConfig;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.contextmanager.ContextManagerConfig;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -409,6 +410,46 @@ public class MLAgentRegistrationValidatorTests extends TestCase {
         } catch (IllegalArgumentException e) {
             assertEquals("Invalid context management configuration", e.getMessage());
         }
+    }
+
+    // ===== Tool Selection Validation Tests =====
+
+    @Test
+    public void testValidateToolSelection_AllowedOnV2Agents() {
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test_v2_agent")
+            .type("conversational_v2")
+            .toolSelection(MLToolSelectionConfig.builder().enabled(true).build())
+            .build();
+        assertNull(MLAgentRegistrationValidator.validateToolSelection(agent));
+    }
+
+    @Test
+    public void testValidateToolSelection_AbsentIsAlwaysValid() {
+        assertNull(MLAgentRegistrationValidator.validateToolSelection(MLAgent.builder().name("flow_agent").type("flow").build()));
+    }
+
+    @Test
+    public void testValidateAgentForRegistration_ToolSelectionOnAnotherAgentTypeIsRejected() throws InterruptedException {
+        // Only the conversational_v2 runner reads tool_selection; elsewhere it would be silently ignored.
+        MLAgent agent = MLAgent
+            .builder()
+            .name("flow_agent")
+            .type("flow")
+            .toolSelection(MLToolSelectionConfig.builder().enabled(true).build())
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Exception> error = new AtomicReference<>();
+        validator.validateAgentForRegistration(agent, ActionListener.wrap(r -> latch.countDown(), e -> {
+            error.set(e);
+            latch.countDown();
+        }));
+
+        assertTrue(latch.await(1, TimeUnit.SECONDS));
+        assertTrue(error.get() instanceof IllegalArgumentException);
+        assertTrue(error.get().getMessage().contains("tool_selection is only supported for V2 agents"));
     }
 
     // ===== V2 Agent Memory Validation Tests =====
