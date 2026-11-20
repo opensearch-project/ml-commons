@@ -485,7 +485,7 @@ public class MLChatAgentRunnerV2Test {
             }
         };
         appender.start();
-        Logger logger = (Logger) LogManager.getLogger(MLChatAgentRunnerV2.class);
+        Logger logger = (Logger) LogManager.getLogger(AgentUtils.class);
         logger.addAppender(appender);
         try {
             Exception e = runner

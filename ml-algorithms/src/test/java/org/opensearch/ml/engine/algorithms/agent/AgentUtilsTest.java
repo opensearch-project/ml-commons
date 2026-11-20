@@ -4159,7 +4159,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         MLAgent agentWithoutMcp = mock(MLAgent.class);
         when(agentWithoutMcp.getParameters()).thenReturn(Map.of());
         AgentUtils.McpToolLoadResult result = loadWithFailures(agentWithoutMcp);
-        assertEquals(0, result.getConfiguredConnectors());
+        assertEquals(0, result.getConfiguredConnectorsCount());
         assertTrue(result.getToolSpecs().isEmpty());
         assertTrue(result.getFailedConnectors().isEmpty());
         assertFalse(result.allConnectorsFailed());
@@ -4211,7 +4211,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
 
             assertEquals(1, result.getFailedConnectors().size());
-            assertEquals(2, result.getFailedCount());
+            assertEquals(2, result.getFailedConnectorsCount());
             assertTrue(result.allConnectorsFailed());
         }
     }
@@ -4233,7 +4233,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
 
             assertFalse(result.allConnectorsFailed());
-            assertEquals(2, result.getConfiguredConnectors());
+            assertEquals(2, result.getConfiguredConnectorsCount());
             assertEquals(goodTools, result.getToolSpecs());
             assertEquals(1, result.getFailedConnectors().size());
         }
@@ -4288,47 +4288,50 @@ public class AgentUtilsTest extends MLStaticMockBase {
         }
     }
 
+    /** How a connector failure reads in logs: "ExceptionType: message". */
+    private static String describeFailure(Throwable t) {
+        return AgentUtils.McpConnectorFailure.of(t).toString();
+    }
+
     @Test
-    public void testRootCauseMessage() {
+    public void testMcpConnectorFailureToString() {
         assertEquals(
             "ConnectException: refused",
-            AgentUtils
-                .rootCauseMessage(new RuntimeException("outer", new IllegalStateException("mid", new java.net.ConnectException("refused"))))
+            describeFailure(new RuntimeException("outer", new IllegalStateException("mid", new java.net.ConnectException("refused"))))
         );
-        assertEquals("IllegalStateException", AgentUtils.rootCauseMessage(new IllegalStateException()));
+        assertEquals("IllegalStateException", describeFailure(new IllegalStateException()));
         // As seen live for an unreachable MCP server: the network exception wraps a bare ClosedChannelException.
         assertEquals(
             "ConnectException",
-            AgentUtils
-                .rootCauseMessage(
-                    new RuntimeException(
-                        "Client failed to initialize by explicit API call",
-                        new java.net.ConnectException().initCause(new java.nio.channels.ClosedChannelException())
-                    )
+            describeFailure(
+                new RuntimeException(
+                    "Client failed to initialize by explicit API call",
+                    new java.net.ConnectException().initCause(new java.nio.channels.ClosedChannelException())
                 )
+            )
         );
     }
 
     @Test
-    public void testRootCauseMessage_Null() {
-        assertEquals("unknown error", AgentUtils.rootCauseMessage(null));
+    public void testMcpConnectorFailureToString_Null() {
+        assertEquals("unknown error", describeFailure(null));
     }
 
     @Test
-    public void testRootCauseMessage_CauseCycleEnds() {
+    public void testMcpConnectorFailureToString_CauseCycleEnds() {
         // initCause only rejects a self-cause, so a chain can loop through two exceptions
         RuntimeException a = new RuntimeException("a");
         IllegalStateException b = new IllegalStateException("b");
         a.initCause(b);
         b.initCause(a);
-        assertEquals("IllegalStateException: b", AgentUtils.rootCauseMessage(a));
+        assertEquals("IllegalStateException: b", describeFailure(a));
     }
 
     @Test
-    public void testRootCauseMessage_AnonymousExceptionUsesItsFullName() {
+    public void testMcpConnectorFailureToString_AnonymousExceptionUsesItsFullName() {
         RuntimeException anonymous = new RuntimeException("boom") {
         };
-        assertEquals(anonymous.getClass().getName() + ": boom", AgentUtils.rootCauseMessage(anonymous));
+        assertEquals(anonymous.getClass().getName() + ": boom", describeFailure(anonymous));
     }
 
     @Test
@@ -4370,7 +4373,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         // Before: "[]" never completed the listener and "null" threw a NullPointerException
         for (String config : List.of("[]", "null")) {
             AgentUtils.McpToolLoadResult result = loadWithFailures(mockAgent(config, "tenant"));
-            assertEquals(config, 0, result.getConfiguredConnectors());
+            assertEquals(config, 0, result.getConfiguredConnectorsCount());
             assertTrue(config, result.getToolSpecs().isEmpty());
             assertFalse(config, result.allConnectorsFailed());
         }

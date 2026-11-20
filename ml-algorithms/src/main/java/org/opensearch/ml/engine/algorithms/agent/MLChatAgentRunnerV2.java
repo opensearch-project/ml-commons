@@ -8,22 +8,16 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.AGENT_ID_LOG_FIELD;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -167,77 +161,9 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         AgentUtils.getMcpToolSpecsWithFailures(mlAgent, client, sdkClient, encryptor, listener);
     }
 
-    /**
-     * Some connectors failing is tolerated, as before. If every connector failed and the agent has
-     * no other tools, the run fails instead of letting the model answer with no tools: with the failures'
-     * shared 4xx status when each is a client or configuration error (such as a deleted connector), 400 if
-     * their 4xx statuses differ, else 502.
-     *
-     * @return the exception to fail the run with, or null to continue
-     */
+    /** See {@link AgentUtils#mcpLoadFailure}. An instance method so tests can stub it. */
     Exception mcpLoadFailure(AgentUtils.McpToolLoadResult result, boolean noOtherTools, String agentId) {
-        Map<String, AgentUtils.McpConnectorFailure> failed = result.getFailedConnectors();
-        if (failed.isEmpty()) {
-            return null;
-        }
-        String failures = describeFailures(failed, true);
-        if (result.allConnectorsFailed() && noOtherTools) {
-            log
-                .error(
-                    "No MCP connector could be loaded and the agent has no other tools; failing the run. agentId={}, {}",
-                    agentId,
-                    failures
-                );
-            // A missing or non-MCP connector keeps its message, which names only the connector id. Causes from the
-            // remote MCP call are reduced to their type and status: they can name internal hosts. The log above has them.
-            return new OpenSearchStatusException(
-                "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: "
-                    + describeFailures(failed, false),
-                runFailureStatus(failed.values())
-            );
-        }
-        log
-            .warn(
-                "Some MCP connectors failed to load; continuing with the tools that did. agentId={}, failed {} of {}: {}",
-                agentId,
-                result.getFailedCount(),
-                result.getConfiguredConnectors(),
-                failures
-            );
-        return null;
-    }
-
-    /** The failures' status if they all share one 4xx status, 400 if they are all other 4xx, else 502. */
-    private static RestStatus runFailureStatus(Collection<AgentUtils.McpConnectorFailure> failures) {
-        if (!failures.stream().allMatch(AgentUtils.McpConnectorFailure::isClientError)) {
-            return RestStatus.BAD_GATEWAY;
-        }
-        Set<RestStatus> statuses = failures.stream().map(AgentUtils.McpConnectorFailure::getStatus).collect(Collectors.toSet());
-        return statuses.size() == 1 ? statuses.iterator().next() : RestStatus.BAD_REQUEST;
-    }
-
-    /**
-     * "id (cause)" per failed connector, sorted by id.
-     *
-     * @param withMessages true for the full "ExceptionType: message" cause, false for what the caller may see: the
-     *                     message of a missing or non-MCP connector, else the exception type (and status for a 4xx)
-     */
-    private static String describeFailures(Map<String, AgentUtils.McpConnectorFailure> failedConnectors, boolean withMessages) {
-        return new TreeMap<>(failedConnectors)
-            .entrySet()
-            .stream()
-            .map(entry -> entry.getKey() + " (" + describeFailure(entry.getValue(), withMessages) + ")")
-            .collect(Collectors.joining(", "));
-    }
-
-    private static String describeFailure(AgentUtils.McpConnectorFailure failure, boolean withMessage) {
-        if (withMessage) {
-            return failure.toString();
-        }
-        if (failure.isMessageReturnable()) {
-            return failure.getMessage() + ", " + failure.getStatus().getStatus();
-        }
-        return failure.isClientError() ? failure.getType() + ", " + failure.getStatus().getStatus() : failure.getType();
+        return AgentUtils.mcpLoadFailure(result, noOtherTools, agentId);
     }
 
     /**

@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -930,64 +931,77 @@ public class AgentUtils {
         loadMcpToolSpecs(mlAgent, client, sdkClient, encryptor, true, listener);
     }
 
-    /** Tools loaded from an agent's MCP connectors, plus the connectors that failed and why. */
-    @Getter
-    @AllArgsConstructor
-    public static class McpToolLoadResult {
-        private final List<MLToolSpec> toolSpecs;
-        private final int configuredConnectors;
-        /** Counted per mcp_connectors entry: a repeated or missing id is one key in failedConnectors. */
-        private final int failedCount;
-        private final Map<String, McpConnectorFailure> failedConnectors;
-
-        /** True when MCP connectors are configured and every one of them failed. */
-        public boolean allConnectorsFailed() {
-            return configuredConnectors > 0 && failedCount >= configuredConnectors;
+    /**
+     * Some connectors failing is tolerated, as before. If every connector failed and the agent has
+     * no other tools, the run fails instead of letting the model answer with no tools: with the failures'
+     * shared 4xx status when each is a client or configuration error (such as a deleted connector), 400 if
+     * their 4xx statuses differ, else 502.
+     *
+     * @return the exception to fail the run with, or null to continue
+     */
+    public static Exception mcpLoadFailure(McpToolLoadResult result, boolean noOtherTools, String agentId) {
+        Map<String, McpConnectorFailure> failed = result.getFailedConnectors();
+        if (failed.isEmpty()) {
+            return null;
         }
-    }
-
-    /** Why an MCP connector failed: the root cause's type and message, and the HTTP status of the failure. */
-    @Getter
-    @AllArgsConstructor
-    public static class McpConnectorFailure {
-        private final String type;
-        /** The root cause's message, or null if it has none. */
-        private final String message;
-        private final RestStatus status;
-
-        static McpConnectorFailure of(Throwable t) {
-            if (t == null) {
-                return new McpConnectorFailure("unknown error", null, RestStatus.INTERNAL_SERVER_ERROR);
-            }
-            Throwable cause = rootCause(t);
-            String message = cause.getMessage();
-            return new McpConnectorFailure(
-                exceptionType(cause),
-                message == null || message.isBlank() ? null : message,
-                ExceptionsHelper.status(ExceptionsHelper.unwrapCause(t))
+        String failures = describeFailures(failed, true);
+        if (result.allConnectorsFailed() && noOtherTools) {
+            log
+                .error(
+                    "No MCP connector could be loaded and the agent has no other tools; failing the run. agentId={}, {}",
+                    agentId,
+                    failures
+                );
+            // A missing or non-MCP connector keeps its message, which names only the connector id. Causes from the
+            // remote MCP call are reduced to their type and status: they can name internal hosts. The log above has them.
+            return new OpenSearchStatusException(
+                "None of the agent's MCP connectors could be loaded, and it has no other tools. Failed connectors: "
+                    + describeFailures(failed, false),
+                mcpRunFailureStatus(failed.values())
             );
         }
+        log
+            .warn(
+                "Some MCP connectors failed to load; continuing with the tools that did. agentId={}, failed {} of {}: {}",
+                agentId,
+                result.getFailedConnectorsCount(),
+                result.getConfiguredConnectorsCount(),
+                failures
+            );
+        return null;
+    }
 
-        /** True for a 4xx failure, such as a deleted connector, a connector that isn't an MCP connector or a bad tool filter. */
-        public boolean isClientError() {
-            return status.getStatus() >= 400 && status.getStatus() < 500;
+    /** The failures' status if they all share one 4xx status, 400 if they are all other 4xx, else 502. */
+    private static RestStatus mcpRunFailureStatus(Collection<McpConnectorFailure> failures) {
+        if (!failures.stream().allMatch(McpConnectorFailure::isClientError)) {
+            return RestStatus.BAD_GATEWAY;
         }
+        Set<RestStatus> statuses = failures.stream().map(McpConnectorFailure::getStatus).collect(Collectors.toSet());
+        return statuses.size() == 1 ? statuses.iterator().next() : RestStatus.BAD_REQUEST;
+    }
 
-        /**
-         * True when ml-commons raised the failure itself because the connector is missing or isn't an MCP connector.
-         * Those messages name only the connector id, so they can be returned, unlike causes from the remote MCP call.
-         */
-        public boolean isMessageReturnable() {
-            return OpenSearchStatusException.class.getSimpleName().equals(type)
-                && message != null
-                && (message.startsWith(CONNECTOR_NOT_FOUND_MESSAGE) || message.endsWith(NOT_AN_MCP_CONNECTOR_MESSAGE));
-        }
+    /**
+     * "id (cause)" per failed connector, sorted by id.
+     *
+     * @param withMessages true for the full "ExceptionType: message" cause, false for what the caller may see: the
+     *                     message of a missing or non-MCP connector, else the exception type (and status for a 4xx)
+     */
+    private static String describeFailures(Map<String, McpConnectorFailure> failedConnectors, boolean withMessages) {
+        return new TreeMap<>(failedConnectors)
+            .entrySet()
+            .stream()
+            .map(entry -> entry.getKey() + " (" + describeFailure(entry.getValue(), withMessages) + ")")
+            .collect(Collectors.joining(", "));
+    }
 
-        /** "ExceptionType: message", or the type alone when there is no message. */
-        @Override
-        public String toString() {
-            return message == null ? type : type + ": " + message;
+    private static String describeFailure(McpConnectorFailure failure, boolean withMessage) {
+        if (withMessage) {
+            return failure.toString();
         }
+        if (failure.isMessageReturnable()) {
+            return failure.getMessage() + ", " + failure.getStatus().getStatus();
+        }
+        return failure.isClientError() ? failure.getType() + ", " + failure.getStatus().getStatus() : failure.getType();
     }
 
     /**
@@ -1022,9 +1036,9 @@ public class AgentUtils {
         boolean isLogWarnEnabled = log.isWarnEnabled();
         Map<String, List<String>> toolNameToConnectorIds = isLogWarnEnabled ? new ConcurrentHashMap<>() : null;
         Map<String, McpConnectorFailure> failedConnectors = new ConcurrentHashMap<>();
-        AtomicInteger failedCount = new AtomicInteger();
+        AtomicInteger failedConnectorsCount = new AtomicInteger();
         BiConsumer<String, Throwable> recordFailure = (connectorId, cause) -> {
-            failedCount.incrementAndGet();
+            failedConnectorsCount.incrementAndGet();
             failedConnectors.put(String.valueOf(connectorId), McpConnectorFailure.of(cause));
         };
         // Copies: the result stays as it was at completion, whatever the connector callbacks do afterwards.
@@ -1033,7 +1047,7 @@ public class AgentUtils {
                 new McpToolLoadResult(
                     new ArrayList<>(finalToolSpecs),
                     mcpConnectorConfigs.size(),
-                    failedCount.get(),
+                    failedConnectorsCount.get(),
                     Map.copyOf(failedConnectors)
                 )
             );
@@ -1120,40 +1134,6 @@ public class AgentUtils {
             }
             onAllDone.run();
         }
-    }
-
-    /**
-     * "ExceptionType: message" for the first java.net exception in the chain, else the innermost
-     * cause. A refused connection's innermost cause is often a bare ClosedChannelException.
-     */
-    static String rootCauseMessage(Throwable t) {
-        return McpConnectorFailure.of(t).toString();
-    }
-
-    /**
-     * The first java.net exception in the cause chain, else the innermost cause. The walk stops at a cause
-     * already seen, since a chain can loop through more than one exception.
-     */
-    private static Throwable rootCause(Throwable t) {
-        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        Throwable cause = t;
-        while (true) {
-            if (cause.getClass().getName().startsWith("java.net.")) {
-                return cause;
-            }
-            seen.add(cause);
-            Throwable next = cause.getCause();
-            if (next == null || seen.contains(next)) {
-                return cause;
-            }
-            cause = next;
-        }
-    }
-
-    /** The simple class name, or the full name for an anonymous class, whose simple name is empty. */
-    private static String exceptionType(Throwable t) {
-        String simpleName = t.getClass().getSimpleName();
-        return simpleName.isEmpty() ? t.getClass().getName() : simpleName;
     }
 
     private static void warnOnDuplicateMcpToolNames(Map<String, List<String>> toolNameToConnectorIds) {
@@ -1305,6 +1285,7 @@ public class AgentUtils {
         if (client == null) {
             throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
         }
+        // getMCPToolSpecsFromConnector has already rejected anything that isn't one of the two MCP connector types.
         if (connector instanceof McpConnector) {
             McpConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             connectorExecutor.setClient(client);
@@ -2340,5 +2321,102 @@ public class AgentUtils {
      */
     public static void logTimeToFirstToken(String modelId, String tenantId, long timeToFirstTokenMs) {
         logMetric(false, "TimeToFirstToken", "modelId", modelId, "tenantId", tenantId, "timeToFirstTokenMs", timeToFirstTokenMs);
+    }
+
+    /** Tools loaded from an agent's MCP connectors, plus the connectors that failed and why. */
+    @Getter
+    @AllArgsConstructor
+    public static class McpToolLoadResult {
+        private final List<MLToolSpec> toolSpecs;
+        /** Number of mcp_connectors entries. */
+        private final int configuredConnectorsCount;
+        /**
+         * Number of mcp_connectors entries that failed. Kept besides failedConnectors because that map is keyed
+         * by connector id, so a repeated or missing id is one key; allConnectorsFailed compares per entry.
+         */
+        private final int failedConnectorsCount;
+        private final Map<String, McpConnectorFailure> failedConnectors;
+
+        /** True when MCP connectors are configured and every one of them failed. */
+        public boolean allConnectorsFailed() {
+            return configuredConnectorsCount > 0 && failedConnectorsCount >= configuredConnectorsCount;
+        }
+    }
+
+    /** Why an MCP connector failed: the root cause's type and message, and the HTTP status of the failure. */
+    @Getter
+    @AllArgsConstructor
+    public static class McpConnectorFailure {
+        /**
+         * Exceptions from this package name the actual network problem (unknown host, refused connection, timeout).
+         * They are preferred over the innermost cause, which for a refused connection is often a bare
+         * ClosedChannelException that says nothing about what went wrong.
+         */
+        private static final String NETWORK_EXCEPTION_PACKAGE = "java.net.";
+
+        private final String type;
+        /** The root cause's message, or null if it has none. */
+        private final String message;
+        private final RestStatus status;
+
+        static McpConnectorFailure of(Throwable t) {
+            if (t == null) {
+                return new McpConnectorFailure("unknown error", null, RestStatus.INTERNAL_SERVER_ERROR);
+            }
+            Throwable cause = rootCause(t);
+            String message = cause.getMessage();
+            return new McpConnectorFailure(
+                exceptionType(cause),
+                message == null || message.isBlank() ? null : message,
+                ExceptionsHelper.status(ExceptionsHelper.unwrapCause(t))
+            );
+        }
+
+        /** True for a 4xx failure, such as a deleted connector, a connector that isn't an MCP connector or a bad tool filter. */
+        public boolean isClientError() {
+            return status.getStatus() >= 400 && status.getStatus() < 500;
+        }
+
+        /**
+         * True when ml-commons raised the failure itself because the connector is missing or isn't an MCP connector.
+         * Those messages name only the connector id, so they can be returned, unlike causes from the remote MCP call.
+         */
+        public boolean isMessageReturnable() {
+            return OpenSearchStatusException.class.getSimpleName().equals(type)
+                && message != null
+                && (message.startsWith(CONNECTOR_NOT_FOUND_MESSAGE) || message.endsWith(NOT_AN_MCP_CONNECTOR_MESSAGE));
+        }
+
+        /** "ExceptionType: message", or the type alone when there is no message. */
+        @Override
+        public String toString() {
+            return message == null ? type : type + ": " + message;
+        }
+
+        /**
+         * The first network exception (see {@link #NETWORK_EXCEPTION_PACKAGE}) in the cause chain, else the innermost
+         * cause. The walk stops at a cause already seen, since a chain can loop through more than one exception.
+         */
+        private static Throwable rootCause(Throwable t) {
+            Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            Throwable cause = t;
+            while (true) {
+                if (cause.getClass().getName().startsWith(NETWORK_EXCEPTION_PACKAGE)) {
+                    return cause;
+                }
+                seen.add(cause);
+                Throwable next = cause.getCause();
+                if (next == null || seen.contains(next)) {
+                    return cause;
+                }
+                cause = next;
+            }
+        }
+
+        /** The simple class name, or the full name for an anonymous class, whose simple name is empty. */
+        private static String exceptionType(Throwable t) {
+            String simpleName = t.getClass().getSimpleName();
+            return simpleName.isEmpty() ? t.getClass().getName() : simpleName;
+        }
     }
 }
