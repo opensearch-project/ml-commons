@@ -68,4 +68,27 @@ public class ConnectorProtocolsTest {
         assertTrue(ConnectorProtocols.isMcpProtocol("MCP_SSE"));
         assertTrue(ConnectorProtocols.isMcpProtocol("Mcp_Streamable_Http"));
     }
+
+    @Test
+    public void supportsAuthConfig_httpAndGoogleCloudOnly_andNeverThrows() {
+        assertTrue(ConnectorProtocols.supportsAuthConfig(ConnectorProtocols.HTTP));
+        assertTrue(ConnectorProtocols.supportsAuthConfig(ConnectorProtocols.GOOGLE_CLOUD));
+        for (String protocol : new String[] {
+            ConnectorProtocols.AWS_SIGV4,
+            ConnectorProtocols.MCP_SSE,
+            ConnectorProtocols.MCP_STREAMABLE_HTTP,
+            null,
+            "",
+            "bogus",
+            "mcp" }) {
+            assertFalse(String.valueOf(protocol), ConnectorProtocols.supportsAuthConfig(protocol));
+        }
+    }
+
+    /** Same case handling as {@link ConnectorProtocols#isMcpProtocol}. */
+    @Test
+    public void supportsAuthConfig_ignoresCase() {
+        assertTrue(ConnectorProtocols.supportsAuthConfig("HTTP"));
+        assertTrue(ConnectorProtocols.supportsAuthConfig("Http"));
+    }
 }

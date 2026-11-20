@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 5
+    "schema_version": 6
   },
   "properties": {
     "name": {
@@ -22,6 +22,9 @@
       "type": "keyword"
     },
     "parameters": {
+      "type": "flat_object"
+    },
+    "auth_config": {
       "type": "flat_object"
     },
     "credential": {

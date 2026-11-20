@@ -34,7 +34,6 @@ POST /_plugins/_ml/connectors/_create
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
-        "auth": "Sig_V4",
         "response_filter": "$.content[0].text",
         "max_tokens_to_sample": "8000",
         "anthropic_version": "bedrock-2023-05-31",
@@ -70,7 +69,6 @@ POST /_plugins/_ml/connectors/_create
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
         "service_name": "bedrock",
-        "auth": "Sig_V4",
         "response_filter": "$.content[0].text",
         "max_tokens_to_sample": "8000",
         "anthropic_version": "bedrock-2023-05-31",

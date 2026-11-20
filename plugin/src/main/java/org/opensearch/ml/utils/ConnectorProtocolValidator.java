@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.connector.HttpConnector.MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
@@ -12,16 +14,23 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VER
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.Version;
+import org.opensearch.cluster.ClusterState;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.auth.CredentialReference;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 /**
@@ -33,6 +42,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
  * or by supplying an inline connector on a model request. Call
  * {@link #validateProtocolEnabled(String, MLFeatureEnabledSetting)} with the protocol the connector will have
  * <em>after</em> the request is applied.
+ * <p>
+ * The class also holds the write-time checks of a connector's {@code auth_config}.
  */
 public class ConnectorProtocolValidator {
 
@@ -176,9 +187,6 @@ public class ConnectorProtocolValidator {
         return PROTOCOLS_WITHOUT_MUTUAL_TLS.contains(protocol);
     }
 
-    /** A literal cleartext scheme at the start of an action URL. */
-    private static final Pattern CLEARTEXT_URL = Pattern.compile("^\\s*http://", Pattern.CASE_INSENSITIVE);
-
     /**
      * Rejects {@code mutual_tls_enabled} on a connector whose action URL is plain {@code http://}.
      * <p>
@@ -317,7 +325,7 @@ public class ConnectorProtocolValidator {
             && url != null
             && clientConfig != null
             && Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())
-            && CLEARTEXT_URL.matcher(url).find();
+            && ConnectorAction.CLEARTEXT_URL.matcher(url).find();
     }
 
     /** Mirrors {@code HttpConnector#update}, which merges parameters with putAll rather than replacing them. */
@@ -342,20 +350,293 @@ public class ConnectorProtocolValidator {
         Map<String, String> parameters,
         ConnectorClientConfig clientConfig
     ) {
-        if (actions == null || clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
+        if (clientConfig == null || !Boolean.TRUE.equals(clientConfig.getMutualTlsEnabled())) {
             return null;
         }
-        StringSubstitutor substitutor = new StringSubstitutor(parameters == null ? Map.of() : parameters, "${parameters.", "}");
-        for (ConnectorAction action : actions) {
-            String url = action == null ? null : action.getUrl();
-            if (url == null) {
-                continue;
-            }
-            String resolved = substitutor.replace(url);
-            if (CLEARTEXT_URL.matcher(resolved).find()) {
-                return resolved.trim();
+        return ConnectorAction.firstCleartextUrl(actions, parameters);
+    }
+
+    // ---- auth_config --------------------------------------------------------------------------------------------
+
+    /** What {@link #firstChangedProtectedField} reports when the set of referenced credential keys differs. */
+    static final String REFERENCED_KEYS = "credential keys referenced by auth_config";
+    /** The protected members of the {@code jwt} block, as {@link #firstChangedProtectedField} reports them. */
+    static final String JWT_ISSUER = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.ISSUER_FIELD;
+    static final String JWT_SUBJECT = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.SUBJECT_FIELD;
+    static final String JWT_AUDIENCE = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.AUDIENCE_FIELD;
+    static final String JWT_ADDITIONAL_CLAIMS = OAuth2AuthConfig.JWT_FIELD + "." + JwtSpec.ADDITIONAL_CLAIMS_FIELD;
+
+    /** A request that carries {@code auth_config} without a credential changes the referenced credential keys. */
+    public static final String REFERENCED_KEYS_CREDENTIAL_REQUIRED_MESSAGE =
+        "Changing the credential keys referenced by auth_config requires credential in the same update";
+    /** A caller-supplied connector drops a field of the {@code auth_config} the stored connector has. */
+    public static final String SUPPLIED_CONNECTOR_REMOVES_FIELDS_MESSAGE =
+        "A caller-supplied updatedConnector cannot remove auth_config fields; update the model's connector instead";
+    /** A caller-supplied connector changes the referenced credential keys. */
+    public static final String SUPPLIED_CONNECTOR_CHANGES_REFERENCED_KEYS_MESSAGE =
+        "A caller-supplied updatedConnector cannot change the credential keys referenced by auth_config; update the model's connector instead";
+
+    /** The message for a configuration on a protocol that does not take {@code auth_config}. */
+    public static String protocolNotSupportedMessage(String protocol) {
+        return "auth_config is not supported for connector protocol [" + protocol + "]";
+    }
+
+    /** The message for a configuration written while {@code oldest}, the oldest node of the cluster, predates the feature. */
+    public static String versionGuardMessage(Version oldest) {
+        return "Writing auth_config requires every node to run "
+            + MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH
+            + " or later; the oldest node runs "
+            + oldest;
+    }
+
+    /** The message for a request that carries {@code auth_config} without a credential and changes protected {@code field}. */
+    public static String credentialRequiredMessage(String field) {
+        return "Changing auth_config." + field + " requires credential in the same update";
+    }
+
+    /** The message for a caller-supplied connector that changes protected {@code field}. */
+    public static String suppliedConnectorChangesMessage(String field) {
+        return "A caller-supplied updatedConnector cannot change auth_config." + field + "; update the model's connector instead";
+    }
+
+    /**
+     * Write-time checks of the {@code auth_config} of a connector that is created, registered inline, or supplied whole
+     * by a transport caller. In order: the type is one a request may set, the protocol takes {@code auth_config}, every
+     * node of the cluster supports it, and for a type that attaches credentials the flag of the protocol is on, then
+     * {@code plugins.ml_commons.connector.auth_enabled}. Every write path, the caller-supplied connector included, thus
+     * runs the same flag checks; the protocol check the create and register actions run themselves gives the same answer.
+     * <p>
+     * A request without {@code auth_config} is not judged, and neither the flag nor the cluster state is read. A
+     * configuration without a protocol is rejected like one on a protocol that does not take {@code auth_config};
+     * every request parser that leads to a write already rejects a missing protocol, so only a dry run or a connector
+     * built in code can reach here without one.
+     *
+     * @param protocol the connector protocol
+     * @param authConfig the configuration the request carries; may be null
+     * @param mlFeatureEnabledSetting feature flag accessor
+     * @param clusterState the current cluster state; read only for a configuration
+     * @throws IllegalArgumentException when the configuration is not accepted
+     * @throws OpenSearchStatusException with {@link RestStatus#FORBIDDEN} for a type that attaches credentials while the
+     *     protocol's flag or {@code plugins.ml_commons.connector.auth_enabled} is off
+     */
+    public static void validateAuth(
+        String protocol,
+        OAuth2AuthConfig authConfig,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Supplier<ClusterState> clusterState
+    ) {
+        if (authConfig == null) {
+            return;
+        }
+        requireUserWritableType(authConfig);
+        requireProtocolTakesAuthConfig(protocol);
+        requireEveryNodeSupportsConnectorAuth(clusterState);
+        if (authConfig.getType().isActive()) {
+            validateProtocolEnabled(protocol, mlFeatureEnabledSetting);
+            requireConnectorAuthEnabled(mlFeatureEnabledSetting);
+        }
+    }
+
+    /** Whether an update carries {@code auth_config} or changes the protocol; only such an update is judged. */
+    public static boolean touchesAuthOrProtocol(OAuth2AuthConfig updated, String updatedProtocol, String storedProtocol) {
+        return updated != null || (updatedProtocol != null && !updatedProtocol.equals(storedProtocol));
+    }
+
+    /**
+     * Update variant of {@link #validateAuth}, for the connector API and a model's inline connector. It judges the
+     * {@code auth_config} the connector will hold once {@code stored.update()} has applied the request, and must run
+     * before that call, which modifies the stored connector in place.
+     * <p>
+     * A request that neither carries {@code auth_config} nor changes the protocol is not judged. The resulting
+     * configuration is the request's when it carries one and the stored one otherwise; a connector that ends up
+     * without one is not judged further. The checks then run in the {@link #validateAuth} order, followed by the
+     * protected-field check: a request that carries {@code auth_config} without a credential may not change a
+     * protected field or the referenced credential keys, or switch to a type that attaches credentials. The flags and
+     * the protected-field check apply only to a request that carries {@code auth_config}; the version guard applies to
+     * every request that is judged, an identical re-send included. For a type that attaches credentials, the flag of
+     * the resulting protocol is judged before {@code plugins.ml_commons.connector.auth_enabled}, as the action judges
+     * it when the request re-sends the protocol, so an update that omits the protocol is judged the same way.
+     *
+     * @param stored the connector as fetched; never null
+     * @param updatedProtocol the protocol the request sets, or null
+     * @param updated the configuration the request carries, or null
+     * @param updatedCredential the credential the request carries; null or empty means none
+     * @param mlFeatureEnabledSetting feature flag accessor
+     * @param clusterState the current cluster state; read only when a configuration is judged
+     */
+    public static void validateAuthAfterUpdate(
+        Connector stored,
+        String updatedProtocol,
+        OAuth2AuthConfig updated,
+        Map<String, String> updatedCredential,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Supplier<ClusterState> clusterState
+    ) {
+        boolean carriesAuth = updated != null;
+        String storedProtocol = stored.getProtocol();
+        if (!touchesAuthOrProtocol(updated, updatedProtocol, storedProtocol)) {
+            return;
+        }
+        if (carriesAuth) {
+            requireUserWritableType(updated);
+        }
+        OAuth2AuthConfig resulting = carriesAuth ? updated : stored.getAuthConfig();
+        if (resulting == null) {
+            return;
+        }
+        String resultingProtocol = updatedProtocol != null ? updatedProtocol : storedProtocol;
+        requireProtocolTakesAuthConfig(resultingProtocol);
+        requireEveryNodeSupportsConnectorAuth(clusterState);
+        if (carriesAuth && resulting.getType().isActive()) {
+            validateProtocolEnabled(resultingProtocol, mlFeatureEnabledSetting);
+            requireConnectorAuthEnabled(mlFeatureEnabledSetting);
+        }
+        if (carriesAuth && (updatedCredential == null || updatedCredential.isEmpty())) {
+            Optional<String> changed = firstChangedProtectedField(stored.getAuthConfig(), resulting);
+            if (changed.isPresent()) {
+                throw new IllegalArgumentException(
+                    REFERENCED_KEYS.equals(changed.get())
+                        ? REFERENCED_KEYS_CREDENTIAL_REQUIRED_MESSAGE
+                        : credentialRequiredMessage(changed.get())
+                );
             }
         }
-        return null;
+    }
+
+    /**
+     * Checks a connector a transport caller supplies whole for a model, against the model's stored inline connector.
+     * Such a connector replaces the stored one and arrives without a plaintext credential, so it may not remove an
+     * {@code auth_config} the stored connector has or any of its fields, and may not change a protected field or the
+     * referenced credential keys. A stored connector without {@code auth_config} compares as {@code {"type": "none"}}.
+     *
+     * @param stored the model's stored inline connector; null for a model without one
+     * @param supplied the caller-supplied connector
+     * @throws IllegalArgumentException when the supplied connector is not accepted
+     */
+    public static void validateSuppliedConnector(Connector stored, Connector supplied) {
+        OAuth2AuthConfig storedConfig = stored == null ? null : stored.getAuthConfig();
+        OAuth2AuthConfig suppliedConfig = supplied.getAuthConfig();
+        // The supplied object marks nothing as removed, so a dropped field would survive on a merging store.
+        if (storedConfig != null && (suppliedConfig == null || suppliedConfig.dropsMembers(storedConfig))) {
+            throw new IllegalArgumentException(SUPPLIED_CONNECTOR_REMOVES_FIELDS_MESSAGE);
+        }
+        Optional<String> changed = firstChangedProtectedField(storedConfig, suppliedConfig);
+        if (changed.isPresent()) {
+            throw new IllegalArgumentException(
+                REFERENCED_KEYS.equals(changed.get())
+                    ? SUPPLIED_CONNECTOR_CHANGES_REFERENCED_KEYS_MESSAGE
+                    : suppliedConnectorChangesMessage(changed.get())
+            );
+        }
+    }
+
+    /**
+     * The first protected field whose value differs between the stored configuration and the resulting one, then
+     * {@link #REFERENCED_KEYS} when the set of referenced credential keys differs. Empty when nothing protected
+     * changes, and when the result is absent or {@code none}. Not protected: {@code token_response.*},
+     * {@code jwt.signing_alg}, {@code jwt.lifetime_seconds} and {@code jwt.private_key}, whose key is part of the
+     * referenced set.
+     * <p>
+     * A stored side that is absent compares as {@code {"type": "none"}}; an absent {@code jwt} block compares as one
+     * without members and without claims. A literal {@code token_url} compares in its canonical form, a reference as
+     * written.
+     *
+     * @param stored the stored configuration, possibly null
+     * @param resulting the configuration the write leaves, possibly null
+     * @return the name of the first changed field, or {@link #REFERENCED_KEYS}
+     */
+    static Optional<String> firstChangedProtectedField(OAuth2AuthConfig stored, OAuth2AuthConfig resulting) {
+        if (resulting == null || !resulting.getType().isActive()) {
+            // A none result holds no field and attaches nothing, so switching to none needs no credential.
+            return Optional.empty();
+        }
+        OAuth2AuthConfig before = stored == null ? OAuth2AuthConfig.NONE : stored;
+        if (!Objects.equals(comparableTokenUrl(before.getTokenUrl()), comparableTokenUrl(resulting.getTokenUrl()))) {
+            return Optional.of(OAuth2AuthConfig.TOKEN_URL_FIELD);
+        }
+        if (!Objects.equals(before.getGrantType(), resulting.getGrantType())) {
+            return Optional.of(OAuth2AuthConfig.GRANT_TYPE_FIELD);
+        }
+        if (!Objects.equals(before.getClientAuthMethod(), resulting.getClientAuthMethod())) {
+            return Optional.of(OAuth2AuthConfig.CLIENT_AUTH_METHOD_FIELD);
+        }
+        if (!Objects.equals(before.getClientId(), resulting.getClientId())) {
+            return Optional.of(OAuth2AuthConfig.CLIENT_ID_FIELD);
+        }
+        if (!Objects.equals(before.getScope(), resulting.getScope())) {
+            return Optional.of(OAuth2AuthConfig.SCOPE_FIELD);
+        }
+        if (!Objects.equals(before.getAudience(), resulting.getAudience())) {
+            return Optional.of(OAuth2AuthConfig.AUDIENCE_FIELD);
+        }
+        if (!before.getTokenRequestParams().equals(resulting.getTokenRequestParams())) {
+            return Optional.of(OAuth2AuthConfig.TOKEN_REQUEST_PARAMS_FIELD);
+        }
+        JwtSpec beforeJwt = before.getJwt();
+        JwtSpec resultingJwt = resulting.getJwt();
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getIssuer), jwtMember(resultingJwt, JwtSpec::getIssuer))) {
+            return Optional.of(JWT_ISSUER);
+        }
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getSubject), jwtMember(resultingJwt, JwtSpec::getSubject))) {
+            return Optional.of(JWT_SUBJECT);
+        }
+        if (!Objects.equals(jwtMember(beforeJwt, JwtSpec::getAudience), jwtMember(resultingJwt, JwtSpec::getAudience))) {
+            return Optional.of(JWT_AUDIENCE);
+        }
+        if (!jwtClaims(beforeJwt).equals(jwtClaims(resultingJwt))) {
+            return Optional.of(JWT_ADDITIONAL_CLAIMS);
+        }
+        if (!before.referencedCredentialKeys().equals(resulting.referencedCredentialKeys())) {
+            return Optional.of(REFERENCED_KEYS);
+        }
+        return Optional.empty();
+    }
+
+    /** A literal {@code token_url} in its canonical form; a reference, or null, as it is. */
+    private static String comparableTokenUrl(String tokenUrl) {
+        return tokenUrl == null || CredentialReference.isReference(tokenUrl) ? tokenUrl : OAuth2AuthConfig.canonicalTokenUrl(tokenUrl);
+    }
+
+    /** A member of {@code jwt}; null for an absent block. */
+    private static String jwtMember(JwtSpec jwt, Function<JwtSpec, String> member) {
+        return jwt == null ? null : member.apply(jwt);
+    }
+
+    /** The claims of {@code jwt}; an absent block adds none. */
+    private static Map<String, String> jwtClaims(JwtSpec jwt) {
+        return jwt == null ? Map.of() : jwt.getAdditionalClaims();
+    }
+
+    /**
+     * A type only code builds is refused however the configuration arrived: the request parsers refuse it already, and
+     * a connector supplied whole by an in-process caller would otherwise be stored with a block no read can parse.
+     */
+    private static void requireUserWritableType(OAuth2AuthConfig authConfig) {
+        if (!authConfig.getType().isUserWritable()) {
+            throw new IllegalArgumentException(OAuth2AuthConfig.INTERNAL_TYPE_MESSAGE);
+        }
+    }
+
+    private static void requireProtocolTakesAuthConfig(String protocol) {
+        if (!ConnectorProtocols.supportsAuthConfig(protocol)) {
+            throw new IllegalArgumentException(protocolNotSupportedMessage(protocol));
+        }
+    }
+
+    /**
+     * A node of an older release would ignore a stored {@code auth_config}, and its own writes would drop it on some
+     * metadata stores, so no configuration is written while one is part of the cluster.
+     */
+    private static void requireEveryNodeSupportsConnectorAuth(Supplier<ClusterState> clusterState) {
+        Version oldest = clusterState.get().nodes().getMinNodeVersion();
+        if (oldest.before(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH)) {
+            throw new IllegalArgumentException(versionGuardMessage(oldest));
+        }
+    }
+
+    private static void requireConnectorAuthEnabled(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        if (!mlFeatureEnabledSetting.isConnectorAuthEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
     }
 }
