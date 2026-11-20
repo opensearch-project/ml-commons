@@ -388,25 +388,26 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
         // Delegate to ModelProvider - it knows its own response format
         // First extract the message portion from the full response
         String messageJson = modelProvider.extractMessageFromResponse(dataAsMap);
-        if (messageJson == null) {
-            throw new IllegalStateException(
-                "ModelProvider failed to extract message from response. Provider: "
-                    + modelProvider.getClass().getSimpleName()
-                    + ". This may indicate an unexpected response format."
-            );
-        }
-
-        // Then parse the message to unified format
-        Message message = modelProvider.parseToUnifiedMessage(messageJson);
+        Message message = messageJson == null ? null : modelProvider.parseToUnifiedMessage(messageJson);
         if (message != null) {
             return message;
         }
-
-        // If provider parsing failed, throw with context for debugging
+        // Providers return null for a message with no text, no tool calls and no tool result: memory loading
+        // relies on that to skip such messages. For a live reply, it's an empty reply only if the provider
+        // confirms the response has nothing in it; otherwise the response is in a shape we can't read.
+        String provider = modelProvider.getClass().getSimpleName();
+        if (modelProvider.isEmptyReply(dataAsMap)) {
+            throw new EmptyModelResponseException(provider, modelProvider.extractFinishReason(dataAsMap));
+        }
+        if (messageJson == null) {
+            throw new IllegalStateException(
+                "ModelProvider failed to extract message from response. Provider: "
+                    + provider
+                    + ". This may indicate an unexpected response format."
+            );
+        }
         throw new IllegalStateException(
-            "ModelProvider failed to parse message JSON. Provider: "
-                + modelProvider.getClass().getSimpleName()
-                + ". This may indicate an unexpected message format."
+            "ModelProvider failed to parse message JSON. Provider: " + provider + ". This may indicate an unexpected message format."
         );
     }
 
