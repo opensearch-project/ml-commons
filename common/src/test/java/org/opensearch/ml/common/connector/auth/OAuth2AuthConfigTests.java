@@ -30,6 +30,8 @@ import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.parseMessage;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.parser;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.privateKeyJwt;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.privateKeyJwtBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.roundTrip;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.storedWithMarkersAsRead;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.toJson;
@@ -192,8 +194,11 @@ public class OAuth2AuthConfigTests {
 
     @Test
     public void parse_oauth2RequiresClientAuthMethod() {
-        String message = parseMessage(oauth2Without("client_auth_method"));
-        assertTrue(message, message.startsWith("auth_config.client_auth_method is required for type oauth2"));
+        assertEquals(OAuth2AuthConfig.CLIENT_AUTH_METHOD_REQUIRED_MESSAGE, parseMessage(oauth2Without("client_auth_method")));
+        assertEquals(
+            "auth_config.client_auth_method is required for type oauth2; use client_secret_basic, client_secret_post, private_key_jwt or none",
+            OAuth2AuthConfig.CLIENT_AUTH_METHOD_REQUIRED_MESSAGE
+        );
     }
 
     @Test
@@ -219,8 +224,12 @@ public class OAuth2AuthConfigTests {
         none.remove("client_secret");
         assertEquals("none", OAuth2AuthConfig.parse(none).getClientAuthMethod());
         assertEquals(
-            "auth_config.client_auth_method must be one of client_secret_basic, client_secret_post, none",
+            OAuth2AuthConfig.UNKNOWN_CLIENT_AUTH_METHOD_MESSAGE,
             parseMessage(oauth2With("client_auth_method", "'Client_Secret_Post'"))
+        );
+        assertEquals(
+            "auth_config.client_auth_method must be one of client_secret_basic, client_secret_post, private_key_jwt, none",
+            OAuth2AuthConfig.UNKNOWN_CLIENT_AUTH_METHOD_MESSAGE
         );
         assertEquals(
             "auth_config.client_auth_method must be a literal value, not a reference",
@@ -229,11 +238,7 @@ public class OAuth2AuthConfigTests {
     }
 
     @Test
-    public void parse_privateKeyJwtAndTokenRequestParamReferencesAreNotSupported() {
-        assertEquals(
-            OAuth2AuthConfig.PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE,
-            parseMessage(oauth2With("client_auth_method", "'private_key_jwt'"))
-        );
+    public void parse_tokenRequestParamReferencesAreNotSupported() {
         assertEquals(
             "auth_config.token_request_params.apikey: ${credential.<key>} references in token_request_params are not supported in this version",
             parseMessage(oauth2With("token_request_params", "{'apikey':'${credential.ibm_api_key}'}"))
@@ -446,10 +451,6 @@ public class OAuth2AuthConfigTests {
             canonicalFails("http://good.host/token").getMessage(),
             buildMessage(oauth2Builder().tokenUrl("http://good.host/token"))
         );
-        assertEquals(
-            OAuth2AuthConfig.PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE,
-            buildMessage(oauth2Builder().clientAuthMethod("private_key_jwt"))
-        );
         assertEquals("auth_config.grant_type [password] is not allowed", buildMessage(oauth2Builder().grantType("password")));
         assertEquals(OAuth2AuthConfig.CLIENT_SECRET_MUST_BE_REFERENCE_MESSAGE, buildMessage(oauth2Builder().clientSecret("s3cr3t-value")));
         assertEquals(parseMessage(oauth2With("scope", "''")), buildMessage(oauth2Builder().scope("")));
@@ -637,7 +638,8 @@ public class OAuth2AuthConfigTests {
             oauth2(),
             OAuth2AuthConfig.NONE,
             jwtBearer(),
-            fullJwtBearer() }) {
+            fullJwtBearer(),
+            privateKeyJwt() }) {
             assertEquals(config, roundTrip(config, Version.CURRENT, OAuth2AuthConfig::new));
         }
         OAuth2AuthConfig read = roundTrip(oauth2().replacing(fullOauth2()), Version.CURRENT, OAuth2AuthConfig::new);
@@ -715,11 +717,45 @@ public class OAuth2AuthConfigTests {
             OAuth2AuthConfig.CLIENT_SECRET_WITH_NONE_MESSAGE,
             buildMessage(oauth2Builder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE))
         );
-        assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, buildMessage(oauth2Builder().jwt(jwt())));
+        assertEquals(OAuth2AuthConfig.JWT_NOT_USED_MESSAGE, buildMessage(oauth2Builder().jwt(jwt())));
         // The parse applies the same rules.
         assertEquals(OAuth2AuthConfig.JWT_REQUIRED_MESSAGE, parseMessage(jwtBearerWith("jwt", null)));
         assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, parseMessage(jwtWith("issuer", null)));
-        assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, parseMessage(oauth2With("jwt", JWT_JSON)));
+        assertEquals(OAuth2AuthConfig.JWT_NOT_USED_MESSAGE, parseMessage(oauth2With("jwt", JWT_JSON)));
+    }
+
+    @Test
+    public void build_privateKeyJwtAuthenticatesTheClientCredentialsGrantWithAnAssertionForTheClientId() throws IOException {
+        OAuth2AuthConfig config = privateKeyJwt();
+        assertEquals(OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS, config.getGrantType());
+        assertEquals("what it emits parses back", config, OAuth2AuthConfig.parse(emitted(config)));
+        assertEquals(
+            OAuth2AuthConfig.PRIVATE_KEY_JWT_NEEDS_CLIENT_CREDENTIALS_MESSAGE,
+            buildMessage(privateKeyJwtBuilder().grantType(OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER))
+        );
+        assertEquals(OAuth2AuthConfig.PRIVATE_KEY_JWT_NEEDS_JWT_MESSAGE, buildMessage(privateKeyJwtBuilder().jwt(null)));
+        assertEquals(
+            OAuth2AuthConfig.CLIENT_SECRET_WITH_PRIVATE_KEY_JWT_MESSAGE,
+            buildMessage(privateKeyJwtBuilder().clientSecret("${credential.s}"))
+        );
+        // The client id is the issuer and the subject; the block names neither.
+        JwtSpec keyOnly = config.getJwt();
+        assertEquals(
+            OAuth2AuthConfig.JWT_IDENTITY_IS_CLIENT_ID_MESSAGE,
+            buildMessage(privateKeyJwtBuilder().jwt(keyOnly.toBuilder().issuer("app").build()))
+        );
+        assertEquals(
+            OAuth2AuthConfig.JWT_IDENTITY_IS_CLIENT_ID_MESSAGE,
+            buildMessage(privateKeyJwtBuilder().jwt(keyOnly.toBuilder().subject("app").build()))
+        );
+        // The audience of the assertion may differ from the token URL.
+        OAuth2AuthConfig tenantAudience = privateKeyJwtBuilder()
+            .jwt(keyOnly.toBuilder().audience("https://acme.auth0.com/").build())
+            .build();
+        assertEquals(
+            "https://acme.auth0.com/",
+            ((Map<?, ?>) emitted(tenantAudience).get(OAuth2AuthConfig.JWT_FIELD)).get(JwtSpec.AUDIENCE_FIELD)
+        );
     }
 
     @Test

@@ -187,9 +187,10 @@ public final class OAuth2TokenClient {
         try {
             request = TokenRequests.build(url, config, credentials, canonical);
         } catch (IllegalArgumentException e) {
-            // The key the JWT bearer configuration references cannot sign its assertion. A token failure rather than a
-            // refusal: the cache then holds requests with this configuration back as it does after an endpoint failure,
-            // so a key that cannot sign is not parsed again on every request the connector serves.
+            // The key the jwt block references cannot sign the assertion of the JWT bearer grant or of private_key_jwt,
+            // the only failure building the request reports. A token failure rather than a refusal: the cache then
+            // holds requests with this configuration back as it does after an endpoint failure, so a key that cannot
+            // sign is not parsed again on every request the connector serves.
             logRefusal(host, "invalid_private_key");
             throw new MLException(failureMessage(host, INVALID_PRIVATE_KEY));
         }

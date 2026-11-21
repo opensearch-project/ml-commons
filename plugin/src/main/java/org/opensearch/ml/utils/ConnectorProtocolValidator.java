@@ -546,8 +546,11 @@ public class ConnectorProtocolValidator {
      * The first protected field whose value differs between the stored configuration and the resulting one, then
      * {@link #REFERENCED_KEYS} when the set of referenced credential keys differs. Empty when nothing protected
      * changes, and when the result is absent or {@code none}. Not protected: {@code token_response.*},
-     * {@code jwt.signing_alg}, {@code jwt.lifetime_seconds} and {@code jwt.private_key}, whose key is part of the
-     * referenced set.
+     * {@code jwt.lifetime_seconds}, {@code jwt.signing_alg} and {@code jwt.header}, which change neither the
+     * destination, the identity, the authorization context nor the referenced keys, and {@code jwt.private_key}, whose
+     * key is part of the referenced set. A wrong {@code signing_alg} or {@code header} makes the node refuse to sign,
+     * for a key of the other family, or the identity provider refuse the assertion. Switching
+     * {@code client_auth_method} to {@code private_key_jwt} changes a protected field.
      * <p>
      * A stored side that is absent compares as {@code {"type": "none"}}; an absent {@code jwt} block compares as one
      * without members and without claims. A literal {@code token_url} compares in its canonical form, a reference as

@@ -27,6 +27,8 @@ import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBuilde
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.pem;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.privateKeyJwt;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.privateKeyJwtBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.rsaPkcs8;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.rsaPkcs8Pem;
 
@@ -224,6 +226,16 @@ public class AuthConfigValidatorTests {
                 fails(http(builder.clientId("app").clientSecret(null).build()))
             );
         }
+    }
+
+    @Test
+    public void privateKeyJwt_needsAClientIdAndNoSecret() {
+        Set<String> keys = Set.of(PRIVATE_KEY_KEY);
+        assertEquals(privateKeyJwt(), validate(http(privateKeyJwt()), keys, DEFAULT_TOKEN_ALLOWLIST));
+        assertEquals(
+            AuthConfigValidator.clientIdRequiredMessage(OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT),
+            fails(http(privateKeyJwtBuilder().clientId(null).build()), keys)
+        );
     }
 
     @Test

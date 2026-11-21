@@ -23,6 +23,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyJwtConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.rsaPkcs8Pem;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
 
@@ -209,6 +210,29 @@ public class TokenRequestsTests {
         assertEquals("r", value(request, "resource"));
         assertEquals(CLIENT_ID, value(request, "client_id"));
         assertFalse(rawBody(request).contains("client_secret"));
+    }
+
+    @Test
+    public void build_privateKeyJwt_sendsTheClientIdAndAClientAssertion_andNoSecret() throws IOException {
+        Request request = build(
+            privateKeyJwtConfig("${credential.id}", "'scope':'s','audience':'https://api.example','token_request_params':{'resource':'r'}"),
+            snapshot(Map.of(PRIVATE_KEY_KEY, rsaPkcs8Pem(), "id", CLIENT_ID))
+        );
+
+        assertEquals("the assertion is the client authentication", Set.of("Accept"), request.headers().names());
+        assertEquals(
+            List.of("grant_type", "scope", "audience", "resource", "client_id", "client_assertion_type", "client_assertion"),
+            names(request)
+        );
+        assertEquals("client_credentials", value(request, "grant_type"));
+        assertEquals(CLIENT_ID, value(request, "client_id"));
+        assertEquals("urn:ietf:params:oauth:client-assertion-type:jwt-bearer", value(request, "client_assertion_type"));
+        Map<String, Object> claims = claims(value(request, "client_assertion"));
+        assertEquals("the resolved client id", CLIENT_ID, claims.get("iss"));
+        assertEquals(CLIENT_ID, claims.get("sub"));
+        assertEquals(PUBLIC_TOKEN_URL, claims.get("aud"));
+        String body = rawBody(request);
+        assertFalse(body, body.contains("client_secret") || body.contains("PRIVATE") || body.contains("\n"));
     }
 
     @Test

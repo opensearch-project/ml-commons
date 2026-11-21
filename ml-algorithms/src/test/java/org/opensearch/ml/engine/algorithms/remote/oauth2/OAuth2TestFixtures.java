@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE;
+import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
@@ -174,6 +175,26 @@ public final class OAuth2TestFixtures {
     /** The smallest jwt-bearer configuration: no client id, no subject, no audience, the default algorithm and lifetime. */
     public static OAuth2AuthConfig jwtBearerConfig() {
         return jwtBearerConfig("", "");
+    }
+
+    /**
+     * A private_key_jwt configuration for {@link #PUBLIC_TOKEN_URL}: the client id {@code clientId}, the extra members
+     * {@code members} (single-quoted JSON) and a jwt block with the key referenced as {@code ${credential.private_key}}.
+     */
+    public static OAuth2AuthConfig privateKeyJwtConfig(String clientId, String members) {
+        return parse(
+            "{'type':'oauth2','token_url':'"
+                + PUBLIC_TOKEN_URL
+                + "','client_auth_method':'"
+                + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
+                + "','client_id':'"
+                + clientId
+                + "'"
+                + (members.isEmpty() ? "" : "," + members)
+                + ",'jwt':{'private_key':'${credential."
+                + PRIVATE_KEY_KEY
+                + "}'}}"
+        );
     }
 
     /** Generated once, since key generation is slow; loaded only by the tests that sign. */

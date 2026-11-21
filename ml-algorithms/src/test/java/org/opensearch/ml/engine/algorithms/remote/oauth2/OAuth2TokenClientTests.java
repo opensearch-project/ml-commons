@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_ID;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.OPEN;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
@@ -33,12 +34,14 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.clientSecret;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connectorAuthGate;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ecPkcs8Pem;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.fail;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.json;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.logged;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyJwtConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.reply;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.scriptedTransport;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
@@ -509,6 +512,18 @@ public class OAuth2TokenClientTests {
             List.of("WARN OAuth2 token request refused before sending: host=203.0.113.10 reason=invalid_private_key"),
             outcome.log()
         );
+        assertTrue(recorded.isEmpty());
+    }
+
+    @Test
+    public void requestToken_privateKeyJwt_failsAsATokenFailureWhenTheKeyIsNotOfTheAlgorithmsFamily() throws Exception {
+        OAuth2TokenClient client = client();
+
+        // An EC key under the default RS256.
+        Failed outcome = failed(client, privateKeyJwtConfig(CLIENT_ID, ""), snapshot(privateKeyCredential(ecPkcs8Pem())), allowAll());
+
+        assertSame(MLException.class, outcome.exception().getClass());
+        assertEquals(failureMessage(PUBLIC_TOKEN_HOST, OAuth2TokenClient.INVALID_PRIVATE_KEY), outcome.exception().getMessage());
         assertTrue(recorded.isEmpty());
     }
 

@@ -14,6 +14,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_ID;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ISSUER;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
@@ -22,6 +23,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyJwtConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.rsaPkcs8Pem;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.rsaPublicKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
@@ -324,6 +326,27 @@ public class JwtAssertionSignerTests {
         assertTrue(first, first.matches("[A-Za-z0-9_-]{22}"));
         assertEquals(16, BASE64URL.decode(first).length);
         assertNotEquals(first, second);
+    }
+
+    @Test
+    public void clientAssertion_namesTheClientAsIssuerAndSubject_andIsNewOnEveryCall() throws Exception {
+        JwtSpec jwt = privateKeyJwtConfig(CLIENT_ID, "").getJwt();
+        String assertion = JwtAssertionSigner.clientAssertion(jwt, CLIENT_ID, privateKey(), PUBLIC_TOKEN_URL, NOW);
+        assertTrue(verifies(assertion, rsaPublicKey()));
+        Map<String, Object> claims = claims(assertion);
+        assertEquals(List.of("iss", "sub", "aud", "iat", "exp", "jti"), new ArrayList<>(claims.keySet()));
+        assertEquals(CLIENT_ID, claims.get("iss"));
+        assertEquals(CLIENT_ID, claims.get("sub"));
+        assertEquals("the token endpoint, when the block names no audience", PUBLIC_TOKEN_URL, claims.get("aud"));
+        assertEquals(NOW.getEpochSecond() + JwtSpec.DEFAULT_LIFETIME_SECONDS, number(claims, "exp"));
+        String again = JwtAssertionSigner.clientAssertion(jwt, CLIENT_ID, privateKey(), PUBLIC_TOKEN_URL, NOW);
+        assertNotEquals(claims.get("jti"), claims(again).get("jti"));
+
+        JwtSpec tenant = jwt.toBuilder().audience("https://acme.auth0.com/").build();
+        assertEquals(
+            "https://acme.auth0.com/",
+            claims(JwtAssertionSigner.clientAssertion(tenant, CLIENT_ID, privateKey(), PUBLIC_TOKEN_URL, NOW)).get("aud")
+        );
     }
 
     @Test

@@ -23,12 +23,14 @@ import org.opensearch.ml.common.connector.auth.PrivateKeys;
 import org.opensearch.ml.common.utils.StringUtils;
 
 /**
- * Builds and signs the assertion of the JWT bearer grant (RFC 7523) from the {@code auth_config.jwt} block of a
- * connector: a compact JWS (RFC 7515) whose header is {@code alg}, {@code typ} {@code JWT} and then the block's header
- * members, whose claims are {@code iss}, {@code sub} when configured, {@code aud}, {@code iat}, {@code exp},
- * {@code jti} and then the configured additional claims, and whose signature is RS256, PS256 or ES256 under the PKCS#8
- * key the connector credential holds. The key is parsed for one signature and dropped: nothing here keeps, logs or
- * echoes it, and a key that cannot be used is reported with the messages of {@link PrivateKeys} alone.
+ * Builds and signs, from the {@code auth_config.jwt} block of a connector, the assertion of the JWT bearer grant (RFC
+ * 7523 section 2.1) or the client assertion of {@code private_key_jwt} (RFC 7523 section 2.2, OpenID Connect Core
+ * section 9): a compact JWS (RFC 7515) whose header is {@code alg}, {@code typ} {@code JWT} and then the block's header
+ * members, whose claims are {@code iss}, {@code sub}, {@code aud}, {@code iat}, {@code exp}, {@code jti} and then the
+ * configured additional claims, and whose signature is RS256, PS256 or ES256 under the PKCS#8 key the connector
+ * credential holds. Each call signs a new assertion, with its own {@code jti} and {@code iat}. The key is parsed for one
+ * signature and dropped: nothing here keeps, logs or echoes it, and a key that cannot be used is reported with the
+ * messages of {@link PrivateKeys} alone.
  */
 final class JwtAssertionSigner {
     static final String ALGORITHM_HEADER = "alg";
@@ -71,8 +73,9 @@ final class JwtAssertionSigner {
     private JwtAssertionSigner() {}
 
     /**
-     * The signed assertion of {@code jwt}, issued at {@code now} and valid for its lifetime, with the references of
-     * its issuer, subject, audience and private key resolved from {@code credentials}.
+     * The signed assertion of the JWT bearer grant for {@code jwt}, issued at {@code now} and valid for its lifetime,
+     * with the references of its issuer, subject, audience and private key resolved from {@code credentials}; the
+     * subject only when the block names one.
      *
      * @param effectiveTokenUrl the canonical URL the assertion is sent to; its {@code aud} when the block names none
      * @throws IllegalArgumentException with a message of {@link PrivateKeys#parsePkcs8} when the key is not an
@@ -80,10 +83,35 @@ final class JwtAssertionSigner {
      *     JDK cannot sign with it
      */
     static String assertion(JwtSpec jwt, CredentialSnapshot credentials, String effectiveTokenUrl, Instant now) {
+        String issuer = credentials.resolve(jwt.getIssuer());
+        return signed(jwt, claims(jwt, issuer, credentials.resolve(jwt.getSubject()), credentials, effectiveTokenUrl, now), credentials);
+    }
+
+    /**
+     * The signed client assertion of {@code private_key_jwt} for {@code jwt}: {@link #assertion} with {@code iss} and
+     * {@code sub} both {@code clientId}, as RFC 7523 section 3 and OpenID Connect Core section 9 require.
+     *
+     * @param clientId the client id, resolved
+     * @param effectiveTokenUrl the canonical URL the assertion is sent to; its {@code aud} when the block names none
+     * @throws IllegalArgumentException as {@link #assertion} does
+     */
+    static String clientAssertion(JwtSpec jwt, String clientId, CredentialSnapshot credentials, String effectiveTokenUrl, Instant now) {
+        return signed(jwt, claims(jwt, clientId, clientId, credentials, effectiveTokenUrl, now), credentials);
+    }
+
+    /** The claims in order: {@code iss}, {@code sub} unless null, {@code aud}, {@code iat}, {@code exp}, {@code jti}, the additional ones. */
+    private static Map<String, Object> claims(
+        JwtSpec jwt,
+        String issuer,
+        String subject,
+        CredentialSnapshot credentials,
+        String effectiveTokenUrl,
+        Instant now
+    ) {
         Map<String, Object> claims = new LinkedHashMap<>();
-        claims.put(ISSUER_CLAIM, credentials.resolve(jwt.getIssuer()));
-        if (jwt.getSubject() != null) {
-            claims.put(SUBJECT_CLAIM, credentials.resolve(jwt.getSubject()));
+        claims.put(ISSUER_CLAIM, issuer);
+        if (subject != null) {
+            claims.put(SUBJECT_CLAIM, subject);
         }
         String audience = credentials.resolve(jwt.getAudience());
         claims.put(AUDIENCE_CLAIM, audience != null ? audience : effectiveTokenUrl);
@@ -93,6 +121,11 @@ final class JwtAssertionSigner {
         claims.put(JWT_ID_CLAIM, jwtId());
         // Literals that name none of the claims above, in key order.
         claims.putAll(jwt.getAdditionalClaims());
+        return claims;
+    }
+
+    /** The compact JWS of {@code claims} under the header and the key of {@code jwt}. */
+    private static String signed(JwtSpec jwt, Map<String, Object> claims, CredentialSnapshot credentials) {
         String signingInput = base64Url(header(jwt).getBytes(UTF_8))
             + "."
             + base64Url(StringUtils.MAPPER.writeValueAsString(claims).getBytes(UTF_8));

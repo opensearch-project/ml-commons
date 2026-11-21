@@ -318,6 +318,19 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         afterUpdate(stored, null, jwtBearer(), CREDENTIAL);
     }
 
+    public void testAfterUpdate_signingAlgAndHeaderChangeWithoutCredential_privateKeyJwtNeedsIt() {
+        when(setting.isConnectorAuthEnabled()).thenReturn(true);
+        afterUpdate(http(jwtBearer()), null, jwtWith(j -> j.signingAlg(JwtSpec.ES256).header(Map.of(JwtSpec.KID, "k1"))), null);
+        OAuth2AuthConfig privateKeyJwt = oauth2()
+            .toBuilder()
+            .clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT)
+            .clientSecret(null)
+            .jwt(JwtSpec.builder().privateKey("${credential.k}").build())
+            .build();
+        assertEquals(credentialRequired("client_auth_method"), afterUpdateFails(http(oauth2()), null, privateKeyJwt, null));
+        afterUpdate(http(oauth2()), null, privateKeyJwt, CREDENTIAL);
+    }
+
     public void testAfterUpdate_oauth2ToNone_passesWithoutCredentialAndWithTheFlagOff() {
         when(setting.isConnectorAuthEnabled()).thenReturn(false);
         afterUpdate(http(fullOauth2()), null, NONE, null);
@@ -390,8 +403,9 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
         assertEquals(Optional.of(REFERENCED_KEYS), changed(oauth2Builder().build(), secret("s")));
         assertEquals(Optional.of("token_url"), changed(NONE, withUrl.toBuilder().clientSecret("${credential.s}").build()));
         assertEquals(Optional.empty(), changed(fullOauth2(), fullOauth2()));
-        // The members of the jwt block that name the identity are protected; its lifetime is not, and the only
-        // admitted signing algorithm leaves nothing to change. The private key surfaces through the referenced keys.
+        // The members of the jwt block that name the identity are protected; its lifetime, algorithm and header members
+        // are not (testAfterUpdate_signingAlgAndHeaderChangeWithoutCredential_privateKeyJwtNeedsIt), since a wrong value
+        // only makes the identity provider refuse the assertion. The private key surfaces through the referenced keys.
         assertEquals(Optional.of("jwt.issuer"), changed(jwtBearer(), jwtWith(j -> j.issuer("other@project.iam.gserviceaccount.com"))));
         assertEquals(Optional.of("jwt.subject"), changed(jwtBearer(), jwtWith(j -> j.subject("user@example.com"))));
         assertEquals(Optional.of("jwt.audience"), changed(jwtBearer(), jwtWith(j -> j.audience("https://api.example"))));

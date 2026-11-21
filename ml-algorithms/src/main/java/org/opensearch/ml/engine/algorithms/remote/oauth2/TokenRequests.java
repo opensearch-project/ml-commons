@@ -26,19 +26,25 @@ import okhttp3.Request;
 final class TokenRequests {
     /** The form parameter that carries the assertion of the JWT bearer grant (RFC 7523 section 2.1). */
     static final String ASSERTION_FIELD = "assertion";
+    /** The form parameters of client authentication with an assertion (RFC 7521 section 4.2). */
+    static final String CLIENT_ASSERTION_TYPE_FIELD = "client_assertion_type";
+    static final String CLIENT_ASSERTION_FIELD = "client_assertion";
+    /** The {@code client_assertion_type} of a JWT (RFC 7523 section 2.2). */
+    static final String CLIENT_ASSERTION_TYPE_JWT_BEARER = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
     private TokenRequests() {}
 
     /**
      * A POST to {@code url} with the form body of the grant. The client credentials grant sends the client id and
-     * secret in the body or, for {@code client_secret_basic}, in the Basic authorization header. The JWT bearer grant
-     * sends an assertion signed now, addressed to {@code canonicalTokenUrl} unless the block names an audience, and
-     * the client id as a form parameter when there is one (RFC 7521 section 4.2); the assertion is the client
-     * authentication, so no header and no secret go with it. {@code scope}, {@code audience} and
-     * {@code token_request_params} are sent with either grant.
+     * secret in the body or, for {@code client_secret_basic}, in the Basic authorization header; for
+     * {@code private_key_jwt}, the client id and a client assertion signed now, with no header and no secret. The JWT
+     * bearer grant sends an assertion signed now and the client id as a form parameter when there is one (RFC 7521
+     * section 4.2); the assertion is the client authentication, so no header and no secret go with it. Either
+     * assertion is addressed to {@code canonicalTokenUrl} unless the block names an audience. {@code scope},
+     * {@code audience} and {@code token_request_params} are sent with either grant.
      *
-     * @throws IllegalArgumentException with a message of {@link PrivateKeys} when the key a JWT bearer configuration
-     *     references cannot sign its assertion
+     * @throws IllegalArgumentException with a message of {@link PrivateKeys} when the key the jwt block references
+     *     cannot sign the assertion
      */
     static Request build(HttpUrl url, OAuth2AuthConfig config, CredentialSnapshot credentials, String canonicalTokenUrl) {
         boolean jwtBearer = OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(config.getGrantType());
@@ -55,6 +61,13 @@ final class TokenRequests {
         String clientId = credentials.resolve(config.getClientId());
         if (jwtBearer) {
             addIfPresent(form, OAuth2AuthConfig.CLIENT_ID_FIELD, clientId);
+        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(config.getClientAuthMethod())) {
+            String clientAssertion = JwtAssertionSigner
+                .clientAssertion(config.getJwt(), clientId, credentials, canonicalTokenUrl, Instant.now());
+            form
+                .add(OAuth2AuthConfig.CLIENT_ID_FIELD, clientId)
+                .add(CLIENT_ASSERTION_TYPE_FIELD, CLIENT_ASSERTION_TYPE_JWT_BEARER)
+                .add(CLIENT_ASSERTION_FIELD, clientAssertion);
         } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC.equals(config.getClientAuthMethod())) {
             request.header(OAuth2Support.AUTHORIZATION_HEADER, basicAuthorization(clientId, credentials.resolve(config.getClientSecret())));
         } else {

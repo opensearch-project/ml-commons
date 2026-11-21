@@ -206,10 +206,14 @@ public final class AuthConfigValidator {
         return suppliesActions && isLegacyGoogleCloud(stored);
     }
 
-    /** The client credentials grant authenticates with a client id and secret, which the method must send. */
+    /**
+     * The client credentials grant authenticates with a client id and either a secret or, for {@code private_key_jwt},
+     * an assertion the client signs, which the method must send.
+     */
     private static void validateClientCredentials(OAuth2AuthConfig config) {
-        // The parse admits only client_secret_basic, client_secret_post and none, so after this check the method sends
-        // a client id and secret.
+        // The parse admits client_secret_basic, client_secret_post, private_key_jwt and none, and private_key_jwt only
+        // with its jwt block and without a secret; after these checks the method sends a client id and its secret or
+        // assertion.
         String method = config.getClientAuthMethod();
         if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(method)) {
             throw new IllegalArgumentException(CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
@@ -217,7 +221,7 @@ public final class AuthConfigValidator {
         if (config.getClientId() == null) {
             throw new IllegalArgumentException(clientIdRequiredMessage(method));
         }
-        if (config.getClientSecret() == null) {
+        if (!OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(method) && config.getClientSecret() == null) {
             throw new IllegalArgumentException(clientSecretRequiredMessage(method));
         }
     }

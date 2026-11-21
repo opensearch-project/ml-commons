@@ -198,6 +198,24 @@ public final class AuthTestFixtures {
             .build();
     }
 
+    /**
+     * The smallest private_key_jwt configuration: the client credentials grant, a client id and a jwt block with the
+     * key alone, as a builder for variants.
+     */
+    public static OAuth2AuthConfig.OAuth2AuthConfigBuilder privateKeyJwtBuilder() {
+        return OAuth2AuthConfig
+            .builder()
+            .type(ConnectorAuthType.OAUTH2)
+            .tokenUrl(TOKEN_URL)
+            .clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT)
+            .clientId("app")
+            .jwt(JwtSpec.builder().privateKey("${credential." + PRIVATE_KEY_KEY + "}").build());
+    }
+
+    public static OAuth2AuthConfig privateKeyJwt() {
+        return privateKeyJwtBuilder().build();
+    }
+
     /** Generated once, since key generation is slow; loaded only by the tests that read a key. */
     private static final class Keys {
         static final KeyPair RSA = generate("RSA", 2048);

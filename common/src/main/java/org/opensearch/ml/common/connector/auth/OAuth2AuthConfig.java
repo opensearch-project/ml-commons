@@ -90,12 +90,38 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
         + ConnectorAuthType.GOOGLE_ADC.getValue()
         + "] is internal and cannot be configured";
     public static final String NONE_WITH_FIELDS_MESSAGE = "auth_config of type none must not contain other fields";
-    public static final String PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE = "auth_config.client_auth_method ["
+    public static final String CLIENT_AUTH_METHOD_REQUIRED_MESSAGE = "auth_config.client_auth_method is required for type oauth2; use "
+        + CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC
+        + ", "
+        + CLIENT_AUTH_METHOD_CLIENT_SECRET_POST
+        + ", "
         + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
-        + "] is not supported in this version";
+        + " or "
+        + CLIENT_AUTH_METHOD_NONE;
+    public static final String UNKNOWN_CLIENT_AUTH_METHOD_MESSAGE = "auth_config.client_auth_method must be one of "
+        + CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC
+        + ", "
+        + CLIENT_AUTH_METHOD_CLIENT_SECRET_POST
+        + ", "
+        + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
+        + ", "
+        + CLIENT_AUTH_METHOD_NONE;
     public static final String JWT_REQUIRED_MESSAGE = "auth_config.jwt is required for the jwt-bearer grant";
-    public static final String JWT_ONLY_WITH_JWT_BEARER_MESSAGE = "auth_config.jwt is used only with grant_type " + GRANT_TYPE_JWT_BEARER;
+    public static final String JWT_NOT_USED_MESSAGE = "auth_config.jwt is used only with the jwt-bearer grant or client_auth_method "
+        + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT;
     public static final String JWT_BEARER_NEEDS_NONE_MESSAGE = "auth_config.client_auth_method must be none for the jwt-bearer grant";
+    public static final String PRIVATE_KEY_JWT_NEEDS_CLIENT_CREDENTIALS_MESSAGE = "auth_config.client_auth_method ["
+        + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
+        + "] is used with grant_type "
+        + GRANT_TYPE_CLIENT_CREDENTIALS;
+    public static final String PRIVATE_KEY_JWT_NEEDS_JWT_MESSAGE = "auth_config.jwt is required for client_auth_method "
+        + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT;
+    public static final String CLIENT_SECRET_WITH_PRIVATE_KEY_JWT_MESSAGE =
+        "auth_config.client_secret must not be set with client_auth_method " + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT;
+    public static final String JWT_IDENTITY_IS_CLIENT_ID_MESSAGE =
+        "auth_config.jwt.issuer and auth_config.jwt.subject are not set with client_auth_method "
+            + CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT
+            + "; both are the client_id";
     public static final String CLIENT_SECRET_WITH_NONE_MESSAGE =
         "auth_config.client_secret must not be set when client_auth_method is none";
     public static final String CLIENT_SECRET_MUST_BE_REFERENCE_MESSAGE =
@@ -104,7 +130,12 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     public static final String TOKEN_URL_MUST_NAME_A_HOST_MESSAGE = "auth_config.token_url must name a host";
     public static final String TOKEN_URL_SCOPED_IPV6_MESSAGE = "auth_config.token_url must not use an IPv6 address with a zone id";
     public static final Set<String> CLIENT_AUTH_METHODS = Set
-        .of(CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC, CLIENT_AUTH_METHOD_CLIENT_SECRET_POST, CLIENT_AUTH_METHOD_NONE);
+        .of(
+            CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+            CLIENT_AUTH_METHOD_CLIENT_SECRET_POST,
+            CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT,
+            CLIENT_AUTH_METHOD_NONE
+        );
 
     /** Form parameters the token client sets itself; {@code token_request_params} may not set them. */
     public static final Set<String> RESERVED_TOKEN_REQUEST_PARAMS = Set
@@ -137,7 +168,10 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     @ToString.Exclude
     private final Map<String, String> tokenRequestParams;
     private final TokenResponseSpec tokenResponse;
-    /** The assertion of the JWT bearer grant; present exactly when {@link #grantType} is {@link #GRANT_TYPE_JWT_BEARER}. */
+    /**
+     * The assertion the client signs; present exactly for the jwt-bearer grant ({@link #GRANT_TYPE_JWT_BEARER}) and for
+     * {@link #CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT}.
+     */
     private final JwtSpec jwt;
     /**
      * In a partial update, the stored configuration this one replaces. Its members this one lacks are emitted as
@@ -478,8 +512,8 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
      * streamed meets the same ones: no empty member, no reserved or referencing {@code token_request_params},
      * placeholders only as whole-value credential references where a reference is allowed, {@code client_secret} a
      * reference, and for {@code oauth2} a well-formed {@code token_url}, a supported {@code client_auth_method}, an
-     * allowed grant, and a {@code jwt} block exactly for the jwt-bearer grant, which authenticates with the assertion
-     * alone: {@code client_auth_method} none and no {@code client_secret}.
+     * allowed grant, and a {@code jwt} block exactly for the jwt-bearer grant and for {@code private_key_jwt}, which
+     * authenticate with the assertion and send no {@code client_secret}.
      */
     private void validateMembers() {
         checkNotEmpty("auth_config." + TOKEN_URL_FIELD, tokenUrl);
@@ -542,12 +576,28 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     }
 
     /**
-     * The grant, the client authentication method and the {@code jwt} block agree: the jwt-bearer grant has a block
-     * with an issuer and authenticates with the assertion alone (RFC 7523 section 2.1, so {@code client_auth_method}
-     * none), every other grant has no block, and a client that authenticates with no method sends no secret.
+     * The grant, the client authentication method and the {@code jwt} block agree. {@code private_key_jwt} authenticates
+     * a client credentials grant with an assertion (RFC 7523 section 2.2, OpenID Connect Core section 9): it has a block
+     * whose issuer and subject are the client id, so the block names neither, and no secret. The jwt-bearer grant has
+     * a block with an issuer and authenticates with the assertion alone (RFC 7523 section 2.1, so
+     * {@code client_auth_method} none). Any other configuration has no block, and a client that authenticates with no
+     * method sends no secret.
      */
     private void validateGrantCombination() {
-        if (GRANT_TYPE_JWT_BEARER.equals(grantType)) {
+        if (CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(clientAuthMethod)) {
+            if (!GRANT_TYPE_CLIENT_CREDENTIALS.equals(grantType)) {
+                throw new IllegalArgumentException(PRIVATE_KEY_JWT_NEEDS_CLIENT_CREDENTIALS_MESSAGE);
+            }
+            if (jwt == null) {
+                throw new IllegalArgumentException(PRIVATE_KEY_JWT_NEEDS_JWT_MESSAGE);
+            }
+            if (clientSecret != null) {
+                throw new IllegalArgumentException(CLIENT_SECRET_WITH_PRIVATE_KEY_JWT_MESSAGE);
+            }
+            if (jwt.getIssuer() != null || jwt.getSubject() != null) {
+                throw new IllegalArgumentException(JWT_IDENTITY_IS_CLIENT_ID_MESSAGE);
+            }
+        } else if (GRANT_TYPE_JWT_BEARER.equals(grantType)) {
             if (jwt == null) {
                 throw new IllegalArgumentException(JWT_REQUIRED_MESSAGE);
             }
@@ -558,7 +608,7 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException(JWT_BEARER_NEEDS_NONE_MESSAGE);
             }
         } else if (jwt != null) {
-            throw new IllegalArgumentException(JWT_ONLY_WITH_JWT_BEARER_MESSAGE);
+            throw new IllegalArgumentException(JWT_NOT_USED_MESSAGE);
         }
         if (CLIENT_AUTH_METHOD_NONE.equals(clientAuthMethod) && clientSecret != null) {
             throw new IllegalArgumentException(CLIENT_SECRET_WITH_NONE_MESSAGE);
@@ -596,27 +646,10 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
 
     private static void validateClientAuthMethod(String clientAuthMethod) {
         if (clientAuthMethod == null) {
-            throw new IllegalArgumentException(
-                "auth_config.client_auth_method is required for type oauth2; use "
-                    + CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC
-                    + ", "
-                    + CLIENT_AUTH_METHOD_CLIENT_SECRET_POST
-                    + " or "
-                    + CLIENT_AUTH_METHOD_NONE
-            );
-        }
-        if (CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(clientAuthMethod)) {
-            throw new IllegalArgumentException(PRIVATE_KEY_JWT_NOT_SUPPORTED_MESSAGE);
+            throw new IllegalArgumentException(CLIENT_AUTH_METHOD_REQUIRED_MESSAGE);
         }
         if (!CLIENT_AUTH_METHODS.contains(clientAuthMethod)) {
-            throw new IllegalArgumentException(
-                "auth_config.client_auth_method must be one of "
-                    + CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC
-                    + ", "
-                    + CLIENT_AUTH_METHOD_CLIENT_SECRET_POST
-                    + ", "
-                    + CLIENT_AUTH_METHOD_NONE
-            );
+            throw new IllegalArgumentException(UNKNOWN_CLIENT_AUTH_METHOD_MESSAGE);
         }
     }
 
