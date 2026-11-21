@@ -8,7 +8,8 @@ no `Authorization` or `api-key` header.
 
 Before you start, in Azure:
 
-- Register an application in your Entra ID tenant and create a client secret for it.
+- Register an application in your Entra ID tenant and create a client secret for it, or upload a certificate to
+  authenticate with instead (see [Certificate credentials](#certificate-credentials-private_key_jwt)).
 - Assign the application's service principal the **Cognitive Services OpenAI User** role on the Azure OpenAI resource.
 - Note the tenant ID, the application (client) ID, the client secret, the resource name, the deployment name and the
   API version you want to use.
@@ -202,12 +203,76 @@ POST /_plugins/_ml/models/FKppEY0BpYxvPx3HZZk0/_predict
 }
 ```
 
+## Certificate credentials (`private_key_jwt`)
+
+Instead of a client secret, the application can authenticate with a certificate. The plugin signs a client assertion
+(RFC 7523, OpenID Connect `private_key_jwt`) with the certificate's private key, which the connector credential holds,
+and Entra ID verifies it with the certificate uploaded to the application. No secret is sent.
+
+Create a key and a certificate for it, and upload `cert.pem` to the application under **Certificates & secrets** >
+**Certificates**. The key must be an unencrypted PKCS#8 RSA key of at least 2048 bits (`-----BEGIN PRIVATE KEY-----`);
+convert a `-----BEGIN RSA PRIVATE KEY-----` file with `openssl pkcs8 -topk8 -nocrypt -in key.pem -out key.p8.pem`. A
+key generated with `-algorithm RSA-PSS` is not supported.
+
+```sh
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out key.pem
+openssl req -new -x509 -key key.pem -out cert.pem -days 365 -subj "/CN=opensearch-connector"
+```
+
+Entra ID finds the certificate by its thumbprint in the assertion header: `x5t#S256`, the base64url-encoded SHA-256
+digest of the certificate without padding. The SHA-1 form `x5t` is also accepted in its place. The hexadecimal
+thumbprint the Azure portal shows is not either of them and is rejected; convert it with the last command.
+
+```sh
+# x5t#S256
+openssl x509 -in cert.pem -outform DER | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '='
+# x5t
+openssl x509 -in cert.pem -outform DER | openssl dgst -sha1 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '='
+# x5t, from the hexadecimal thumbprint of the portal
+echo <HEX THUMBPRINT> | xxd -r -p | openssl base64 -A | tr '+/' '-_' | tr -d '='
+```
+
+Create the connector of step 2 with this `auth_config` and `credential`; the other members stay as they are. In JSON,
+the line breaks of the key are written as `\n`; `jq -Rs . key.pem` prints the file in that form.
+
+```json
+{
+  "auth_config": {
+    "type": "oauth2",
+    "token_url": "https://login.microsoftonline.com/<YOUR TENANT ID>/oauth2/v2.0/token",
+    "client_auth_method": "private_key_jwt",
+    "client_id": "<YOUR APPLICATION (CLIENT) ID>",
+    "scope": "https://cognitiveservices.azure.com/.default",
+    "jwt": {
+      "signing_alg": "PS256",
+      "header": {
+        "x5t#S256": "<YOUR CERTIFICATE THUMBPRINT>"
+      },
+      "private_key": "${credential.private_key}"
+    }
+  },
+  "credential": {
+    "private_key": "-----BEGIN PRIVATE KEY-----\n<YOUR KEY>\n-----END PRIVATE KEY-----\n"
+  }
+}
+```
+
+`PS256` is the algorithm Entra ID documents for certificate credentials; `RS256`, the default, also works. The
+assertion names the client ID as its issuer and subject, so `jwt.issuer` and `jwt.subject` are not set, and
+`client_secret` is rejected beside `private_key_jwt`. Its audience is the token URL, as Entra ID expects. Each token
+request carries a new assertion, valid for `jwt.lifetime_seconds` (default 60, at most 3600). The key is read when
+the connector is created and whenever `credential` is updated, and one in another form, or of fewer than 2048 bits, is
+rejected before it is stored.
+
 ## Updates and the client secret
 
-An update that sends `auth_config` sends the whole block. Changing `token_url`, `client_auth_method`, `client_id`,
-`scope`, `audience` or `token_request_params`, or the credential keys the block refers to, requires `credential` in the
-same update. To rotate the client secret, undeploy the model, update the connector with the new secret in
-`credential`, and deploy the model again.
+An update that sends `auth_config` sends the whole block. Changing `token_url`, `grant_type`, `client_auth_method`,
+`client_id`, `scope`, `audience`, `token_request_params`, `jwt.issuer`, `jwt.subject`, `jwt.audience` or
+`jwt.additional_claims`, or the credential keys the block refers to, requires `credential` in the same update;
+`token_response`, `jwt.signing_alg`, `jwt.lifetime_seconds` and `jwt.header` can change without it. To rotate the
+client secret, undeploy the model, update the connector with the new secret in `credential`, and deploy the model
+again. To rotate a certificate, upload the new one to the application first, then do the same with the new key in
+`credential` and its thumbprint in `auth_config.jwt.header`, and remove the old certificate.
 
 ## Troubleshooting
 
@@ -219,7 +284,8 @@ same update. To rotate the client secret, undeploy the model, update the connect
   it to the setting in the same way as in step 1, and replace `scope` with
   `"token_request_params": { "resource": "https://cognitiveservices.azure.com/" }`.
 - `Failed to obtain OAuth2 token from login.microsoftonline.com: invalid_client (HTTP 401)`: Entra ID rejected the client
-  ID or the client secret.
+  ID or the client secret. With certificate credentials, the thumbprint in `jwt.header` is not that of a certificate
+  of the application, or the key in `credential` is not that certificate's key.
 - The model request returns `401` from Azure OpenAI: check the role assignment of the service principal on the
   resource. After a `401` the plugin sends the request once more with a new token, unless the token it used is younger
   than ten seconds.

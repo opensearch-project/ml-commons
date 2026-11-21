@@ -162,6 +162,13 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
         + OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER
         + "\", \"client_auth_method\": \"none\"";
     private static final String ISSUER = "svc@project.iam.gserviceaccount.com";
+    /** The members of a private_key_jwt object before its jwt block; the default token endpoints admit the token URL. */
+    private static final String PRIVATE_KEY_JWT_MEMBERS = "\"type\": \"oauth2\", \"token_url\": \""
+        + ENTRA_TOKEN_URL
+        + "\", \"client_auth_method\": \"private_key_jwt\", \"client_id\": \"my-client\", "
+        + "\"scope\": \"https://cognitiveservices.azure.com/.default\"";
+    /** The {@code x5t#S256} of a certificate: 32 bytes, 43 base64url characters. */
+    private static final String X5T_S256 = "Z7E26IvERGSlI9PxYRR6U4XP1YQ7riAsx0JIHMtn8so";
     private static final String SCOPE_CLAIM = "https://www.googleapis.com/auth/cloud-platform";
     private static final String PRIVATE_KEY_REFERENCE = "${credential.private_key}";
     private static final String TERM_TYPE_NONE = "{\"query\": {\"term\": {\"auth_config.type\": \"none\"}}}";
@@ -475,7 +482,7 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
      */
     @SuppressWarnings("unchecked")
     public void testJwtBearerWritePathsAndRefusals() throws Exception {
-        byte[] encoded = generatedRsaKey();
+        byte[] encoded = generatedKey("RSA", 2048);
         String pem = pem("PRIVATE KEY", encoded);
         String jwtBearer = jwtBearer(", \"additional_claims\": {\"scope\": \"" + SCOPE_CLAIM + "\"}");
         updateClusterSettings(AUTH_ENABLED, true);
@@ -507,13 +514,17 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
             updateConnector(c1, getBody);
             assertEquals(created, authConfigOf(getConnector(c1)));
 
-            // The block's rules, checked on create; the key is read for the block's algorithm.
+            // ES256 signs with an EC key on P-256.
+            String es256Key = privateKeyCredential(pem("PRIVATE KEY", generatedKey("EC", 256)));
+            String es256 = registerConnector(httpConnector(PARAMETERS, jwtBearer(", \"signing_alg\": \"ES256\""), es256Key));
+            assertEquals("ES256", ((Map<String, Object>) authConfigOf(getConnector(es256)).get("jwt")).get("signing_alg"));
+
+            // The block's rules, checked as the request is parsed.
             Map<String, String> refusals = new LinkedHashMap<>();
             refusals.put("{" + JWT_BEARER_MEMBERS + "}", OAuth2AuthConfig.JWT_REQUIRED_MESSAGE);
             refusals.put(jwtBearer("").replace("\"none\"", "\"client_secret_post\""), OAuth2AuthConfig.JWT_BEARER_NEEDS_NONE_MESSAGE);
             refusals.put(jwtBearer(", \"additional_claims\": {\"iss\": \"other\"}"), JwtSpec.reservedClaimMessage("iss"));
             refusals.put(jwtBearer(", \"signing_alg\": \"HS256\""), JwtSpec.SIGNING_ALG_MESSAGE);
-            refusals.put(jwtBearer(", \"signing_alg\": \"ES256\""), PrivateKeys.keyTypeMessage(JwtSpec.ES256));
             for (Map.Entry<String, String> refusal : refusals.entrySet()) {
                 assertRejected(
                     RestStatus.BAD_REQUEST,
@@ -541,12 +552,61 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
     }
 
     /**
+     * private_key_jwt on http: a client credentials configuration whose jwt block signs the client assertion is stored and
+     * returned with its header members and the defaults filled in, without the key, which the credential holds; a client
+     * secret beside it is refused.
+     */
+    @SuppressWarnings("unchecked")
+    public void testPrivateKeyJwtWritePathAndRefusal() throws Exception {
+        String privateKeyJwt = "{"
+            + PRIVATE_KEY_JWT_MEMBERS
+            + ", \"jwt\": {\"signing_alg\": \"PS256\", \"header\": {\"x5t#S256\": \""
+            + X5T_S256
+            + "\"}, \"private_key\": \""
+            + PRIVATE_KEY_REFERENCE
+            + "\"}}";
+        String credential = privateKeyCredential(pem("PRIVATE KEY", generatedKey("RSA", 2048)));
+        updateClusterSettings(AUTH_ENABLED, true);
+        try {
+            String connectorId = registerConnector(httpConnector(PARAMETERS, privateKeyJwt, credential));
+            String getBody = EntityUtils.toString(request("GET", CONNECTORS + connectorId, "").getEntity(), StandardCharsets.UTF_8);
+            assertFalse("the key stays in the credential", getBody.contains("PRIVATE KEY"));
+            Map<String, Object> created = (Map<String, Object>) XContentHelper
+                .convertToMap(JsonXContent.jsonXContent, getBody, true)
+                .get("auth_config");
+            assertEquals(
+                List.of("type", "token_url", "grant_type", "client_auth_method", "client_id", "scope", "jwt"),
+                new ArrayList<>(created.keySet())
+            );
+            assertEquals(OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS, created.get("grant_type"));
+            assertEquals(OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT, created.get("client_auth_method"));
+            Map<String, Object> jwt = (Map<String, Object>) created.get("jwt");
+            assertEquals(List.of("signing_alg", "lifetime_seconds", "header", "private_key"), new ArrayList<>(jwt.keySet()));
+            assertEquals("PS256", jwt.get("signing_alg"));
+            assertEquals(60, jwt.get("lifetime_seconds"));
+            assertEquals(Map.of("x5t#S256", X5T_S256), jwt.get("header"));
+            assertEquals(PRIVATE_KEY_REFERENCE, jwt.get("private_key"));
+            assertEquals(Set.of("private_key"), storedCredential(connectorId).keySet());
+
+            String withSecret = privateKeyJwt
+                .replace(PRIVATE_KEY_JWT_MEMBERS, PRIVATE_KEY_JWT_MEMBERS + ", \"client_secret\": \"${credential.client_secret}\"");
+            assertRejected(
+                RestStatus.BAD_REQUEST,
+                OAuth2AuthConfig.CLIENT_SECRET_WITH_PRIVATE_KEY_JWT_MESSAGE,
+                () -> createConnector(httpConnector(PARAMETERS, withSecret, credential))
+            );
+        } finally {
+            updateClusterSettings(AUTH_ENABLED, (Object) null);
+        }
+    }
+
+    /**
      * google_cloud takes an explicit auth_config under its protocol setting and the auth_config setting, both checked on
      * write; a legacy service account connector stores none, is written as before and shows none.
      */
     @SuppressWarnings("unchecked")
     public void testGoogleCloudTakesAnExplicitAuthConfigUnderBothSettings() throws Exception {
-        String pem = pem("PRIVATE KEY", generatedRsaKey());
+        String pem = pem("PRIVATE KEY", generatedKey("RSA", 2048));
         String serviceAccount = "{\"private_key\": \""
             + pem.replace("\n", "\\n")
             + "\", \"client_email\": \""
@@ -606,10 +666,10 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
         return "{\"private_key\": \"" + pem.replace("\n", "\\n") + "\"}";
     }
 
-    /** The PKCS#8 encoding of a freshly generated RSA key. */
-    private static byte[] generatedRsaKey() throws GeneralSecurityException {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
+    /** The PKCS#8 encoding of a freshly generated {@code algorithm} key of {@code keySize} bits; for EC 256, on P-256. */
+    private static byte[] generatedKey(String algorithm, int keySize) throws GeneralSecurityException {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm);
+        generator.initialize(keySize);
         return generator.generateKeyPair().getPrivate().getEncoded();
     }
 
