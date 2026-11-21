@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CON
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_EXTENSION_GRANTS;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.clusterState;
@@ -172,6 +173,7 @@ public class TransportRegisterModelActionAuthConfigTests extends OpenSearchTestC
         when(clusterService.localNode()).thenReturn(localNode);
         when(localNode.getId()).thenReturn("node-1");
         when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
+        when(mlFeatureEnabledSetting.getOAuth2ExtensionGrants()).thenReturn(DEFAULT_EXTENSION_GRANTS);
         action = spy(
             new TransportRegisterModelAction(
                 transportService,

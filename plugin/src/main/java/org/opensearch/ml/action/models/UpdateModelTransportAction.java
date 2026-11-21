@@ -50,6 +50,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
@@ -164,7 +165,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         supplied,
                         supplied.getAuthConfig(),
                         AuthConfigValidator.keysOf(supplied.getCredential()),
-                        mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                        mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints(),
+                        mlFeatureEnabledSetting.getOAuth2ExtensionGrants()
                     );
             } catch (Exception e) {
                 log.error("Rejected update of model {} with a caller-supplied connector: {}", modelId, e.getMessage());
@@ -495,7 +497,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         || AuthConfigValidator.actionsAreJudgedAsNew(connector, updateModelInput.getConnector().getActions() != null);
                     Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
                     TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
-                    boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);
+                    ExtensionGrantAllowlist grants = mlFeatureEnabledSetting.getOAuth2ExtensionGrants();
+                    boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist, grants);
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update
@@ -516,6 +519,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 connector.getAuthConfig(),
                                 keyView,
                                 allowlist,
+                                grants,
                                 authOrProtocolTouched,
                                 storedPassed
                             )) {

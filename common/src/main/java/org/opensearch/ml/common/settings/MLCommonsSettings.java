@@ -15,6 +15,8 @@ import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_OPENSEARCH;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -26,6 +28,7 @@ import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 
 import com.google.common.collect.ImmutableList;
 
@@ -855,6 +858,47 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    /**
+     * The extension grants (RFC 6749 section 4.5) a connector auth_config may request a token with, each an absolute
+     * URI. The client credentials and JWT bearer grants need no entry. Widening the list is safe; a grant removed from
+     * it fails the connectors that use it at their next request, since the list is read live.
+     */
+    public static final Setting<List<String>> ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.oauth2_extension_grants",
+            ImmutableList.of("urn:ibm:params:oauth:grant-type:apikey"),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String grant : value) {
+                        if (!isAbsoluteUri(grant)) {
+                            throw new IllegalArgumentException(
+                                "Extension grant \""
+                                    + grant
+                                    + "\" is not an absolute URI; RFC 6749 section 4.5 names extension grants by one"
+                            );
+                        }
+                        if (OAuth2AuthConfig.DENIED_GRANT_TYPES.contains(grant)) {
+                            throw new IllegalArgumentException(
+                                "Grant \"" + grant + "\" acts for a user and cannot be admitted for a connector"
+                            );
+                        }
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    private static boolean isAbsoluteUri(String value) {
+        try {
+            return new URI(value).isAbsolute();
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
 
     /**
      * Operators may persist patterns that let the host position match path or query characters.

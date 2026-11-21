@@ -164,7 +164,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     connector,
                     connector.getAuthConfig(),
                     AuthConfigValidator.keysOf(connector.getCredential()),
-                    mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                    mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints(),
+                    mlFeatureEnabledSetting.getOAuth2ExtensionGrants()
                 );
             // The credential is still plaintext here; it is encrypted just before the write. A private key the
             // configuration references is parsed while it is, so a key that could not sign is refused now.

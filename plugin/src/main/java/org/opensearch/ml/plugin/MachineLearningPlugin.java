@@ -1586,7 +1586,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MEMORY_DEFAULT_HISTORY_MAX_COUNT,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
-                MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS
+                MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS
             );
         return settings;
     }

@@ -266,6 +266,7 @@ public class MachineLearningPluginTests {
         assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED));
         assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX));
         assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS));
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS));
     }
 
     @Test

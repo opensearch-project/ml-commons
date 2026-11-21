@@ -167,6 +167,12 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
         + ENTRA_TOKEN_URL
         + "\", \"client_auth_method\": \"private_key_jwt\", \"client_id\": \"my-client\", "
         + "\"scope\": \"https://cognitiveservices.azure.com/.default\"";
+    /**
+     * The members of an extension grant object before its token_request_params: the API key grant of IBM Cloud IAM, whose
+     * token endpoint the default token endpoints admit.
+     */
+    private static final String APIKEY_GRANT_MEMBERS = "\"type\": \"oauth2\", \"token_url\": \"https://iam.cloud.ibm.com/identity/token\", "
+        + "\"grant_type\": \"urn:ibm:params:oauth:grant-type:apikey\", \"client_auth_method\": \"none\"";
     /** The {@code x5t#S256} of a certificate: 32 bytes, 43 base64url characters. */
     private static final String X5T_S256 = "Z7E26IvERGSlI9PxYRR6U4XP1YQ7riAsx0JIHMtn8so";
     private static final String SCOPE_CLAIM = "https://www.googleapis.com/auth/cloud-platform";
@@ -594,6 +600,41 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
                 RestStatus.BAD_REQUEST,
                 OAuth2AuthConfig.CLIENT_SECRET_WITH_PRIVATE_KEY_JWT_MESSAGE,
                 () -> createConnector(httpConnector(PARAMETERS, withSecret, credential))
+            );
+        } finally {
+            updateClusterSettings(AUTH_ENABLED, (Object) null);
+        }
+    }
+
+    /**
+     * An extension grant on http: a configuration with client_auth_method none whose token_request_params reference the
+     * API key is stored and returned with the reference, the key staying in the credential; one whose token_request_params
+     * carry no reference is refused.
+     */
+    @SuppressWarnings("unchecked")
+    public void testExtensionGrantWritePathAndRefusal() throws Exception {
+        String apikeyGrant = "{" + APIKEY_GRANT_MEMBERS + ", \"token_request_params\": {\"apikey\": \"${credential.apikey}\"}}";
+        String credential = "{\"apikey\": \"ibm-cloud-api-key-value\"}";
+        updateClusterSettings(AUTH_ENABLED, true);
+        try {
+            String connectorId = registerConnector(httpConnector(PARAMETERS, apikeyGrant, credential));
+            String getBody = EntityUtils.toString(request("GET", CONNECTORS + connectorId, "").getEntity(), StandardCharsets.UTF_8);
+            assertFalse("the key stays in the credential", getBody.contains("ibm-cloud-api-key-value"));
+            Map<String, Object> created = (Map<String, Object>) XContentHelper
+                .convertToMap(JsonXContent.jsonXContent, getBody, true)
+                .get("auth_config");
+            assertEquals(
+                List.of("type", "token_url", "grant_type", "client_auth_method", "token_request_params"),
+                new ArrayList<>(created.keySet())
+            );
+            assertEquals(mapOf(apikeyGrant), created);
+            assertEquals(Set.of("apikey"), storedCredential(connectorId).keySet());
+
+            String literal = apikeyGrant.replace("${credential.apikey}", "ibm-cloud-api-key-value");
+            assertRejected(
+                RestStatus.BAD_REQUEST,
+                AuthConfigValidator.EXTENSION_GRANT_NEEDS_CREDENTIAL_PARAMETER_MESSAGE,
+                () -> createConnector(httpConnector(PARAMETERS, literal, credential))
             );
         } finally {
             updateClusterSettings(AUTH_ENABLED, (Object) null);

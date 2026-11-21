@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -108,7 +109,8 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_CONNECTOR_AUTH_ENABLED,
                             ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
                             ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS,
-                            ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED
+                            ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED,
+                            ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS
                         )
                 )
             );

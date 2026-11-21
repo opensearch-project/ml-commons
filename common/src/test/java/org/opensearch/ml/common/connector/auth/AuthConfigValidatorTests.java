@@ -12,12 +12,15 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ACTION_URL;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.DEFAULT_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.GOOGLE_TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.SECRET_LOOKING;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ecPkcs8;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.extensionGrant;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.extensionGrantBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.http;
@@ -60,7 +63,7 @@ public class AuthConfigValidatorTests {
 
     /** {@link AuthConfigValidator#validate} of the configuration {@code connector} holds. */
     private static OAuth2AuthConfig validate(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
-        return AuthConfigValidator.validate(connector, connector.getAuthConfig(), keys, allowlist);
+        return AuthConfigValidator.validate(connector, connector.getAuthConfig(), keys, allowlist, DEFAULT_EXTENSION_GRANTS);
     }
 
     private static OAuth2AuthConfig validate(Connector connector) {
@@ -68,7 +71,7 @@ public class AuthConfigValidatorTests {
     }
 
     private static boolean passes(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
-        return AuthConfigValidator.passes(connector, connector.getAuthConfig(), keys, allowlist);
+        return AuthConfigValidator.passes(connector, connector.getAuthConfig(), keys, allowlist, DEFAULT_EXTENSION_GRANTS);
     }
 
     private static boolean validateOrGrandfather(
@@ -79,7 +82,15 @@ public class AuthConfigValidatorTests {
         boolean storedPassed
     ) {
         return AuthConfigValidator
-            .validateOrGrandfather(connector, connector.getAuthConfig(), keys, allowlist, authOrProtocolTouched, storedPassed);
+            .validateOrGrandfather(
+                connector,
+                connector.getAuthConfig(),
+                keys,
+                allowlist,
+                DEFAULT_EXTENSION_GRANTS,
+                authOrProtocolTouched,
+                storedPassed
+            );
     }
 
     private static String fails(Connector connector, Set<String> keys, TokenEndpointAllowlist allowlist) {
@@ -157,31 +168,102 @@ public class AuthConfigValidatorTests {
     }
 
     @Test
-    public void grant_isClientCredentialsOrJwtBearer() {
+    public void grant_isClientCredentialsJwtBearerOrAnExtensionGrantUri() {
         validate(http(oauth2Builder().grantType(OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS).build()));
         assertEquals(jwtBearer(), validate(http(jwtBearer()), Set.of(PRIVATE_KEY_KEY), DEFAULT_TOKEN_ALLOWLIST));
-        for (String grant : new String[] { "urn:ibm:params:oauth:grant-type:apikey", "Client_Credentials" }) {
+        // An extension grant is named by an absolute URI (RFC 6749 section 4.5).
+        Set<String> apikey = Set.of("apikey");
+        assertEquals(extensionGrant(), validate(http(extensionGrant()), apikey, DEFAULT_TOKEN_ALLOWLIST));
+        OAuth2AuthConfig other = extensionGrantBuilder().grantType("https://idp.example/grants/api-key").build();
+        AuthConfigValidator
+            .validate(
+                http(other),
+                other,
+                apikey,
+                DEFAULT_TOKEN_ALLOWLIST,
+                new ExtensionGrantAllowlist(List.of("https://idp.example/grants/api-key"))
+            );
+        for (String grant : new String[] { "apikey", "Client_Credentials", "1urn:x", "urn:ibm:params:oauth:grant type:apikey" }) {
             assertEquals(
                 grant,
-                AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE,
-                fails(http(oauth2Builder().grantType(grant).build()))
+                AuthConfigValidator.GRANT_TYPE_MESSAGE,
+                fails(http(extensionGrantBuilder().grantType(grant).build()), apikey)
             );
         }
         assertEquals(
-            "auth_config.grant_type is not supported in this version; use client_credentials or urn:ietf:params:oauth:grant-type:jwt-bearer",
-            AuthConfigValidator.GRANT_TYPE_NOT_SUPPORTED_MESSAGE
+            "auth_config.grant_type must be client_credentials, urn:ietf:params:oauth:grant-type:jwt-bearer or an extension grant URI",
+            AuthConfigValidator.GRANT_TYPE_MESSAGE
         );
     }
 
     @Test
-    public void clientAuthMethodNone_isAdmittedOnlyWithTheJwtBearerGrant() {
+    public void extensionGrant_mustBeOneTheSettingAdmits() {
+        Set<String> apikey = Set.of("apikey");
+        OAuth2AuthConfig other = extensionGrantBuilder().grantType("https://idp.example/grants/api-key").build();
+        // The default admits the IBM grant alone; another grant needs an entry, and a user's grant is refused by the parse first.
+        assertEquals(extensionGrant(), validate(http(extensionGrant()), apikey, DEFAULT_TOKEN_ALLOWLIST));
+        assertEquals(ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE, fails(http(other), apikey));
         assertEquals(
-            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE,
+            "auth_config.grant_type is an extension grant that plugins.ml_commons.connector.oauth2_extension_grants does not admit",
+            ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE
+        );
+        ExtensionGrantAllowlist nothing = new ExtensionGrantAllowlist(List.of());
+        assertEquals(
+            ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE,
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> AuthConfigValidator.validate(http(extensionGrant()), extensionGrant(), apikey, DEFAULT_TOKEN_ALLOWLIST, nothing)
+            ).getMessage()
+        );
+        // The grants the plugin implements itself need no entry.
+        assertEquals(oauth2(), AuthConfigValidator.validate(http(oauth2()), oauth2(), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, nothing));
+        assertEquals(
+            jwtBearer(),
+            AuthConfigValidator.validate(http(jwtBearer()), jwtBearer(), Set.of(PRIVATE_KEY_KEY), DEFAULT_TOKEN_ALLOWLIST, nothing)
+        );
+    }
+
+    @Test
+    public void clientAuthMethodNone_isRefusedWithTheClientCredentialsGrant() {
+        assertEquals(
+            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_MESSAGE,
             fails(http(oauth2Builder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE).clientSecret(null).build()))
         );
         assertEquals(
-            "auth_config.client_auth_method [none] is supported only with the jwt-bearer grant in this version",
-            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE
+            "auth_config.client_auth_method [none] is used with the jwt-bearer grant or an extension grant",
+            AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_MESSAGE
+        );
+    }
+
+    @Test
+    public void extensionGrant_authenticatesWithNoneAndACredentialReferenceInTokenRequestParams() {
+        Set<String> keys = Set.of("apikey", "s");
+        for (String method : new String[] {
+            OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC,
+            OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST }) {
+            assertEquals(
+                method,
+                AuthConfigValidator.EXTENSION_GRANT_NEEDS_NONE_MESSAGE,
+                fails(http(extensionGrantBuilder().clientAuthMethod(method).clientId("app").clientSecret("${credential.s}").build()), keys)
+            );
+        }
+        // Without a reference the token request would carry no credential.
+        for (Map<String, String> params : List.<Map<String, String>>of(Map.of(), Map.of("apikey", SECRET_LOOKING))) {
+            assertEquals(
+                params.toString(),
+                AuthConfigValidator.EXTENSION_GRANT_NEEDS_CREDENTIAL_PARAMETER_MESSAGE,
+                fails(http(extensionGrantBuilder().tokenRequestParams(params).build()), keys)
+            );
+        }
+        // The reference names a key of the credential, as every reference does.
+        assertEquals(AuthConfigValidator.missingCredentialKeyMessage("apikey"), fails(http(extensionGrant()), Set.of("s")));
+        assertEquals(
+            "auth_config.client_auth_method must be none with an extension grant",
+            AuthConfigValidator.EXTENSION_GRANT_NEEDS_NONE_MESSAGE
+        );
+        assertEquals(
+            "auth_config.token_request_params must carry a ${credential.<key>} value with an extension grant",
+            AuthConfigValidator.EXTENSION_GRANT_NEEDS_CREDENTIAL_PARAMETER_MESSAGE
         );
     }
 
@@ -353,7 +435,14 @@ public class AuthConfigValidatorTests {
         // No grant, no token URL and no key to check, so the allowlist and the key set play no part.
         assertEquals(
             adc,
-            AuthConfigValidator.validate(http(parameters(), null, actions(null, ACTION_URL), null), adc, Set.of(), NOTHING_ALLOWED)
+            AuthConfigValidator
+                .validate(
+                    http(parameters(), null, actions(null, ACTION_URL), null),
+                    adc,
+                    Set.of(),
+                    NOTHING_ALLOWED,
+                    DEFAULT_EXTENSION_GRANTS
+                )
         );
 
         ConnectorClientConfig skip = ConnectorClientConfig.builder().skipSslVerification(true).build();
@@ -383,16 +472,18 @@ public class AuthConfigValidatorTests {
         // Written: the write paths pass the declaration the connector holds, none here.
         assertEquals(
             AuthConfigValidator.GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE,
-            assertThrows(IllegalArgumentException.class, () -> AuthConfigValidator.validate(stored, null, keys, DEFAULT_TOKEN_ALLOWLIST))
-                .getMessage()
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> AuthConfigValidator.validate(stored, null, keys, DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS)
+            ).getMessage()
         );
-        assertNull(AuthConfigValidator.validate(clean, null, keys, DEFAULT_TOKEN_ALLOWLIST));
+        assertNull(AuthConfigValidator.validate(clean, null, keys, DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS));
         assertTrue(AuthConfigValidator.definesAuthorizationHeader(stored));
         assertFalse(AuthConfigValidator.definesAuthorizationHeader(clean));
 
         // Run: the executor passes the configuration the stored identity stands for; the token replaces the header.
         OAuth2AuthConfig implied = stored.getEffectiveAuthConfig();
-        assertSame(implied, AuthConfigValidator.validate(stored, implied, keys, DEFAULT_TOKEN_ALLOWLIST));
+        assertSame(implied, AuthConfigValidator.validate(stored, implied, keys, DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS));
 
         // The other checks of an active configuration still apply, worded for the protocol.
         assertEquals(
@@ -447,7 +538,8 @@ public class AuthConfigValidatorTests {
     private static String failsWhenRun(GoogleCloudConnector connector, Set<String> keys) {
         return assertThrows(
             IllegalArgumentException.class,
-            () -> AuthConfigValidator.validate(connector, connector.getEffectiveAuthConfig(), keys, DEFAULT_TOKEN_ALLOWLIST)
+            () -> AuthConfigValidator
+                .validate(connector, connector.getEffectiveAuthConfig(), keys, DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS)
         ).getMessage();
     }
 
@@ -455,7 +547,7 @@ public class AuthConfigValidatorTests {
     private static String failsWith(Connector connector, OAuth2AuthConfig config) {
         return assertThrows(
             IllegalArgumentException.class,
-            () -> AuthConfigValidator.validate(connector, config, Set.of(), NOTHING_ALLOWED)
+            () -> AuthConfigValidator.validate(connector, config, Set.of(), NOTHING_ALLOWED, DEFAULT_EXTENSION_GRANTS)
         ).getMessage();
     }
 
@@ -515,9 +607,12 @@ public class AuthConfigValidatorTests {
     @Test
     public void validate_judgesTheGivenConfiguration() {
         // The caller reads the configuration from the connector; what is judged is the one it passes.
-        assertEquals(oauth2(), AuthConfigValidator.validate(http(null), oauth2(), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST));
-        assertNull(AuthConfigValidator.validate(http(oauth2()), null, Set.of(), NOTHING_ALLOWED));
-        assertFalse(AuthConfigValidator.passes(http(null), oauth2(), Set.of(), DEFAULT_TOKEN_ALLOWLIST));
+        assertEquals(
+            oauth2(),
+            AuthConfigValidator.validate(http(null), oauth2(), Set.of("s"), DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS)
+        );
+        assertNull(AuthConfigValidator.validate(http(oauth2()), null, Set.of(), NOTHING_ALLOWED, DEFAULT_EXTENSION_GRANTS));
+        assertFalse(AuthConfigValidator.passes(http(null), oauth2(), Set.of(), DEFAULT_TOKEN_ALLOWLIST, DEFAULT_EXTENSION_GRANTS));
     }
 
     @Test

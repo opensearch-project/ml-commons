@@ -66,6 +66,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
                     MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS,
                     MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED
                 )
         );
@@ -336,6 +337,8 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.getTrustedOAuth2TokenEndpoints().matches(AuthTestFixtures.TOKEN_URL));
         assertFalse(setting.getTrustedOAuth2TokenEndpoints().matches("https://idp.corp.example/token"));
         assertEquals(3600, setting.getOAuth2TokenCacheMaxSeconds());
+        assertTrue(setting.getOAuth2ExtensionGrants().admits(AuthTestFixtures.APIKEY_GRANT));
+        assertFalse(setting.getOAuth2ExtensionGrants().admits("urn:ietf:params:oauth:grant-type:token-exchange"));
     }
 
     @Test
@@ -350,6 +353,7 @@ public class MLFeatureEnabledSettingTests {
                     .put("plugins.ml_commons.connector.auth_enabled", true)
                     .putList("plugins.ml_commons.trusted_oauth2_token_endpoints_regex", "^https://idp\\.corp\\.example/token$")
                     .put("plugins.ml_commons.connector.oauth2_token_cache_max_seconds", 600)
+                    .putList("plugins.ml_commons.connector.oauth2_extension_grants", "https://idp.corp.example/grants/api-key")
                     .build()
             );
 
@@ -359,6 +363,8 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(after.matches("https://idp.corp.example/token"));
         assertFalse(after.matches(AuthTestFixtures.TOKEN_URL));
         assertEquals(600, setting.getOAuth2TokenCacheMaxSeconds());
+        assertTrue(setting.getOAuth2ExtensionGrants().admits("https://idp.corp.example/grants/api-key"));
+        assertFalse(setting.getOAuth2ExtensionGrants().admits(AuthTestFixtures.APIKEY_GRANT));
     }
 
     @Test

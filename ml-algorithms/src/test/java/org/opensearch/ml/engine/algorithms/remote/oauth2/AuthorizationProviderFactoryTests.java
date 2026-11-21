@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AU
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
@@ -64,6 +65,7 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLException;
@@ -155,7 +157,7 @@ public class AuthorizationProviderFactoryTests {
                 + CLIENT_AUTH_METHOD_NONE
                 + "','client_id':'app'}"
         );
-        assertRefused(connector(none, ACTION_URL), AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
+        assertRefused(connector(none, ACTION_URL), AuthConfigValidator.CLIENT_AUTH_METHOD_NONE_MESSAGE);
 
         clusterSettings
             .applySettings(Settings.builder().putList(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getKey(), List.of()).build());
@@ -296,6 +298,42 @@ public class AuthorizationProviderFactoryTests {
         assertTrue(
             factory.providerFor(googleConnector(adc, null, null, ACTION_URL, null, header)) instanceof GoogleAdcAuthorizationProvider
         );
+    }
+
+    /** The admitted extension grants are read at every hand-out, so a grant the operator removes stops at once, cached token or not. */
+    @Test
+    public void anExtensionGrantTheSettingNoLongerAdmits_failsTheNextHandOut_andNothingIsSent() throws Exception {
+        OAuth2AuthConfig apikey = parse(
+            "{'type':'oauth2','token_url':'"
+                + PUBLIC_TOKEN_URL
+                + "','grant_type':'urn:ibm:params:oauth:grant-type:apikey','client_auth_method':'none',"
+                + "'token_request_params':{'apikey':'${credential.apikey}'}}"
+        );
+        AuthorizationProvider provider = factory.providerFor(connector(apikey, ACTION_URL, Map.of("apikey", "k-1")));
+        assertEquals("tok-1", token(provider));
+        assertEquals(1, recorded.size());
+
+        clusterSettings.applySettings(Settings.builder().putList(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getKey()).build());
+        Exception e = failure(provider);
+        assertSame(IllegalArgumentException.class, e.getClass());
+        assertEquals(ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE, e.getMessage());
+        assertEquals(1, recorded.size());
+        // A connector built while the grant is not admitted fails the write check the factory re-runs.
+        IllegalArgumentException refused = assertThrows(
+            IllegalArgumentException.class,
+            () -> factory.providerFor(connector(apikey, ACTION_URL, Map.of("apikey", "k-1")))
+        );
+        assertEquals(ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE, refused.getMessage());
+
+        clusterSettings
+            .applySettings(
+                Settings
+                    .builder()
+                    .putList(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getKey(), "urn:ibm:params:oauth:grant-type:apikey")
+                    .build()
+            );
+        assertEquals("tok-1", token(provider));
+        assertEquals(1, recorded.size());
     }
 
     @Test

@@ -46,6 +46,7 @@ import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -242,7 +243,9 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 .touchesAuthOrProtocol(mlCreateConnectorInput.getAuthConfig(), updatedProtocol, connector.getProtocol())
                                 || AuthConfigValidator.actionsAreJudgedAsNew(connector, mlCreateConnectorInput.getActions() != null);
                             TokenEndpointAllowlist allowlist = mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints();
-                            boolean storedPassed = AuthConfigValidator.passes(connector, connector.getAuthConfig(), storedKeys, allowlist);
+                            ExtensionGrantAllowlist grants = mlFeatureEnabledSetting.getOAuth2ExtensionGrants();
+                            boolean storedPassed = AuthConfigValidator
+                                .passes(connector, connector.getAuthConfig(), storedKeys, allowlist, grants);
                             connector.update(mlUpdateConnectorAction.getUpdateContent());
 
                             // Only validate headers if actions were modified in this update
@@ -284,6 +287,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                         connector.getAuthConfig(),
                                         keyView,
                                         allowlist,
+                                        grants,
                                         authOrProtocolTouched,
                                         storedPassed
                                     )) {

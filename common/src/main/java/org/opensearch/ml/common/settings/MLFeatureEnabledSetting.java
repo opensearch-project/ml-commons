@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -42,6 +43,7 @@ import java.util.List;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -86,6 +88,7 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isConnectorAuthEnabled;
     private volatile TokenEndpointAllowlist trustedOAuth2TokenEndpoints;
+    private volatile ExtensionGrantAllowlist oauth2ExtensionGrants;
     private volatile Integer oauth2TokenCacheMaxSeconds;
 
     private volatile Boolean isMutualTlsEnabled;
@@ -127,6 +130,7 @@ public class MLFeatureEnabledSetting {
         isVertexAIConnectorEnabled = ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.get(settings);
         isConnectorAuthEnabled = ML_COMMONS_CONNECTOR_AUTH_ENABLED.get(settings);
         trustedOAuth2TokenEndpoints = new TokenEndpointAllowlist(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.get(settings));
+        oauth2ExtensionGrants = new ExtensionGrantAllowlist(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.get(settings));
         oauth2TokenCacheMaxSeconds = ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.get(settings);
         isMutualTlsEnabled = ML_COMMONS_MUTUAL_TLS_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
@@ -186,6 +190,12 @@ public class MLFeatureEnabledSetting {
             .addSettingsUpdateConsumer(
                 ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
                 it -> trustedOAuth2TokenEndpoints = new TokenEndpointAllowlist(it)
+            );
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(
+                ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS,
+                it -> oauth2ExtensionGrants = new ExtensionGrantAllowlist(it)
             );
         clusterService
             .getClusterSettings()
@@ -380,6 +390,11 @@ public class MLFeatureEnabledSetting {
      */
     public TokenEndpointAllowlist getTrustedOAuth2TokenEndpoints() {
         return trustedOAuth2TokenEndpoints;
+    }
+
+    /** The extension grants a connector auth_config may request a token with, read live. */
+    public ExtensionGrantAllowlist getOAuth2ExtensionGrants() {
+        return oauth2ExtensionGrants;
     }
 
     /**

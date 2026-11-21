@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CON
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_EXTENSION_GRANTS;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_OVER_FULL_OAUTH2_DOCUMENT;
@@ -164,6 +165,7 @@ public class UpdateConnectorTransportActionAuthConfigTests extends OpenSearchTes
         when(clusterService.state()).thenReturn(clusterState(Version.CURRENT));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
+        when(mlFeatureEnabledSetting.getOAuth2ExtensionGrants()).thenReturn(DEFAULT_EXTENSION_GRANTS);
         ThreadContext threadContext = new ThreadContext(
             Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build()
         );

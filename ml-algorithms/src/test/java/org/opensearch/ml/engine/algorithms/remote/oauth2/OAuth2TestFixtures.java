@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AU
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
@@ -48,6 +49,7 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
@@ -193,6 +195,34 @@ public final class OAuth2TestFixtures {
                 + (members.isEmpty() ? "" : "," + members)
                 + ",'jwt':{'private_key':'${credential."
                 + PRIVATE_KEY_KEY
+                + "}'}}"
+        );
+    }
+
+    /** The extension grant of IBM Cloud IAM, which exchanges an API key for a token. */
+    public static final String APIKEY_GRANT = "urn:ibm:params:oauth:grant-type:apikey";
+    /** The credential key the extension grant configurations reference for the API key. */
+    public static final String APIKEY_KEY = "apikey";
+
+    /**
+     * An extension grant configuration for {@link #PUBLIC_TOKEN_URL} as IBM Cloud IAM takes it: {@link #APIKEY_GRANT},
+     * {@code client_auth_method} none, the extra members {@code members} (single-quoted JSON) and the API key referenced
+     * as {@code ${credential.apikey}} in {@code token_request_params}.
+     */
+    public static OAuth2AuthConfig extensionGrantConfig(String members) {
+        return parse(
+            "{'type':'oauth2','token_url':'"
+                + PUBLIC_TOKEN_URL
+                + "','grant_type':'"
+                + APIKEY_GRANT
+                + "','client_auth_method':'"
+                + CLIENT_AUTH_METHOD_NONE
+                + "'"
+                + (members.isEmpty() ? "" : "," + members)
+                + ",'token_request_params':{'"
+                + APIKEY_KEY
+                + "':'${credential."
+                + APIKEY_KEY
                 + "}'}}"
         );
     }
@@ -417,7 +447,8 @@ public final class OAuth2TestFixtures {
                 .of(
                     ML_COMMONS_CONNECTOR_AUTH_ENABLED,
                     ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED,
-                    ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX
+                    ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
+                    ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS
                 )
         );
     }
@@ -429,6 +460,8 @@ public final class OAuth2TestFixtures {
         when(settings.isVertexAIConnectorEnabled()).thenAnswer(invocation -> clusterSettings.get(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED));
         when(settings.getTrustedOAuth2TokenEndpoints())
             .thenAnswer(invocation -> new TokenEndpointAllowlist(clusterSettings.get(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX)));
+        when(settings.getOAuth2ExtensionGrants())
+            .thenAnswer(invocation -> new ExtensionGrantAllowlist(clusterSettings.get(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS)));
         return settings;
     }
 

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
 import java.io.IOException;
@@ -37,6 +38,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.connector.auth.ConnectorAuthType;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
@@ -67,6 +69,10 @@ public final class AuthConfigTestFixtures {
     /** The token endpoint patterns of a node with default settings. */
     public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
         ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
+    );
+    /** The setting's default: the IBM API key grant alone. */
+    public static final ExtensionGrantAllowlist DEFAULT_EXTENSION_GRANTS = new ExtensionGrantAllowlist(
+        ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getDefault(Settings.EMPTY)
     );
     /** A token URL the default token endpoint patterns admit, for the jwt-bearer configurations. */
     public static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";

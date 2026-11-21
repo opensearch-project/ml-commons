@@ -15,11 +15,15 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST;
 import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.APIKEY_GRANT;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.APIKEY_KEY;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_ID;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.extensionGrantConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
@@ -134,15 +138,20 @@ public class TokenRequestsTests {
 
     @Test
     public void build_sendsScopeAudienceAndParametersWhenPresent() {
+        // The parameters in key order, a reference replaced by its value and a literal as written.
         Request withScope = build(
-            config(CLIENT_AUTH_METHOD_CLIENT_SECRET_POST, "'scope':'${credential.scope}','token_request_params':{'resource':'r','x':'y'}"),
-            snapshot(Map.of("client_secret", "s3cr3t", "scope", "api://model/.default"))
+            config(
+                CLIENT_AUTH_METHOD_CLIENT_SECRET_POST,
+                "'scope':'${credential.scope}','token_request_params':{'x':'y','resource':'r','apikey':'${credential.apikey}'}"
+            ),
+            snapshot(Map.of("client_secret", "s3cr3t", "scope", "api://model/.default", "apikey", "k-1"))
         );
         assertEquals(
             List
                 .of(
                     "grant_type=client_credentials",
                     "scope=api://model/.default",
+                    "apikey=k-1",
                     "resource=r",
                     "x=y",
                     "client_id=" + CLIENT_ID,
@@ -233,6 +242,26 @@ public class TokenRequestsTests {
         assertEquals(PUBLIC_TOKEN_URL, claims.get("aud"));
         String body = rawBody(request);
         assertFalse(body, body.contains("client_secret") || body.contains("PRIVATE") || body.contains("\n"));
+    }
+
+    @Test
+    public void build_extensionGrant_sendsTheResolvedParametersAndNoClientAuthentication() throws IOException {
+        CredentialSnapshot apikey = snapshot(Map.of(APIKEY_KEY, CLIENT_SECRET));
+
+        Request request = build(extensionGrantConfig(""), apikey);
+        assertEquals("the parameters carry the credential", Set.of("Accept"), request.headers().names());
+        assertEquals(List.of("grant_type=" + APIKEY_GRANT, "apikey=" + CLIENT_SECRET), form(request));
+
+        // The client id, when there is one, follows the parameters, as with the JWT bearer grant.
+        Request withClientId = build(
+            extensionGrantConfig("'client_id':'${credential.id}','scope':'s','audience':'a'"),
+            snapshot(Map.of(APIKEY_KEY, CLIENT_SECRET, "id", CLIENT_ID))
+        );
+        assertEquals(Set.of("Accept"), withClientId.headers().names());
+        assertEquals(List.of("grant_type", "scope", "audience", "apikey", "client_id"), names(withClientId));
+        assertEquals(CLIENT_ID, value(withClientId, "client_id"));
+        String body = rawBody(withClientId);
+        assertFalse(body, body.contains("client_secret") || body.contains("assertion"));
     }
 
     @Test

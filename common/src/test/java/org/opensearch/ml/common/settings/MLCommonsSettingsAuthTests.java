@@ -11,6 +11,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
@@ -48,6 +49,37 @@ public class MLCommonsSettingsAuthTests {
         assertDynamicNodeScope(ML_COMMONS_CONNECTOR_AUTH_ENABLED);
         assertTrue(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE.contains("plugins.ml_commons.connector.auth_enabled"));
         assertTrue(ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE.endsWith(ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey()));
+    }
+
+    private static List<String> extensionGrants(String... grants) {
+        return ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS
+            .get(Settings.builder().putList(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getKey(), grants).build());
+    }
+
+    @Test
+    public void extensionGrants_keyScopeAndDefault() {
+        assertEquals("plugins.ml_commons.connector.oauth2_extension_grants", ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getKey());
+        assertDynamicNodeScope(ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS);
+        assertEquals(List.of("urn:ibm:params:oauth:grant-type:apikey"), ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.get(Settings.EMPTY));
+        assertEquals(
+            List.of("urn:ibm:params:oauth:grant-type:apikey", "https://idp.example/grants/api-key"),
+            extensionGrants("urn:ibm:params:oauth:grant-type:apikey", "https://idp.example/grants/api-key")
+        );
+        assertEquals(List.of(), extensionGrants());
+    }
+
+    @Test
+    public void extensionGrants_rejectsNonUrisAndUserGrants() {
+        for (String grant : new String[] { "apikey", "client_credentials", "urn:ibm:params:oauth:grant type:apikey", "" }) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> extensionGrants(grant));
+            assertTrue(e.getMessage(), e.getMessage().contains("not an absolute URI"));
+        }
+        for (String grant : new String[] {
+            "urn:ietf:params:oauth:grant-type:device_code",
+            "http://auth0.com/oauth/grant-type/password-realm" }) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> extensionGrants(grant));
+            assertTrue(e.getMessage(), e.getMessage().contains("acts for a user"));
+        }
     }
 
     @Test

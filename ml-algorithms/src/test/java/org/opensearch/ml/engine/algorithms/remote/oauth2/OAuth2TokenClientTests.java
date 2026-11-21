@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.connector.auth.OAuth2AuthConfig.GRANT_TYP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor.RETRY_EXECUTOR;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.APIKEY_KEY;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_ID;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.CLIENT_SECRET;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.OPEN;
@@ -35,6 +36,7 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.config;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.connectorAuthGate;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ecPkcs8Pem;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.extensionGrantConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.fail;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.json;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
@@ -498,6 +500,36 @@ public class OAuth2TokenClientTests {
         String grant = "grant_type=" + URLEncoder.encode(GRANT_TYPE_JWT_BEARER, StandardCharsets.UTF_8) + "&assertion=";
         assertTrue(form, form.startsWith(grant));
         assertFalse(form, form.contains("client_secret") || form.contains("PRIVATE"));
+    }
+
+    @Test
+    public void requestToken_extensionGrant_sendsTheApiKeyInTheFormWithNoClientAuthentication() throws Exception {
+        // A response as IBM Cloud IAM gives it, with a lifetime and an expiry time: the lifetime is read.
+        OAuth2TokenClient client = client(
+            reply(
+                200,
+                json(
+                    "{'access_token':'tok-1','refresh_token':'not_supported','token_type':'Bearer','expires_in':1200,"
+                        + "'expiration':4102444800,'scope':'ibm openid'}"
+                )
+            )
+        );
+
+        OAuth2TokenClient.IssuedToken token = request(
+            client,
+            extensionGrantConfig(""),
+            snapshot(Map.of(APIKEY_KEY, "my-api-key")),
+            allowAll()
+        ).get(10, TimeUnit.SECONDS);
+
+        assertArrayEquals("tok-1".getBytes(StandardCharsets.US_ASCII), token.token());
+        assertEquals(1200, token.lifetimeSeconds());
+        assertEquals(1, recorded.size());
+        Request sent = recorded.get(0);
+        assertNull(sent.header("Authorization"));
+        Buffer body = new Buffer();
+        sent.body().writeTo(body);
+        assertEquals("grant_type=urn%3Aibm%3Aparams%3Aoauth%3Agrant-type%3Aapikey&apikey=my-api-key", body.readUtf8());
     }
 
     @Test

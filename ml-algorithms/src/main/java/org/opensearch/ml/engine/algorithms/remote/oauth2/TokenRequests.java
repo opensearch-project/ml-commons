@@ -20,8 +20,9 @@ import okhttp3.HttpUrl;
 import okhttp3.Request;
 
 /**
- * Builds the token request of a client credentials grant or of a JWT bearer grant. Resolved values are never sent
- * raw: the form body percent-encodes them and the Basic value is Base64, so no credential value can start a header.
+ * Builds the token request of a client credentials grant, of a JWT bearer grant or of an extension grant. Resolved
+ * values are never sent raw: the form body percent-encodes them and the Basic value is Base64, so no credential value
+ * can start a header.
  */
 final class TokenRequests {
     /** The form parameter that carries the assertion of the JWT bearer grant (RFC 7523 section 2.1). */
@@ -35,45 +36,50 @@ final class TokenRequests {
     private TokenRequests() {}
 
     /**
-     * A POST to {@code url} with the form body of the grant. The client credentials grant sends the client id and
-     * secret in the body or, for {@code client_secret_basic}, in the Basic authorization header; for
-     * {@code private_key_jwt}, the client id and a client assertion signed now, with no header and no secret. The JWT
-     * bearer grant sends an assertion signed now and the client id as a form parameter when there is one (RFC 7521
-     * section 4.2); the assertion is the client authentication, so no header and no secret go with it. Either
-     * assertion is addressed to {@code canonicalTokenUrl} unless the block names an audience. {@code scope},
-     * {@code audience} and {@code token_request_params} are sent with either grant.
+     * A POST to {@code url} with the form body of the grant: {@code grant_type}, the assertion of the JWT bearer grant,
+     * {@code scope}, {@code audience} and {@code token_request_params} in key order, each value a literal or the value
+     * of the credential key it references, then the client authentication of {@code client_auth_method}.
+     * {@code client_secret_basic} sends the client id and secret in the Basic authorization header and
+     * {@code client_secret_post} in the body; {@code private_key_jwt} sends the client id and a client assertion signed
+     * now, with no header and no secret. {@code none} sends the client id as a form parameter when there is one (RFC
+     * 7521 section 4.2) and no header, secret or client assertion: the JWT bearer grant authenticates with its
+     * assertion, signed now, and an extension grant with the credential its {@code token_request_params} carry. Either
+     * assertion is addressed to {@code canonicalTokenUrl} unless the block names an audience.
      *
      * @throws IllegalArgumentException with a message of {@link PrivateKeys} when the key the jwt block references
      *     cannot sign the assertion
      */
     static Request build(HttpUrl url, OAuth2AuthConfig config, CredentialSnapshot credentials, String canonicalTokenUrl) {
-        boolean jwtBearer = OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(config.getGrantType());
         FormBody.Builder form = new FormBody.Builder(UTF_8).add(OAuth2AuthConfig.GRANT_TYPE_FIELD, config.getGrantType());
-        if (jwtBearer) {
+        if (OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(config.getGrantType())) {
             form.add(ASSERTION_FIELD, JwtAssertionSigner.assertion(config.getJwt(), credentials, canonicalTokenUrl, Instant.now()));
         }
         addIfPresent(form, OAuth2AuthConfig.SCOPE_FIELD, credentials.resolve(config.getScope()));
         addIfPresent(form, OAuth2AuthConfig.AUDIENCE_FIELD, credentials.resolve(config.getAudience()));
         if (config.getTokenRequestParams() != null) {
-            config.getTokenRequestParams().forEach(form::add);
+            config.getTokenRequestParams().forEach((name, value) -> form.add(name, credentials.resolve(value)));
         }
         Request.Builder request = new Request.Builder().url(url).header("Accept", "application/json");
         String clientId = credentials.resolve(config.getClientId());
-        if (jwtBearer) {
+        // The parse admits these four methods only, and AuthConfigValidator pairs each with the grants it serves.
+        String method = config.getClientAuthMethod();
+        if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(method)) {
             addIfPresent(form, OAuth2AuthConfig.CLIENT_ID_FIELD, clientId);
-        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(config.getClientAuthMethod())) {
+        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(method)) {
             String clientAssertion = JwtAssertionSigner
                 .clientAssertion(config.getJwt(), clientId, credentials, canonicalTokenUrl, Instant.now());
             form
                 .add(OAuth2AuthConfig.CLIENT_ID_FIELD, clientId)
                 .add(CLIENT_ASSERTION_TYPE_FIELD, CLIENT_ASSERTION_TYPE_JWT_BEARER)
                 .add(CLIENT_ASSERTION_FIELD, clientAssertion);
-        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC.equals(config.getClientAuthMethod())) {
+        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC.equals(method)) {
             request.header(OAuth2Support.AUTHORIZATION_HEADER, basicAuthorization(clientId, credentials.resolve(config.getClientSecret())));
-        } else {
+        } else if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_POST.equals(method)) {
             form
                 .add(OAuth2AuthConfig.CLIENT_ID_FIELD, clientId)
                 .add(OAuth2AuthConfig.CLIENT_SECRET_FIELD, credentials.resolve(config.getClientSecret()));
+        } else {
+            throw new IllegalStateException("No client authentication for client_auth_method [" + method + "]");
         }
         return request.post(form.build()).build();
     }

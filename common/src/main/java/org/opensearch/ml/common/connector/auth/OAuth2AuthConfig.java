@@ -76,9 +76,21 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     public static final String GRANT_TYPE_CLIENT_CREDENTIALS = "client_credentials";
     /** The JWT bearer grant of RFC 7523: the client authenticates with an assertion it signs ({@link #jwt}). */
     public static final String GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer";
-    /** Interactive, user-credential and refresh grants are never accepted (RFC 9700 section 2.4 for password). */
+    /**
+     * The interactive, user-credential and refresh grants listed here are refused by name (RFC 9700 section 2.4 for
+     * password), among them the extension grants known to act for a user: OpenID CIBA and Auth0's password realm. An
+     * extension grant is accepted on the condition that the credential it references is a client or service
+     * credential, such as an API key; the plugin cannot tell what the referenced value is.
+     */
     public static final Set<String> DENIED_GRANT_TYPES = Set
-        .of("password", "authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code");
+        .of(
+            "password",
+            "authorization_code",
+            "refresh_token",
+            "urn:ietf:params:oauth:grant-type:device_code",
+            "urn:openid:params:grant-type:ciba",
+            "http://auth0.com/oauth/grant-type/password-realm"
+        );
 
     public static final String CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC = "client_secret_basic";
     public static final String CLIENT_AUTH_METHOD_CLIENT_SECRET_POST = "client_secret_post";
@@ -162,8 +174,9 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
     private final String scope;
     private final String audience;
     /**
-     * Never null, in key order, so that equal configurations emit the same document; literal values may be sensitive,
-     * so they stay out of {@link #toString()}.
+     * Never null, in key order, so that equal configurations emit the same document. Each value is a literal or a
+     * {@code ${credential.<key>}} reference, resolved when a token is requested; literal values may be sensitive, so
+     * they stay out of {@link #toString()}.
      */
     @ToString.Exclude
     private final Map<String, String> tokenRequestParams;
@@ -509,11 +522,12 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
 
     /**
      * The value rules of the block, run once the members are assigned so that a configuration parsed, built or
-     * streamed meets the same ones: no empty member, no reserved or referencing {@code token_request_params},
-     * placeholders only as whole-value credential references where a reference is allowed, {@code client_secret} a
-     * reference, and for {@code oauth2} a well-formed {@code token_url}, a supported {@code client_auth_method}, an
-     * allowed grant, and a {@code jwt} block exactly for the jwt-bearer grant and for {@code private_key_jwt}, which
-     * authenticate with the assertion and send no {@code client_secret}.
+     * streamed meets the same ones: no empty member, no {@code token_request_params} name that is reserved or holds
+     * <code>${</code>, placeholders only as whole-value credential references where a reference is allowed (every
+     * {@code token_request_params} value among them), {@code client_secret} a reference, and for {@code oauth2} a
+     * well-formed {@code token_url}, a supported {@code client_auth_method}, an allowed grant, and a {@code jwt} block
+     * exactly for the jwt-bearer grant and for {@code private_key_jwt}, which authenticate with the assertion and send
+     * no {@code client_secret}.
      */
     private void validateMembers() {
         checkNotEmpty("auth_config." + TOKEN_URL_FIELD, tokenUrl);
@@ -530,11 +544,6 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             String normalized = name.toLowerCase(Locale.ROOT);
             if (RESERVED_TOKEN_REQUEST_PARAMS.contains(normalized) || normalized.startsWith(RESERVED_TOKEN_REQUEST_PARAM_PREFIX)) {
                 throw new IllegalArgumentException(paramsPath + " may not set the reserved parameter [" + name + "]");
-            }
-            if (CredentialReference.isReference(param.getValue())) {
-                throw new IllegalArgumentException(
-                    paramsPath + "." + name + ": ${credential.<key>} references in token_request_params are not supported in this version"
-                );
             }
         }
 

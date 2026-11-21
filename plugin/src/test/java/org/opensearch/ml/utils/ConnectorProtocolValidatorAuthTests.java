@@ -376,6 +376,12 @@ public class ConnectorProtocolValidatorAuthTests extends OpenSearchTestCase {
             ConnectorProtocolValidator.REFERENCED_KEYS_CREDENTIAL_REQUIRED_MESSAGE,
             afterUpdateFails(stored, null, fullOauth2().toBuilder().clientSecret("${credential.other}").build(), null)
         );
+        // A reference in token_request_params is protected as a literal is, under token_request_params.
+        OAuth2AuthConfig referencing = fullOauth2().toBuilder().tokenRequestParams(pairs("apikey", "${credential.apikey}")).build();
+        assertEquals(
+            credentialRequired("token_request_params"),
+            afterUpdateFails(http(referencing), null, referencing.toBuilder().tokenRequestParams(pairs("apikey", "${credential.other}")).build(), null)
+        );
         // token_response is not protected.
         afterUpdate(stored, null, fullOauth2().toBuilder().tokenResponse(ttl(1200)).build(), null);
     }

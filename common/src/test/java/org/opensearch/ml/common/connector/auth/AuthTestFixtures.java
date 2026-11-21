@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector.auth;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 
 import java.io.IOException;
@@ -107,9 +108,26 @@ public final class AuthTestFixtures {
             + "}"
     );
 
+    /** The token endpoint of IBM Cloud IAM, which the default token endpoint patterns admit. */
+    public static final String IBM_TOKEN_URL = "https://iam.cloud.ibm.com/identity/token";
+    /** The extension grant of IBM Cloud IAM, which exchanges an API key for a token. */
+    public static final String APIKEY_GRANT = "urn:ibm:params:oauth:grant-type:apikey";
+    /** The document {@link #extensionGrant()} emits. */
+    public static final String EXTENSION_GRANT_JSON = json(
+        "{'type':'oauth2','token_url':'"
+            + IBM_TOKEN_URL
+            + "','grant_type':'"
+            + APIKEY_GRANT
+            + "','client_auth_method':'none','token_request_params':{'apikey':'${credential.apikey}'}}"
+    );
+
     /** The token endpoint patterns of a node with default settings. */
     public static final TokenEndpointAllowlist DEFAULT_TOKEN_ALLOWLIST = new TokenEndpointAllowlist(
         ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.getDefault(Settings.EMPTY)
+    );
+    /** The setting's default: the IBM API key grant alone. */
+    public static final ExtensionGrantAllowlist DEFAULT_EXTENSION_GRANTS = new ExtensionGrantAllowlist(
+        ML_COMMONS_CONNECTOR_OAUTH2_EXTENSION_GRANTS.getDefault(Settings.EMPTY)
     );
 
     /** The smallest oauth2 configuration the parse accepts, as a builder for variants. */
@@ -214,6 +232,24 @@ public final class AuthTestFixtures {
 
     public static OAuth2AuthConfig privateKeyJwt() {
         return privateKeyJwtBuilder().build();
+    }
+
+    /**
+     * An extension grant configuration as IBM Cloud IAM takes it: {@link #APIKEY_GRANT}, {@code client_auth_method}
+     * none and the API key referenced in {@code token_request_params}, as a builder for variants.
+     */
+    public static OAuth2AuthConfig.OAuth2AuthConfigBuilder extensionGrantBuilder() {
+        return OAuth2AuthConfig
+            .builder()
+            .type(ConnectorAuthType.OAUTH2)
+            .tokenUrl(IBM_TOKEN_URL)
+            .grantType(APIKEY_GRANT)
+            .clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE)
+            .tokenRequestParams(Map.of("apikey", "${credential.apikey}"));
+    }
+
+    public static OAuth2AuthConfig extensionGrant() {
+        return extensionGrantBuilder().build();
     }
 
     /** Generated once, since key generation is slow; loaded only by the tests that read a key. */

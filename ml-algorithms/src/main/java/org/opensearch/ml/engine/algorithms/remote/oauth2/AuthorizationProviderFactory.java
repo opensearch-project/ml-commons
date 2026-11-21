@@ -15,6 +15,7 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.ExtensionGrantAllowlist;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
@@ -54,7 +55,14 @@ public class AuthorizationProviderFactory {
     /** The provider of an oauth2 configuration over the node's cache and token client, every request subject to {@code gate}. */
     AuthorizationProvider oauth2Provider(Connector connector, OAuth2AuthConfig config, Gate gate) {
         Map<String, String> credential = connector.getDecryptedCredential();
-        AuthConfigValidator.validate(connector, config, AuthConfigValidator.keysOf(credential), settings.getTrustedOAuth2TokenEndpoints());
+        AuthConfigValidator
+            .validate(
+                connector,
+                config,
+                AuthConfigValidator.keysOf(credential),
+                settings.getTrustedOAuth2TokenEndpoints(),
+                settings.getOAuth2ExtensionGrants()
+            );
         // Taken now: some callers clear the connector's decrypted credential when their action completes.
         CredentialSnapshot snapshot = CredentialSnapshot.of(credential, config.referencedCredentialKeys());
         CredentialResolver credentials = listener -> listener.onResponse(snapshot);
@@ -68,6 +76,11 @@ public class AuthorizationProviderFactory {
         return new AuthorizationProvider() {
             @Override
             public void authorizationValue(ActionListener<TokenHandle> listener) {
+                // Read live, before the cache: a grant the operator has removed stops at the next hand-out, cached token or not.
+                if (!settings.getOAuth2ExtensionGrants().admits(config.getGrantType())) {
+                    listener.onFailure(new IllegalArgumentException(ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE));
+                    return;
+                }
                 cache.get(tenantId, configKey, credentials, source, gate, listener);
             }
 

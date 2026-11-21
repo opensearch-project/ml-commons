@@ -311,7 +311,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                 inlineConnector,
                                 inlineConnector.getAuthConfig(),
                                 AuthConfigValidator.keysOf(inlineConnector.getCredential()),
-                                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints(),
+                                mlFeatureEnabledSetting.getOAuth2ExtensionGrants()
                             );
                         // The inline credential is still plaintext here, so a referenced private key is parsed now.
                         AuthConfigValidator.validatePrivateKey(inlineConnector.getAuthConfig(), inlineConnector.getCredential());
@@ -518,7 +519,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 connector,
                 connector.getAuthConfig(),
                 AuthConfigValidator.keysOf(connector.getCredential()),
-                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()
+                mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints(),
+                mlFeatureEnabledSetting.getOAuth2ExtensionGrants()
             );
         // The inline credential is still plaintext here, so a referenced private key is parsed now.
         AuthConfigValidator.validatePrivateKey(connector.getAuthConfig(), connector.getCredential());

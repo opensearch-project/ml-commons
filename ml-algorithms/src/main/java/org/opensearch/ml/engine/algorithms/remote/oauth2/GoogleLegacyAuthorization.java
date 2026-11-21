@@ -56,7 +56,8 @@ final class GoogleLegacyAuthorization {
                     connector,
                     config,
                     AuthConfigValidator.keysOf(connector.getDecryptedCredential()),
-                    settings.getTrustedOAuth2TokenEndpoints()
+                    settings.getTrustedOAuth2TokenEndpoints(),
+                    settings.getOAuth2ExtensionGrants()
                 );
             provider = new GoogleAdcAuthorizationProvider(List.of(connector.getScopes()), vertexAi);
         } else {

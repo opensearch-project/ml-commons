@@ -10,6 +10,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.EXTENSION_GRANT_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_JWT_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_OAUTH2_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ISSUER;
@@ -19,6 +20,8 @@ import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.OAUTH2_JS
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.STORED_WITH_MARKERS_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.document;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.extensionGrant;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.extensionGrantBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwt;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
@@ -238,11 +241,20 @@ public class OAuth2AuthConfigTests {
     }
 
     @Test
-    public void parse_tokenRequestParamReferencesAreNotSupported() {
+    public void parse_tokenRequestParamValuesMayBeCredentialReferences() throws IOException {
+        // The form of an extension grant: the API key that authenticates it, referenced from the credential.
+        OAuth2AuthConfig parsed = OAuth2AuthConfig.parse(document(EXTENSION_GRANT_JSON));
+        assertEquals(extensionGrant(), parsed);
+        assertEquals(Map.of("apikey", "${credential.apikey}"), parsed.getTokenRequestParams());
+        assertEquals(EXTENSION_GRANT_JSON, toJson(parsed));
+        assertEquals(parsed, roundTrip(parsed, Version.CURRENT, OAuth2AuthConfig::new));
+        // As everywhere, a reference is the whole value.
         assertEquals(
-            "auth_config.token_request_params.apikey: ${credential.<key>} references in token_request_params are not supported in this version",
-            parseMessage(oauth2With("token_request_params", "{'apikey':'${credential.ibm_api_key}'}"))
+            "auth_config.token_request_params.apikey must be a whole-value ${credential.<key>} reference or contain no ${",
+            parseMessage(oauth2With("token_request_params", "{'apikey':'key ${credential.apikey}'}"))
         );
+        // The parameter authenticates the grant; a jwt block has no use beside it.
+        assertEquals(OAuth2AuthConfig.JWT_NOT_USED_MESSAGE, buildMessage(extensionGrantBuilder().jwt(jwt())));
     }
 
     @Test
@@ -252,6 +264,8 @@ public class OAuth2AuthConfigTests {
             "authorization_code",
             "refresh_token",
             "urn:ietf:params:oauth:grant-type:device_code",
+            "urn:openid:params:grant-type:ciba",
+            "http://auth0.com/oauth/grant-type/password-realm",
             "PASSWORD",
             "Refresh_Token" }) {
             String message = parseMessage(oauth2With("grant_type", "'" + grant + "'"));
@@ -459,10 +473,6 @@ public class OAuth2AuthConfigTests {
             buildMessage(oauth2Builder().tokenRequestParams(Map.of("Client_Assertion", "v")))
         );
         assertEquals(
-            "auth_config.token_request_params.apikey: ${credential.<key>} references in token_request_params are not supported in this version",
-            buildMessage(oauth2Builder().tokenRequestParams(Map.of("apikey", "${credential.k}")))
-        );
-        assertEquals(
             "auth_config.scope must not use ${parameters.*}: auth_config is read from the stored connector only",
             buildMessage(oauth2Builder().scope("${parameters.x}"))
         );
@@ -526,9 +536,9 @@ public class OAuth2AuthConfigTests {
             .clientSecret("${credential.client_secret}")
             .scope("${credential.scope}")
             .audience("${credential.audience}")
-            .tokenRequestParams(Map.of("resource", "literal"))
+            .tokenRequestParams(Map.of("resource", "literal", "apikey", "${credential.apikey}"))
             .build();
-        assertEquals(Set.of("token_uri", "client_id", "client_secret", "scope", "audience"), config.referencedCredentialKeys());
+        assertEquals(Set.of("token_uri", "client_id", "client_secret", "scope", "audience", "apikey"), config.referencedCredentialKeys());
     }
 
     @Test

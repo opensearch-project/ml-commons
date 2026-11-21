@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector.auth;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Map;
 import java.util.Set;
 
@@ -22,13 +23,20 @@ import org.opensearch.ml.common.connector.GoogleCloudConnector;
  */
 public final class AuthConfigValidator {
 
-    public static final String GRANT_TYPE_NOT_SUPPORTED_MESSAGE = "auth_config.grant_type is not supported in this version; use "
+    public static final String GRANT_TYPE_MESSAGE = "auth_config.grant_type must be "
         + OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS
-        + " or "
-        + OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER;
-    public static final String CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE = "auth_config.client_auth_method ["
+        + ", "
+        + OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER
+        + " or an extension grant URI";
+    public static final String CLIENT_AUTH_METHOD_NONE_MESSAGE = "auth_config.client_auth_method ["
         + OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE
-        + "] is supported only with the jwt-bearer grant in this version";
+        + "] is used with the jwt-bearer grant or an extension grant";
+    public static final String EXTENSION_GRANT_NEEDS_NONE_MESSAGE = "auth_config.client_auth_method must be "
+        + OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE
+        + " with an extension grant";
+    public static final String EXTENSION_GRANT_NEEDS_CREDENTIAL_PARAMETER_MESSAGE = "auth_config."
+        + OAuth2AuthConfig.TOKEN_REQUEST_PARAMS_FIELD
+        + " must carry a ${credential.<key>} value with an extension grant";
     public static final String AUTHORIZATION_HEADER_MESSAGE =
         "A connector with an active auth_config must not define an Authorization header; the token is injected at request time";
     public static final String CLEARTEXT_ACTION_URL_MESSAGE = "A connector with an active auth_config must use https for every action URL";
@@ -76,6 +84,7 @@ public final class AuthConfigValidator {
      * @param config the configuration to judge, as the caller reads it from the connector; null when it holds none
      * @param credentialKeys the credential keys the stored connector will have; references must name one of them
      * @param allowlist the trusted token endpoint patterns a literal {@code token_url} must match
+     * @param grants the extension grants a token may be requested with
      * @return {@code config}
      * @throws IllegalArgumentException when the configuration is invalid
      */
@@ -83,7 +92,8 @@ public final class AuthConfigValidator {
         Connector connector,
         OAuth2AuthConfig config,
         Set<String> credentialKeys,
-        TokenEndpointAllowlist allowlist
+        TokenEndpointAllowlist allowlist,
+        ExtensionGrantAllowlist grants
     ) {
         if (config == null) {
             if (isLegacyGoogleCloud(connector)) {
@@ -98,7 +108,7 @@ public final class AuthConfigValidator {
             }
         }
         if (config.getType().isActive()) {
-            validateActive(connector, config, allowlist);
+            validateActive(connector, config, allowlist, grants);
         }
         return config;
     }
@@ -108,24 +118,33 @@ public final class AuthConfigValidator {
      * endpoint, the actions and the client config, which every grant shares. A {@code google_adc} configuration makes
      * no token request of its own, so only the connector is examined.
      */
-    private static void validateActive(Connector connector, OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
+    private static void validateActive(
+        Connector connector,
+        OAuth2AuthConfig config,
+        TokenEndpointAllowlist allowlist,
+        ExtensionGrantAllowlist grants
+    ) {
         if (config.getType() != ConnectorAuthType.GOOGLE_ADC) {
-            validateTokenRequest(config, allowlist);
+            validateTokenRequest(config, allowlist, grants);
         }
         validateConnector(connector, isLegacyGoogleCloud(connector));
     }
 
-    /** The grant, what it authenticates with and the literal token endpoint. */
-    private static void validateTokenRequest(OAuth2AuthConfig config, TokenEndpointAllowlist allowlist) {
+    /**
+     * The grant, what it authenticates with and the literal token endpoint. The grant is the client credentials grant,
+     * the JWT bearer grant or an extension grant (RFC 6749 section 4.5); the parse has already refused the denied ones.
+     */
+    private static void validateTokenRequest(OAuth2AuthConfig config, TokenEndpointAllowlist allowlist, ExtensionGrantAllowlist grants) {
         String grantType = config.getGrantType();
         if (OAuth2AuthConfig.GRANT_TYPE_CLIENT_CREDENTIALS.equals(grantType)) {
             validateClientCredentials(config);
         } else if (!OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(grantType)) {
-            // The JWT bearer grant authenticates with its assertion alone: the configuration already holds the jwt block,
-            // names no method and has no secret, and the key the block references is parsed where the credential is
-            // plaintext (validatePrivateKey) or when an assertion is signed.
-            throw new IllegalArgumentException(GRANT_TYPE_NOT_SUPPORTED_MESSAGE);
+            validateExtensionGrant(config, grants);
         }
+        // The JWT bearer grant has no check here: it authenticates with its assertion alone, the parse has already
+        // required its jwt block, none and no secret, and the key the block references is parsed where the credential
+        // is plaintext (validatePrivateKey) or when an assertion is signed.
+
         // A reference is checked when a token is requested, once its value is known.
         String tokenUrl = config.getTokenUrl();
         if (!CredentialReference.isReference(tokenUrl)) {
@@ -216,13 +235,45 @@ public final class AuthConfigValidator {
         // assertion.
         String method = config.getClientAuthMethod();
         if (OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(method)) {
-            throw new IllegalArgumentException(CLIENT_AUTH_METHOD_NONE_NOT_SUPPORTED_MESSAGE);
+            throw new IllegalArgumentException(CLIENT_AUTH_METHOD_NONE_MESSAGE);
         }
         if (config.getClientId() == null) {
             throw new IllegalArgumentException(clientIdRequiredMessage(method));
         }
         if (!OAuth2AuthConfig.CLIENT_AUTH_METHOD_PRIVATE_KEY_JWT.equals(method) && config.getClientSecret() == null) {
             throw new IllegalArgumentException(clientSecretRequiredMessage(method));
+        }
+    }
+
+    /**
+     * An extension grant is named by an absolute URI and authenticates with a credential of its own definition, such as
+     * an API key, which a {@code ${credential.<key>}} value of {@code token_request_params} carries; the client sends
+     * no secret and no assertion, so {@code client_auth_method} is none. Without such a value the token request would
+     * carry no credential at all. The parse refuses a {@code jwt} block with this grant, and a {@code client_secret}
+     * with none. Which extension grants may be requested is the operator's list: a grant that acts for a user, such as
+     * a token exchange with a subject token, is not told apart from an API key grant by its shape, only by name.
+     */
+    private static void validateExtensionGrant(OAuth2AuthConfig config, ExtensionGrantAllowlist grants) {
+        if (!isAbsoluteUri(config.getGrantType())) {
+            throw new IllegalArgumentException(GRANT_TYPE_MESSAGE);
+        }
+        if (!grants.admits(config.getGrantType())) {
+            throw new IllegalArgumentException(ExtensionGrantAllowlist.NOT_ADMITTED_MESSAGE);
+        }
+        if (!OAuth2AuthConfig.CLIENT_AUTH_METHOD_NONE.equals(config.getClientAuthMethod())) {
+            throw new IllegalArgumentException(EXTENSION_GRANT_NEEDS_NONE_MESSAGE);
+        }
+        if (config.getTokenRequestParams().values().stream().noneMatch(CredentialReference::isReference)) {
+            throw new IllegalArgumentException(EXTENSION_GRANT_NEEDS_CREDENTIAL_PARAMETER_MESSAGE);
+        }
+    }
+
+    /** Whether {@code value} is a URI with a scheme (RFC 3986 section 4.3), such as {@code urn:...} or {@code https://...}. */
+    private static boolean isAbsoluteUri(String value) {
+        try {
+            return new URI(value).isAbsolute();
+        } catch (URISyntaxException e) {
+            return false;
         }
     }
 
@@ -272,10 +323,11 @@ public final class AuthConfigValidator {
         Connector connector,
         OAuth2AuthConfig config,
         Set<String> credentialKeys,
-        TokenEndpointAllowlist allowlist
+        TokenEndpointAllowlist allowlist,
+        ExtensionGrantAllowlist grants
     ) {
         try {
-            validate(connector, config, credentialKeys, allowlist);
+            validate(connector, config, credentialKeys, allowlist, grants);
             return true;
         } catch (Exception e) {
             return false;
@@ -295,11 +347,12 @@ public final class AuthConfigValidator {
         OAuth2AuthConfig config,
         Set<String> credentialKeys,
         TokenEndpointAllowlist allowlist,
+        ExtensionGrantAllowlist grants,
         boolean authOrProtocolTouched,
         boolean storedPassed
     ) {
         try {
-            validate(connector, config, credentialKeys, allowlist);
+            validate(connector, config, credentialKeys, allowlist, grants);
             return false;
         } catch (IllegalArgumentException e) {
             if (!authOrProtocolTouched && !storedPassed) {

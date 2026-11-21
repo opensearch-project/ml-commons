@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.ACTION_URL;
+import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_EXTENSION_GRANTS;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.DEFAULT_TOKEN_ALLOWLIST;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.NONE_DOCUMENT;
 import static org.opensearch.ml.utils.AuthConfigTestFixtures.OLD_VERSION;
@@ -146,6 +147,7 @@ public class TransportCreateConnectorActionAuthConfigTests extends OpenSearchTes
         when(clusterService.state()).thenReturn(clusterState(Version.CURRENT));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.getTrustedOAuth2TokenEndpoints()).thenReturn(DEFAULT_TOKEN_ALLOWLIST);
+        when(mlFeatureEnabledSetting.getOAuth2ExtensionGrants()).thenReturn(DEFAULT_EXTENSION_GRANTS);
 
         action = new TransportCreateConnectorAction(
             transportService,

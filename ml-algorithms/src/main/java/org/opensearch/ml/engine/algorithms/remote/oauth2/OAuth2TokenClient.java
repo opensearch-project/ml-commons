@@ -43,11 +43,11 @@ import okhttp3.Response;
 import okio.BufferedSource;
 
 /**
- * Requests OAuth2 access tokens with the client credentials grant or the JWT bearer grant. A token request goes to the
- * declared token endpoint once its URL is https, in canonical form and on the token-endpoint allowlist, and only to
- * the addresses that passed {@link TokenEndpointAddressValidator}: directly, without redirects, within
- * {@link #TIMEOUT}, reading at most {@link #MAX_RESPONSE_BYTES}. The JVM trust store and hostname verification always
- * apply.
+ * Requests OAuth2 access tokens with the client credentials grant, the JWT bearer grant or an extension grant. A token
+ * request goes to the declared token endpoint once its URL is https, in canonical form and on the token-endpoint
+ * allowlist, and only to the addresses that passed {@link TokenEndpointAddressValidator}: directly, without redirects,
+ * within {@link #TIMEOUT}, reading at most {@link #MAX_RESPONSE_BYTES}. The JVM trust store and hostname verification
+ * always apply.
  *
  * <p>Logs one line per request: the host, the status, the outcome and the latency. Tokens, bodies, credential values,
  * private keys and exception messages are never logged.
