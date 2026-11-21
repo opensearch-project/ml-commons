@@ -73,6 +73,11 @@ public class HttpConnector extends AbstractConnector {
      * that carries one is refused while any node of the cluster is older. A fixed release, not {@code Version.CURRENT}.
      */
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH = VERSION_3_11_0;
+    /**
+     * The oldest node version that reads the {@code jwt} block with an optional {@code issuer} and the {@code header}
+     * map; kept apart from {@link #MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH} so that it can move on its own.
+     */
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_PRIVATE_KEY_JWT = VERSION_3_11_0;
 
     // Allowlist of top-level JSON fields that _<field>_json / _<field>_additions_json parameters may inject.
     // Restricts injection to structured-output fields only; prevents callers from overriding

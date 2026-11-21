@@ -507,13 +507,13 @@ public class RestMLConnectorAuthConfigIT extends MLCommonsRestTestCase {
             updateConnector(c1, getBody);
             assertEquals(created, authConfigOf(getConnector(c1)));
 
-            // The block's rules, checked as the request is parsed.
+            // The block's rules, checked on create; the key is read for the block's algorithm.
             Map<String, String> refusals = new LinkedHashMap<>();
             refusals.put("{" + JWT_BEARER_MEMBERS + "}", OAuth2AuthConfig.JWT_REQUIRED_MESSAGE);
             refusals.put(jwtBearer("").replace("\"none\"", "\"client_secret_post\""), OAuth2AuthConfig.JWT_BEARER_NEEDS_NONE_MESSAGE);
             refusals.put(jwtBearer(", \"additional_claims\": {\"iss\": \"other\"}"), JwtSpec.reservedClaimMessage("iss"));
             refusals.put(jwtBearer(", \"signing_alg\": \"HS256\""), JwtSpec.SIGNING_ALG_MESSAGE);
-            refusals.put(jwtBearer(", \"signing_alg\": \"ES256\""), JwtSpec.signingAlgNotSupportedMessage("ES256"));
+            refusals.put(jwtBearer(", \"signing_alg\": \"ES256\""), PrivateKeys.keyTypeMessage(JwtSpec.ES256));
             for (Map.Entry<String, String> refusal : refusals.entrySet()) {
                 assertRejected(
                     RestStatus.BAD_REQUEST,

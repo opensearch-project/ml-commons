@@ -33,6 +33,7 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.JwtSpec;
 import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.connector.auth.PrivateKeys;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -104,7 +105,7 @@ public class GoogleClaimParityTests {
         ServiceAccountCredentials.Builder builder = ServiceAccountCredentials
             .newBuilder()
             .setClientEmail(ISSUER)
-            .setPrivateKey(PrivateKeys.parsePkcs8(rsaPkcs8Pem()))
+            .setPrivateKey(PrivateKeys.parsePkcs8(rsaPkcs8Pem(), JwtSpec.RS256))
             .setScopes(List.of(SCOPE))
             .setHttpTransportFactory(() -> transport);
         if (tokenServerUri != null) {

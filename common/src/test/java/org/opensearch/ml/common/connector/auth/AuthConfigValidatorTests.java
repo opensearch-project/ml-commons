@@ -17,11 +17,13 @@ import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.GOOGLE_TO
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.PRIVATE_KEY_KEY;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.SECRET_LOOKING;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.ecPkcs8;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.http;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBearerBuilder;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwtBuilder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2Builder;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.pem;
@@ -515,6 +517,12 @@ public class AuthConfigValidatorTests {
         );
         assertEquals(PrivateKeys.INVALID_MESSAGE, e.getMessage());
         assertNull(e.getCause());
+
+        // The key is read for the block's algorithm.
+        Map<String, String> ecKey = Map.of(PRIVATE_KEY_KEY, pem("PRIVATE KEY", ecPkcs8(), true));
+        AuthConfigValidator.validatePrivateKey(jwtBearerBuilder().jwt(jwtBuilder().signingAlg(JwtSpec.ES256).build()).build(), ecKey);
+        e = assertThrows(IllegalArgumentException.class, () -> AuthConfigValidator.validatePrivateKey(jwtBearer(), ecKey));
+        assertEquals(PrivateKeys.keyTypeMessage(JwtSpec.RS256), e.getMessage());
     }
 
     @Test

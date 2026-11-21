@@ -543,13 +543,16 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
 
     /**
      * The grant, the client authentication method and the {@code jwt} block agree: the jwt-bearer grant has a block
-     * and authenticates with the assertion alone (RFC 7523 section 2.1, so {@code client_auth_method} none), every
-     * other grant has no block, and a client that authenticates with no method sends no secret.
+     * with an issuer and authenticates with the assertion alone (RFC 7523 section 2.1, so {@code client_auth_method}
+     * none), every other grant has no block, and a client that authenticates with no method sends no secret.
      */
     private void validateGrantCombination() {
         if (GRANT_TYPE_JWT_BEARER.equals(grantType)) {
             if (jwt == null) {
                 throw new IllegalArgumentException(JWT_REQUIRED_MESSAGE);
+            }
+            if (jwt.getIssuer() == null) {
+                throw new IllegalArgumentException(JwtSpec.ISSUER_REQUIRED_MESSAGE);
             }
             if (!CLIENT_AUTH_METHOD_NONE.equals(clientAuthMethod)) {
                 throw new IllegalArgumentException(JWT_BEARER_NEEDS_NONE_MESSAGE);
@@ -668,6 +671,8 @@ public final class OAuth2AuthConfig implements ToXContentObject, Writeable {
             .signingAlg(optionalString(node, JwtSpec.SIGNING_ALG_FIELD, path))
             .lifetimeSeconds(optionalInteger(node, JwtSpec.LIFETIME_SECONDS_FIELD, path))
             .additionalClaims(parseStringMap(node.get(JwtSpec.ADDITIONAL_CLAIMS_FIELD), path + "." + JwtSpec.ADDITIONAL_CLAIMS_FIELD))
+            // Its member names are checked when the block is built, so that a block built in code meets the same rule.
+            .header(parseStringMap(node.get(JwtSpec.HEADER_FIELD), path + "." + JwtSpec.HEADER_FIELD))
             .privateKey(optionalString(node, JwtSpec.PRIVATE_KEY_FIELD, path))
             .build();
     }

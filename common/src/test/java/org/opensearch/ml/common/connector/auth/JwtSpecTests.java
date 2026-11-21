@@ -9,9 +9,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.HttpConnector.MINIMAL_SUPPORTED_VERSION_FOR_PRIVATE_KEY_JWT;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_JWT_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.JWT_BEARER_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.JWT_JSON;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.X5T;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.X5T_S256;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.document;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwt;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwt;
@@ -56,12 +60,14 @@ public class JwtSpecTests {
         assertNull("never defaulted", spec.getSubject());
         assertNull("the signer addresses the token endpoint", spec.getAudience());
         assertEquals("never null", Map.of(), spec.getAdditionalClaims());
-        assertEquals(spec, jwtBuilder().signingAlg(null).lifetimeSeconds(null).additionalClaims(null).build());
+        assertEquals("never null", Map.of(), spec.getHeader());
+        assertEquals(spec, jwtBuilder().signingAlg(null).lifetimeSeconds(null).additionalClaims(null).header(null).build());
     }
 
     @Test
-    public void issuer_isRequiredAndNotEmpty() {
-        assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, buildMessage(b -> b.issuer(null)));
+    public void issuer_isOptionalInTheBlockAndNotEmpty() {
+        // The jwt-bearer grant requires one (OAuth2AuthConfigTests); the block alone does not.
+        assertNull(jwtBuilder().issuer(null).build().getIssuer());
         assertEquals("auth_config.jwt.issuer must not be empty", buildMessage(b -> b.issuer("")));
     }
 
@@ -92,12 +98,11 @@ public class JwtSpecTests {
     }
 
     @Test
-    public void signingAlg_isRs256() {
-        assertEquals("RS256", jwtBuilder().signingAlg("RS256").build().getSigningAlg());
-        for (String alg : new String[] { "PS256", "ES256" }) {
-            assertEquals(JwtSpec.signingAlgNotSupportedMessage(alg), buildMessage(b -> b.signingAlg(alg)));
+    public void signingAlg_isRs256Ps256OrEs256() {
+        for (String alg : new String[] { "RS256", "PS256", "ES256" }) {
+            assertEquals(alg, jwtBuilder().signingAlg(alg).build().getSigningAlg());
         }
-        for (String alg : new String[] { "rs256", "HS256", "none", "" }) {
+        for (String alg : new String[] { "rs256", "HS256", "ES384", "none", "" }) {
             assertEquals(alg, JwtSpec.SIGNING_ALG_MESSAGE, buildMessage(b -> b.signingAlg(alg)));
         }
     }
@@ -151,6 +156,63 @@ public class JwtSpecTests {
     }
 
     @Test
+    public void header_membersAreKeptInKeyOrder_andAnEmptyHeaderIsNoHeader() throws IOException {
+        Map<String, String> reversed = new LinkedHashMap<>();
+        reversed.put("x5t#S256", X5T_S256);
+        reversed.put("x5t", X5T);
+        reversed.put("kid", "k1");
+        JwtSpec spec = jwtBuilder().header(reversed).build();
+        assertEquals(List.of("kid", "x5t", "x5t#S256"), List.copyOf(spec.getHeader().keySet()));
+        assertThrows(UnsupportedOperationException.class, () -> spec.getHeader().put("x", "y"));
+
+        JwtSpec empty = jwtBuilder().header(Map.of()).build();
+        assertEquals(jwt(), empty);
+        assertEquals(JWT_JSON, toJson(empty));
+    }
+
+    @Test
+    public void header_membersAreKidAndTheThumbprints_asNonEmptyLiterals() {
+        for (String name : new String[] { "alg", "typ", "x5c" }) {
+            assertEquals(name, JwtSpec.unknownHeaderFieldMessage(name), buildMessage(b -> b.header(Map.of(name, "v"))));
+        }
+        assertEquals("Unknown auth_config.jwt.header field [x5c]", JwtSpec.unknownHeaderFieldMessage("x5c"));
+        assertEquals(
+            "auth_config.jwt.header.kid must be a literal value, not a reference",
+            buildMessage(b -> b.header(Map.of("kid", "${credential.kid}")))
+        );
+        assertEquals("auth_config.jwt.header.kid must not be empty", buildMessage(b -> b.header(Map.of("kid", ""))));
+        Map<String, String> nullValue = new LinkedHashMap<>();
+        nullValue.put("kid", null);
+        assertEquals("auth_config.jwt.header.kid must be a string", buildMessage(b -> b.header(nullValue)));
+    }
+
+    @Test
+    public void header_thumbprintsAreUnpaddedBase64UrlOfTheirDigestLength() {
+        assertEquals(2, jwtBuilder().header(Map.of("x5t", X5T, "x5t#S256", X5T_S256)).build().getHeader().size());
+        Map<String, List<String>> refused = new LinkedHashMap<>();
+        // Padded, the hex form a console shows, the other digest's length, the standard alphabet.
+        refused.put("x5t", List.of(X5T + "=", "E7D298948801E3F5E526646C7578B616F1559A46", X5T_S256, X5T.replace('_', '/')));
+        refused.put("x5t#S256", List.of(X5T_S256 + "=", "67B136E88BC44464A523D3F161147A5385CFD5843BAE202CC742481CCB67F2CA", X5T));
+        for (Map.Entry<String, List<String>> member : refused.entrySet()) {
+            for (String value : member.getValue()) {
+                assertEquals(
+                    value,
+                    JwtSpec.thumbprintMessage(member.getKey()),
+                    buildMessage(b -> b.header(Map.of(member.getKey(), value)))
+                );
+            }
+        }
+        assertEquals(
+            "auth_config.jwt.header.x5t must be the base64url-encoded SHA-1 certificate thumbprint without padding",
+            JwtSpec.thumbprintMessage("x5t")
+        );
+        assertEquals(
+            "auth_config.jwt.header.x5t#S256 must be the base64url-encoded SHA-256 certificate thumbprint without padding",
+            JwtSpec.thumbprintMessage("x5t#S256")
+        );
+    }
+
+    @Test
     public void privateKey_isRequiredAndMustBeAReference() {
         assertEquals(JwtSpec.PRIVATE_KEY_REQUIRED_MESSAGE, buildMessage(b -> b.privateKey(null)));
         String pasted = "-----BEGIN PRIVATE KEY-----\nMIIE-not-a-key\n-----END PRIVATE KEY-----";
@@ -168,22 +230,44 @@ public class JwtSpecTests {
     }
 
     @Test
-    public void toXContent_emitsTheMembersInSchemaOrderWithTheDefaultsAndClaimsOnlyWhenPresent() throws IOException {
+    public void toXContent_emitsTheMembersInSchemaOrderWithTheDefaultsAndClaimsAndHeaderOnlyWhenPresent() throws IOException {
         assertEquals(JWT_JSON, toJson(jwt()));
         assertEquals(FULL_JWT_JSON, toJson(fullJwt()));
     }
 
     @Test
     public void stream_roundTripIsEqual() throws IOException {
-        for (JwtSpec spec : new JwtSpec[] { jwt(), fullJwt() }) {
+        // Without and with a header, and without an issuer, which the block alone does not require.
+        for (JwtSpec spec : new JwtSpec[] { jwt(), fullJwt(), jwtBuilder().issuer(null).build() }) {
             assertEquals(spec, roundTrip(spec, Version.CURRENT, JwtSpec::new));
         }
     }
 
     @Test
+    public void stream_beforeThePrivateKeyJwtVersionCarriesTheIssuerAsRequiredAndNoHeader() throws IOException {
+        Version before = Version.fromString("3.10.0");
+        assertTrue(before.before(MINIMAL_SUPPORTED_VERSION_FOR_PRIVATE_KEY_JWT));
+        // The members of the first format survive; the header is not on the wire and reads back empty.
+        assertEquals(jwt(), roundTrip(jwt(), before, JwtSpec::new));
+        JwtSpec read = roundTrip(fullJwt(), before, JwtSpec::new);
+        assertTrue(read.getHeader().isEmpty());
+        assertEquals(fullJwt().toBuilder().header(null).build(), read);
+        // Without an issuer the first format carries an empty string, which that reader refuses.
+        JwtSpec noIssuer = jwtBuilder().issuer(null).build();
+        assertEquals(
+            "auth_config.jwt.issuer must not be empty",
+            assertThrows(IllegalArgumentException.class, () -> roundTrip(noIssuer, before, JwtSpec::new)).getMessage()
+        );
+    }
+
+    @Test
     public void parse_appliesTheRulesOfTheBuilder() {
         // The parse reads the shape; the values meet the rules when the block is built, with the same message.
-        assertEquals(buildMessage(b -> b.signingAlg("ES256")), parseJwtMessage(JWT_JSON.replace("RS256", "ES256")));
+        assertEquals(buildMessage(b -> b.signingAlg("HS256")), parseJwtMessage(JWT_JSON.replace("RS256", "HS256")));
+        assertEquals(
+            buildMessage(b -> b.header(Map.of("x5c", "v"))),
+            parseJwtMessage(JWT_JSON.replace("\"signing_alg\"", "\"header\":{\"x5c\":\"v\"},\"signing_alg\""))
+        );
         assertEquals(
             buildMessage(b -> b.additionalClaims(Map.of("exp", "1"))),
             parseJwtMessage(JWT_JSON.replace("\"signing_alg\"", "\"additional_claims\":{\"exp\":\"1\"},\"signing_alg\""))

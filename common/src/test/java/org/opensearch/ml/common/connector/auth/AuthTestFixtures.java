@@ -78,7 +78,11 @@ public final class AuthTestFixtures {
     public static final String ISSUER = "svc@project.iam.gserviceaccount.com";
     /** The credential key {@link #jwt()} references for its private key. */
     public static final String PRIVATE_KEY_KEY = "k";
-    /** The document {@link #jwt()} emits: the two required members plus the defaults. */
+    /** The {@code x5t} of a certificate: 20 bytes, 27 base64url characters. */
+    public static final String X5T = "59KYlIgB4_XlJmRsdXi2FvFVmkY";
+    /** The {@code x5t#S256} of a certificate: 32 bytes, 43 base64url characters. */
+    public static final String X5T_S256 = "Z7E26IvERGSlI9PxYRR6U4XP1YQ7riAsx0JIHMtn8so";
+    /** The document {@link #jwt()} emits: the issuer and the key plus the defaults. */
     public static final String JWT_JSON = json(
         "{'issuer':'" + ISSUER + "','signing_alg':'RS256','lifetime_seconds':60,'private_key':'${credential." + PRIVATE_KEY_KEY + "}'}"
     );
@@ -88,7 +92,9 @@ public final class AuthTestFixtures {
             + ISSUER
             + "','subject':'user@example.com','audience':'https://api.example','signing_alg':'RS256','lifetime_seconds':120,"
             + "'additional_claims':{'scope':'https://www.googleapis.com/auth/cloud-platform','tenant':'t1'},"
-            + "'private_key':'${credential."
+            + "'header':{'kid':'k1','x5t#S256':'"
+            + X5T_S256
+            + "'},'private_key':'${credential."
             + PRIVATE_KEY_KEY
             + "}'}"
     );
@@ -156,11 +162,15 @@ public final class AuthTestFixtures {
         Map<String, String> claims = new LinkedHashMap<>();
         claims.put("tenant", "t1");
         claims.put("scope", "https://www.googleapis.com/auth/cloud-platform");
+        Map<String, String> header = new LinkedHashMap<>();
+        header.put(JwtSpec.X5T_S256, X5T_S256);
+        header.put(JwtSpec.KID, "k1");
         return jwtBuilder()
             .subject("user@example.com")
             .audience("https://api.example")
             .lifetimeSeconds(120)
             .additionalClaims(claims)
+            .header(header)
             .build();
     }
 
@@ -214,9 +224,14 @@ public final class AuthTestFixtures {
         return Keys.generate("RSA", bits).getPrivate().getEncoded();
     }
 
-    /** The PKCS#8 encoding of an EC private key: well-formed, but not a key the RSA signer can use. */
+    /** The PKCS#8 encoding of an EC private key on P-256, the key ES256 signs with. */
     public static byte[] ecPkcs8() {
         return Keys.EC.getPrivate().getEncoded();
+    }
+
+    /** The PKCS#8 encoding of a freshly generated EC key on the curve of {@code bits} bits, for a curve other than P-256. */
+    public static byte[] ecPkcs8(int bits) {
+        return Keys.generate("EC", bits).getPrivate().getEncoded();
     }
 
     /** {@link #rsaPkcs8()} as the PEM document a key file holds. */

@@ -178,12 +178,14 @@ public final class OAuth2TestFixtures {
 
     /** Generated once, since key generation is slow; loaded only by the tests that sign. */
     private static final class Keys {
-        static final KeyPair RSA = generate();
+        static final KeyPair RSA = generate("RSA", 2048);
+        /** On P-256, the JDK's curve of 256 bits. */
+        static final KeyPair EC = generate("EC", 256);
 
-        private static KeyPair generate() {
+        private static KeyPair generate(String algorithm, int keySize) {
             try {
-                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-                generator.initialize(2048);
+                KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm);
+                generator.initialize(keySize);
                 return generator.generateKeyPair();
             } catch (GeneralSecurityException e) {
                 throw new AssertionError(e);
@@ -198,7 +200,21 @@ public final class OAuth2TestFixtures {
 
     /** An unencrypted PKCS#8 PEM document holding an RSA key, with its body in 64-character lines as a key file has it. */
     public static String rsaPkcs8Pem() {
-        String body = Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(Keys.RSA.getPrivate().getEncoded());
+        return pem(Keys.RSA);
+    }
+
+    /** The public half of the key {@link #ecPkcs8Pem()} holds. */
+    public static PublicKey ecPublicKey() {
+        return Keys.EC.getPublic();
+    }
+
+    /** {@link #rsaPkcs8Pem()} for an EC key on P-256, the key ES256 signs with. */
+    public static String ecPkcs8Pem() {
+        return pem(Keys.EC);
+    }
+
+    private static String pem(KeyPair keys) {
+        String body = Base64.getMimeEncoder(64, new byte[] { '\n' }).encodeToString(keys.getPrivate().getEncoded());
         return "-----BEGIN PRIVATE KEY-----\n" + body + "\n-----END PRIVATE KEY-----\n";
     }
 

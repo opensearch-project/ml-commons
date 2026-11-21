@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.OAUTH2_JS
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.STORED_WITH_MARKERS_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.TOKEN_URL;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.document;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwt;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.jwt;
@@ -670,8 +671,9 @@ public class OAuth2AuthConfigTests {
         assertEquals("auth_config.jwt.lifetime_seconds must be an integer", parseMessage(jwtWith("lifetime_seconds", "'1m'")));
         assertEquals("auth_config.jwt.additional_claims must be a JSON object", parseMessage(jwtWith("additional_claims", "'scope=x'")));
         assertEquals("auth_config.jwt.additional_claims.scope must be a string", parseMessage(jwtWith("additional_claims", "{'scope':1}")));
+        assertEquals("auth_config.jwt.header must be a JSON object", parseMessage(jwtWith("header", "'kid=k1'")));
+        assertEquals("auth_config.jwt.header.kid must be a string", parseMessage(jwtWith("header", "{'kid':1}")));
         // The value rules of the block apply to a parsed one.
-        assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, parseMessage(jwtWith("issuer", null)));
         assertEquals(JwtSpec.PRIVATE_KEY_REQUIRED_MESSAGE, parseMessage(jwtWith("private_key", null)));
     }
 
@@ -701,6 +703,8 @@ public class OAuth2AuthConfigTests {
     public void build_jwtBearerAuthenticatesWithTheAssertionAlone() {
         assertEquals("a client id may accompany the assertion", "app", jwtBearerBuilder().clientId("app").build().getClientId());
         assertEquals(OAuth2AuthConfig.JWT_REQUIRED_MESSAGE, buildMessage(jwtBearerBuilder().jwt(null)));
+        // The grant names who issues the assertion; the block alone does not require it.
+        assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, buildMessage(jwtBearerBuilder().jwt(jwtBuilder().issuer(null).build())));
         assertEquals(
             OAuth2AuthConfig.JWT_BEARER_NEEDS_NONE_MESSAGE,
             buildMessage(jwtBearerBuilder().clientAuthMethod(OAuth2AuthConfig.CLIENT_AUTH_METHOD_CLIENT_SECRET_BASIC))
@@ -714,6 +718,7 @@ public class OAuth2AuthConfigTests {
         assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, buildMessage(oauth2Builder().jwt(jwt())));
         // The parse applies the same rules.
         assertEquals(OAuth2AuthConfig.JWT_REQUIRED_MESSAGE, parseMessage(jwtBearerWith("jwt", null)));
+        assertEquals(JwtSpec.ISSUER_REQUIRED_MESSAGE, parseMessage(jwtWith("issuer", null)));
         assertEquals(OAuth2AuthConfig.JWT_ONLY_WITH_JWT_BEARER_MESSAGE, parseMessage(oauth2With("jwt", JWT_JSON)));
     }
 
@@ -737,13 +742,22 @@ public class OAuth2AuthConfigTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void replacing_marksRemovedJwtMembersAndADroppedJwtBlock() throws IOException {
         Map<String, Object> narrowed = emitted(jwtBearer().replacing(fullJwtBearer()));
-        assertEquals(withMarkers(JWT_JSON, "subject", "audience", "additional_claims"), narrowed.get(OAuth2AuthConfig.JWT_FIELD));
+        assertEquals(withMarkers(JWT_JSON, "subject", "audience", "additional_claims", "header"), narrowed.get(OAuth2AuthConfig.JWT_FIELD));
         assertEquals(List.of(), narrowed.get(OAuth2AuthConfig.TOKEN_REQUEST_PARAMS_FIELD));
         assertEquals("what the replacement emits reads back as the replacement", jwtBearer(), OAuth2AuthConfig.fromStored(narrowed));
         assertTrue(jwtBearer().dropsMembers(fullJwtBearer()));
         assertFalse(fullJwtBearer().dropsMembers(jwtBearer()));
+
+        // A header member dropped alone is marked inside the header.
+        OAuth2AuthConfig kidOnly = fullJwtBearer().toBuilder().jwt(fullJwt().toBuilder().header(Map.of(JwtSpec.KID, "k1")).build()).build();
+        Map<String, Object> header = (Map<String, Object>) ((Map<String, Object>) emitted(kidOnly.replacing(fullJwtBearer()))
+            .get(OAuth2AuthConfig.JWT_FIELD)).get(JwtSpec.HEADER_FIELD);
+        assertEquals(Map.of(JwtSpec.KID, "k1", JwtSpec.X5T_S256, List.of()), header);
+        assertEquals(kidOnly, OAuth2AuthConfig.fromStored(emitted(kidOnly.replacing(fullJwtBearer()))));
+        assertTrue(kidOnly.dropsMembers(fullJwtBearer()));
 
         Map<String, Object> dropped = emitted(oauth2().replacing(jwtBearer()));
         assertEquals(List.of(), dropped.get(OAuth2AuthConfig.JWT_FIELD));

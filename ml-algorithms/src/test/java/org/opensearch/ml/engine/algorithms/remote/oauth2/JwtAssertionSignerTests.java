@@ -17,6 +17,8 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ISSUER;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PKCS1_PEM;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.PUBLIC_TOKEN_URL;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ecPkcs8Pem;
+import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.ecPublicKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.jwtBearerConfig;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKey;
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.privateKeyCredential;
@@ -25,14 +27,24 @@ import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtur
 import static org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures.snapshot;
 
 import java.math.BigInteger;
+import java.security.AlgorithmParameters;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPrivateKeySpec;
+import java.security.spec.ECPublicKeySpec;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.security.spec.RSAPrivateCrtKeySpec;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -48,6 +60,10 @@ public class JwtAssertionSignerTests {
 
     private static final Instant NOW = Instant.ofEpochSecond(1_700_000_000L);
     private static final Base64.Decoder BASE64URL = Base64.getUrlDecoder();
+    private static final String X5T_S256 = "Z7E26IvERGSlI9PxYRR6U4XP1YQ7riAsx0JIHMtn8so";
+    /** The signing input of the examples of RFC 7515 Appendix A, after its header: BASE64URL(payload). */
+    private static final String RFC_7515_PAYLOAD =
+        "eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ";
 
     /** The three parts of a compact JWS. */
     private static String[] parts(String assertion) {
@@ -67,8 +83,11 @@ public class JwtAssertionSignerTests {
     }
 
     private static boolean verifies(String assertion, PublicKey key) throws GeneralSecurityException {
+        return verifies(assertion, key, Signature.getInstance("SHA256withRSA"));
+    }
+
+    private static boolean verifies(String assertion, PublicKey key, Signature verifier) throws GeneralSecurityException {
         String[] parts = parts(assertion);
-        Signature verifier = Signature.getInstance("SHA256withRSA");
         verifier.initVerify(key);
         verifier.update((parts[0] + "." + parts[1]).getBytes(UTF_8));
         return verifier.verify(BASE64URL.decode(parts[2]));
@@ -81,6 +100,28 @@ public class JwtAssertionSignerTests {
     /** A JWK parameter, base64url of a big-endian unsigned integer. */
     private static BigInteger unsigned(String base64Url) {
         return new BigInteger(1, BASE64URL.decode(base64Url));
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        byte[] all = new byte[Arrays.stream(parts).mapToInt(part -> part.length).sum()];
+        int offset = 0;
+        for (byte[] part : parts) {
+            System.arraycopy(part, 0, all, offset, part.length);
+            offset += part.length;
+        }
+        return all;
+    }
+
+    /** The DER element of {@code tag} whose content is {@code parts}, of fewer than 128 bytes. */
+    private static byte[] der(int tag, byte[]... parts) {
+        byte[] content = concat(parts);
+        return concat(new byte[] { (byte) tag, (byte) content.length }, content);
+    }
+
+    private static byte[] filled(int length, int value) {
+        byte[] bytes = new byte[length];
+        Arrays.fill(bytes, (byte) value);
+        return bytes;
     }
 
     @Test
@@ -121,9 +162,7 @@ public class JwtAssertionSignerTests {
         );
         RSAPrivateKey key = (RSAPrivateKey) KeyFactory.getInstance("RSA").generatePrivate(spec);
         // The signing input of the example: BASE64URL(header) '.' BASE64URL(payload), as ASCII.
-        byte[] signingInput = ("eyJhbGciOiJSUzI1NiJ9"
-            + "."
-            + "eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ").getBytes(US_ASCII);
+        byte[] signingInput = ("eyJhbGciOiJSUzI1NiJ9" + "." + RFC_7515_PAYLOAD).getBytes(US_ASCII);
         byte[] signature = BASE64URL
             .decode(
                 "cC4hiUPoj9Eetdgtv3hF80EGrhuB__dzERat0XF9g2VtQgr9PJbu3XOiZj5RZmh7"
@@ -134,7 +173,90 @@ public class JwtAssertionSignerTests {
                     + "p0igcN_IoypGlUPQGe77Rw"
             );
 
-        assertArrayEquals(signature, JwtAssertionSigner.sign(signingInput, key));
+        assertArrayEquals(signature, JwtAssertionSigner.sign(signingInput, key, JwtSpec.RS256));
+    }
+
+    @Test
+    public void sign_es256_writesTheSignatureInTheFormOfRfc7515AppendixA3() throws Exception {
+        // The EC key of the example, given there as a JWK. ECDSA is randomized, so the example's signature is checked
+        // by verifying it, and one made here by verifying it under the same key and form.
+        AlgorithmParameters p256 = AlgorithmParameters.getInstance("EC");
+        p256.init(new ECGenParameterSpec("secp256r1"));
+        ECParameterSpec curve = p256.getParameterSpec(ECParameterSpec.class);
+        KeyFactory ec = KeyFactory.getInstance("EC");
+        ECPoint w = new ECPoint(
+            unsigned("f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU"),
+            unsigned("x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0")
+        );
+        PublicKey publicKey = ec.generatePublic(new ECPublicKeySpec(w, curve));
+        PrivateKey key = ec.generatePrivate(new ECPrivateKeySpec(unsigned("jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI"), curve));
+        String signingInput = "eyJhbGciOiJFUzI1NiJ9" + "." + RFC_7515_PAYLOAD;
+        String example = "DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q";
+        Signature verifier = Signature.getInstance("SHA256withECDSAinP1363Format");
+        assertTrue(verifies(signingInput + "." + example, publicKey, verifier));
+
+        byte[] signature = JwtAssertionSigner.sign(signingInput.getBytes(US_ASCII), key, JwtSpec.ES256);
+        assertEquals("R and S, 32 bytes each", 64, signature.length);
+        assertTrue(verifies(signingInput + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(signature), publicKey, verifier));
+    }
+
+    @Test
+    public void es256Signature_writesTheDerIntegersAs32BytesEach_andRefusesWhatIsNotAnEcdsaSignature() {
+        byte[] r = filled(32, 0x11);
+        byte[] s = filled(32, 0x22);
+        assertArrayEquals(concat(r, s), JwtAssertionSigner.es256Signature(der(0x30, der(0x02, r), der(0x02, s))));
+        // A value whose first bit is set carries a leading zero in DER, so that it reads as positive.
+        byte[] high = filled(32, 0x91);
+        assertArrayEquals(concat(high, s), JwtAssertionSigner.es256Signature(der(0x30, der(0x02, new byte[] { 0 }, high), der(0x02, s))));
+        // A value of fewer than 32 bytes is left-padded.
+        byte[] shortS = filled(31, 0x22);
+        assertArrayEquals(
+            concat(r, new byte[] { 0 }, shortS),
+            JwtAssertionSigner.es256Signature(der(0x30, der(0x02, r), der(0x02, shortS)))
+        );
+
+        byte[] valid = der(0x30, der(0x02, r), der(0x02, s));
+        List<byte[]> refused = List
+            .of(
+                new byte[0],
+                der(0x31, der(0x02, r), der(0x02, s)),
+                Arrays.copyOf(valid, valid.length - 1),
+                concat(valid, new byte[] { 0 }),
+                der(0x30, der(0x02, r)),
+                der(0x30, der(0x02, r), der(0x04, s)),
+                der(0x30, der(0x02, r), der(0x02)),
+                der(0x30, der(0x02, high), der(0x02, s)),
+                der(0x30, der(0x02, filled(33, 0x11)), der(0x02, s))
+            );
+        for (byte[] input : refused) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> JwtAssertionSigner.es256Signature(input));
+            assertEquals(Arrays.toString(input), PrivateKeys.INVALID_MESSAGE, e.getMessage());
+        }
+    }
+
+    @Test
+    public void sign_refusesAnAlgorithmItDoesNotKnow_andReportsAnyFailureOfTheSignatureAsAnUnusableKey() {
+        PrivateKey key = PrivateKeys.parsePkcs8(rsaPkcs8Pem(), JwtSpec.RS256);
+        IllegalArgumentException unknown = assertThrows(
+            IllegalArgumentException.class,
+            () -> JwtAssertionSigner.sign(new byte[] { 1 }, key, "HS256")
+        );
+        assertEquals(PrivateKeys.INVALID_MESSAGE, unknown.getMessage());
+        // Here the JDK fails unchecked, as a provider may on any input.
+        IllegalArgumentException unchecked = assertThrows(
+            IllegalArgumentException.class,
+            () -> JwtAssertionSigner.sign(null, key, JwtSpec.RS256)
+        );
+        assertEquals(PrivateKeys.INVALID_MESSAGE, unchecked.getMessage());
+        assertNull(unchecked.getCause());
+    }
+
+    @Test
+    public void header_writesTheMemberValuesAsJsonStrings() {
+        JwtSpec jwt = jwtBearerConfig().getJwt().toBuilder().header(Map.of(JwtSpec.KID, "a\"b\n")).build();
+        String header = JwtAssertionSigner.header(jwt);
+        assertEquals("{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"a\\\"b\\n\"}", header);
+        assertEquals(Map.of("alg", "RS256", "typ", "JWT", "kid", "a\"b\n"), StringUtils.MAPPER.readValue(header, Map.class));
     }
 
     @Test
@@ -142,12 +264,27 @@ public class JwtAssertionSignerTests {
         String assertion = JwtAssertionSigner.assertion(jwtBearerConfig().getJwt(), privateKey(), PUBLIC_TOKEN_URL, NOW);
 
         assertTrue(assertion, assertion.matches("[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"));
-        assertEquals(Map.of("alg", "RS256", "typ", "JWT"), StringUtils.MAPPER.readValue(decoded(parts(assertion)[0]), Map.class));
+        assertEquals("the bytes of a block without header members", "{\"alg\":\"RS256\",\"typ\":\"JWT\"}", decoded(parts(assertion)[0]));
         assertTrue(verifies(assertion, rsaPublicKey()));
         // One flipped payload bit, and the signature no longer verifies.
         String[] parts = parts(assertion);
         String tampered = parts[0] + "." + (parts[1].charAt(0) == 'e' ? 'f' : 'e') + parts[1].substring(1) + "." + parts[2];
         assertFalse(verifies(tampered, rsaPublicKey()));
+    }
+
+    @Test
+    public void assertion_isSignedWithTheBlocksAlgorithm_underAHeaderWithItsMembersInOrder() throws Exception {
+        JwtSpec ps256 = jwtBearerConfig("", "'signing_alg':'PS256','header':{'x5t#S256':'" + X5T_S256 + "','kid':'k1'}").getJwt();
+        String assertion = JwtAssertionSigner.assertion(ps256, privateKey(), PUBLIC_TOKEN_URL, NOW);
+        assertEquals("{\"alg\":\"PS256\",\"typ\":\"JWT\",\"kid\":\"k1\",\"x5t#S256\":\"" + X5T_S256 + "\"}", decoded(parts(assertion)[0]));
+        Signature pss = Signature.getInstance("RSASSA-PSS");
+        pss.setParameter(new PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1));
+        assertTrue(verifies(assertion, rsaPublicKey(), pss));
+
+        JwtSpec es256 = jwtBearerConfig("", "'signing_alg':'ES256'").getJwt();
+        String ecAssertion = JwtAssertionSigner.assertion(es256, snapshot(privateKeyCredential(ecPkcs8Pem())), PUBLIC_TOKEN_URL, NOW);
+        assertEquals("{\"alg\":\"ES256\",\"typ\":\"JWT\"}", decoded(parts(ecAssertion)[0]));
+        assertTrue(verifies(ecAssertion, ecPublicKey(), Signature.getInstance("SHA256withECDSAinP1363Format")));
     }
 
     @Test

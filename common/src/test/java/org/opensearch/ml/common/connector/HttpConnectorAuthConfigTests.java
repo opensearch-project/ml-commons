@@ -12,6 +12,7 @@ import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.FULL_OAUTH2_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.STORED_WITH_MARKERS_JSON;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.document;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullJwtBearer;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.fullOauth2;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.http;
 import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
@@ -202,5 +203,16 @@ public class HttpConnectorAuthConfigTests {
         assertNull(older.getAuthConfig());
 
         assertNull(roundTrip(http(null), Version.CURRENT, HttpConnector::new).getAuthConfig());
+    }
+
+    @Test
+    public void stream_roundTripKeepsAJwtBlockAtTheCurrentVersion() throws IOException {
+        // A jwt block with a header and one without an issuer, as the two grants that carry one write them.
+        for (OAuth2AuthConfig config : new OAuth2AuthConfig[] { fullJwtBearer() }) {
+            HttpConnector source = http(config);
+            HttpConnector current = roundTrip(source, Version.CURRENT, HttpConnector::new);
+            assertSameApartFromAuthConfig(source, current);
+            assertEquals(config, current.getAuthConfig());
+        }
     }
 }

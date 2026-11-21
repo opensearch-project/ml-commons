@@ -239,23 +239,24 @@ public final class AuthConfigValidator {
 
     /**
      * Parses the private key that the {@code jwt.private_key} reference of {@code config} names, when
-     * {@code plaintextCredential} holds it, so that a key the signer could not use is refused where the plaintext is
-     * still at hand instead of on every request the connector serves. Nothing is read for a configuration that is
-     * absent, attaches nothing or has no {@code jwt} block, or when the map lacks the key ({@link #validate} reports a
-     * missing key). The key material is parsed and dropped; it is never logged or echoed.
+     * {@code plaintextCredential} holds it, for the block's {@code signing_alg}, so that a key the signer could not use
+     * is refused where the plaintext is still at hand instead of on every request the connector serves. Nothing is read
+     * for a configuration that is absent, attaches nothing or has no {@code jwt} block, or when the map lacks the key
+     * ({@link #validate} reports a missing key). The key material is parsed and dropped; it is never logged or echoed.
      *
      * @param config the configuration the write leaves; may be null
      * @param plaintextCredential the credential the request carries, before encryption; may be null
-     * @throws IllegalArgumentException with {@link PrivateKeys#INVALID_MESSAGE} when the key is not an unencrypted
-     *     PKCS#8 RSA key, with {@link PrivateKeys#KEY_TOO_SHORT_MESSAGE} when it is one of fewer than 2048 bits
+     * @throws IllegalArgumentException with a message of {@link PrivateKeys#parsePkcs8} when the key is not an
+     *     unencrypted PKCS#8 key the algorithm signs with
      */
     public static void validatePrivateKey(OAuth2AuthConfig config, Map<String, String> plaintextCredential) {
         if (config == null || !config.getType().isActive() || config.getJwt() == null || plaintextCredential == null) {
             return;
         }
-        String pem = plaintextCredential.get(CredentialReference.keyOf(config.getJwt().getPrivateKey()));
+        JwtSpec jwt = config.getJwt();
+        String pem = plaintextCredential.get(CredentialReference.keyOf(jwt.getPrivateKey()));
         if (pem != null) {
-            PrivateKeys.parsePkcs8(pem);
+            PrivateKeys.parsePkcs8(pem, jwt.getSigningAlg());
         }
     }
 

@@ -37,9 +37,8 @@ final class TokenRequests {
      * authentication, so no header and no secret go with it. {@code scope}, {@code audience} and
      * {@code token_request_params} are sent with either grant.
      *
-     * @throws IllegalArgumentException with {@link PrivateKeys#INVALID_MESSAGE} or
-     *     {@link PrivateKeys#KEY_TOO_SHORT_MESSAGE} when the key a JWT bearer configuration references cannot sign
-     *     its assertion
+     * @throws IllegalArgumentException with a message of {@link PrivateKeys} when the key a JWT bearer configuration
+     *     references cannot sign its assertion
      */
     static Request build(HttpUrl url, OAuth2AuthConfig config, CredentialSnapshot credentials, String canonicalTokenUrl) {
         boolean jwtBearer = OAuth2AuthConfig.GRANT_TYPE_JWT_BEARER.equals(config.getGrantType());
