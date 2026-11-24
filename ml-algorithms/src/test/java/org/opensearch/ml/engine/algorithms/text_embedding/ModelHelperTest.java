@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 
@@ -20,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -42,6 +44,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.utils.ZipUtils;
 
 public class ModelHelperTest {
     @Rule
@@ -283,7 +286,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("disallowed executable file");
         Path dir = tempFolder.newFolder("model_dir_jar").toPath();
-        Files.write(dir.resolve("model.pt"), new byte[] { 1 });
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
         Files.write(dir.resolve("evil.jar"), "PK".getBytes(StandardCharsets.UTF_8));
         ModelHelper.verifyModelDirSafety(dir);
     }
@@ -293,7 +296,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("references a non-DJL class");
         Path dir = tempFolder.newFolder("model_dir_props").toPath();
-        Files.write(dir.resolve("model.pt"), new byte[] { 1 });
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
         Files.write(dir.resolve("serving.properties"), "blockFactory=com.attacker.Evil\n".getBytes(StandardCharsets.UTF_8));
         ModelHelper.verifyModelDirSafety(dir);
     }
@@ -303,7 +306,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("disallowed executable file");
         Path dir = tempFolder.newFolder("model_dir_nested").toPath();
-        Files.write(dir.resolve("model.pt"), new byte[] { 1 });
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
         Path nested = Files.createDirectory(dir.resolve("nested"));
         Files.write(nested.resolve("libx.so"), new byte[] { 1 });
         ModelHelper.verifyModelDirSafety(dir);
@@ -312,10 +315,195 @@ public class ModelHelperTest {
     @Test
     public void testVerifyModelDirSafety_CleanDirectory_Allowed() throws IOException {
         Path dir = tempFolder.newFolder("model_dir_clean").toPath();
-        Files.write(dir.resolve("model.pt"), new byte[] { 1 });
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
         Files.write(dir.resolve("tokenizer.json"), "{}".getBytes(StandardCharsets.UTF_8));
         Files.write(dir.resolve("serving.properties"), "translatorFactory=ai.djl.foo.Bar\n".getBytes(StandardCharsets.UTF_8));
         ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_TorchScriptFromFile_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("TorchScript model uses disallowed operation: from_file");
+        Path dir = tempFolder.newFolder("model_dir_torchscript").toPath();
+        writeTorchScriptArchive(dir.resolve("model.pt"), "    _0 = torch.from_file(\"/tmp/secret\", False, 16, dtype=0)\n");
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_DisallowedTorchScriptOpSpellings_Rejected() throws IOException {
+        String[] sources = {
+            "    _0 = torch.from_file(_1, False, 16, dtype=0)\n",
+            "    _0 = ops.aten.from_file(_1, False, 16)\n",
+            "    _0 = torch.UntypedStorage.from_file(_1, False, 16)\n",
+            "    torch.save(self.secret, \"/tmp/out\")\n",
+            "    _0 = ops.debugprims.load_tensor(_1, [16], [1], 0, 0)\n" };
+        for (int i = 0; i < sources.length; i++) {
+            Path dir = tempFolder.newFolder("model_dir_op_" + i).toPath();
+            writeTorchScriptArchive(dir.resolve("model.pt"), sources[i]);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ModelHelper.verifyModelDirSafety(dir));
+            assertTrue(sources[i], e.getMessage().startsWith("TorchScript model uses disallowed operation"));
+        }
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_DisallowedTorchScriptNamespace_Rejected() throws IOException {
+        String[] sources = { "    _0 = torch.classes.dist_c10d.FileStore(_1, 1)\n", "    _0 = ops.image.read_file(_1)\n" };
+        for (int i = 0; i < sources.length; i++) {
+            Path dir = tempFolder.newFolder("model_dir_ns_" + i).toPath();
+            writeTorchScriptArchive(dir.resolve("model.pt"), sources[i]);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ModelHelper.verifyModelDirSafety(dir));
+            assertTrue(sources[i], e.getMessage().startsWith("TorchScript model uses disallowed operation namespace"));
+        }
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_AllowedTorchScriptNamespaces_Allowed() throws IOException {
+        Path dir = tempFolder.newFolder("model_dir_ns_allowed").toPath();
+        writeTorchScriptArchive(
+            dir.resolve("model.pt"),
+            "    _0 = ops.prim.NumToTensor(_1)\n    _2 = ops.quantized.linear(_0, self._packed_params, 1.0, 0)\n"
+                + "    _3 : __torch__.torch.classes.quantized.LinearPackedParamsBase = self._packed_params\n"
+        );
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_NonZipModelFile_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("is not a valid TorchScript zip archive");
+        Path dir = tempFolder.newFolder("model_dir_non_zip").toPath();
+        Files.write(dir.resolve("model.pt"), new byte[] { 1 });
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_ZipWithoutTorchScriptCode_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("is not a TorchScript archive: no code/ entries");
+        Path dir = tempFolder.newFolder("model_dir_no_code").toPath();
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(dir.resolve("model.pt").toFile()))) {
+            zos.putNextEntry(new ZipEntry("model/data.pkl"));
+            zos.write(new byte[] { 1 });
+            zos.closeEntry();
+        }
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_OversizedTorchScriptSource_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("source exceeds the size limit");
+        Path dir = tempFolder.newFolder("model_dir_oversized").toPath();
+        byte[] block = new byte[1024 * 1024];
+        Arrays.fill(block, (byte) ' ');
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(dir.resolve("model.pt").toFile()))) {
+            zos.putNextEntry(new ZipEntry("model/code/__torch__.py"));
+            for (int i = 0; i < 17; i++) {
+                zos.write(block);
+            }
+            zos.closeEntry();
+        }
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_PickleWithDisallowedClassNamespace_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("TorchScript model uses disallowed operation namespace: dist_c10d in model/constants.pkl");
+        Path dir = tempFolder.newFolder("model_dir_pickle_ns").toPath();
+        writeTorchScriptArchive(
+            dir.resolve("model.pt"),
+            BENIGN_TORCHSCRIPT_SOURCE,
+            "model/constants.pkl",
+            "c__torch__.torch.classes.dist_c10d\nFileStore\n".getBytes(StandardCharsets.ISO_8859_1)
+        );
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_PickleWithQuantizedClass_Allowed() throws IOException {
+        // Dynamically quantized models pickle a torch.classes.quantized packed-params object in data.pkl.
+        Path dir = tempFolder.newFolder("model_dir_pickle_quantized").toPath();
+        writeTorchScriptArchive(
+            dir.resolve("model.pt"),
+            BENIGN_TORCHSCRIPT_SOURCE,
+            "model/data.pkl",
+            "c__torch__.torch.classes.quantized\nLinearPackedParamsBase\n".getBytes(StandardCharsets.ISO_8859_1)
+        );
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_ExtensionlessFileNamedLikeModelDir_Scanned() throws IOException {
+        // DJL loads <dir>/<dir> before <dir>/<dir>.pt, so a malicious extensionless file there must not slip past the scan.
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("TorchScript model uses disallowed operation: from_file");
+        Path dir = tempFolder.newFolder("evil").toPath();
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
+        writeTorchScriptArchive(dir.resolve("evil"), "    _0 = torch.from_file(_1, False, 16, dtype=0)\n");
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_ExtensionlessNonZipNamedLikeModelDir_Rejected() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("is not a valid TorchScript zip archive");
+        Path dir = tempFolder.newFolder("evil_flat").toPath();
+        writeTorchScriptArchive(dir.resolve("model.pt"), BENIGN_TORCHSCRIPT_SOURCE);
+        Files.write(dir.resolve("EVIL_FLAT"), new byte[] { 1 });
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_NamespaceSplitByCommentOrContinuation_Rejected() throws IOException {
+        String[] sources = {
+            "    _0 = (torch.ops.  # c\n      image.read_file(_1))\n",
+            "    _0 = (torch.ops  # c\n      .image.read_file(_1))\n",
+            "    _0 = torch.classes. \\\n      dist_c10d.FileStore(_1, 1)\n" };
+        for (int i = 0; i < sources.length; i++) {
+            Path dir = tempFolder.newFolder("model_dir_ns_split_" + i).toPath();
+            writeTorchScriptArchive(dir.resolve("model.pt"), sources[i]);
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ModelHelper.verifyModelDirSafety(dir));
+            assertTrue(sources[i], e.getMessage().startsWith("TorchScript model uses disallowed operation namespace"));
+        }
+    }
+
+    @Test(timeout = 10_000)
+    public void testVerifyModelDirSafety_LongCommentRun_NoCatastrophicBacktracking() throws IOException {
+        Path dir = tempFolder.newFolder("model_dir_redos").toPath();
+        writeTorchScriptArchive(dir.resolve("model.pt"), "    ops" + "#".repeat(100_000) + "\n");
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    @Test
+    public void testVerifyModelDirSafety_BundledTorchScriptModel_Allowed() throws IOException, URISyntaxException {
+        Path dir = tempFolder.newFolder("model_dir_bundled").toPath();
+        ZipUtils.unzip(new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_sentence-transformer.zip").toURI()), dir);
+        ModelHelper.verifyModelDirSafety(dir);
+    }
+
+    private static final String BENIGN_TORCHSCRIPT_SOURCE =
+        "class Model(Module):\n  def forward(self, x: Tensor) -> Tensor:\n    return x\n";
+
+    /** Write a minimal TorchScript-style zip with the given source as its only code/ entry. */
+    private static void writeTorchScriptArchive(Path path, String source) throws IOException {
+        writeTorchScriptArchive(path, source, null, null);
+    }
+
+    /** Same as above, plus one extra entry (e.g. a pickle) when extraEntryName is not null. */
+    private static void writeTorchScriptArchive(Path path, String source, String extraEntryName, byte[] extraEntryContent)
+        throws IOException {
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(path.toFile()))) {
+            zos.putNextEntry(new ZipEntry("model/code/__torch__.py"));
+            zos.write(source.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            if (extraEntryName != null) {
+                zos.putNextEntry(new ZipEntry(extraEntryName));
+                zos.write(extraEntryContent);
+                zos.closeEntry();
+            }
+        }
     }
 
     /**

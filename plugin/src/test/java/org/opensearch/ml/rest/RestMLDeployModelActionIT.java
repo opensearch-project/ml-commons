@@ -6,12 +6,21 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.opensearch.client.Response;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -65,6 +74,51 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
+        });
+    }
+
+    public void testDeployModel_InvalidTorchScriptFile_TaskFails() throws Exception {
+        ByteArrayOutputStream zipBytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(zipBytes)) {
+            zos.putNextEntry(new ZipEntry("model.pt"));
+            zos.write("not a torchscript model".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("tokenizer.json"));
+            zos.write("{}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        byte[] modelZip = zipBytes.toByteArray();
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(modelZip));
+        String metaInput = "{\"name\":\"invalid-torchscript-model\",\"version\":\"1.0.0\",\"model_format\":\"TORCH_SCRIPT\","
+            + "\"function_name\":\"TEXT_EMBEDDING\",\"model_group_id\":\""
+            + modelGroupId
+            + "\",\"model_content_size_in_bytes\":"
+            + modelZip.length
+            + ",\"model_content_hash_value\":\""
+            + hash
+            + "\",\"total_chunks\":1,\"model_config\":{\"model_type\":\"bert\",\"embedding_dimension\":16,"
+            + "\"framework_type\":\"sentence_transformers\"}}";
+
+        Response metaResponse = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_register_meta", null, metaInput, null);
+        String modelId = (String) parseResponseToMap(metaResponse).get(MODEL_ID_FIELD);
+        TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/models/" + modelId + "/upload_chunk/0",
+                null,
+                new ByteArrayEntity(modelZip, ContentType.APPLICATION_JSON),
+                null
+            );
+
+        String taskId = deployModel(modelId);
+        waitForTask(taskId, MLTaskState.FAILED);
+        getTask(client(), taskId, task -> {
+            assertEquals(MLTaskState.FAILED.name(), task.get("state"));
+            assertTrue(
+                String.valueOf(task.get("error")),
+                String.valueOf(task.get("error")).contains("is not a valid TorchScript zip archive")
+            );
         });
     }
 }
