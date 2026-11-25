@@ -142,6 +142,36 @@ public class MLSearchHandlerTests extends OpenSearchTestCase {
         assertTrue(s.contains("\"exists\""));
     }
 
+    // ---------- restrictToAccessible (per-model gate, union of model and group access) ----------
+
+    public void testRestrictToAccessible_deniesAllWhenNothingAccessible() {
+        QueryBuilder qb = MLSearchHandler.restrictToAccessible(null, Collections.emptyList(), Collections.emptyList());
+        assertTrue("an empty accessible set must deny rather than match all: " + qb, qb.toString().contains("must_not"));
+    }
+
+    public void testRestrictToAccessible_matchesModelIdsWhenOnlyModelsShared() {
+        QueryBuilder qb = MLSearchHandler.restrictToAccessible(null, List.of("m1", "m2"), Collections.emptyList());
+        String rendered = qb.toString();
+        assertTrue("expected an ids clause: " + rendered, rendered.contains("ids"));
+        assertFalse("no group clause is expected when no group is accessible: " + rendered, rendered.contains("model_group_id"));
+    }
+
+    public void testRestrictToAccessible_admitsModelsReachableThroughTheirGroup() {
+        // A group-level share is resolved by inheritance when a permission is checked and is not written into the model
+        // document, so search has to match on the group as well or it would hide a model the caller can GET.
+        QueryBuilder qb = MLSearchHandler.restrictToAccessible(null, Collections.emptyList(), List.of("g1"));
+        String rendered = qb.toString();
+        assertTrue("expected a model_group_id clause: " + rendered, rendered.contains("model_group_id"));
+    }
+
+    public void testRestrictToAccessible_admitsEitherPath() {
+        QueryBuilder qb = MLSearchHandler.restrictToAccessible(null, List.of("m1"), List.of("g1"));
+        String rendered = qb.toString();
+        assertTrue("expected an ids clause: " + rendered, rendered.contains("ids"));
+        assertTrue("expected a model_group_id clause: " + rendered, rendered.contains("model_group_id"));
+        assertTrue("the two clauses must be alternatives: " + rendered, rendered.contains("should"));
+    }
+
     // ---------- rewriteQueryBuilderRSC (resource-sharing client gate) ----------
 
     public void testRewriteQueryBuilderRSC_emptyIds_returnsDenyAll_whenExistingNull() {

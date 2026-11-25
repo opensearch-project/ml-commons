@@ -98,8 +98,9 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper
-                    .validateModelGroupAccess(
+                    .validateModelAccess(
                         user,
+                        modelId,
                         mlModel.getModelGroupId(),
                         MLControllerDeleteAction.NAME,
                         client,

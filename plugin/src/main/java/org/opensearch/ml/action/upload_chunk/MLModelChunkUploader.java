@@ -83,8 +83,9 @@ public class MLModelChunkUploader {
                         MLModel existingModel = MLModel.parse(parser, algorithmName);
 
                         modelAccessControlHelper
-                            .validateModelGroupAccess(
+                            .validateModelAccess(
                                 user,
+                                modelId,
                                 existingModel.getModelGroupId(),
                                 MLUploadModelChunkAction.NAME,
                                 client,

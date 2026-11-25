@@ -335,10 +335,11 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(
+                        .validateModelAccess(
                             user,
                             mlFeatureEnabledSetting,
                             tenantId,
+                            modelId,
                             mlModel.getModelGroupId(),
                             MLUndeployModelsAction.NAME,
                             client,
