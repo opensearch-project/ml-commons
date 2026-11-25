@@ -399,7 +399,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model Index search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
                     } catch (Exception e) {
