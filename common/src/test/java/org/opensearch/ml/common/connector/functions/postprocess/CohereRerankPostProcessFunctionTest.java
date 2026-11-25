@@ -6,8 +6,11 @@
 package org.opensearch.ml.common.connector.functions.postprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,5 +66,37 @@ public class CohereRerankPostProcessFunctionTest {
         assertEquals(0.3, result.get(0).getData()[0]);
         assertEquals(0.4, result.get(1).getData()[0]);
         assertEquals(0.5, result.get(2).getData()[0]);
+    }
+
+    @Test
+    public void process_BigDecimalScore() {
+        List<Map<String, Object>> rerankResults = List
+            .of(Map.of("index", 1, "relevance_score", new BigDecimal("0.73105857863000487")), Map.of("index", 0, "relevance_score", 0.2));
+        List<ModelTensor> result = function.apply(rerankResults, null);
+        assertEquals(2, result.size());
+        assertEquals(0.2, result.get(0).getData()[0]);
+        assertEquals(0.73105857863000487, result.get(1).getData()[0]);
+    }
+
+    @Test
+    public void process_IntegerScore() {
+        List<Map<String, Object>> rerankResults = List
+            .of(Map.of("index", 0, "relevance_score", 1), Map.of("index", 1, "relevance_score", 0.5));
+        List<ModelTensor> result = function.apply(rerankResults, null);
+        assertEquals(2, result.size());
+        assertEquals(1.0, result.get(0).getData()[0]);
+        assertEquals(0.5, result.get(1).getData()[0]);
+    }
+
+    @Test
+    public void process_NullScore() {
+        Map<String, Object> nullScore = new HashMap<>();
+        nullScore.put("index", 0);
+        nullScore.put("relevance_score", null);
+        List<Map<String, Object>> rerankResults = List.of(nullScore, Map.of("index", 1, "relevance_score", 0.5));
+        List<ModelTensor> result = function.apply(rerankResults, null);
+        assertEquals(2, result.size());
+        assertNull(result.get(0).getData()[0]);
+        assertEquals(0.5, result.get(1).getData()[0]);
     }
 }
