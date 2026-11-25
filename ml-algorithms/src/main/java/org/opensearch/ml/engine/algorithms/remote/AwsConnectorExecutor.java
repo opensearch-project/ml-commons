@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -89,6 +90,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+    @Setter
+    private volatile BooleanSupplier legacyActionUrlOriginEnabled = () -> false;
 
     @Setter
     @Getter
@@ -116,7 +119,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         try {
             // The request is built from this URI, which passed the connector's URL checks.
-            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
             Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
 
             SdkHttpFullRequest request;
@@ -181,7 +185,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         try {
             // The same checks as the non-streaming call; the Bedrock handler sends to the connector's region, not to this URI.
-            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
             String llmInterface = parameters.get(LLM_INTERFACE);
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);

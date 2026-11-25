@@ -59,7 +59,8 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE,
                     MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                    MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -416,5 +417,14 @@ public class MLFeatureEnabledSettingTests {
         mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.mcp_header_passthrough_enabled", false).build());
 
         assertFalse(setting.isMcpHeaderPassthroughEnabled());
+    }
+
+    @Test
+    public void testLegacyActionUrlOriginEnabledByDefault_andFollowsTheSetting() {
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, Settings.EMPTY);
+        assertTrue(setting.isLegacyActionUrlOriginEnabled());
+        mockClusterSettings
+            .applySettings(Settings.builder().put("plugins.ml_commons.connector.legacy_action_url_origin_enabled", false).build());
+        assertFalse(setting.isLegacyActionUrlOriginEnabled());
     }
 }

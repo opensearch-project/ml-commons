@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -51,6 +52,7 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
     private volatile List<String> trustedConnectorEndpointsRegex;
+    private volatile Boolean isLegacyActionUrlOriginEnabled;
 
     private volatile Boolean isControllerEnabled;
     private volatile Boolean isBatchIngestionEnabled;
@@ -100,6 +102,7 @@ public class MLFeatureEnabledSetting {
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        isLegacyActionUrlOriginEnabled = ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED.get(settings);
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
@@ -140,6 +143,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED, it -> isLegacyActionUrlOriginEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
         clusterService
             .getClusterSettings()
@@ -230,6 +236,11 @@ public class MLFeatureEnabledSetting {
     public List<String> getTrustedConnectorEndpointsRegex() {
         List<String> current = trustedConnectorEndpointsRegex;
         return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
+    }
+
+    /** Whether a connector whose parameters give no origin for an action URL keeps the allowlist-only check (deprecated). */
+    public boolean isLegacyActionUrlOriginEnabled() {
+        return isLegacyActionUrlOriginEnabled;
     }
 
     /**

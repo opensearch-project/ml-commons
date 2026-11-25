@@ -267,8 +267,22 @@ public interface Connector extends ToXContentObject, Writeable {
      * change where the request goes. Build the request from the returned URI.
      */
     default URI resolveActionEndpoint(String action, Map<String, String> parameters, List<String> urlRegexes) {
+        return resolveActionEndpoint(action, parameters, urlRegexes, false);
+    }
+
+    /**
+     * As {@link #resolveActionEndpoint(String, Map, List)}, except that with {@code legacyOriginAllowed} a connector whose
+     * own parameters give no scheme or host for the action, one stored before the write-time check required them, is not
+     * refused: its URL has passed the trusted endpoint patterns and nothing more, which is logged once per connector and
+     * action on each node. A connector whose parameters give an origin is held to it either way. Deprecated; removed in 4.0.
+     */
+    default URI resolveActionEndpoint(String action, Map<String, String> parameters, List<String> urlRegexes, boolean legacyOriginAllowed) {
         URI endpoint = validateResolvedEndpoint(getActionEndpoint(action, parameters), urlRegexes);
         URI stored = storedOrigin(action);
+        if (stored == null && legacyOriginAllowed) {
+            RejectedConnectorUrlLog.warnUnpinnedOrigin(getName(), action, origin(endpoint));
+            return endpoint;
+        }
         if (stored == null || !origin(endpoint).equals(origin(stored))) {
             logRejectedUrl(endpoint.toString());
             throw new IllegalArgumentException(ACTION_URL_HOST_CHANGED_MESSAGE);

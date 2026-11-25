@@ -510,6 +510,31 @@ public class ConnectorTest {
     }
 
     @Test
+    public void resolveActionEndpoint_legacyMode_allowsAConnectorWhoseParametersGiveNoOrigin() {
+        // Stored before the write-time check required the host: under the deprecated setting the request passes the
+        // trusted endpoint patterns and nothing more.
+        HttpConnector connector = connectorWithUrl(ENDPOINT_URL, Map.of());
+        assertEquals(
+            URI.create("https://api.openai.com/v1/chat/completions"),
+            connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com"), ANY_URL, true)
+        );
+    }
+
+    @Test
+    public void resolveActionEndpoint_legacyMode_stillPinsAConnectorWhoseParametersGiveAnOrigin() {
+        HttpConnector connector = connectorWithUrl(ENDPOINT_URL, STORED_ENDPOINT);
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "evil.example"), ANY_URL, true)
+        );
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, e.getMessage());
+        assertEquals(
+            URI.create("https://api.openai.com/v1/chat/completions"),
+            connector.resolveActionEndpoint(PREDICT, Map.of("endpoint", "api.openai.com"), ANY_URL, true)
+        );
+    }
+
+    @Test
     public void resolveActionEndpoint_readsOnlyTheStoredSchemeAndAuthority() {
         assertEquals(
             URI.create("https://api.x.com/ab"),

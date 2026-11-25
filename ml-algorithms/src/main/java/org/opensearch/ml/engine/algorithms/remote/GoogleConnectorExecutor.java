@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -89,6 +90,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+    @Setter
+    private volatile BooleanSupplier legacyActionUrlOriginEnabled = () -> false;
 
     @Setter
     @Getter
@@ -135,7 +138,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         try {
             // The request is built from this URI, which passed the connector's URL checks.
-            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
             // Resolve and validate the HTTP method up front, before minting a token.
             SdkHttpMethod method;
@@ -206,7 +210,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         try {
             // The request is built from this URI, which passed the connector's URL checks.
-            URI endpoint = connector.resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex);
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
             String llmInterface = parameters.get(LLM_INTERFACE);
             if (llmInterface == null) {

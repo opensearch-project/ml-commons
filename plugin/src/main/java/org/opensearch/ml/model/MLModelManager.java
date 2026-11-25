@@ -40,6 +40,7 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_P
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.LEGACY_ACTION_URL_ORIGIN_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
@@ -85,6 +86,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1935,6 +1937,7 @@ public class MLModelManager {
         params.put(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS, connectorTrustedPrivateEndpoints);
         params.put(CONNECTOR_RESTRICTED_IP_PATTERNS, connectorRestrictedIpPatterns);
         params.put(TRUSTED_CONNECTOR_ENDPOINTS_REGEX, mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+        params.put(LEGACY_ACTION_URL_ORIGIN_ENABLED, (BooleanSupplier) mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
         params.put(SDK_CLIENT, sdkClient);
         params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);

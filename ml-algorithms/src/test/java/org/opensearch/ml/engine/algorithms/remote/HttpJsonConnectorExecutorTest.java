@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -1075,6 +1076,105 @@ public class HttpJsonConnectorExecutorTest extends MLStaticMockBase {
     public void invokeRemoteService_requestParametersCannotChangeHost() {
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(storedEndpointConnector()));
         executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        doReturn(httpClient).when(executor).getHttpClient();
+        Map<String, String> parameters = Map.of("endpoint", "api.example.com", "model", "gpt-4o", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+        verify(httpClient, never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteService_legacyMode_sendsForAConnectorWhoseParametersGiveNoOrigin() {
+        // The connector stores no endpoint, so its URL has no origin of its own; under the deprecated setting the request
+        // goes out once the resolved URL has passed the trusted endpoint patterns.
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/v1/${parameters.model}")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of())
+            .credential(Map.of("api_key", "test-key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        executor.setLegacyActionUrlOriginEnabled(() -> true);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        when(httpClient.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
+        doReturn(httpClient).when(executor).getHttpClient();
+        Map<String, String> parameters = Map.of("endpoint", "api.openai.com", "model", "gpt-4o", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+
+        verify(httpClient).execute(any());
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void invokeRemoteService_legacyMode_readsTheSettingOnEveryRequest() {
+        // The executor keeps a supplier, not a copy of the flag: turning the setting off reaches a model that is already
+        // deployed without a redeploy.
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("https://${parameters.endpoint}/v1/${parameters.model}")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of())
+            .credential(Map.of("api_key", "test-key"))
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        AtomicBoolean legacyOriginAllowed = new AtomicBoolean(true);
+        executor.setLegacyActionUrlOriginEnabled(legacyOriginAllowed::get);
+        executor.setClient(client);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        when(httpClient.execute(any())).thenReturn(CompletableFuture.completedFuture(null));
+        doReturn(httpClient).when(executor).getHttpClient();
+        Map<String, String> parameters = Map.of("endpoint", "api.openai.com", "model", "gpt-4o", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+        verify(httpClient).execute(any());
+        verify(actionListener, never()).onFailure(any());
+
+        legacyOriginAllowed.set(false);
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), actionListener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+        verify(httpClient).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteService_legacyMode_stillRefusesAMovedHostWhenTheConnectorGivesAnOrigin() {
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(storedEndpointConnector()));
+        executor.setTrustedConnectorEndpointsRegex(OPENAI_OR_EXAMPLE);
+        executor.setLegacyActionUrlOriginEnabled(() -> true);
         SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
         doReturn(httpClient).when(executor).getHttpClient();
         Map<String, String> parameters = Map.of("endpoint", "api.example.com", "model", "gpt-4o", "input", "x");
