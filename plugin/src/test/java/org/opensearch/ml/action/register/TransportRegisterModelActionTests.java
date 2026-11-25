@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -55,6 +56,8 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -172,6 +175,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
+
+    private static final String CALLER = "bob|IT|engineering";
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
@@ -1334,6 +1339,130 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
         // A name clash is a request problem, so it stays a 400
         assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+    }
+
+    @Test
+    public void test_ExistingModelGroupNameIsCheckedForTheCallingUser() throws IOException {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        stubModelGroupNameSearch(createModelGroupSearchResponse(1));
+        // Like the real helper, a null user means access control is off, so access is granted.
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
+            listener.onResponse(user == null);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        actionWithRealModelGroupManager().doExecute(task, prepareRequest("http://test_url", null), actionListener);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(modelAccessControlHelper).validateModelGroupAccess(userCaptor.capture(), any(), any(), any(), any(), any(), any(), any());
+        assertNotNull("access must be checked for the caller, not a null user", userCaptor.getValue());
+        assertEquals("bob", userCaptor.getValue().getName());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
+            argumentCaptor.getValue().getMessage()
+        );
+        verify(mlTaskManager, never()).createMLTask(any(), any());
+    }
+
+    @Test
+    public void test_ConnectorAccessIsCheckedForTheCallingUserWithoutModelGroupId() throws IOException {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        stubModelGroupNameSearch(createModelGroupSearchResponse(0));
+        AtomicReference<String> userSeenByConnectorCheck = new AtomicReference<>();
+        // Like the real helper, which reads the user from the thread context: no user means access control is off.
+        doAnswer(invocation -> {
+            userSeenByConnectorCheck.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            ActionListener<Boolean> listener = invocation.getArgument(5);
+            listener.onResponse(userSeenByConnectorCheck.get() == null);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
+        MLRegisterModelInput input = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("Test Model")
+            .connectorId("mockConnectorId")
+            .build();
+
+        actionWithRealModelGroupManager().doExecute(task, new MLRegisterModelRequest(input), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "You don't have permission to use the connector provided, connector id: mockConnectorId",
+            argumentCaptor.getValue().getMessage()
+        );
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        verify(mlModelManager, never()).getConnector(any(), any(), any());
+        assertEquals(CALLER, userSeenByConnectorCheck.get());
+    }
+
+    @Test
+    public void test_InlineConnectorDryRunRunsAsTheCallingUserWithoutModelGroupId() throws IOException {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        stubModelGroupNameSearch(createModelGroupSearchResponse(0));
+        AtomicReference<String> userSeenByDryRun = new AtomicReference<>();
+        doAnswer(invocation -> {
+            userSeenByDryRun.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            ActionListener<MLCreateConnectorResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(MLCreateConnectorResponse.class));
+            return null;
+        }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), any());
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getModelName()).thenReturn("Test Model");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        Connector connector = mock(Connector.class);
+        when(input.getConnector()).thenReturn(connector);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://api.openai.com");
+
+        actionWithRealModelGroupManager().doExecute(task, request, actionListener);
+
+        assertEquals(CALLER, userSeenByDryRun.get());
+    }
+
+    private TransportRegisterModelAction actionWithRealModelGroupManager() {
+        MLModelGroupManager realModelGroupManager = new MLModelGroupManager(
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            clusterService,
+            modelAccessControlHelper
+        );
+        return new TransportRegisterModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlIndicesHandler,
+            mlModelManager,
+            mlTaskManager,
+            clusterService,
+            settings,
+            threadPool,
+            client,
+            sdkClient,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlStats,
+            modelAccessControlHelper,
+            connectorAccessControlHelper,
+            realModelGroupManager,
+            mlFeatureEnabledSetting
+        );
+    }
+
+    private void stubModelGroupNameSearch(SearchResponse searchResponse) {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
     }
 
     @Test

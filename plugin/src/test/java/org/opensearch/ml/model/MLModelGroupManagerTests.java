@@ -7,6 +7,7 @@ package org.opensearch.ml.model;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -22,6 +23,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -51,6 +54,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.AccessMode;
@@ -63,6 +67,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -111,6 +116,8 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private final List<String> backendRoles = Arrays.asList("IT", "HR");
+
+    private static final String CALLER = "alex|IT,HR|engineering";
 
     @Before
     public void setup() throws IOException {
@@ -521,6 +528,127 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_validateUniqueModelGroupName_responseRunsWithCallerContext() throws IOException {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        SearchResponse searchResponse = getNonEmptySearchResponse();
+        AtomicReference<String> userSeenBySearch = stubNameSearchRecordingUser(listener -> listener.onResponse(searchResponse));
+        AtomicReference<String> userSeenByListener = new AtomicReference<>();
+        AtomicReference<SearchResponse> response = new AtomicReference<>();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+
+        mlModelGroupManager.validateUniqueModelGroupName("modelGroupName", null, ActionListener.wrap(r -> {
+            userSeenByListener.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            response.set(r);
+        }, failure::set));
+
+        // The privileged lookup itself must stay stashed.
+        assertNull(userSeenBySearch.get());
+        assertNull(failure.get());
+        assertSame(searchResponse, response.get());
+        assertEquals(CALLER, userSeenByListener.get());
+    }
+
+    public void test_validateUniqueModelGroupName_indexNotFoundRunsWithCallerContext() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        AtomicReference<String> userSeenBySearch = stubNameSearchRecordingUser(
+            listener -> listener.onFailure(new IndexNotFoundException(ML_MODEL_GROUP_INDEX))
+        );
+        AtomicReference<String> userSeenByListener = new AtomicReference<>();
+        AtomicReference<SearchResponse> response = new AtomicReference<>();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+
+        mlModelGroupManager.validateUniqueModelGroupName("modelGroupName", null, ActionListener.wrap(r -> {
+            userSeenByListener.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            response.set(r);
+        }, failure::set));
+
+        assertNull(userSeenBySearch.get());
+        assertNull(failure.get());
+        assertNull(response.get());
+        assertEquals(CALLER, userSeenByListener.get());
+    }
+
+    public void test_validateUniqueModelGroupName_searchFailureRunsWithCallerContext() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        RuntimeException searchFailure = new RuntimeException("search failed");
+        AtomicReference<String> userSeenBySearch = stubNameSearchRecordingUser(listener -> listener.onFailure(searchFailure));
+        AtomicReference<String> userSeenByListener = new AtomicReference<>();
+        AtomicReference<SearchResponse> response = new AtomicReference<>();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+
+        mlModelGroupManager.validateUniqueModelGroupName("modelGroupName", null, ActionListener.wrap(response::set, e -> {
+            userSeenByListener.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            failure.set(e);
+        }));
+
+        assertNull(userSeenBySearch.get());
+        assertNull(response.get());
+        assertNotNull(failure.get());
+        assertSame(searchFailure, failure.get().getCause());
+        assertEquals(CALLER, userSeenByListener.get());
+    }
+
+    public void test_validateUniqueModelGroupName_parseFailureRunsWithCallerContext() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        doReturn(CompletableFuture.completedFuture(new SearchDataObjectResponse((SearchResponse) null)))
+            .when(sdkClient)
+            .searchDataObjectAsync(any());
+        AtomicReference<String> userSeenByListener = new AtomicReference<>();
+        AtomicReference<SearchResponse> response = new AtomicReference<>();
+        AtomicReference<Exception> failure = new AtomicReference<>();
+
+        mlModelGroupManager.validateUniqueModelGroupName("modelGroupName", null, ActionListener.wrap(response::set, e -> {
+            userSeenByListener.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            failure.set(e);
+        }));
+
+        assertNull(response.get());
+        assertTrue(failure.get() instanceof OpenSearchStatusException);
+        assertEquals("Failed to parse search response", failure.get().getMessage());
+        assertEquals(CALLER, userSeenByListener.get());
+    }
+
+    public void test_createModelGroup_afterNameLookupIsOwnedByCaller() {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, CALLER);
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(isNotNull())).thenReturn(true);
+        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
+        when(putResponse.indexResponse()).thenReturn(indexResponse);
+        when(putResponse.id()).thenReturn("model_group_ID");
+        AtomicReference<String> userSeenByPut = new AtomicReference<>("put not called");
+        ArgumentCaptor<PutDataObjectRequest> putRequestCaptor = ArgumentCaptor.forClass(PutDataObjectRequest.class);
+        doAnswer(invocation -> {
+            userSeenByPut.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            return CompletableFuture.completedFuture(putResponse);
+        }).when(sdkClient).putDataObjectAsync(putRequestCaptor.capture());
+
+        // Mirrors Register Model without a model_group_id.
+        MLRegisterModelGroupInput input = prepareRequest(List.of("IT"), AccessMode.RESTRICTED, null);
+        mlModelGroupManager
+            .validateUniqueModelGroupName(
+                input.getName(),
+                null,
+                ActionListener.wrap(r -> mlModelGroupManager.createModelGroup(input, actionListener), actionListener::onFailure)
+            );
+
+        verify(actionListener).onResponse("model_group_ID");
+        MLModelGroup modelGroup = (MLModelGroup) putRequestCaptor.getValue().dataObject();
+        assertEquals("alex", modelGroup.getOwner().getName());
+        assertEquals(AccessMode.RESTRICTED.getValue(), modelGroup.getAccess());
+        assertEquals(List.of("IT"), modelGroup.getBackendRoles());
+        // The system index write must still run stashed.
+        assertNull(userSeenByPut.get());
+    }
+
+    private AtomicReference<String> stubNameSearchRecordingUser(Consumer<ActionListener<SearchResponse>> reply) {
+        AtomicReference<String> userSeenBySearch = new AtomicReference<>("search not called");
+        doAnswer(invocation -> {
+            userSeenBySearch.set(threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
+            reply.accept(invocation.getArgument(1));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        return userSeenBySearch;
     }
 
     private MLRegisterModelGroupInput prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {

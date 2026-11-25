@@ -6,12 +6,15 @@
 package org.opensearch.ml.action.upload_chunk;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -22,11 +25,14 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.BaseModelConfig.FrameworkType;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -34,10 +40,13 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
@@ -252,6 +261,55 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Runtime exception", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_ExistingModelGroupNameIsCheckedForTheCallingUser() throws IOException {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "bob|IT|engineering");
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+        // Like the real helper, a null user means access control is off, so access is granted.
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
+            listener.onResponse(user == null);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        SdkClient sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+        MLModelGroupManager realModelGroupManager = new MLModelGroupManager(
+            mock(MLIndicesHandler.class),
+            client,
+            sdkClient,
+            mock(ClusterService.class),
+            modelAccessControlHelper
+        );
+        TransportRegisterModelMetaAction actionWithRealModelGroupManager = new TransportRegisterModelMetaAction(
+            transportService,
+            actionFilters,
+            mlModelManager,
+            client,
+            modelAccessControlHelper,
+            realModelGroupManager
+        );
+
+        actionWithRealModelGroupManager.doExecute(task, prepareRequest(null), actionListener);
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(modelAccessControlHelper).validateModelGroupAccess(userCaptor.capture(), any(), any(), any(), any());
+        assertNotNull("access must be checked for the caller, not a null user", userCaptor.getValue());
+        assertEquals("bob", userCaptor.getValue().getName());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "The name {Test Model} you provided is unavailable because it is used by another model group with id {model_group_ID} to which you do not have access. Please provide a different name.",
+            argumentCaptor.getValue().getMessage()
+        );
+        verify(mlModelManager, never()).registerModelMeta(any(), any());
     }
 
     @Test
