@@ -346,12 +346,15 @@ public class AgentUtils {
                 throw new IllegalArgumentException("Tool [" + toolName + "] not registered for model");
             }
             toolsBuilder.append(toolPrefix).append(toolName).append(": ").append(tools.get(toolName).getDescription()).append(toolSuffix);
-            toolNamesBuilder.append(toolName).append(", ");
+            if (toolNamesBuilder.length() > 0) {
+                toolNamesBuilder.append(", ");
+            }
+            toolNamesBuilder.append(toolName);
         }
         toolsBuilder.append(toolsSuffix);
         Map<String, String> toolsPromptMap = new HashMap<>();
         toolsPromptMap.put(TOOL_DESCRIPTIONS, toolsBuilder.toString());
-        toolsPromptMap.put(TOOL_NAMES, toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1));
+        toolsPromptMap.put(TOOL_NAMES, toolNamesBuilder.toString());
 
         if (parameters.containsKey(TOOL_DESCRIPTIONS)) {
             toolsPromptMap.put(TOOL_DESCRIPTIONS, parameters.get(TOOL_DESCRIPTIONS));
@@ -1807,22 +1810,33 @@ public class AgentUtils {
                         listener.onFailure(cause);
                     }
                 } else {
+                    // Notify the listener outside the parse try: an exception thrown by the listener is not a parse
+                    // failure and must not reach onFailure as one.
+                    MLModel mlModel = null;
+                    Exception parseFailure = null;
                     try {
                         GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                         if (gr != null && gr.isExists()) {
                             try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, gr.getSourceAsBytesRef())) {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLModel mlModel = MLModel.parse(parser, null);
-                                listener.onResponse(mlModel);
-                            } catch (Exception e) {
-                                log.error("Failed to parse model:{}", modelId);
-                                listener.onFailure(e);
+                                mlModel = MLModel.parse(parser, null);
                             }
-                        } else {
-                            listener.onFailure(new OpenSearchStatusException("Failed to find model:" + modelId, RestStatus.NOT_FOUND));
                         }
                     } catch (Exception e) {
-                        listener.onFailure(e);
+                        log.error("Failed to parse model:{}", modelId, e);
+                        parseFailure = e;
+                    }
+                    if (parseFailure != null) {
+                        listener.onFailure(parseFailure);
+                    } else if (mlModel == null) {
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model:" + modelId, RestStatus.NOT_FOUND));
+                    } else {
+                        try {
+                            listener.onResponse(mlModel);
+                        } catch (Exception e) {
+                            // This runs in a CompletableFuture callback, which would drop the exception without a trace.
+                            log.error("Model listener failed after the model was read. modelId={}", modelId, e);
+                        }
                     }
                 }
             });
@@ -1935,7 +1949,7 @@ public class AgentUtils {
      * @param sdkClient the SDK client (may be null)
      * @param client the OpenSearch client
      * @param xContentRegistry the content registry for parsing
-     * @param listener receives String[]{url, name} — never called with onFailure
+     * @param metadataListener receives String[]{url, name} — never called with onFailure
      */
     public static void getModelMetadata(
         String modelId,
@@ -1943,8 +1957,11 @@ public class AgentUtils {
         SdkClient sdkClient,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        ActionListener<String[]> listener
+        ActionListener<String[]> metadataListener
     ) {
+        // The fallbacks below call onResponse from failure handlers, and ActionListener.wrap routes an exception thrown by
+        // onResponse to those handlers. Notify once so the caller's onResponse is never run a second time.
+        ActionListener<String[]> listener = ActionListener.notifyOnce(metadataListener);
         // Primarily for test compatibility — sdkClient may be null in unit tests.
         // TODO: Update tests to mock this
         if (sdkClient == null) {

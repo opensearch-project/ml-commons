@@ -463,10 +463,71 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tokenTracker.setSubAgent(true);
         }
 
-        // getModelMetadata always calls onResponse (falls back to modelId on failure),
-        // but we handle onFailure defensively in case the contract changes.
-        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
-            tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+        // getModelMetadata always calls onResponse (falls back to modelId on failure), but we handle onFailure
+        // defensively in case the contract changes. This is not ActionListener.wrap: wrap would send an exception thrown
+        // by onResponse to onFailure, which would run the agent a second time.
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, new ActionListener<>() {
+            @Override
+            public void onResponse(String[] metadata) {
+                tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+                startReAct(
+                    mlAgent,
+                    tools,
+                    toolSpecMap,
+                    parameters,
+                    memory,
+                    listener,
+                    functionCalling,
+                    backendTools,
+                    tokenTracker,
+                    tenantId,
+                    usesUnifiedInterface,
+                    modelProvider
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
+                tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
+                startReAct(
+                    mlAgent,
+                    tools,
+                    toolSpecMap,
+                    parameters,
+                    memory,
+                    listener,
+                    functionCalling,
+                    backendTools,
+                    tokenTracker,
+                    tenantId,
+                    usesUnifiedInterface,
+                    modelProvider
+                );
+            }
+        });
+    }
+
+    /**
+     * Runs {@link #runReAct} and sends an exception it throws before its first async call to {@code listener}. The
+     * metadata callbacks that call this would otherwise catch the exception, run the agent again from their fallback, and
+     * finally drop it, so the request never completes.
+     */
+    private void startReAct(
+        MLAgent mlAgent,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Map<String, String> parameters,
+        Memory memory,
+        ActionListener<Object> listener,
+        FunctionCalling functionCalling,
+        Map<String, Tool> backendTools,
+        AgentTokenTracker tokenTracker,
+        String tenantId,
+        boolean usesUnifiedInterface,
+        ModelProvider modelProvider
+    ) {
+        try {
             runReAct(
                 mlAgent,
                 tools,
@@ -481,24 +542,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 usesUnifiedInterface,
                 modelProvider
             );
-        }, e -> {
-            log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
-            tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
-            runReAct(
-                mlAgent,
-                tools,
-                toolSpecMap,
-                parameters,
-                memory,
-                listener,
-                functionCalling,
-                backendTools,
-                tokenTracker,
-                tenantId,
-                usesUnifiedInterface,
-                modelProvider
-            );
-        }));
+        } catch (Exception e) {
+            log.error("Failed to run chat agent. agentId={}, tenantId={}", parameters.get(AGENT_ID_LOG_FIELD), tenantId, e);
+            listener.onFailure(e);
+        }
     }
 
     private void runReAct(

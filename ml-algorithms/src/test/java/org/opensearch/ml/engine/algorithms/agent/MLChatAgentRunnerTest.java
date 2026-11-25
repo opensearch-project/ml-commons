@@ -14,7 +14,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
@@ -22,9 +24,11 @@ import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -43,6 +47,8 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -69,7 +75,13 @@ import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.gson.JsonSyntaxException;
 
 public class MLChatAgentRunnerTest {
     public static final String FIRST_TOOL = "firstTool";
@@ -199,6 +211,76 @@ public class MLChatAgentRunnerTest {
             .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "thought 3", "final_answer", "This is the final answer")))
             .when(client)
             .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRunWithNoToolsOnPromptPath() throws Exception {
+        doAnswer(getLLMAnswer(ImmutableMap.of("thought", "no tool needed", "final_answer", "Hello")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("NoToolsAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Collections.emptyList())
+            .memory(mlMemorySpec)
+            .llm(LLMSpec.builder().modelId("MODEL_ID").build())
+            .build();
+
+        runnerWithAsyncModelLookup()
+            .run(mlAgent, new HashMap<>(Map.of("question", "Say hello", "verbose", "true")), agentActionListener, null);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+        verify(agentActionListener, never()).onFailure(any());
+        ModelTensorOutput output = (ModelTensorOutput) responseCaptor.getValue();
+        ModelTensor answer = output.getMlModelOutputs().get(1).getMlModelTensors().get(0);
+        assertEquals("Hello", answer.getResult());
+    }
+
+    @Test
+    public void testRunSendsExceptionBeforeLLMCallToOnFailure() throws Exception {
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        // Not a JSON array, so building the prompt throws before the LLM is called.
+        params.put(MLChatAgentRunner.OS_INDICES, "{\"index\":\"a\"}");
+
+        runnerWithAsyncModelLookup().run(mlAgent, params, agentActionListener, null);
+
+        ArgumentCaptor<Exception> failureCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener, times(1)).onFailure(failureCaptor.capture());
+        assertTrue(failureCaptor.getValue() instanceof JsonSyntaxException);
+        verify(agentActionListener, never()).onResponse(any());
+        verify(client, never()).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+    }
+
+    /**
+     * A runner whose model metadata lookup completes through a {@link CompletableFuture}, as it does in a cluster. An
+     * exception thrown from its callback is dropped by the future instead of reaching the caller.
+     */
+    private MLChatAgentRunner runnerWithAsyncModelLookup() throws Exception {
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.EMPTY));
+        SdkClient sdkClient = mock(SdkClient.class);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(invocation -> {
+            String json = "{\"_index\":\".plugins-ml-model\",\"_id\":\"MODEL_ID\",\"found\":true,"
+                + "\"_source\":{\"name\":\"llm\",\"algorithm\":\"REMOTE\"}}";
+            GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+            when(response.parser()).thenReturn(XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json));
+            return CompletableFuture.completedFuture(response);
+        });
+        return new MLChatAgentRunner(
+            client,
+            settings,
+            clusterService,
+            NamedXContentRegistry.EMPTY,
+            toolFactories,
+            memoryMap,
+            sdkClient,
+            null
+        );
     }
 
     @Test

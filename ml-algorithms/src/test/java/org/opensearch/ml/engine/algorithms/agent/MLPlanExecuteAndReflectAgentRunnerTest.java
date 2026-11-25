@@ -18,6 +18,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
@@ -28,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
@@ -40,6 +43,8 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
@@ -71,7 +76,10 @@ import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
@@ -274,6 +282,45 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ModelTensor responseTensor = secondModelTensorList.get(0);
         assertEquals("response", responseTensor.getName());
         assertEquals("final result", responseTensor.getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testRunSendsExceptionBeforeLLMCallToOnFailure() throws Exception {
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        // Not a number, so memory setup throws before the planner is called.
+        params.put(MLPlanExecuteAndReflectAgentRunner.PLANNER_MESSAGE_HISTORY_LIMIT, "not-a-number");
+        // The model metadata lookup completes through a CompletableFuture, as it does in a cluster, so an exception
+        // thrown from its callback would be dropped instead of reaching the caller.
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.EMPTY));
+        SdkClient sdkClient = mock(SdkClient.class);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(invocation -> {
+            String json = "{\"_index\":\".plugins-ml-model\",\"_id\":\"MODEL_ID\",\"found\":true,"
+                + "\"_source\":{\"name\":\"llm\",\"algorithm\":\"REMOTE\"}}";
+            GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+            when(response.parser()).thenReturn(XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json));
+            return CompletableFuture.completedFuture(response);
+        });
+        MLPlanExecuteAndReflectAgentRunner runner = new MLPlanExecuteAndReflectAgentRunner(
+            client,
+            settings,
+            clusterService,
+            NamedXContentRegistry.EMPTY,
+            toolFactories,
+            memoryMap,
+            sdkClient,
+            encryptor,
+            null
+        );
+
+        runner.run(mlAgent, params, agentActionListener, transportChannel);
+
+        verify(agentActionListener, times(1)).onFailure(any(NumberFormatException.class));
+        verify(agentActionListener, never()).onResponse(any());
+        verify(client, never()).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
     }
 
     @Test
