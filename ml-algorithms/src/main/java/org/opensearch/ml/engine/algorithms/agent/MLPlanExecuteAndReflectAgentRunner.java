@@ -300,7 +300,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, getPlanExecuteReflectResponseFormat());
 
-        params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
+        // Merge rather than overwrite: no_escape_params is the documented opt-out for a connector that
+        // interpolates a parameter in a raw JSON position, so replacing whatever the caller sent would silently
+        // switch that off. MLAgentExecutor and ToolUtils merge the same field the same way.
+        String callerNoEscapeParams = params.get(NO_ESCAPE_PARAMS_FIELD);
+        params
+            .put(
+                NO_ESCAPE_PARAMS_FIELD,
+                callerNoEscapeParams == null || callerNoEscapeParams.isBlank()
+                    ? DEFAULT_NO_ESCAPE_PARAMS
+                    : callerNoEscapeParams + "," + DEFAULT_NO_ESCAPE_PARAMS
+            );
 
         // setting defaults for llm response
         if (params.containsKey(LLM_INTERFACE) && (!params.containsKey(LLM_RESPONSE_FILTER) || params.get(LLM_RESPONSE_FILTER).isEmpty())) {
