@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,8 +67,12 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.script.StoredScriptSource;
 import org.opensearch.transport.client.AdminClient;
@@ -129,7 +134,8 @@ public class QueryPlanningToolTests {
         when(adminClient.indices()).thenReturn(indicesAdminClient);
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
 
-        // Mock the MLFeatureEnabledSetting to return true for agentic search
+        // Mock the model validation to return a valid REMOTE model by default
+        mockRemoteModelValidation();
 
         // Initialize the factory with mocked dependencies
         factory = QueryPlanningTool.Factory.getInstance();
@@ -139,6 +145,24 @@ public class QueryPlanningToolTests {
         validParams.put(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
         emptyParams = Collections.emptyMap();
 
+    }
+
+    /**
+     * Mocks the model validation to return a valid REMOTE model.
+     * This is needed because QueryPlanningTool.run() validates the model is REMOTE type.
+     */
+    public void mockRemoteModelValidation() {
+        MLModel mockModel = mock(MLModel.class);
+        when(mockModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+
+        MLModelGetResponse mockResponse = mock(MLModelGetResponse.class);
+        when(mockResponse.getMlModel()).thenReturn(mockModel);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelGetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(MLModelGetRequest.class), any());
     }
 
     @SneakyThrows
@@ -232,7 +256,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -284,7 +308,14 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "test_model_id"
+        );
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -319,7 +350,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -362,7 +393,14 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt
@@ -402,7 +440,8 @@ public class QueryPlanningToolTests {
             queryGenerationTool,
             client,
             searchTemplates,
-            null
+            null,
+            "test_model_id"
         );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -432,7 +471,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -457,7 +496,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -483,7 +522,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -527,6 +566,40 @@ public class QueryPlanningToolTests {
 
     @SneakyThrows
     @Test
+    public void testRunWithNoPrompt() {
+        // Mock the async calls
+        mockSampleDoc();
+        mockGetIndexMapping();
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "some query");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        tool.run(parameters, listener);
+
+        // Manually trigger the getIndex response to prevent hanging
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool).run(captor.capture(), any());
+        Map<String, String> capturedParams = captor.getValue();
+        // With no custom fallback query configured, the escaped default query is substituted into the placeholder
+        String escapedDefaultQuery = gson.toJson(DEFAULT_QUERY);
+        escapedDefaultQuery = escapedDefaultQuery.substring(1, escapedDefaultQuery.length() - 1);
+        String expectedSystemPrompt = DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT
+            .replace(QueryPlanningPromptTemplate.FALLBACK_QUERY_PROMPT_PLACEHOLDER, escapedDefaultQuery);
+        assertEquals(expectedSystemPrompt, capturedParams.get("system_prompt"));
+    }
+
+    @SneakyThrows
+    @Test
     public void testStripAgentContextParameters() throws ExecutionException, InterruptedException {
         mockSampleDoc();
         mockGetIndexMapping();
@@ -539,7 +612,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -581,7 +654,7 @@ public class QueryPlanningToolTests {
     public void testRunWithInvalidParameters() {
         mockSampleDoc();
         mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         ActionListener<String> listener = mock(ActionListener.class);
 
         tool.run(Collections.emptyMap(), listener);
@@ -600,7 +673,7 @@ public class QueryPlanningToolTests {
         // Mock the async calls
         mockSampleDoc();
         mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "some query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
@@ -624,7 +697,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testSetName() {
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         tool.setName("NewName");
         assertEquals("NewName", tool.getName());
     }
@@ -661,7 +734,7 @@ public class QueryPlanningToolTests {
         // Mock the async calls
         mockSampleDoc();
         mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
@@ -708,7 +781,7 @@ public class QueryPlanningToolTests {
         // Mock the async calls
         mockSampleDoc();
         mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
@@ -757,7 +830,7 @@ public class QueryPlanningToolTests {
         // Mock the async calls
         mockSampleDoc();
         mockGetIndexMapping();
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
@@ -925,7 +998,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(indicesAdminClient).getIndex(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
 
@@ -1012,7 +1085,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
 
@@ -1049,7 +1122,7 @@ public class QueryPlanningToolTests {
         // Success for index mapping
         mockGetIndexMapping();
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         // Case 1: onResponse throws inside try (null SearchResponse)
         doAnswer(invocation -> {
@@ -1105,7 +1178,7 @@ public class QueryPlanningToolTests {
     @SneakyThrows
     @Test
     public void testGetIndexMapping_ErrorPaths() throws ExecutionException, InterruptedException {
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         // Common model stub to avoid NPE later if it gets that far
         doAnswer(invocation -> {
@@ -1251,7 +1324,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         // Run 1: no hits
         final CompletableFuture<String> future1 = new CompletableFuture<>();
@@ -1312,7 +1385,14 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "test_model_id"
+        );
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -1370,7 +1450,14 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            USER_SEARCH_TEMPLATES_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "test_model_id"
+        );
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -1481,7 +1568,7 @@ public class QueryPlanningToolTests {
         }).when(queryGenerationTool).run(any(), any());
 
         // Create tool using constructor with the mocked queryGenerationTool
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         // Create extract_json processor config (same as in factory)
         Map<String, Object> extractJsonConfig = new HashMap<>();
@@ -1570,7 +1657,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -1595,7 +1682,7 @@ public class QueryPlanningToolTests {
         GetIndexResponse response = mock(GetIndexResponse.class);
         when(response.mappings()).thenReturn(null);
 
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
 
         CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -1638,7 +1725,14 @@ public class QueryPlanningToolTests {
 
         String customFallbackQuery =
             "{\"size\":10,\"query\":{\"multi_match\":{\"query\":\"${parameters.question}\",\"fields\":[\"title\",\"description\"]}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1667,7 +1761,14 @@ public class QueryPlanningToolTests {
 
         String customFallbackQuery =
             "{\"size\":10,\"query\":{\"multi_match\":{\"query\":\"${parameters.question}\",\"fields\":[\"title\",\"description\"]}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1695,7 +1796,14 @@ public class QueryPlanningToolTests {
         }).when(queryGenerationTool).run(any(), any());
 
         String customFallbackQuery = "{\"size\":5,\"query\":{\"match\":{\"title\":\"${parameters.question}\"}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1724,7 +1832,14 @@ public class QueryPlanningToolTests {
 
         // Fallback with no parameter placeholders
         String customFallbackQuery = "{\"size\":20,\"query\":{\"match_all\":{}},\"sort\":[{\"timestamp\":{\"order\":\"desc\"}}]}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1750,7 +1865,7 @@ public class QueryPlanningToolTests {
         }).when(queryGenerationTool).run(any(), any());
 
         // null fallback — should behave exactly like before
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1776,7 +1891,7 @@ public class QueryPlanningToolTests {
         }).when(queryGenerationTool).run(any(), any());
 
         // null fallback — should behave exactly like before
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1804,7 +1919,14 @@ public class QueryPlanningToolTests {
 
         String customFallbackQuery =
             "{\"query\":{\"neural\":{\"embedding\":{\"query_text\":\"${parameters.question}\",\"model_id\":\"${parameters.embedding_model_id}\",\"k\":10}}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("question", "help me find some books related to wind");
@@ -1835,7 +1957,14 @@ public class QueryPlanningToolTests {
 
         String customFallbackQuery =
             "{\"size\":10,\"query\":{\"multi_match\":{\"query\":\"${parameters.question}\",\"fields\":[\"title\",\"description\"]}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         tool.setOutputParser(null);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
@@ -1893,14 +2022,155 @@ public class QueryPlanningToolTests {
     @Test
     public void testGetFallbackQuery_ReturnsConfiguredValue() {
         String customFallbackQuery = "{\"query\":{\"match\":{\"title\":\"test\"}}}";
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, customFallbackQuery);
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            customFallbackQuery,
+            "test_model_id"
+        );
         assertEquals(customFallbackQuery, tool.getFallbackQuery());
     }
 
     @Test
     public void testGetFallbackQuery_ReturnsNullWhenNotConfigured() {
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "test_model_id");
         assertNull(tool.getFallbackQuery());
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_RemoteModel_ValidationSucceeds() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+
+        // Mock a REMOTE model - validation should succeed
+        MLModel mockModel = mock(MLModel.class);
+        when(mockModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+
+        MLModelGetResponse mockResponse = mock(MLModelGetResponse.class);
+        when(mockResponse.getMlModel()).thenReturn(mockModel);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelGetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(MLModelGetRequest.class), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "remote_model_id"
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("{\"query\":{\"match_all\":{}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "test question");
+        params.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(params, listener);
+
+        // Manually trigger the getIndex response
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        // Should succeed - no exception thrown
+        String result = future.get();
+        assertNotNull(result);
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_NonRemoteModel_ValidationFails() throws ExecutionException, InterruptedException {
+        // Mock a non-REMOTE model (e.g., TEXT_EMBEDDING) - validation should fail
+        MLModel mockModel = mock(MLModel.class);
+        when(mockModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+
+        MLModelGetResponse mockResponse = mock(MLModelGetResponse.class);
+        when(mockResponse.getMlModel()).thenReturn(mockModel);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelGetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(MLModelGetRequest.class), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(
+            LLM_GENERATED_TYPE_FIELD,
+            queryGenerationTool,
+            client,
+            null,
+            null,
+            "non_remote_model_id"
+        );
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "test question");
+        params.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(params, listener);
+
+        // Should fail with validation error
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(exception.getCause() instanceof IllegalArgumentException);
+        assertTrue(exception.getCause().getMessage().contains("requires a remote LLM model"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_NullModelId_ValidationFails() throws ExecutionException, InterruptedException {
+        // No model id provided - validation should fail before any model lookup is attempted
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, null);
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "test question");
+        params.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(params, listener);
+
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(exception.getCause() instanceof IllegalArgumentException);
+        assertTrue(exception.getCause().getMessage().contains("LLM model not found"));
+        // The model lookup must never be invoked when the model id is missing
+        verify(client, never()).execute(any(), any(MLModelGetRequest.class), any());
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_EmptyModelId_ValidationFails() throws ExecutionException, InterruptedException {
+        // Empty model id provided - validation should fail before any model lookup is attempted
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null, "");
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION_FIELD, "test question");
+        params.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(params, listener);
+
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(exception.getCause() instanceof IllegalArgumentException);
+        assertTrue(exception.getCause().getMessage().contains("LLM model not found"));
+        verify(client, never()).execute(any(), any(MLModelGetRequest.class), any());
     }
 
 }
