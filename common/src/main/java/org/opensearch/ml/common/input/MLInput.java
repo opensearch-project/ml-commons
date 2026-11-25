@@ -255,6 +255,13 @@ public class MLInput implements Input {
         if (MLCommonsClassLoader.canInitMLInput(algorithm)) {
             MLInput mlInput = MLCommonsClassLoader
                 .initMLInput(algorithm, new Object[] { parser, algorithm }, XContentParser.class, FunctionName.class);
+            // MLCommonsClassLoader returns null when the input constructor threw an exception it doesn't rethrow, for
+            // example the IllegalStateException the parser raises for a null or wrongly typed field value.
+            if (mlInput == null) {
+                throw new IllegalArgumentException(
+                    String.format(Locale.ROOT, "Failed to parse %s input, please check for null or malformed field values", algorithmName)
+                );
+            }
             mlInput.setAlgorithm(algorithm);
             return mlInput;
         }

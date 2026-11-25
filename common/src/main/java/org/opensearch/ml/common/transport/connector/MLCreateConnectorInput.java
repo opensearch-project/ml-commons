@@ -199,13 +199,13 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
             switch (fieldName) {
                 case CONNECTOR_ID_FIELD:
-                    connectorId = parser.text();
+                    connectorId = parser.textOrNull();
                     break;
                 case CONNECTOR_NAME_FIELD:
                     name = parser.text();
                     break;
                 case CONNECTOR_DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case CONNECTOR_VERSION_FIELD:
                     version = parser.text();

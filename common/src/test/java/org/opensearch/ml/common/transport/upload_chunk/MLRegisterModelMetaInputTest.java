@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.upload_chunk;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
@@ -223,6 +224,40 @@ public class MLRegisterModelMetaInputTest {
         parser.nextToken();
         MLRegisterModelMetaInput parsedInput = MLRegisterModelMetaInput.parse(parser);
         assertEquals("text_embedding_v1", parsedInput.getModelId());
+    }
+
+    @Test
+    public void parse_WithNullModelId() throws Exception {
+        String json = "{\"name\":\"Model Name\",\"function_name\":\"BATCH_RCF\",\"model_group_id\":\"model_group_id\","
+            + "\"version\":\"1.0\",\"description\":\"Model Description\",\"model_format\":\"TORCH_SCRIPT\","
+            + "\"model_state\":\"DEPLOYING\",\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2,"
+            + "\"model_id\":null}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLRegisterModelMetaInput parsedInput = MLRegisterModelMetaInput.parse(parser);
+        assertNull(parsedInput.getModelId());
+    }
+
+    @Test
+    public void parse_WithNullDescriptionAndModelGroupId() throws Exception {
+        String json = "{\"name\":\"Model Name\",\"function_name\":\"BATCH_RCF\",\"model_group_id\":null,"
+            + "\"version\":\"1.0\",\"description\":null,\"model_format\":\"TORCH_SCRIPT\","
+            + "\"model_state\":\"DEPLOYING\",\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        MLRegisterModelMetaInput parsedInput = MLRegisterModelMetaInput.parse(parser);
+        assertNull(parsedInput.getDescription());
+        assertNull(parsedInput.getModelGroupId());
     }
 
     @Test
