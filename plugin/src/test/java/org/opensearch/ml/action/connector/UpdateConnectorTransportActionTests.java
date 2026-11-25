@@ -7,6 +7,9 @@ package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -42,6 +45,8 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
@@ -51,6 +56,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -134,6 +140,10 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
     private MLEngine mlEngine;
 
     private static final String TEST_CONNECTOR_ID = "test_connector_id";
+    private static final String CALLER = "alice|role1,role2|own";
+    private static final String OTHER_USER = "bob|role1|own";
+    private static final String ADMIN = "admin|role1|all_access";
+    private static final String NO_BACKEND_ROLES_USER = "carol||own";
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
@@ -1035,6 +1045,353 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testUpdate_accessFieldsWithAccessControlDisabled_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(null, null, null), accessUpdate().access(AccessMode.PUBLIC).build());
+        when(connectorAccessControlHelper.accessControlNotEnabled(any())).thenReturn(true);
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected(
+            "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster.",
+            RestStatus.BAD_REQUEST
+        );
+    }
+
+    @Test
+    public void testUpdate_addAllBackendRolesWithAccessControlDisabled_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(null, null, null), accessUpdate().addAllBackendRoles(true).build());
+        when(connectorAccessControlHelper.accessControlNotEnabled(any())).thenReturn(true);
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected(
+            "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster.",
+            RestStatus.BAD_REQUEST
+        );
+    }
+
+    @Test
+    public void testUpdate_emptyBackendRolesWithAccessControlDisabled_keepsStoredBackendRoles() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().backendRoles(List.of()).build()
+        );
+        when(connectorAccessControlHelper.accessControlNotEnabled(any())).thenReturn(true);
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertEquals(List.of("role1"), persistedConnectorDoc().get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_emptyBackendRolesByNonOwner_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(OTHER_USER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().backendRoles(List.of()).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("Only owner or admin can update access control data.", RestStatus.FORBIDDEN);
+    }
+
+    @Test
+    public void testUpdate_accessChangeByNonOwner_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(OTHER_USER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().access(AccessMode.PUBLIC).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("Only owner or admin can update access control data.", RestStatus.FORBIDDEN);
+    }
+
+    @Test
+    public void testUpdate_accessChangeOnOwnerlessConnectorByNonAdmin_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(null, null, null), accessUpdate().access(AccessMode.PRIVATE).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("Only owner or admin can update access control data.", RestStatus.FORBIDDEN);
+    }
+
+    @Test
+    public void testUpdate_backendRoleNotHeldByOwner_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().backendRoles(List.of("role3")).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You don't have the backend roles specified.", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_backendRolesWithAddAllBackendRoles_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.PRIVATE, null),
+            accessUpdate().access(AccessMode.RESTRICTED).backendRoles(List.of("role1")).addAllBackendRoles(true).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You can't specify backend roles and add all backend roles to true at same time.", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_addAllBackendRoles_persistsCallerBackendRoles() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.PRIVATE, null),
+            accessUpdate().access(AccessMode.RESTRICTED).addAllBackendRoles(true).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals(AccessMode.RESTRICTED.getValue(), doc.get(ACCESS_FIELD));
+        assertEquals(List.of("role1", "role2"), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_backendRolesOnRestrictedConnectorWithoutAccessMode_persistsRoles() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().backendRoles(List.of("role2")).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals(AccessMode.RESTRICTED.getValue(), doc.get(ACCESS_FIELD));
+        assertEquals(List.of("role2"), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_addAllBackendRolesWithoutCallerBackendRoles_isRejected() {
+        stubAccessUpdate(
+            NO_BACKEND_ROLES_USER,
+            storedConnector(NO_BACKEND_ROLES_USER, AccessMode.PRIVATE, null),
+            accessUpdate().access(AccessMode.RESTRICTED).addAllBackendRoles(true).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You must have at least one backend role to create a connector.", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_addAllBackendRolesByAdmin_isRejected() {
+        stubAccessUpdate(
+            ADMIN,
+            storedConnector(OTHER_USER, AccessMode.PRIVATE, null),
+            accessUpdate().access(AccessMode.RESTRICTED).addAllBackendRoles(true).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("Admin can't add all backend roles", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_addAllBackendRolesOnPrivateConnectorWithoutAccessMode_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(CALLER, AccessMode.PRIVATE, null), accessUpdate().addAllBackendRoles(true).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You can specify backend roles only for a connector with the restricted access mode.", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_privateWithBackendRoles_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().access(AccessMode.PRIVATE).backendRoles(List.of("role1")).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You can specify backend roles only for a connector with the restricted access mode.", RestStatus.BAD_REQUEST);
+    }
+
+    /** Search matches backend_roles regardless of access mode, so a private connector must not keep them. */
+    @Test
+    public void testUpdate_privateOnRestrictedConnector_clearsBackendRoles() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().access(AccessMode.PRIVATE).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals(AccessMode.PRIVATE.getValue(), doc.get(ACCESS_FIELD));
+        assertEquals(List.of(), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_restrictedResentWithoutBackendRoles_isRejected() {
+        stubAccessUpdate(
+            CALLER,
+            storedConnector(CALLER, AccessMode.RESTRICTED, List.of("role1")),
+            accessUpdate().access(AccessMode.RESTRICTED).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected(
+            "You must specify at least one backend role or make the connector public/private for registering it.",
+            RestStatus.BAD_REQUEST
+        );
+    }
+
+    @Test
+    public void testUpdate_restrictedWithoutBackendRoles_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(CALLER, AccessMode.PRIVATE, null), accessUpdate().access(AccessMode.RESTRICTED).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected(
+            "You must specify at least one backend role or make the connector public/private for registering it.",
+            RestStatus.BAD_REQUEST
+        );
+    }
+
+    @Test
+    public void testUpdate_backendRolesOnPrivateConnectorWithoutAccessMode_isRejected() {
+        stubAccessUpdate(CALLER, storedConnector(CALLER, AccessMode.PRIVATE, null), accessUpdate().backendRoles(List.of("role1")).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertRejected("You can specify backend roles only for a connector with the restricted access mode.", RestStatus.BAD_REQUEST);
+    }
+
+    @Test
+    public void testUpdate_mcpConnectorMadePublic_clearsBackendRoles() {
+        Connector stored = McpConnector
+            .builder()
+            .name("mcp")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .url("https://api.openai.com/mcp")
+            .owner(User.parse(CALLER))
+            .accessMode(AccessMode.RESTRICTED)
+            .backendRoles(List.of("role1"))
+            .build();
+        stubAccessUpdate(CALLER, stored, accessUpdate().access(AccessMode.PUBLIC).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals(AccessMode.PUBLIC.getValue(), doc.get(ACCESS_FIELD));
+        assertEquals(List.of(), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_nonAccessFieldByNonOwner_isAccepted() {
+        stubAccessUpdate(CALLER, storedConnector(OTHER_USER, AccessMode.RESTRICTED, List.of("role1")), accessUpdate().build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals("updated description", doc.get(DESCRIPTION_FIELD));
+        assertEquals(List.of("role1"), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    @Test
+    public void testUpdate_adminRestrictsOwnerlessConnectorWithRoleNotHeld_isAccepted() {
+        stubAccessUpdate(
+            ADMIN,
+            storedConnector(null, null, null),
+            accessUpdate().access(AccessMode.RESTRICTED).backendRoles(List.of("role9")).build()
+        );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertEquals(AccessMode.RESTRICTED.getValue(), doc.get(ACCESS_FIELD));
+        assertEquals(List.of("role9"), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    /** An owner-less connector without a mode is served as public; persisting that inferred mode would change how Search sees it. */
+    @Test
+    public void testUpdate_adminAddAllFalseOnOwnerlessConnector_doesNotPersistAccess() {
+        stubAccessUpdate(ADMIN, storedConnector(null, null, null), accessUpdate().addAllBackendRoles(false).build());
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        Map<String, Object> doc = persistedConnectorDoc();
+        assertFalse(doc.containsKey(ACCESS_FIELD));
+        assertEquals(List.of(), doc.get(BACKEND_ROLES_FIELD));
+    }
+
+    private MLCreateConnectorInput.MLCreateConnectorInputBuilder accessUpdate() {
+        return MLCreateConnectorInput.builder().updateConnector(true).description("updated description");
+    }
+
+    private HttpConnector storedConnector(String owner, AccessMode access, List<String> backendRoles) {
+        return HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .owner(owner == null ? null : User.parse(owner))
+            .accessMode(access)
+            .backendRoles(backendRoles)
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                List
+                    .of(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .requestBody("{\"model\": \"${parameters.model}\"}")
+                            .build()
+                    )
+            )
+            .build();
+    }
+
+    private void stubAccessUpdate(String caller, Connector stored, MLCreateConnectorInput update) {
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, caller);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any())).thenReturn(false);
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener.onResponse(stored);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        when(updateRequest.getUpdateContent()).thenReturn(update);
+        stubUpdateSucceeds();
+    }
+
+    private void assertRejected(String message, RestStatus status) {
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(message, captor.getValue().getMessage());
+        assertEquals(status, ExceptionsHelper.status(captor.getValue()));
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    private Map<String, Object> persistedConnectorDoc() {
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        ArgumentCaptor<UpdateRequest> captor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client).update(captor.capture(), any());
+        return captor.getValue().doc().sourceAsMap();
     }
 
 }
