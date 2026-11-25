@@ -20,6 +20,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_LOAD_CHAT_HISTORY;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
@@ -267,6 +268,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         "You don't have permission to access this resource",
                                                         RestStatus.FORBIDDEN
                                                     )
+                                                );
+                                            return;
+                                        }
+
+                                        if (MLAgentType.AG_UI.name().equalsIgnoreCase(mlAgent.getType())
+                                            && !mlFeatureEnabledSetting.isAGUIEnabled()) {
+                                            logAgentExecutionFailure(
+                                                mlAgent.getType(),
+                                                agentId,
+                                                tenantId,
+                                                0,
+                                                String.valueOf(RestStatus.FORBIDDEN.getStatus())
+                                            );
+                                            listener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(ML_COMMONS_AG_UI_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
                                                 );
                                             return;
                                         }

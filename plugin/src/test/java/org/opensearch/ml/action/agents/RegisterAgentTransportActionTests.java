@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.utils.MLResourceIdUtils.MAX_DOCUMENT_ID_LENGTH;
@@ -164,6 +165,84 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         transportRegisterAgentAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    @Test
+    public void test_execute_registerAgent_AGUIAgent_featureDisabled() {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.AG_UI.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+        verify(mlIndicesHandler, never()).initMLAgentIndex(any());
+        verify(client, never()).index(any(), any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_AGUIAgentWithModelSpec_featureDisabled_noModelCreated() {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .modelParameters(Map.of("region", "us-west-2"))
+            .credential(Map.of("access_key", "test_key", "secret_key", "test_secret"))
+            .build();
+        // Lowercase type: the stored type string keeps the caller's case
+        MLAgent mlAgent = MLAgent.builder().name("agent").type("ag_ui").model(modelSpec).build();
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+        verify(client, never()).execute(any(), any(), any());
+        verify(mlIndicesHandler, never()).initMLAgentIndex(any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_AGUIAgent_featureEnabled() {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(true);
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.AG_UI.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            IndexResponse indexResponse = new IndexResponse(new ShardId("test", "test", 1), "test", 1l, 1l, 1l, true);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLRegisterAgentResponse.class));
     }
 
     @Test

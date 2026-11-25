@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentStreamRestRequest;
@@ -270,6 +271,50 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testPrepareRequestAGUIAgent_featureDisabled_returnsForbidden() {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        mockAgentGetResponse("{\"name\":\"agui_agent\",\"type\":\"ag_ui\"}");
+
+        OpenSearchStatusException exception = assertThrows(
+                OpenSearchStatusException.class,
+                () -> restAction.prepareRequest(getPlainStreamRequest("agui_agent_id"), client)
+        );
+        assertEquals(RestStatus.FORBIDDEN, exception.status());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, exception.getMessage());
+    }
+
+    @Test
+    public void testPrepareRequestAGUIAgent_featureEnabled_notRejected() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(true);
+        mockAgentGetResponse("{\"name\":\"agui_agent\",\"type\":\"AG_UI\"}");
+
+        assertNotNull(restAction.prepareRequest(getPlainStreamRequest("agui_agent_id"), client));
+    }
+
+    private void mockAgentGetResponse(String agentSource) {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse mockResponse = mock(GetResponse.class);
+            when(mockResponse.isExists()).thenReturn(true);
+            when(mockResponse.getSourceAsString()).thenReturn(agentSource);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).get(any(), any());
+    }
+
+    private RestRequest getPlainStreamRequest(String agentId) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, agentId);
+        return new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray("{\"parameters\":{\"question\":\"test question\"}}"), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/" + agentId + "/_execute/stream")
+            .build();
+    }
+
+    @Test
     public void testPrepareRequestInvalidModelId() throws IOException {
         when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
@@ -337,6 +382,28 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
         assertNotNull(inputDataSet);
         assertEquals("true", inputDataSet.getParameters().get("stream"));
+    }
+
+    @Test
+    public void testGetRequestAgent_AGUIInput_featureDisabled_returnsForbidden() {
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"threadId\":\"t1\",\"runId\":\"r1\",\"messages\":[{\"id\":\"m1\",\"role\":\"user\",\"content\":\"hello\"}],\"tools\":[],\"context\":[],\"state\":{},\"forwardedProps\":{}}";
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+            .build();
+
+        OpenSearchStatusException e = assertThrows(
+            OpenSearchStatusException.class,
+            () -> restAction.getRequest("test_agent_id", request, request.content())
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, e.getMessage());
     }
 
     @Test

@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
@@ -2187,6 +2188,85 @@ public class MLAgentExecutorTest {
         mlAgentExecutor.execute(agentInput, listener, channel);
 
         verify(listener, timeout(5000).atLeastOnce()).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testExecute_AGUIAgent_featureDisabled_returnsForbidden() throws IOException {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agui-agent")
+            .type(MLAgentType.AG_UI.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .memory(MLMemorySpec.builder().type(MLMemoryType.CONVERSATION_INDEX.name()).build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+        memoryFactoryMap.put(MLMemoryType.CONVERSATION_INDEX.name(), mockMemoryFactory);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "hello");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, captor.getValue().getMessage());
+        verify(mockMemoryFactory, never()).create(any(), any());
+    }
+
+    @Test
+    public void testExecute_AGUIAgent_featureEnabled_notRejected() throws IOException {
+        mockLocalNode();
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isRemoteAgenticMemoryEnabled()).thenReturn(true);
+        // Lowercase type: stored agents keep the type string as sent, so the gate must match case-insensitively
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agui-agent")
+            .type("ag_ui")
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .memory(MLMemorySpec.builder().type(MLMemoryType.CONVERSATION_INDEX.name()).build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+        memoryFactoryMap.put(MLMemoryType.CONVERSATION_INDEX.name(), mockMemoryFactory);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "hello");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        // Execution got past the gate and started creating memory
+        verify(mockMemoryFactory, timeout(5000)).create(any(), any());
+        verify(listener, never()).onFailure(argThat(e -> e != null && ML_COMMONS_AG_UI_DISABLED_MESSAGE.equals(e.getMessage())));
+    }
+
+    @Test
+    public void testExecute_AGUIAgent_lowercaseType_featureDisabled_returnsForbidden() throws IOException {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        MLAgent agent = MLAgent
+            .builder()
+            .name("test-agui-agent")
+            .type("ag_ui")
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .build();
+        mockSdkClientResponse(buildAgentResponse(agent));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "hello");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentInput, listener, channel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener, timeout(5000)).onFailure(captor.capture());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, captor.getValue().getMessage());
     }
 
     /**
