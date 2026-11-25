@@ -92,6 +92,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         List<MLToolSpec> mlToolSpecs = AgentUtils.getMlToolSpecs(mlAgent, params);
         Map<String, Tool> toolsMap = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+        // Close the MCP clients opened for this run once it completes or fails.
+        ActionListener<AgentLogicResult> cleanupListener = ActionListener.runAfter(listener, () -> AgentUtils.cleanUpResource(mlToolSpecs));
 
         // Load MCP tools asynchronously, then create all tools
         AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
@@ -114,7 +116,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 accumulatedTokenUsage,
                 toolsMap,
                 toolInteractionJsonList,
-                listener
+                cleanupListener
             );
         }, e -> {
             // Continue without MCP tools if they fail
@@ -137,7 +139,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 accumulatedTokenUsage,
                 toolsMap,
                 toolInteractionJsonList,
-                listener
+                cleanupListener
             );
         }));
     }

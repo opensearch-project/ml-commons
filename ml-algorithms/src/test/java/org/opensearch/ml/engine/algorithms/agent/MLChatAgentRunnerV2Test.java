@@ -8,27 +8,38 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.TokenUsage;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.input.execute.agent.ContentBlock;
 import org.opensearch.ml.common.input.execute.agent.ContentType;
 import org.opensearch.ml.common.input.execute.agent.Message;
@@ -40,12 +51,21 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-public class MLChatAgentRunnerV2Test {
+import io.modelcontextprotocol.client.McpSyncClient;
+
+public class MLChatAgentRunnerV2Test extends MLStaticMockBase {
 
     @Mock
     private Client client;
@@ -245,7 +265,98 @@ public class MLChatAgentRunnerV2Test {
         assertTrue(result.toolInteractionMessages.size() > 0); // Should have tracked tool interactions
     }
 
+    // ==================== Tests for MCP client cleanup ====================
+
+    @Test
+    public void testExecuteAgentLogic_ClosesMcpClientAfterSuccess() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        McpSyncClient mcpSyncClient = mock(McpSyncClient.class);
+        mockLLMResponseWithNoTools();
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic, loadStatic, mcpSyncClient);
+            runner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+            verify(listener, timeout(5000)).onResponse(any());
+            verify(mcpSyncClient, timeout(5000)).closeGracefully();
+        }
+    }
+
+    @Test
+    public void testExecuteAgentLogic_ClosesMcpClientAfterLLMCallFailure() {
+        Map<String, String> params = new HashMap<>();
+        params.put("agent_id", "test-agent");
+        McpSyncClient mcpSyncClient = mock(McpSyncClient.class);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> llmListener = invocation.getArgument(2);
+            llmListener.onFailure(new RuntimeException("LLM call failed"));
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(ActionRequest.class), any());
+        when(modelProvider.mapMessages(anyList(), any())).thenReturn(Map.of("body", "test body"));
+        ActionListener<AbstractV2AgentRunner.AgentLogicResult> listener = mock(ActionListener.class);
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            mockMcpConnector(connStatic, loadStatic, mcpSyncClient);
+            runner.executeAgentLogic(mlAgent, params, createConversationHistory(), functionCalling, modelProvider, listener);
+
+            verify(listener, timeout(5000)).onFailure(any(Exception.class));
+            verify(mcpSyncClient, timeout(5000)).closeGracefully();
+        }
+    }
+
     // ==================== Helper Methods ====================
+
+    /**
+     * Configures the agent with one MCP connector whose executor returns a single tool backed by the given client.
+     */
+    private void mockMcpConnector(
+        MockedStatic<Connector> connStatic,
+        MockedStatic<MLEngineClassLoader> loadStatic,
+        McpSyncClient mcpSyncClient
+    ) {
+        when(mlAgent.getParameters()).thenReturn(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"));
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.builder().build()));
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                try (XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json)) {
+                    GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+                    when(resp.parser()).thenReturn(parser);
+                    BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                    cb.accept(resp, null);
+                }
+                return stage;
+            });
+            return stage;
+        });
+
+        McpConnector mockConnector = mock(McpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
+        connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+        MLToolSpec mcpToolSpec = MLToolSpec.builder().name("mcp_tool").type(McpSseTool.TYPE).build();
+        mcpToolSpec.addRuntimeResource(MCP_SYNC_CLIENT, mcpSyncClient);
+        McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+        when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpToolSpec));
+        loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+    }
 
     private List<Message> createConversationHistory() {
         List<Message> messages = new ArrayList<>();

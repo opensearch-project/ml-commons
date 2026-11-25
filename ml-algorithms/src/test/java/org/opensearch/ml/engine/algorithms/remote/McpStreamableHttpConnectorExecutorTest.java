@@ -118,6 +118,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
             McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            verify(mcpClient, times(1)).closeGracefully();
         }
     }
 
@@ -131,6 +132,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
             McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            verify(mcpClient, times(1)).closeGracefully();
         }
     }
 

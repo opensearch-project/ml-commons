@@ -621,7 +621,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             tenantId,
                             includeTokenUsage
                         );
-                        cleanUpResource(tools);
                         return;
                     }
 
@@ -1548,7 +1547,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tenantId,
             includeTokenUsage
         );
-        cleanUpResource(tools);
     }
 
     void generateLLMSummary(
@@ -1736,16 +1734,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
     ) {
         // Always get backend tools
         List<MLToolSpec> backendToolSpecs = getMlToolSpecs(mlAgent, params);
+        // Close the MCP clients opened for this run once it completes or fails.
+        ActionListener<Object> cleanupListener = ActionListener.runAfter(listener, () -> cleanUpResource(backendToolSpecs));
 
         // Handle backend tool loading with MCP tools
         getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
             // Add MCP tools to backend tools
             backendToolSpecs.addAll(mcpTools);
-            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
+            buildAndProcessUnifiedTools(mlAgent, params, cleanupListener, memory, functionCalling, frontendTools, backendToolSpecs);
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
             log.warn("Failed to load MCP tools, continuing with backend tools only", e);
-            buildAndProcessUnifiedTools(mlAgent, params, listener, memory, functionCalling, frontendTools, backendToolSpecs);
+            buildAndProcessUnifiedTools(mlAgent, params, cleanupListener, memory, functionCalling, frontendTools, backendToolSpecs);
         }));
     }
 

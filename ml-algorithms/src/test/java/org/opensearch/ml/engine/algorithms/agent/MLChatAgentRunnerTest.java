@@ -17,6 +17,9 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
@@ -25,6 +28,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -34,6 +39,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
@@ -43,8 +49,11 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -52,6 +61,8 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -62,6 +73,10 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
@@ -69,9 +84,15 @@ import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-public class MLChatAgentRunnerTest {
+import io.modelcontextprotocol.client.McpSyncClient;
+
+public class MLChatAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
     @Mock
@@ -667,6 +688,107 @@ public class MLChatAgentRunnerTest {
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testMcpClientClosedAfterFinalAnswer() {
+        McpSyncClient mcpSyncClient = Mockito.mock(McpSyncClient.class);
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            MLChatAgentRunner runnerWithMcp = mockMcpConnector(connStatic, loadStatic, mcpSyncClient);
+            runnerWithMcp.run(createMLAgentWithMcpConnector(), params, agentActionListener, null);
+        }
+
+        verify(agentActionListener).onResponse(any());
+        verify(mcpSyncClient).closeGracefully();
+    }
+
+    @Test
+    public void testMcpClientClosedAfterLLMCallFailure() {
+        McpSyncClient mcpSyncClient = Mockito.mock(McpSyncClient.class);
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+        doAnswer(invocation -> {
+            ActionListener<Object> llmListener = invocation.getArgument(2);
+            llmListener.onFailure(new RuntimeException("LLM call failed"));
+            return null;
+        }).when(client).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            MLChatAgentRunner runnerWithMcp = mockMcpConnector(connStatic, loadStatic, mcpSyncClient);
+            runnerWithMcp.run(createMLAgentWithMcpConnector(), params, agentActionListener, null);
+        }
+
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+        verify(mcpSyncClient).closeGracefully();
+    }
+
+    private MLAgent createMLAgentWithMcpConnector() {
+        return createMLAgentWithTools()
+            .toBuilder()
+            .parameters(Map.of(MCP_CONNECTORS_FIELD, "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]"))
+            .build();
+    }
+
+    /**
+     * Returns a runner whose agents load one MCP tool, backed by the given client, through a mocked MCP connector.
+     */
+    private MLChatAgentRunner mockMcpConnector(
+        MockedStatic<Connector> connStatic,
+        MockedStatic<MLEngineClassLoader> loadStatic,
+        McpSyncClient mcpSyncClient
+    ) {
+        SdkClient sdkClient = Mockito.mock(SdkClient.class);
+        ThreadPool threadPool = Mockito.mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.builder().build()));
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            CompletionStage<GetDataObjectResponse> stage = Mockito.mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                try (XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json)) {
+                    GetDataObjectResponse resp = Mockito.mock(GetDataObjectResponse.class);
+                    when(resp.parser()).thenReturn(parser);
+                    BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                    cb.accept(resp, null);
+                }
+                return stage;
+            });
+            return stage;
+        });
+
+        McpConnector mockConnector = Mockito.mock(McpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+        doAnswer(invocation -> {
+            ActionListener<Boolean> decryptListener = invocation.getArgument(3);
+            decryptListener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), any(), any(ActionListener.class));
+        connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+        // SECOND_TOOL instead of McpSseTool.TYPE: only the two mock tool factories are registered in this test.
+        MLToolSpec mcpToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        mcpToolSpec.addRuntimeResource(MCP_SYNC_CLIENT, mcpSyncClient);
+        McpConnectorExecutor exec = Mockito.mock(McpConnectorExecutor.class);
+        when(exec.getMcpToolSpecs()).thenReturn(List.of(mcpToolSpec));
+        loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+        return new MLChatAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryMap,
+            sdkClient,
+            Mockito.mock(Encryptor.class)
+        );
     }
 
     @Test
