@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -35,6 +36,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BatchInferenceConfig;
+import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -373,6 +377,40 @@ public class ModelHelperTest {
         MLModelConfig modelConfig = argumentCaptor.getValue().getModelConfig();
         assertNotNull(modelConfig);
         assertEquals("mpnet", modelConfig.getModelType());
+    }
+
+    @Test
+    public void testDownloadPrebuiltModelConfig_PreservesOptionalInputFields() {
+        String taskId = "test_task_id";
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
+        Guardrails guardrails = Guardrails.builder().type("local_regex").build();
+        BatchInferenceConfig batchInferenceConfig = BatchInferenceConfig.builder().maxItemsPerRequest(10).build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .description("test description")
+            .isEnabled(false)
+            .rateLimiter(rateLimiter)
+            .guardrails(guardrails)
+            .tenantId("test_tenant")
+            .batchInferenceConfig(batchInferenceConfig)
+            .build();
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
+        ArgumentCaptor<MLRegisterModelInput> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelInput.class);
+        verify(registerModelListener).onResponse(argumentCaptor.capture());
+        MLRegisterModelInput rebuilt = argumentCaptor.getValue();
+        assertNotNull(rebuilt);
+        assertEquals("test description", rebuilt.getDescription());
+        assertEquals(Boolean.FALSE, rebuilt.getIsEnabled());
+        assertEquals(rateLimiter, rebuilt.getRateLimiter());
+        assertEquals(guardrails, rebuilt.getGuardrails());
+        assertEquals("test_tenant", rebuilt.getTenantId());
+        assertEquals(batchInferenceConfig, rebuilt.getBatchInferenceConfig());
     }
 
     @Test
