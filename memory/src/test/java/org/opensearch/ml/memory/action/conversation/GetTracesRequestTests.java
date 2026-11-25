@@ -98,4 +98,29 @@ public class GetTracesRequestTests extends OpenSearchTestCase {
         assert (gir1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gir2.getMaxResults() == 4);
         assert (gir3.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gir4.getMaxResults() == 2);
     }
+
+    public void testFromRestRequest_withOpaquePageToken() throws IOException {
+        // "Ng" = offset 6
+        Map<String, String> pageTokenOnly = Map
+            .of(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, "iid1", ActionConstants.NEXT_PAGE_TOKEN_FIELD, "Ng");
+        Map<String, String> bothMaxAndPageToken = Map
+            .of(
+                ActionConstants.RESPONSE_INTERACTION_ID_FIELD,
+                "iid2",
+                ActionConstants.REQUEST_MAX_RESULTS_FIELD,
+                "2",
+                ActionConstants.NEXT_PAGE_TOKEN_FIELD,
+                "Ng"
+            );
+        RestRequest req1 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(pageTokenOnly).build();
+        RestRequest req2 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(bothMaxAndPageToken).build();
+        GetTracesRequest gtr1 = GetTracesRequest.fromRestRequest(req1);
+        GetTracesRequest gtr2 = GetTracesRequest.fromRestRequest(req2);
+
+        assert (gtr1.validate() == null && gtr2.validate() == null);
+        assert (gtr1.getInteractionId().equals("iid1") && gtr2.getInteractionId().equals("iid2"));
+        assert (gtr1.getFrom() == 6 && gtr2.getFrom() == 6);
+        assert (gtr1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gtr2.getMaxResults() == 2);
+    }
+
 }
