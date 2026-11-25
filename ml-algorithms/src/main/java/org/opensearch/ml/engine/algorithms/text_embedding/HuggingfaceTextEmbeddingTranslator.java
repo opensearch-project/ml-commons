@@ -162,7 +162,7 @@ public class HuggingfaceTextEmbeddingTranslator implements Translator<String, fl
         embeddings = embeddings.duplicate();
         embeddings.set(inputAttentionMask, -1e9); // Set padding tokens to large negative value
 
-        return embeddings.max(AXIS, true);
+        return embeddings.max(AXIS);
     }
 
     private NDArray weightedMeanPool(NDArray embeddings, NDArray inputAttentionMask) {
