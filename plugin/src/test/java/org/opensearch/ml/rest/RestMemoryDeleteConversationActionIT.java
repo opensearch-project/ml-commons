@@ -34,6 +34,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -170,5 +171,60 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         } catch (ResponseException e) {
             assert (TestHelper.restStatus(e.getResponse()) == RestStatus.NOT_FOUND);
         }
+    }
+
+    public void testDeleteConversation_WithTraces_DeletesTraces() throws IOException {
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
+        assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
+        String cid = (String) gson.fromJson(TestHelper.httpEntityToString(ccresponse.getEntity()), Map.class).get(CONVERSATION_ID_FIELD);
+
+        String createMessagePath = ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{memory_id}", cid);
+        Response ciresponse = TestHelper
+            .makeRequest(client(), "POST", createMessagePath, null, gson.toJson(Map.of(ActionConstants.INPUT_FIELD, "input")), null);
+        assert (TestHelper.restStatus(ciresponse) == RestStatus.OK);
+        String iid = (String) gson
+            .fromJson(TestHelper.httpEntityToString(ciresponse.getEntity()), Map.class)
+            .get(RESPONSE_INTERACTION_ID_FIELD);
+        for (int i = 1; i <= 2; i++) {
+            Map<String, Object> trace = Map
+                .of(
+                    ActionConstants.INPUT_FIELD,
+                    "trace input " + i,
+                    ActionConstants.PARENT_INTERACTION_ID_FIELD,
+                    iid,
+                    ActionConstants.TRACE_NUMBER_FIELD,
+                    i
+                );
+            Response traceResponse = TestHelper.makeRequest(client(), "POST", createMessagePath, null, gson.toJson(trace), null);
+            assert (TestHelper.restStatus(traceResponse) == RestStatus.OK);
+        }
+        assertEquals(3, countMessagesOfMemory(cid));
+
+        Response dcresponse = TestHelper
+            .makeRequest(client(), "DELETE", ActionConstants.DELETE_CONVERSATION_REST_PATH.replace("{memory_id}", cid), null, "", null);
+        assert (TestHelper.restStatus(dcresponse) == RestStatus.OK);
+        assert ((Boolean) gson.fromJson(TestHelper.httpEntityToString(dcresponse.getEntity()), Map.class).get("success"));
+
+        // The message and both of its traces are gone
+        assertEquals(0, countMessagesOfMemory(cid));
+    }
+
+    private int countMessagesOfMemory(String memoryId) throws IOException {
+        String index = ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
+        // The messages index is a system index, so read it with the admin client (super-admin when security is enabled)
+        TestHelper.makeRequest(adminClient(), "POST", index + "/_refresh", null, "", null);
+        Response response = TestHelper
+            .makeRequest(
+                adminClient(),
+                "POST",
+                index + "/_count",
+                null,
+                gson
+                    .toJson(
+                        Map.of("query", Map.of("term", Map.of(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, memoryId)))
+                    ),
+                null
+            );
+        return ((Number) gson.fromJson(TestHelper.httpEntityToString(response.getEntity()), Map.class).get("count")).intValue();
     }
 }

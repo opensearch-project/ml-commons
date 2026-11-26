@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,10 +32,10 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
@@ -81,7 +82,7 @@ public class InteractionsIndex {
     private Client client;
     private ClusterService clusterService;
     private ConversationMetaIndex conversationMetaIndex;
-    // How big the steps should be when gathering *ALL* interactions in a conversation
+    // Batch size when deleting all messages of a conversation
     private final int resultsAtATime = 300;
 
     /**
@@ -429,53 +430,8 @@ public class InteractionsIndex {
     }
 
     /**
-     * Gets all interactions in a conversation, regardless of conversation size
-     * @param conversationId conversation to get all interactions of
-     * @param maxResults how many interactions to get per search query
-     * @param listener receives the list of all interactions in the conversation
-     */
-    @VisibleForTesting
-    void getAllInteractions(String conversationId, int maxResults, ActionListener<List<Interaction>> listener) {
-        ActionListener<List<Interaction>> al = nextGetListener(conversationId, 0, maxResults, listener, new LinkedList<>());
-        innerGetInteractions(conversationId, 0, maxResults, al);
-    }
-
-    /**
-     * Recursively builds the list of interactions for getAllInteractions by returning an
-     * ActionListener for handling the next search query
-     * @param conversationId conversation to get interactions from
-     * @param from where to start in this step
-     * @param maxResults how many to get in this step
-     * @param mainListener listener for the final result
-     * @param result partially built list of interactions
-     * @return an ActionListener to handle the next search query
-     */
-    @VisibleForTesting
-    ActionListener<List<Interaction>> nextGetListener(
-        String conversationId,
-        int from,
-        int maxResults,
-        ActionListener<List<Interaction>> mainListener,
-        List<Interaction> result
-    ) {
-        if (maxResults < 1) {
-            mainListener.onFailure(new IllegalArgumentException("maxResults must be positive"));
-            return null;
-        }
-        return ActionListener.wrap(interactions -> {
-            result.addAll(interactions);
-            if (interactions.size() < maxResults) {
-                mainListener.onResponse(result);
-            } else {
-                ActionListener<List<Interaction>> al = nextGetListener(conversationId, from + maxResults, maxResults, mainListener, result);
-                innerGetInteractions(conversationId, from + maxResults, maxResults, al);
-            }
-        }, e -> { mainListener.onFailure(e); });
-    }
-
-    /**
-     * Deletes all interactions associated with a conversationId
-     * Note this uses a bulk delete request (and tries to delete an entire conversation) so it may be heavyweight
+     * Deletes all messages associated with a conversationId, including trace messages
+     * Note this deletes in batches of bulk delete requests (and tries to delete an entire conversation) so it may be heavyweight
      * @param conversationId the id of the conversation to delete from
      * @param listener gets whether the deletion was successful
      */
@@ -488,24 +444,16 @@ public class InteractionsIndex {
         String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            ActionListener<List<Interaction>> searchListener = ActionListener.wrap(interactions -> {
-                if (interactions.size() == 0) {
-                    internalListener.onResponse(true);
-                    return;
-                }
-                BulkRequest request = Requests.bulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                for (Interaction interaction : interactions) {
-                    DeleteRequest delRequest = Requests.deleteRequest(INTERACTIONS_INDEX_NAME).id(interaction.getId());
-                    request.add(delRequest);
-                }
-                client
-                    .bulk(request, ActionListener.wrap(bulkResponse -> { internalListener.onResponse(!bulkResponse.hasFailures()); }, e -> {
-                        internalListener.onFailure(e);
-                    }));
-            }, e -> { internalListener.onFailure(e); });
             ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
                 if (access) {
-                    getAllInteractions(conversationId, resultsAtATime, searchListener);
+                    client
+                        .admin()
+                        .indices()
+                        .refresh(
+                            Requests.refreshRequest(INTERACTIONS_INDEX_NAME),
+                            ActionListener
+                                .wrap(r -> deleteConversationMessages(conversationId, false, internalListener), internalListener::onFailure)
+                        );
                 } else {
                     throw new OpenSearchStatusException(
                         "User [" + user + "] does not have access to memory " + conversationId,
@@ -517,6 +465,57 @@ public class InteractionsIndex {
         } catch (Exception e) {
             log.error("Failure while deleting messages associated with memory id=" + conversationId, e);
             listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Deletes every message of a conversation in batches. Unlike the list APIs, the query matches on the memory id
+     * only, so trace messages are deleted too. Each round fetches the next batch without a paging offset and deletes
+     * it with an immediate refresh, so conversations larger than the search result window are deleted as well.
+     * A round with failed items does not stop the delete as long as it deleted something, so one bad batch does not
+     * leave the rest of the conversation behind.
+     * @param conversationId the id of the conversation to delete from
+     * @param hadFailures whether an earlier round had failed items
+     * @param listener gets whether the deletion was successful
+     */
+    @VisibleForTesting
+    void deleteConversationMessages(String conversationId, boolean hadFailures, ActionListener<Boolean> listener) {
+        SearchRequest request = Requests.searchRequest(INTERACTIONS_INDEX_NAME);
+        request
+            .source(
+                new SearchSourceBuilder()
+                    .query(QueryBuilders.termQuery(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId))
+                    .size(resultsAtATime)
+                    .fetchSource(false)
+            );
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            client.search(request, ActionListener.wrap(response -> {
+                SearchHit[] hits = response.getHits().getHits();
+                if (hits.length == 0) {
+                    internalListener.onResponse(!hadFailures);
+                    return;
+                }
+                BulkRequest bulkRequest = Requests.bulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                for (SearchHit hit : hits) {
+                    bulkRequest.add(Requests.deleteRequest(INTERACTIONS_INDEX_NAME).id(hit.getId()));
+                }
+                client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
+                    boolean failures = hadFailures || bulkResponse.hasFailures();
+                    if (bulkResponse.hasFailures()) {
+                        log.error("Failed to delete some messages of memory {}: {}", conversationId, bulkResponse.buildFailureMessage());
+                    }
+                    boolean deletedAny = Arrays
+                        .stream(bulkResponse.getItems())
+                        .anyMatch(item -> !item.isFailed() && item.getResponse().getResult() == DocWriteResponse.Result.DELETED);
+                    if (!deletedAny || hits.length < resultsAtATime) {
+                        // Stop when this round made no progress, or when it was the last batch
+                        internalListener.onResponse(!failures);
+                    } else {
+                        deleteConversationMessages(conversationId, failures, internalListener);
+                    }
+                }, internalListener::onFailure));
+            }, internalListener::onFailure));
         }
     }
 

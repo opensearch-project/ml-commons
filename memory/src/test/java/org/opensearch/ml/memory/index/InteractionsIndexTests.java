@@ -18,9 +18,7 @@
 package org.opensearch.ml.memory.index;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -29,21 +27,30 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
 
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.refresh.RefreshResponse;
+import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -110,8 +117,6 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
 
     InteractionsIndex interactionsIndex;
 
-    Interaction interaction;
-
     @Before
     public void setup() {
         this.client = mock(Client.class);
@@ -129,17 +134,6 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doReturn(indicesAdminClient).when(adminClient).indices();
         doReturn(threadPool).when(client).threadPool();
         doReturn(new ThreadContext(Settings.EMPTY)).when(threadPool).getThreadContext();
-        interaction = new Interaction(
-            "iid",
-            Instant.ofEpochMilli(1234),
-            Instant.ofEpochMilli(1234),
-            "cid",
-            "inp",
-            "pt",
-            "rsp",
-            "ogn",
-            Collections.singletonMap("metadata", "some meta")
-        );
         this.interactionsIndex = spy(new InteractionsIndex(client, clusterService, conversationMetaIndex));
     }
 
@@ -508,106 +502,6 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Client Failure"));
     }
 
-    public void testGetAll_BadMaxResults_ThenFail() {
-        @SuppressWarnings("unchecked")
-        ActionListener<List<Interaction>> getInteractionsListener = mock(ActionListener.class);
-        interactionsIndex.nextGetListener("cid", 0, 0, getInteractionsListener, List.of());
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(getInteractionsListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("maxResults must be positive"));
-    }
-
-    public void testGetAll_Recursion() {
-        List<Interaction> interactions = List
-            .of(
-                new Interaction(
-                    "iid1",
-                    Instant.now(),
-                    Instant.now(),
-                    "cid",
-                    "inp",
-                    "pt",
-                    "rsp",
-                    "ogn",
-                    Collections.singletonMap("meta", "some meta")
-                ),
-                new Interaction(
-                    "iid2",
-                    Instant.now(),
-                    Instant.now(),
-                    "cid",
-                    "inp",
-                    "pt",
-                    "rsp",
-                    "ogn",
-                    Collections.singletonMap("meta", "some meta")
-                ),
-                new Interaction(
-                    "iid3",
-                    Instant.now(),
-                    Instant.now(),
-                    "cid",
-                    "inp",
-                    "pt",
-                    "rsp",
-                    "ogn",
-                    Collections.singletonMap("meta", "some meta")
-                ),
-                new Interaction(
-                    "iid4",
-                    Instant.now(),
-                    Instant.now(),
-                    "cid",
-                    "inp",
-                    "pt",
-                    "rsp",
-                    "ogn",
-                    Collections.singletonMap("meta", "some meta")
-                )
-            );
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(3);
-            al.onResponse(interactions.subList(0, 2));
-            return null;
-        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(0), anyInt(), any());
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(3);
-            al.onResponse(interactions.subList(2, 4));
-            return null;
-        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(2), anyInt(), any());
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(3);
-            al.onResponse(List.of());
-            return null;
-        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(4), anyInt(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<Interaction>> getInteractionsListener = mock(ActionListener.class);
-        interactionsIndex.getAllInteractions("cid", 2, getInteractionsListener);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Interaction>> argCaptor = ArgumentCaptor.forClass(List.class);
-        verify(getInteractionsListener, times(1)).onResponse(argCaptor.capture());
-        List<Interaction> result = argCaptor.getValue();
-        assert (result.size() == 4);
-        assert (result.get(0).getId().equals("iid1"));
-        assert (result.get(1).getId().equals("iid2"));
-        assert (result.get(2).getId().equals("iid3"));
-        assert (result.get(3).getId().equals("iid4"));
-    }
-
-    public void testGetAll_GetFails_ThenFail() {
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(3);
-            al.onFailure(new Exception("Failure in Get"));
-            return null;
-        }).when(interactionsIndex).innerGetInteractions(anyString(), anyInt(), anyInt(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<List<Interaction>> getInteractionsListener = mock(ActionListener.class);
-        interactionsIndex.getAllInteractions("cid", 2, getInteractionsListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(getInteractionsListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Failure in Get"));
-    }
-
     public void testDelete_NoIndex_ThenReturnTrue() {
         doReturn(false).when(metadata).hasIndex(anyString());
         @SuppressWarnings("unchecked")
@@ -621,18 +515,9 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     public void testDelete_BulkHasFailures_ReturnFalse() {
         doReturn(true).when(metadata).hasIndex(anyString());
         setupGrantAccess();
-        BulkResponse bulkResponse = mock(BulkResponse.class);
-        doReturn(true).when(bulkResponse).hasFailures();
-        doAnswer(invocation -> {
-            ActionListener<BulkResponse> al = invocation.getArgument(1);
-            al.onResponse(bulkResponse);
-            return null;
-        }).when(client).bulk(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onResponse(List.of(interaction));
-            return null;
-        }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
+        setupRefreshSuccess();
+        setupDeleteSearchResponses(List.of(List.of("iid")));
+        setupBulkResponses(Set.of("iid"));
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
@@ -644,16 +529,13 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     public void testDelete_BulkFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         setupGrantAccess();
+        setupRefreshSuccess();
+        setupDeleteSearchResponses(List.of(List.of("iid")));
         doAnswer(invocation -> {
             ActionListener<BulkResponse> al = invocation.getArgument(1);
             al.onFailure(new Exception("Failure during Bulk"));
             return null;
         }).when(client).bulk(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onResponse(List.of(interaction));
-            return null;
-        }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
@@ -665,33 +547,145 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     public void testDelete_SearchFails_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         setupGrantAccess();
+        setupRefreshSuccess();
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onFailure(new Exception("Failure during GetAllInteractions"));
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Failure during search"));
             return null;
-        }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
+        }).when(client).search(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Failure during GetAllInteractions"));
+        assert (argCaptor.getValue().getMessage().equals("Failure during search"));
+    }
+
+    public void testDelete_RefreshFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Failure during refresh"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Failure during refresh"));
+        verify(client, never()).search(any(), any());
     }
 
     public void testDelete_SearchReturnEmpty_ThenPass() {
         doReturn(true).when(metadata).hasIndex(anyString());
         setupGrantAccess();
-        doAnswer(invocation -> {
-            ActionListener<List<Interaction>> al = invocation.getArgument(2);
-            al.onResponse(List.of());
-            return null;
-        }).when(interactionsIndex).getAllInteractions(anyString(), anyInt(), any());
+        setupRefreshSuccess();
+        setupDeleteSearchResponses(List.of(List.of()));
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
         assert (argCaptor.getValue());
+        verify(client, never()).bulk(any(), any());
+    }
+
+    public void testDelete_QueryIncludesTraces() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        setupDeleteSearchResponses(List.of(List.of("iid", "trace-1", "trace-2")));
+        setupBulkSuccess();
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+
+        // The delete query matches every document of the memory, with no filter that hides trace messages
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(searchCaptor.capture(), any());
+        SearchRequest searchRequest = searchCaptor.getValue();
+        assertEquals(INTERACTIONS_INDEX_NAME, searchRequest.indices()[0]);
+        assertEquals(
+            new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, "cid"),
+            searchRequest.source().query()
+        );
+
+        ArgumentCaptor<BulkRequest> bulkCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(client, times(1)).bulk(bulkCaptor.capture(), any());
+        List<String> deletedIds = bulkCaptor.getValue().requests().stream().map(DocWriteRequest::id).collect(Collectors.toList());
+        assertEquals(List.of("iid", "trace-1", "trace-2"), deletedIds);
+
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testDelete_DeletesInBatchesUntilNoneLeft() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        // A full batch is followed by another search; a partial batch ends the delete
+        List<String> fullBatch = IntStream.range(0, 300).mapToObj(i -> "id-" + i).collect(Collectors.toList());
+        setupDeleteSearchResponses(List.of(fullBatch, List.of("id-300", "id-301")));
+        setupBulkSuccess();
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+
+        // Every round asks for the next batch from the start, with no paging offset
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(2)).search(searchCaptor.capture(), any());
+        for (SearchRequest searchRequest : searchCaptor.getAllValues()) {
+            assertEquals(-1, searchRequest.source().from());
+            assertEquals(300, searchRequest.source().size());
+            assertFalse(searchRequest.source().fetchSource().fetchSource());
+        }
+        ArgumentCaptor<BulkRequest> bulkCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(client, times(2)).bulk(bulkCaptor.capture(), any());
+        assertEquals(300, bulkCaptor.getAllValues().get(0).numberOfActions());
+        assertEquals(2, bulkCaptor.getAllValues().get(1).numberOfActions());
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testDelete_PartialBulkFailure_KeepsDeletingThenReturnsFalse() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        // One item of the first full batch fails; the rest of the conversation is still deleted
+        List<String> fullBatch = IntStream.range(0, 300).mapToObj(i -> "id-" + i).collect(Collectors.toList());
+        setupDeleteSearchResponses(List.of(fullBatch, List.of("id-0", "id-300")));
+        setupBulkResponses(Set.of("id-0"));
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+
+        verify(client, times(2)).search(any(), any());
+        verify(client, times(2)).bulk(any(), any());
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
+    }
+
+    public void testDelete_NoProgress_StopsAndReturnsFalse() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupGrantAccess();
+        setupRefreshSuccess();
+        // A full batch where every delete fails must not loop forever
+        List<String> fullBatch = IntStream.range(0, 300).mapToObj(i -> "id-" + i).collect(Collectors.toList());
+        setupDeleteSearchResponses(List.of(fullBatch, fullBatch));
+        setupBulkResponses(Set.copyOf(fullBatch));
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        interactionsIndex.deleteConversation("cid", deleteConversationListener);
+
+        verify(client, times(1)).search(any(), any());
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
     }
 
     public void testDelete_NoAccessNoUser_ThenFail() {
@@ -1033,6 +1027,71 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             );
             SearchResponse searchResponse = new SearchResponse(
                 searchSections,
+                null,
+                1,
+                1,
+                0,
+                11,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+    }
+
+    private void setupBulkSuccess() {
+        setupBulkResponses(Set.of());
+    }
+
+    /**
+     * Each bulk deletes every requested id, except the ids in failedIds, which come back as failed items
+     */
+    private void setupBulkResponses(Set<String> failedIds) {
+        doAnswer(invocation -> {
+            BulkRequest request = invocation.getArgument(0);
+            BulkItemResponse[] items = new BulkItemResponse[request.numberOfActions()];
+            for (int i = 0; i < items.length; i++) {
+                String id = request.requests().get(i).id();
+                items[i] = failedIds.contains(id)
+                    ? new BulkItemResponse(
+                        i,
+                        DocWriteRequest.OpType.DELETE,
+                        new BulkItemResponse.Failure(INTERACTIONS_INDEX_NAME, id, new Exception("delete failed"))
+                    )
+                    : new BulkItemResponse(
+                        i,
+                        DocWriteRequest.OpType.DELETE,
+                        new DeleteResponse(new ShardId(INTERACTIONS_INDEX_NAME, "uuid", 0), id, 1, 1, 1, true)
+                    );
+            }
+            ActionListener<BulkResponse> al = invocation.getArgument(1);
+            al.onResponse(new BulkResponse(items, 1));
+            return null;
+        }).when(client).bulk(any(), any());
+    }
+
+    /**
+     * Each call to search returns the next list of document ids as hits
+     */
+    private void setupDeleteSearchResponses(List<List<String>> batches) {
+        AtomicInteger call = new AtomicInteger();
+        doAnswer(invocation -> {
+            List<String> ids = batches.get(call.getAndIncrement());
+            SearchHit[] hits = ids.stream().map(id -> new SearchHit(0, id, null, null)).toArray(SearchHit[]::new);
+            SearchHits searchHits = new SearchHits(hits, null, Float.NaN);
+            SearchResponseSections sections = new SearchResponseSections(
+                searchHits,
+                InternalAggregations.EMPTY,
+                null,
+                false,
+                false,
+                null,
+                1
+            );
+            SearchResponse searchResponse = new SearchResponse(
+                sections,
                 null,
                 1,
                 1,
