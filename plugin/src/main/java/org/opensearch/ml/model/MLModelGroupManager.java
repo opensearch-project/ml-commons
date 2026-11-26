@@ -233,6 +233,8 @@ public class MLModelGroupManager {
     public void validateUniqueModelGroupName(String name, String tenantId, ActionListener<SearchResponse> listener)
         throws IllegalArgumentException {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            // Callers read the requesting user in the listener, so it must run with the caller's context restored.
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
 
@@ -251,20 +253,20 @@ public class MLModelGroupManager {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
                         log.debug("Model group index does not exist");
-                        listener.onResponse(null);
+                        wrappedListener.onResponse(null);
                     } else {
                         log.error("Failed to search model group index", cause);
-                        listener.onFailure(cause);
+                        wrappedListener.onFailure(cause);
                     }
                 } else {
                     try {
                         SearchResponse searchResponse = r.searchResponse();
                         // Parsing failure would cause NPE on next line
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
-                        listener.onResponse(searchResponse);
+                        wrappedListener.onResponse(searchResponse);
                     } catch (Exception e) {
                         log.error("Failed to parse search response", e);
-                        listener
+                        wrappedListener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
                     }
                 }

@@ -23,6 +23,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
@@ -65,6 +66,11 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String modelGroupId;
 
     private MLAgent mlAgent;
+
+    // api.openai.com is on the default trusted endpoint list; no test ever calls it.
+    private static final String CONNECTOR_FIELDS = "\"name\":\"OpenAI Connector\",\"version\":1,\"protocol\":\"http\","
+        + "\"parameters\":{\"endpoint\":\"api.openai.com\"},\"credential\":{\"openAI_key\":\"dummy-key\"},"
+        + "\"actions\":[{\"action_type\":\"predict\",\"method\":\"POST\",\"url\":\"https://${parameters.endpoint}/v1/chat/completions\"}]";
 
     /**
      * Create an unguessable password. Simple password are weak due to https://tinyurl.com/383em9zk
@@ -232,6 +238,80 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             });
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public void testRegisterModelWithoutModelGroupId_NameOfInaccessibleModelGroup_IsRejected() throws IOException {
+        String privateModelGroupName = "ml_full_access_private_model_group";
+        MLRegisterModelGroupInput privateModelGroupInput = createRegisterModelGroupInput(
+            privateModelGroupName,
+            null,
+            AccessMode.PRIVATE,
+            null
+        );
+        registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(privateModelGroupInput), null);
+
+        // Access to the group the name points at is checked before the connector is used, so any connector ID will do.
+        String registerModelInput = "{\"name\":\""
+            + privateModelGroupName
+            + "\",\"function_name\":\"remote\",\"connector_id\":\"any-connector-id\"}";
+        ResponseException e = expectThrows(
+            ResponseException.class,
+            () -> registerModel(mlFullAccessNoIndexAccessClient, registerModelInput, null)
+        );
+        assertEquals(RestStatus.BAD_REQUEST.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+        assertTrue(Throwables.getStackTraceAsString(e).contains("is unavailable because it is used by another model group"));
+    }
+
+    public void testRegisterModelWithoutModelGroupId_AutoCreatedModelGroupIsOwnedByCaller() throws IOException, InterruptedException {
+        String connectorId = registerConnector("{" + CONNECTOR_FIELDS + "}");
+        String registerModelInput = "{\"name\":\"ml_full_access_auto_group_model\",\"function_name\":\"remote\",\"connector_id\":\""
+            + connectorId
+            + "\",\"access_mode\":\"private\"}";
+        Response response = TestHelper
+            .makeRequest(mlFullAccessClient, "POST", "/_plugins/_ml/models/_register", null, registerModelInput, null);
+        String modelId = (String) parseResponseToMap(response).get("model_id");
+        response = TestHelper.makeRequest(mlFullAccessClient, "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
+        String autoCreatedModelGroupId = (String) parseResponseToMap(response).get("model_group_id");
+
+        getModelGroup(mlFullAccessClient, autoCreatedModelGroupId, modelGroup -> {
+            assertEquals(mlFullAccessUser, ((Map<String, Object>) modelGroup.get("owner")).get("name"));
+            assertEquals(AccessMode.PRIVATE.getValue(), modelGroup.get("access"));
+        });
+        ResponseException e = expectThrows(
+            ResponseException.class,
+            () -> getModelGroup(mlFullAccessNoIndexAccessClient, autoCreatedModelGroupId, null)
+        );
+        assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+    }
+
+    public void testRegisterModelWithoutModelGroupId_PrivateConnectorOfAnotherUser_IsRejected() throws IOException {
+        updateClusterSettings("plugins.ml_commons.connector_access_control_enabled", true);
+        try {
+            Response response = TestHelper
+                .makeRequest(
+                    mlFullAccessClient,
+                    "POST",
+                    "/_plugins/_ml/connectors/_create",
+                    null,
+                    "{\"access_mode\":\"private\"," + CONNECTOR_FIELDS + "}",
+                    null
+                );
+            String connectorId = (String) parseResponseToMap(response).get("connector_id");
+
+            // Without a model_group_id the connector check runs after the model group name lookup, so it must still see the caller.
+            String registerModelInput = "{\"name\":\"ml_full_access_no_index_access_connector_model\",\"function_name\":\"remote\","
+                + "\"connector_id\":\""
+                + connectorId
+                + "\"}";
+            ResponseException e = expectThrows(
+                ResponseException.class,
+                () -> registerModel(mlFullAccessNoIndexAccessClient, registerModelInput, null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have permission to use the connector provided"));
+        } finally {
+            updateClusterSettings("plugins.ml_commons.connector_access_control_enabled", null);
         }
     }
 
