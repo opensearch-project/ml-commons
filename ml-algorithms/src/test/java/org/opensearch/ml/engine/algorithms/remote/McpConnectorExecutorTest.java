@@ -118,6 +118,7 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
             McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
 
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            verify(mcpClient, times(1)).closeGracefully();
         }
     }
 
@@ -129,6 +130,7 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
             McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            verify(mcpClient, times(1)).closeGracefully();
         }
     }
 

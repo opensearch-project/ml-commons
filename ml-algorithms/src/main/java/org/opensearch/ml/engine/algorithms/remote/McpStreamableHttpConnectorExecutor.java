@@ -98,6 +98,7 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
         boolean mutualTls = super.getConnectorClientConfig() != null
             && Boolean.TRUE.equals(super.getConnectorClientConfig().getMutualTlsEnabled());
 
+        McpSyncClient client = null;
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
@@ -129,7 +130,7 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
                 .customizeRequest(headerConfig)
                 .build();
 
-            McpSyncClient client = McpClient
+            client = McpClient
                 .sync(transport)
                 .requestTimeout(readTimeout)
                 .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
@@ -170,6 +171,9 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
             return mcpToolSpecs;
         } catch (Exception e) {
+            if (client != null) {
+                client.closeGracefully();
+            }
             throw new MLException("Unexpected error while getting MCP tools", e);
         }
     }
