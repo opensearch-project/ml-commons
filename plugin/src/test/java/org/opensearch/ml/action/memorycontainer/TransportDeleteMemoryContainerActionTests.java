@@ -8,7 +8,9 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -27,10 +29,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -172,6 +176,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Setup ML feature settings
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
+
+        // Embedding pipeline deletion succeeds unless a test says otherwise
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(memoryContainerHelper).deleteIngestPipeline(any(), any(), any());
     }
 
     @Test
@@ -456,10 +467,182 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("test-memory-prefix-long-term", indices[2]);
         assertEquals("test-memory-prefix-history", indices[3]);
 
+        // Verify the long-term embedding pipeline was deleted, before the indices
+        InOrder inOrder = inOrder(memoryContainerHelper);
+        inOrder.verify(memoryContainerHelper).deleteIngestPipeline(eq(mockConfig), eq("test-memory-prefix-long-term-embedding"), any());
+        inOrder.verify(memoryContainerHelper).deleteIndex(any(), any(), any());
+
         // Verify final success response
         ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(responseCaptor.capture());
         assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
+    }
+
+    @Test
+    public void testDeleteAllMemories_PipelineNotFound_StillSucceeds() {
+        runLongTermDelete(
+            listener -> listener.onFailure(new ResourceNotFoundException("pipeline [test-memory-prefix-long-term-embedding] is missing"))
+        );
+    }
+
+    @Test
+    public void testDeleteAllMemories_PipelineDeleteFails_StillSucceeds() {
+        runLongTermDelete(listener -> listener.onFailure(new RuntimeException("cluster manager not available")));
+    }
+
+    @Test
+    public void testDeleteAllMemories_PipelineDeleteNotAcknowledged_StillSucceeds() {
+        runLongTermDelete(listener -> listener.onResponse(new AcknowledgedResponse(false)));
+    }
+
+    @Test
+    public void testDeleteAllMemories_PipelineDeleteThrows_StillSucceeds() {
+        runLongTermDelete(listener -> { throw new RuntimeException("boom"); });
+    }
+
+    @Test
+    public void testDeleteAllMemories_PipelineListenerCalledThenThrows_DeletesIndicesOnce() {
+        // The listener runs and the call then throws: the indices must still be deleted only once
+        runLongTermDelete(listener -> {
+            listener.onResponse(new AcknowledgedResponse(true));
+            throw new RuntimeException("thrown after the listener ran");
+        });
+    }
+
+    @Test
+    public void testDeleteLongTerm_DeleteIndexThrows_FailsOnceWith500() {
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList(MemoryType.LONG_TERM)))
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        doAnswer(invocation -> { throw new RuntimeException("delete index threw"); })
+            .when(memoryContainerHelper)
+            .deleteIndex(any(), any(), any());
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(deleteDataObjectResponse));
+
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+        verify(actionListener, never()).onResponse(any());
+    }
+
+    private void runLongTermDelete(java.util.function.Consumer<ActionListener<AcknowledgedResponse>> pipelineOutcome) {
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList(MemoryType.LONG_TERM)))
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(memoryContainerHelper).deleteIndex(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            pipelineOutcome.accept(listener);
+            return null;
+        }).when(memoryContainerHelper).deleteIngestPipeline(any(), any(), any());
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(deleteDataObjectResponse));
+
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        verify(memoryContainerHelper).deleteIngestPipeline(eq(mockConfig), eq("test-memory-prefix-long-term-embedding"), any());
+        // The long-term index is still deleted, exactly once
+        ArgumentCaptor<org.opensearch.action.admin.indices.delete.DeleteIndexRequest> deleteIndexCaptor = ArgumentCaptor
+            .forClass(org.opensearch.action.admin.indices.delete.DeleteIndexRequest.class);
+        verify(memoryContainerHelper).deleteIndex(any(), deleteIndexCaptor.capture(), any());
+        assertArrayEquals(new String[] { "test-memory-prefix-long-term" }, deleteIndexCaptor.getValue().indices());
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testDeleteAllMemories_NoLongTermIndex_SkipsPipeline() {
+        // A container without long-term memory (no LLM or strategies) has no long-term index name
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn(null);
+
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(true)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(memoryContainerHelper).deleteIndex(any(), any(), any());
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(deleteDataObjectResponse));
+
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        verify(memoryContainerHelper).deleteIndex(any(), any(), any());
+        verify(memoryContainerHelper, never()).deleteIngestPipeline(any(), any(), any());
+        verify(actionListener).onResponse(any(DeleteResponse.class));
     }
 
     @Test
@@ -517,6 +700,8 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Verify deleteIndex was called
         verify(memoryContainerHelper).deleteIndex(any(), any(), any());
+        // The pipeline is deleted before the indices, and an index failure is still reported
+        verify(memoryContainerHelper).deleteIngestPipeline(any(), eq("test-memory-prefix-long-term-embedding"), any());
 
         // Verify failure response due to deleteIndex failure (RuntimeException -> INTERNAL_SERVER_ERROR)
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -768,6 +953,9 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         ArgumentCaptor<org.opensearch.action.admin.indices.delete.DeleteIndexRequest> deleteIndexCaptor = ArgumentCaptor
             .forClass(org.opensearch.action.admin.indices.delete.DeleteIndexRequest.class);
         verify(memoryContainerHelper).deleteIndex(any(), deleteIndexCaptor.capture(), any());
+
+        // The long-term index is kept, so its embedding pipeline must be kept too
+        verify(memoryContainerHelper, never()).deleteIngestPipeline(any(), any(), any());
 
         org.opensearch.action.admin.indices.delete.DeleteIndexRequest capturedRequest = deleteIndexCaptor.getValue();
         String[] indices = capturedRequest.indices();

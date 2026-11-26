@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,7 +17,10 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.ingest.GetPipelineRequest;
 import org.opensearch.action.ingest.GetPipelineResponse;
 import org.opensearch.action.ingest.PutPipelineRequest;
@@ -24,6 +28,7 @@ import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -120,6 +125,8 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
             return null;
         }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any());
 
+        mockIndexExists();
+
         AtomicBoolean putCalled = new AtomicBoolean(false);
         doAnswer(invocation -> {
             putCalled.set(true);
@@ -129,10 +136,85 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, client, future);
+        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", "index", configuration, client, future);
 
         assertTrue(future.actionGet());
         assertFalse(putCalled.get());
+    }
+
+    public void testCreateTextEmbeddingPipelineOverwritesLeftoverWhenIndexMissing() {
+        MemoryConfiguration configuration = MemoryConfiguration
+            .builder()
+            .indexPrefix("prefix")
+            .embeddingModelId("new-model")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(8)
+            .build();
+
+        GetPipelineResponse response = mock(GetPipelineResponse.class);
+        when(response.pipelines()).thenReturn(Collections.singletonList(null));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any());
+
+        mockIndexMissing();
+
+        ArgumentCaptor<PutPipelineRequest> putCaptor = ArgumentCaptor.forClass(PutPipelineRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(acknowledgedTrue());
+            return null;
+        }).when(clusterAdminClient).putPipeline(putCaptor.capture(), any());
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", "index", configuration, client, future);
+
+        assertTrue(future.actionGet());
+        assertEquals("index-embedding", putCaptor.getValue().getId());
+        assertTrue(putCaptor.getValue().getSource().utf8ToString().contains("\"model_id\":\"new-model\""));
+    }
+
+    public void testCreateLongTermMemoryIngestPipelineKeepsSharedIndexPipeline() {
+        MemoryConfiguration configuration = MemoryConfiguration
+            .builder()
+            .indexPrefix("prefix")
+            .embeddingModelId("embedding")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(8)
+            .build();
+
+        mockIndexExists();
+        GetPipelineResponse response = mock(GetPipelineResponse.class);
+        when(response.pipelines()).thenReturn(Collections.singletonList(null));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(indicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(acknowledgedTrue());
+            return null;
+        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any());
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline("index", configuration, indicesHandler, client, future);
+
+        assertTrue(future.actionGet());
+        // Shared index: the existing pipeline is kept
+        verify(clusterAdminClient, never()).putPipeline(any(PutPipelineRequest.class), any());
+    }
+
+    public void testGetEmbeddingPipelineName() {
+        assertEquals("index-embedding", MemoryContainerPipelineHelper.getEmbeddingPipelineName("index"));
     }
 
     public void testCreateTextEmbeddingPipelineFailure() {
@@ -157,7 +239,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, client, future);
+        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", "index", configuration, client, future);
 
         OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, future::actionGet);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
@@ -197,6 +279,55 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         MemoryContainerPipelineHelper.createHistoryIndexIfEnabled(disabled, "history", indicesHandler, skip);
         assertTrue(skip.actionGet());
         assertFalse(disabledCalled.get());
+    }
+
+    public void testCreateTextEmbeddingPipelineIndexCheckFailure() {
+        MemoryConfiguration configuration = MemoryConfiguration
+            .builder()
+            .indexPrefix("prefix")
+            .embeddingModelId("embedding")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(8)
+            .build();
+
+        GetPipelineResponse response = mock(GetPipelineResponse.class);
+        when(response.pipelines()).thenReturn(Collections.singletonList(null));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any());
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("cluster state unavailable"));
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
+
+        PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
+        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", "index", configuration, client, future);
+
+        OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, future::actionGet);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
+        // An unknown index state must not overwrite a pipeline that may be in use
+        verify(clusterAdminClient, never()).putPipeline(any(PutPipelineRequest.class), any());
+    }
+
+    private void mockIndexExists() {
+        doAnswer(invocation -> {
+            GetMappingsRequest request = invocation.getArgument(0);
+            assertArrayEquals(new String[] { "index" }, request.indices());
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(GetMappingsResponse.class));
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
+    }
+
+    private void mockIndexMissing() {
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("index"));
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
     }
 
     private AcknowledgedResponse acknowledgedTrue() {

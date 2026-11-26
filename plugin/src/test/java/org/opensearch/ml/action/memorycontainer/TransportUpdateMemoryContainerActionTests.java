@@ -1779,6 +1779,162 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(mlIndicesHandler).createLongTermMemoryHistoryIndex(any(), any(), any());
     }
 
+    public void testUpdateContainer_TransitionToStrategies_LeftoverPipelineIsOverwritten() {
+        // A pipeline left over from a deleted container (old model) exists, but the long-term index does not
+        String containerId = "test-container-id";
+        String llmId = "llm-model-300";
+        String embeddingModelId = "embedding-model-400";
+
+        // Container with NO strategies initially
+        MemoryConfiguration currentConfig = MemoryConfiguration
+            .builder()
+            .indexPrefix("new-index")
+            .llmId(llmId)
+            .embeddingModelId(embeddingModelId)
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(512)
+            .strategies(new ArrayList<>())
+            .build();
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(currentConfig)
+            .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
+            .build();
+
+        // Update that ADDS strategies
+        MemoryStrategy newStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.SEMANTIC)
+            .namespace(Arrays.asList("session_id"))
+            .strategyConfig(new HashMap<>())
+            .build();
+
+        MemoryConfiguration updateConfig = MemoryConfiguration
+            .builder()
+            .llmId(llmId)
+            .embeddingModelId(embeddingModelId)
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(512)
+            .strategies(Arrays.asList(newStrategy))
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().configuration(updateConfig).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        // Mock container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock model validations
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            String modelId = invocation.getArgument(0);
+            org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
+                .builder()
+                .modelId(modelId)
+                .algorithm(modelId.equals(llmId) ? FunctionName.REMOTE : FunctionName.TEXT_EMBEDDING)
+                .name("test-model")
+                .build();
+            modelListener.onResponse(model);
+            return null;
+        }).when(mlModelManager).getModel(any(String.class), any());
+
+        // Mock admin clients
+        org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
+        org.opensearch.transport.client.ClusterAdminClient clusterAdmin = mock(org.opensearch.transport.client.ClusterAdminClient.class);
+        org.opensearch.transport.client.AdminClient adminClient = mock(org.opensearch.transport.client.AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdmin);
+        when(adminClient.cluster()).thenReturn(clusterAdmin);
+
+        // Mock getMappings - index does NOT exist
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse> mappingListener = invocation.getArgument(1);
+            mappingListener.onFailure(new org.opensearch.index.IndexNotFoundException(".plugins-ml-am-new-index-memory-long-term"));
+            return null;
+        }).when(indicesAdmin).getMappings(any(), any());
+
+        // Mock getPipeline - a leftover pipeline that references an old model
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.ingest.GetPipelineResponse> pipelineListener = invocation.getArgument(1);
+            org.opensearch.ingest.PipelineConfiguration leftover = new org.opensearch.ingest.PipelineConfiguration(
+                ".plugins-ml-am-new-index-memory-long-term-embedding",
+                new org.opensearch.core.common.bytes.BytesArray("{\"processors\":[{\"text_embedding\":{\"model_id\":\"old-model\"}}]}"),
+                org.opensearch.common.xcontent.XContentType.JSON
+            );
+            org.opensearch.action.ingest.GetPipelineResponse pipelineResponse = mock(
+                org.opensearch.action.ingest.GetPipelineResponse.class
+            );
+            when(pipelineResponse.pipelines()).thenReturn(Collections.singletonList(leftover));
+            pipelineListener.onResponse(pipelineResponse);
+            return null;
+        }).when(clusterAdmin).getPipeline(any(org.opensearch.action.ingest.GetPipelineRequest.class), any());
+
+        // Mock putPipeline - SUCCESS (create real AcknowledgedResponse)
+        ArgumentCaptor<org.opensearch.action.ingest.PutPipelineRequest> putCaptor = ArgumentCaptor
+            .forClass(org.opensearch.action.ingest.PutPipelineRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.support.clustermanager.AcknowledgedResponse> putListener = invocation.getArgument(1);
+            org.opensearch.action.support.clustermanager.AcknowledgedResponse response =
+                new org.opensearch.action.support.clustermanager.AcknowledgedResponse(true);
+            putListener.onResponse(response);
+            return null;
+        }).when(clusterAdmin).putPipeline(putCaptor.capture(), any());
+
+        // Mock long-term index creation - SUCCESS
+        doAnswer(invocation -> {
+            ActionListener<Boolean> longTermListener = invocation.getArgument(3);
+            longTermListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+
+        // Mock history index creation - SUCCESS
+        doAnswer(invocation -> {
+            ActionListener<Boolean> historyListener = invocation.getArgument(2);
+            historyListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createLongTermMemoryHistoryIndex(any(), any(), any());
+
+        // Mock final update - SUCCESS
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        // The leftover pipeline is replaced with the container's embedding model
+        verify(listener).onResponse(updateResponse);
+        assertEquals(".plugins-ml-am-new-index-memory-long-term-embedding", putCaptor.getValue().getId());
+        String source = putCaptor.getValue().getSource().utf8ToString();
+        assertTrue(source.contains("\"model_id\":\"embedding-model-400\""));
+        assertFalse(source.contains("old-model"));
+        verify(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+    }
+
     public void testUpdateContainer_TransitionToStrategies_NewIndices_HistoryDisabled_Success() {
         // Test transition with new indices but history disabled - covers disableHistory branch in createLongTermAndHistoryIndices
         String containerId = "test-container-id";

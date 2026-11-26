@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.ingest.GetPipelineRequest;
 import org.opensearch.action.ingest.PutPipelineRequest;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -17,6 +19,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -33,6 +36,16 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class MemoryContainerPipelineHelper {
+
+    /**
+     * Returns the name of the embedding ingest pipeline attached to a long-term memory index.
+     *
+     * @param longTermIndexName  The long-term memory index name
+     * @return The pipeline name
+     */
+    public static String getEmbeddingPipelineName(String longTermIndexName) {
+        return longTermIndexName + "-embedding";
+    }
 
     /**
      * Creates an ingest pipeline and long-term memory index.
@@ -56,9 +69,9 @@ public final class MemoryContainerPipelineHelper {
     ) {
         try {
             if (config.getEmbeddingModelType() != null) {
-                String pipelineName = indexName + "-embedding";
+                String pipelineName = getEmbeddingPipelineName(indexName);
 
-                createTextEmbeddingPipeline(pipelineName, config, client, ActionListener.wrap(success -> {
+                createTextEmbeddingPipeline(pipelineName, indexName, config, client, ActionListener.wrap(success -> {
                     log.info("Successfully created text embedding pipeline: {}", pipelineName);
                     indicesHandler.createLongTermMemoryIndex(pipelineName, indexName, config, listener);
                 }, e -> {
@@ -89,57 +102,80 @@ public final class MemoryContainerPipelineHelper {
     /**
      * Creates a text embedding pipeline for memory container.
      * <p>
-     * Checks if the pipeline already exists (shared index scenario) and skips creation if it does.
-     * Otherwise, creates a new pipeline with the appropriate embedding processor.
+     * If the pipeline already exists and the long-term index exists too, another container shares the index and
+     * {@link MemoryContainerSharedIndexValidator} has already checked that its pipeline matches, so creation is skipped.
+     * If the pipeline exists but the long-term index does not, nothing uses the pipeline: it is left over from a
+     * deleted container (or a failed create) and may reference a different model, so it is overwritten with this
+     * container's embedding configuration. Otherwise, a new pipeline is created.
+     * <p>
+     * Index existence is checked with get-mappings, the same call {@link MemoryContainerSharedIndexValidator} uses,
+     * after the pipeline lookup so the check is as close to the write as possible.
      *
-     * @param pipelineName  The pipeline name
-     * @param config        The memory configuration
-     * @param client        The OpenSearch client
-     * @param listener      Action listener that receives true on success, or error on failure
+     * @param pipelineName       The pipeline name
+     * @param longTermIndexName  The long-term memory index that uses this pipeline
+     * @param config             The memory configuration
+     * @param client             The OpenSearch client
+     * @param listener           Action listener that receives true on success, or error on failure
      */
     public static void createTextEmbeddingPipeline(
+        String pipelineName,
+        String longTermIndexName,
+        MemoryConfiguration config,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        client.admin().cluster().getPipeline(new GetPipelineRequest(pipelineName), ActionListener.wrap(response -> {
+            if (response.pipelines().isEmpty()) {
+                createPipelineOrFail(pipelineName, config, client, listener);
+                return;
+            }
+            client.admin().indices().getMappings(new GetMappingsRequest().indices(longTermIndexName), ActionListener.wrap(mappings -> {
+                log.info("Pipeline '{}' already exists (shared index scenario), skipping creation", pipelineName);
+                listener.onResponse(true);
+            }, e -> {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                    log
+                        .info(
+                            "Pipeline '{}' exists but index '{}' does not, overwriting the leftover pipeline",
+                            pipelineName,
+                            longTermIndexName
+                        );
+                    createPipelineOrFail(pipelineName, config, client, listener);
+                } else {
+                    log.error("Failed to check whether index '{}' exists", longTermIndexName, e);
+                    listener
+                        .onFailure(
+                            new org.opensearch.OpenSearchStatusException(
+                                "Internal server error",
+                                org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                            )
+                        );
+                }
+            }));
+        }, error -> {
+            // Pipeline doesn't exist (404 error expected) - create it
+            createPipelineOrFail(pipelineName, config, client, listener);
+        }));
+    }
+
+    private static void createPipelineOrFail(
         String pipelineName,
         MemoryConfiguration config,
         Client client,
         ActionListener<Boolean> listener
     ) {
-        // Check if pipeline already exists (shared index scenario)
-        client.admin().cluster().getPipeline(new GetPipelineRequest(pipelineName), ActionListener.wrap(response -> {
-            if (!response.pipelines().isEmpty()) {
-                // Pipeline exists - skip creation
-                log.info("Pipeline '{}' already exists (shared index scenario), skipping creation", pipelineName);
-                listener.onResponse(true);
-                return;
-            }
-
-            // Pipeline doesn't exist - create it
-            try {
-                createPipelineInternal(pipelineName, config, client, listener);
-            } catch (IOException e) {
-                log.error("Failed to build pipeline configuration for '{}'", pipelineName, e);
-                listener
-                    .onFailure(
-                        new org.opensearch.OpenSearchStatusException(
-                            "Internal server error",
-                            org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
-                        )
-                    );
-            }
-        }, error -> {
-            // Pipeline doesn't exist (404 error expected) - create it
-            try {
-                createPipelineInternal(pipelineName, config, client, listener);
-            } catch (IOException e) {
-                log.error("Failed to build pipeline configuration for '{}'", pipelineName, e);
-                listener
-                    .onFailure(
-                        new org.opensearch.OpenSearchStatusException(
-                            "Internal server error",
-                            org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
-                        )
-                    );
-            }
-        }));
+        try {
+            createPipelineInternal(pipelineName, config, client, listener);
+        } catch (IOException e) {
+            log.error("Failed to build pipeline configuration for '{}'", pipelineName, e);
+            listener
+                .onFailure(
+                    new org.opensearch.OpenSearchStatusException(
+                        "Internal server error",
+                        org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                    )
+                );
+        }
     }
 
     /**

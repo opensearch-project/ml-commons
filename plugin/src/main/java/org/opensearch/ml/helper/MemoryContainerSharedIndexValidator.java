@@ -172,7 +172,7 @@ public final class MemoryContainerSharedIndexValidator {
         Client client,
         ActionListener<ValidationResult> listener
     ) {
-        String pipelineName = longTermIndexName + "-embedding";
+        String pipelineName = MemoryContainerPipelineHelper.getEmbeddingPipelineName(longTermIndexName);
 
         client.admin().cluster().getPipeline(new GetPipelineRequest(pipelineName), ActionListener.wrap(pipelineResponse -> {
             // Step 5: Extract model_id from pipeline

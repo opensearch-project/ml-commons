@@ -13,13 +13,17 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -36,6 +40,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDelet
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -279,7 +284,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         if (!indicesToDelete.isEmpty()) {
             boolean isDeleteAll = deleteMemories.containsAll(EnumSet.allOf(MemoryType.class));
             DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indicesToDelete.toArray(new String[0]));
-            memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
+            Runnable deleteIndices = () -> memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
                 String event = isDeleteAll ? "ALL_INDICES_DELETED" : "SELECTIVE_INDICES_DELETED";
                 log
                     .info(
@@ -293,13 +298,88 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                     );
                 actionListener.onResponse(deleteResponse);
             }, e -> {
-                log.error("Failed to delete selective memory indices [{}] for container: {}.", memoryContainerId, indicesToDelete, e);
+                log.error("Failed to delete selective memory indices [{}] for container: {}.", indicesToDelete, memoryContainerId, e);
                 // Preserve client errors (4xx + IllegalArgumentException) with their real status; sanitize the rest to 500.
                 actionListener.onFailure(RestActionUtils.wrapAsStatusException(e));
             }));
+
+            String longTermIndexName = configuration.getLongMemoryIndexName();
+            if (longTermIndexName != null && indicesToDelete.contains(longTermIndexName)) {
+                // The long-term index is being deleted, so its embedding pipeline will be unused. Delete it too, so a
+                // new container with the same index prefix doesn't pick it up with this container's embedding model.
+                // The pipeline goes first: a create that races with this delete then sees "index exists but pipeline
+                // missing" and is rejected by the shared index validator, instead of having its new pipeline deleted.
+                deleteLongTermEmbeddingPipeline(memoryContainerId, configuration, longTermIndexName, () -> {
+                    try {
+                        deleteIndices.run();
+                    } catch (Exception e) {
+                        log
+                            .error(
+                                "Failed to delete selective memory indices [{}] for container: {}.",
+                                indicesToDelete,
+                                memoryContainerId,
+                                e
+                            );
+                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    }
+                });
+            } else {
+                deleteIndices.run();
+            }
         } else {
             log.info("No valid memory indices to delete for container: {}", memoryContainerId);
             actionListener.onResponse(deleteResponse);
+        }
+    }
+
+    /**
+     * Best-effort delete of the long-term index's embedding pipeline. A failure is logged and does not stop the index
+     * delete or fail the request. A missing pipeline (no embedding model, or already deleted) is expected.
+     * {@code next} runs exactly once.
+     */
+    private void deleteLongTermEmbeddingPipeline(
+        String memoryContainerId,
+        MemoryConfiguration configuration,
+        String longTermIndexName,
+        Runnable next
+    ) {
+        String pipelineName = MemoryContainerPipelineHelper.getEmbeddingPipelineName(longTermIndexName);
+        AtomicBoolean done = new AtomicBoolean(false);
+        Runnable nextOnce = () -> {
+            if (done.compareAndSet(false, true)) {
+                next.run();
+            }
+        };
+        try {
+            memoryContainerHelper.deleteIngestPipeline(configuration, pipelineName, new ActionListener<>() {
+                @Override
+                public void onResponse(AcknowledgedResponse response) {
+                    if (response.isAcknowledged()) {
+                        log.info("Deleted embedding pipeline [{}] for memory container: {}", pipelineName, memoryContainerId);
+                    } else {
+                        log
+                            .warn(
+                                "Delete of embedding pipeline [{}] for memory container {} was not acknowledged",
+                                pipelineName,
+                                memoryContainerId
+                            );
+                    }
+                    nextOnce.run();
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    if (ExceptionsHelper.unwrapCause(e) instanceof ResourceNotFoundException) {
+                        log.debug("Embedding pipeline [{}] not found for memory container: {}", pipelineName, memoryContainerId);
+                    } else {
+                        log.warn("Failed to delete embedding pipeline [{}] for memory container: {}", pipelineName, memoryContainerId, e);
+                    }
+                    nextOnce.run();
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Failed to delete embedding pipeline [{}] for memory container: {}", pipelineName, memoryContainerId, e);
+            nextOnce.run();
         }
     }
 }
