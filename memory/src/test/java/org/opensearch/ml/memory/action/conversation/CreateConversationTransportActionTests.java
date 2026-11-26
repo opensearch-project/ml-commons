@@ -18,14 +18,18 @@
 package org.opensearch.ml.memory.action.conversation;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
@@ -123,16 +127,32 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
 
     public void testCreateConversationWithNullName() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(0);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onResponse("testID-2");
             return null;
-        }).when(cmHandler).createConversation(any(ActionListener.class));
+        }).when(cmHandler).createConversation(any(), any(), any(), any());
         String nullstr = null;
         this.request = new CreateConversationRequest(nullstr);
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().getId().equals("testID-2"));
+    }
+
+    public void testCreateConversationWithoutName_KeepsApplicationTypeAndAdditionalInfo() {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onResponse("testID-3");
+            return null;
+        }).when(cmHandler).createConversation(any(), any(), any(), any());
+        Map<String, String> additionalInfo = Map.of("k", "v");
+        this.request = new CreateConversationRequest(null, "my-app", additionalInfo);
+        action.doExecute(null, request, actionListener);
+        verify(cmHandler).createConversation(isNull(), eq("my-app"), eq(additionalInfo), any());
+        verify(cmHandler, never()).createConversation(any(ActionListener.class));
+        ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().getId().equals("testID-3"));
     }
 
     public void testCreateConversationFails_thenFail() {

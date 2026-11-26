@@ -133,4 +133,17 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
         Assert.assertEquals(123, request.getAdditionalInfos().get("key2"));
     }
 
+    public void testRestRequest_WithoutName_KeepsApplicationTypeAndAdditionalInfo() throws IOException {
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(
+                new BytesArray(gson.toJson(Map.of(APPLICATION_TYPE_FIELD, "my-app", META_ADDITIONAL_INFO_FIELD, Map.of("k", "v")))),
+                MediaTypeRegistry.JSON
+            )
+            .build();
+        CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
+        Assert.assertNull(request.getName());
+        Assert.assertEquals("my-app", request.getApplicationType());
+        Assert.assertEquals(Map.of("k", "v"), request.getAdditionalInfos());
+    }
+
 }
