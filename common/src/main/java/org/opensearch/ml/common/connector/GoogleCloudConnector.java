@@ -82,7 +82,8 @@ public class GoogleCloudConnector extends HttpConnector {
             owner,
             connectorClientConfig,
             tenantId,
-            provisionedBy
+            provisionedBy,
+            null
         );
         validate();
     }

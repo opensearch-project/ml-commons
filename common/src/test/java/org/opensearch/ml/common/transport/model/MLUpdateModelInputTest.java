@@ -13,6 +13,8 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_8_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.oauth2;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.toJson;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -39,6 +41,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.BatchInferenceConfig;
@@ -381,6 +384,47 @@ public class MLUpdateModelInputTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         return builder.toString();
+    }
+
+    @Test
+    public void parse_readsTheInlineConnectorAuthConfigIntoTheField() throws Exception {
+        testParseFromJsonString(
+            "{\"model_id\":\"m\",\"connector\":{\"parameters\":{\"model\":\"x\"},\"auth_config\":{\"type\":\"none\"}}}",
+            parsed -> {
+                assertEquals(OAuth2AuthConfig.NONE, parsed.getConnector().getAuthConfig());
+                assertEquals(Map.of("model", "x"), parsed.getConnector().getParameters());
+            }
+        );
+    }
+
+    @Test
+    public void toXContent_writesTheUpdatedConnectorWithItsRemovalMarkers() throws IOException {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("c")
+            .protocol("http")
+            .parameters(Map.of("model", "x"))
+            .authConfig(oauth2())
+            .build();
+        connector.update(MLCreateConnectorInput.builder().updateConnector(true).authConfig(OAuth2AuthConfig.NONE).build());
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("m").updatedConnector(connector).build();
+        String content = serializationWithToXContent(input);
+        String expected = "\"connector\":{\"name\":\"c\",\"protocol\":\"http\",\"parameters\":{\"model\":\"x\"},\"auth_config\":"
+            + toJson(connector.getAuthConfig())
+            + "}";
+        assertTrue(content, content.contains(expected));
+        assertTrue(content, content.contains("\"token_url\":[]"));
+    }
+
+    @Test
+    public void streamRoundTrip_keepsBothAuthConfigFields() throws IOException {
+        MLCreateConnectorInput inline = MLCreateConnectorInput.builder().updateConnector(true).authConfig(OAuth2AuthConfig.NONE).build();
+        HttpConnector updated = HttpConnector.builder().name("c").protocol("http").authConfig(oauth2()).build();
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("m").connector(inline).updatedConnector(updated).build();
+        readInputStream(input, parsed -> {
+            assertEquals(OAuth2AuthConfig.NONE, parsed.getConnector().getAuthConfig());
+            assertEquals(oauth2(), parsed.getUpdatedConnector().getAuthConfig());
+        });
     }
 
 }

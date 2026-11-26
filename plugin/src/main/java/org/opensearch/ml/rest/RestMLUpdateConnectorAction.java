@@ -83,6 +83,6 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler implements Rest
 
     @Override
     public Set<String> getFilteredFields() {
-        return Set.of("credential", "*.Authorization");
+        return Set.of("credential", "*.Authorization", "auth_config.client_secret");
     }
 }
