@@ -426,11 +426,31 @@ public class RestActionUtils {
             return e;
         }
         if (e instanceof OpenSearchException) {
-            int status = ((OpenSearchException) e).status().getStatus();
-            if (status >= 400 && status < 500) {
+            RestStatus status = ((OpenSearchException) e).status();
+            if (status != null && status.getStatus() >= 400 && status.getStatus() < 500) {
                 return e;
             }
         }
         return new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    /**
+     * Same as {@link #wrapAsStatusException(Exception)}, but also forwards an error returned by a remote model
+     * service. Such errors carry the {@link CommonValue#REMOTE_SERVICE_ERROR} prefix and the remote status, and
+     * {@code _predict} already returns them to the same caller, so they are safe to show. The message is re-wrapped in
+     * a new exception so that transport wrappers (and the node details in their messages) are dropped.
+     *
+     * @param e the exception received by the failure handler of a call to a remote model
+     * @return the exception to pass to {@link ActionListener#onFailure(Exception)}
+     */
+    public static Exception wrapAsStatusExceptionWithRemoteError(Exception e) {
+        Throwable cause = ExceptionsHelper.unwrapCause(e);
+        String message = cause.getMessage();
+        if (message != null && message.startsWith(CommonValue.REMOTE_SERVICE_ERROR)) {
+            // RestStatus.fromCode returns null for HTTP codes it does not know (e.g. 529), so fall back to 500
+            RestStatus status = ExceptionsHelper.status(cause);
+            return new OpenSearchStatusException(message, status == null ? RestStatus.INTERNAL_SERVER_ERROR : status);
+        }
+        return wrapAsStatusException(e);
     }
 }

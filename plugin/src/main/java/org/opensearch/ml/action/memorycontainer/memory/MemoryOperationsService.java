@@ -44,6 +44,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.RestActionUtils;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -227,6 +228,9 @@ public class MemoryOperationsService {
         MLAddMemoriesInput input,
         Exception exception
     ) {
+        if (configuration.isDisableHistory()) {
+            return;
+        }
         Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(
             strategyNamespace,
             input,
@@ -249,7 +253,7 @@ public class MemoryOperationsService {
         Map<String, Object> history = new HashMap<>();
         String ownerId = input.getOwnerId();
         Map<String, String> tags = input.getTags();
-        if (ownerId == null) {
+        if (ownerId != null) {
             history.put(OWNER_ID_FIELD, ownerId);
         }
         if (memoryContainerId != null) {
@@ -263,7 +267,8 @@ public class MemoryOperationsService {
         if (tags != null) {
             history.put(TAGS_FIELD, tags);
         }
-        history.put(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(exception));
+        // Same filter as the API response: keep client errors and remote model errors, hide other server errors
+        history.put(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(RestActionUtils.wrapAsStatusExceptionWithRemoteError(exception)));
         return history;
     }
 
