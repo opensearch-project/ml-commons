@@ -17,6 +17,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
@@ -42,14 +45,22 @@ import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
+import com.networknt.schema.Error;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Helper for creating stateless MCP tool specifications.
@@ -60,6 +71,18 @@ public class McpToolsHelper {
     static final String OBJECT_TYPE = "object";
     static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\"}";
     private static final JacksonMcpJsonMapper JSON_MAPPER = new JacksonMcpJsonMapper(JsonMapper.shared());
+    // The default schema loader does not fetch http, https or file $ref targets (it resolves only the bundled
+    // meta-schemas and classpath resources), so a registered schema can't make the node call out. Messages use
+    // Locale.ROOT so callers get the same text whatever the node's default locale.
+    private static final SchemaRegistry SCHEMA_REGISTRY = SchemaRegistry
+        .withDefaultDialect(
+            SpecificationVersion.DRAFT_2020_12,
+            builder -> builder.schemaRegistryConfig(SchemaRegistryConfig.builder().locale(Locale.ROOT).build())
+        );
+    // Undeclared properties are allowed, as the MCP TypeScript and Python SDKs do by default.
+    private static final Set<String> IGNORED_ARGUMENT_KEYWORDS = Set.of("additionalProperties", "unevaluatedProperties");
+    private static final String INPUT_ARGUMENT = "input";
+    static final int MAX_REPORTED_ARGUMENT_ERRORS = 5;
     private final Client client;
     private final ToolFactoryWrapper toolFactoryWrapper;
 
@@ -85,6 +108,8 @@ public class McpToolsHelper {
         McpSchema.JsonSchema inputSchema = schema != null ? toObjectSchema(schema) : defaultSchema(toolName, factory);
 
         String description = Optional.ofNullable(tool.getDescription()).orElse(factory.getDefaultDescription());
+        // The server is rebuilt from the index for each request, so compile the schema only when the tool is called.
+        Supplier<Schema> argumentSchema = Suppliers.memoize(() -> compileArgumentSchema(toolName, inputSchema));
 
         return new McpStatelessServerFeatures.AsyncToolSpecification(
             McpSchema.Tool.builder().name(toolName).description(String.valueOf(description)).inputSchema(inputSchema).build(),
@@ -107,6 +132,12 @@ public class McpToolsHelper {
                             sink.success(toolErrorResult(e));
                         }
                     );
+
+                String invalidArguments = validateArguments(toolName, argumentSchema.get(), inputSchema, request.arguments());
+                if (invalidArguments != null) {
+                    sink.success(errorResult("Invalid arguments for tool " + toolName + ": " + invalidArguments));
+                    return;
+                }
 
                 try {
                     actualTool.run(StringUtils.getParameterMap(request.arguments()), actionListener);
@@ -170,8 +201,151 @@ public class McpToolsHelper {
      * sees the error. JSON-RPC errors are left for protocol problems such as an unknown tool.
      */
     static McpSchema.CallToolResult toolErrorResult(Exception e) {
-        String message = Optional.ofNullable(e.getMessage()).filter(m -> !m.isBlank()).orElse(e.getClass().getSimpleName());
+        return errorResult(Optional.ofNullable(e.getMessage()).filter(m -> !m.isBlank()).orElse(e.getClass().getSimpleName()));
+    }
+
+    private static McpSchema.CallToolResult errorResult(String message) {
         return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(message)), true, null, Map.of());
+    }
+
+    /**
+     * Compiles the advertised input schema so tools/call arguments can be checked against it, as the MCP spec asks
+     * servers to do. Returns null, and so skips validation, if the schema can't be compiled: a schema that was usable
+     * for listing shouldn't make the tool uncallable.
+     */
+    static Schema compileArgumentSchema(String toolName, McpSchema.JsonSchema inputSchema) {
+        try {
+            JsonNode schemaNode = JsonMapper.shared().readTree(JSON_MAPPER.writeValueAsString(inputSchema));
+            return SCHEMA_REGISTRY.getSchema(schemaNode);
+        } catch (Exception e) {
+            log.warn("Not validating arguments of tool {}: its input schema can't be compiled: {}", toolName, e.getMessage());
+            return null;
+        }
+    }
+
+    // Prefixes the JSON Pointer of the failing argument, e.g. "/size: string found, integer expected". Errors on the
+    // arguments object itself (such as a missing required property) have an empty pointer and keep just the message.
+    private static String describe(Error error) {
+        String location = String.valueOf(Optional.ofNullable(error.getInstanceLocation()).map(Object::toString).orElse(""));
+        return location.isEmpty() ? error.getMessage() : location + ": " + error.getMessage();
+    }
+
+    /**
+     * Checks tools/call arguments against the tool's input schema. Missing arguments are checked as an empty object.
+     * Returns a description of what is wrong, or null if the arguments are valid or can't be checked.
+     * <p>
+     * The check is tolerant in the same ways as the MCP TypeScript and Python SDKs, so arguments that tools accept
+     * today keep working: properties the schema doesn't declare are allowed, and a top-level argument sent as a JSON
+     * string (or a single value where an array is expected) is checked in its parsed form. The tool still receives
+     * the original arguments.
+     */
+    static String validateArguments(
+        String toolName,
+        Schema argumentSchema,
+        McpSchema.JsonSchema inputSchema,
+        Map<String, Object> arguments
+    ) {
+        if (argumentSchema == null) {
+            return null;
+        }
+        try {
+            Map<String, Object> args = Optional.ofNullable(arguments).orElse(Map.of());
+            JsonNode argumentNode = JsonMapper.shared().valueToTree(args);
+            if (argumentNode instanceof ObjectNode objectNode && inputSchema.properties() != null) {
+                if (!unwrapInputArgument(objectNode, inputSchema.properties())) {
+                    return null;
+                }
+                coerceTopLevelArguments(objectNode, inputSchema.properties());
+            }
+            List<Error> errors = argumentSchema
+                .validate(argumentNode)
+                .stream()
+                .filter(e -> !IGNORED_ARGUMENT_KEYWORDS.contains(e.getKeyword()))
+                .toList();
+            if (errors.isEmpty()) {
+                return null;
+            }
+            String message = errors
+                .stream()
+                .limit(MAX_REPORTED_ARGUMENT_ERRORS)
+                .map(McpToolsHelper::describe)
+                .collect(Collectors.joining("; "));
+            return errors.size() > MAX_REPORTED_ARGUMENT_ERRORS
+                ? message + " (and " + (errors.size() - MAX_REPORTED_ARGUMENT_ERRORS) + " more)"
+                : message;
+        } catch (Exception e) {
+            log.warn("Skipping argument validation for tool {}: {}", toolName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Tools also accept their arguments wrapped in "input", as a JSON object or a JSON string, as in the agent execute
+     * API (ToolUtils.extractInputParameters). When the schema doesn't declare "input", check the wrapped arguments in
+     * the validation copy; keys inside "input" win over top-level keys, as they do when the tool unpacks it.
+     * Returns false if "input" is a string Jackson can't parse (tools parse it leniently with Gson), meaning the
+     * arguments can't be checked reliably.
+     */
+    private static boolean unwrapInputArgument(ObjectNode arguments, Map<String, Object> properties) {
+        JsonNode input = arguments.get(INPUT_ARGUMENT);
+        if (input == null || properties.containsKey(INPUT_ARGUMENT)) {
+            return true;
+        }
+        JsonNode parsed = input;
+        if (input.isString()) {
+            try {
+                parsed = JsonMapper.shared().readTree(input.asString());
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        if (parsed instanceof ObjectNode wrapped) {
+            arguments.remove(INPUT_ARGUMENT);
+            for (Map.Entry<String, JsonNode> entry : wrapped.properties()) {
+                arguments.set(entry.getKey(), entry.getValue());
+            }
+        }
+        return true;
+    }
+
+    /**
+     * For each top-level string argument whose declared type doesn't allow a string, checks its parsed form instead:
+     * LLM clients often send objects, arrays and numbers as JSON strings, and ml-commons tools parse them. A string
+     * that isn't JSON is checked as a one-element array when the property expects an array, following how
+     * IndexMappingTool reads a single index name; a tool that can't read a single value still reports its own error.
+     */
+    private static void coerceTopLevelArguments(ObjectNode arguments, Map<String, Object> properties) {
+        for (Map.Entry<String, Object> property : properties.entrySet()) {
+            JsonNode value = arguments.get(property.getKey());
+            if (value == null || !value.isString() || !(property.getValue() instanceof Map<?, ?> propertySchema)) {
+                continue;
+            }
+            Set<String> types = declaredTypes(propertySchema.get("type"));
+            if (types.isEmpty() || types.contains("string")) {
+                continue;
+            }
+            JsonNode parsed;
+            try {
+                parsed = JsonMapper.shared().readTree(value.asString());
+            } catch (Exception e) {
+                parsed = null;
+            }
+            if (parsed != null && !parsed.isMissingNode()) {
+                arguments.set(property.getKey(), parsed);
+            } else if (types.contains("array")) {
+                arguments.set(property.getKey(), JsonMapper.shared().createArrayNode().add(value));
+            }
+        }
+    }
+
+    private static Set<String> declaredTypes(Object type) {
+        if (type instanceof String single) {
+            return Set.of(single);
+        }
+        if (type instanceof List<?> list) {
+            return list.stream().map(String::valueOf).collect(Collectors.toSet());
+        }
+        return Set.of();
     }
 
     private static String getSchema(Map<String, Object> attrs) {

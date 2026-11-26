@@ -217,6 +217,43 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     }
 
     @SuppressWarnings("unchecked")
+    public void test_doExecute_toolsCallInvalidArguments_returnsIsErrorResult() {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        McpToolRegisterInput input = new McpToolRegisterInput(
+            "AskTool",
+            "ListIndexTool",
+            "desc",
+            Map.of(),
+            Map.of("input_schema", "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"}},\"required\":[\"question\"]}"),
+            null,
+            null
+        );
+        mockTools(List.of(input));
+        Tool tool = mock(Tool.class);
+        Tool.Factory<Tool> factory = mock(Tool.Factory.class);
+        when(factory.create(any())).thenReturn(tool);
+        ToolFactoryWrapper wrapper = mock(ToolFactoryWrapper.class);
+        when(wrapper.getToolsFactories()).thenReturn(Map.of("ListIndexTool", factory));
+        McpStatelessServerFeatures.AsyncToolSpecification spec = new McpToolsHelper(mock(Client.class), wrapper).createToolSpecification(input);
+        when(mcpToolsHelper.createToolSpecification(input)).thenReturn(spec);
+        MLMcpServerRequest request = new MLMcpServerRequest(
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"AskTool\",\"arguments\":{}}}"
+        );
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
+        verify(listener).onResponse(responseCaptor.capture());
+        String body = responseCaptor.getValue().getMcpResponse();
+        Map<String, Object> json = gson.fromJson(body, Map.class);
+        assertFalse(body, json.containsKey("error"));
+        Map<String, Object> result = (Map<String, Object>) json.get("result");
+        assertEquals(body, Boolean.TRUE, result.get("isError"));
+        assertTrue(body, body.contains("Invalid arguments for tool AskTool: required property 'question' not found"));
+        verify(tool, never()).run(any(), any());
+    }
+
+    @SuppressWarnings("unchecked")
     private McpStatelessServerFeatures.AsyncToolSpecification realSpecForFailingTool(McpToolRegisterInput input, String message) {
         Tool failingTool = mock(Tool.class);
         doAnswer(inv -> {

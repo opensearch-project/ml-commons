@@ -10,13 +10,16 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -68,6 +71,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
+import com.networknt.schema.Schema;
 
 import io.modelcontextprotocol.spec.McpSchema;
 
@@ -542,6 +546,255 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         assertEquals("NullPointerException", ((McpSchema.TextContent) result.content().get(0)).text());
     }
 
+    // ==================== ARGUMENT VALIDATION TESTS ====================
+
+    private static final Map<String, Object> QUESTION_REQUIRED_SCHEMA = Map
+        .of(
+            "input_schema",
+            "{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\"},\"size\":{\"type\":\"integer\"}},"
+                + "\"required\":[\"question\"]}"
+        );
+
+    @Test
+    public void test_callTool_missingRequiredArgument_returnsIsErrorWithoutRunning() {
+        Tool mockTool = mockToolWithOutput("ran");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, QUESTION_REQUIRED_SCHEMA, Map.of());
+        assertTrue(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertEquals("Invalid arguments for tool MockTool: required property 'question' not found", text);
+        verify(mockTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void test_callTool_nullArguments_areValidatedAsEmptyObject() {
+        Tool mockTool = mockToolWithOutput("ran");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, QUESTION_REQUIRED_SCHEMA, null);
+        assertTrue(result.isError());
+        verify(mockTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void test_callTool_wrongArgumentType_returnsIsErrorWithoutRunning() {
+        Tool mockTool = mockToolWithOutput("ran");
+        Map<String, Object> arguments = new HashMap<>();
+        arguments.put("question", "why");
+        arguments.put("size", "ten");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, QUESTION_REQUIRED_SCHEMA, arguments);
+        assertTrue(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertEquals("Invalid arguments for tool MockTool: /size: string found, integer expected", text);
+        verify(mockTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void test_callTool_validArguments_runTool() {
+        Tool mockTool = mockToolWithOutput("ran");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, QUESTION_REQUIRED_SCHEMA, Map.of("question", "why", "size", 3));
+        assertFalse(result.isError());
+        assertEquals("ran", ((McpSchema.TextContent) result.content().get(0)).text());
+    }
+
+    @Test
+    public void test_callTool_additionalPropertiesFalse_allowsUndeclaredArgument() {
+        // Undeclared properties are allowed, as in the MCP TypeScript and Python SDKs; tools read extra parameters.
+        Tool mockTool = mockToolWithOutput("ran");
+        Map<String, Object> attributes = Map
+            .of("input_schema", "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},\"additionalProperties\":false}");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, attributes, Map.of("q", "x", "other", "y"));
+        assertFalse(result.isError());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void test_callTool_jsonStringForObjectOrArray_isAcceptedAndPassedUnchanged() {
+        Tool mockTool = mockToolWithOutput("ran");
+        Map<String, Object> attributes = Map
+            .of(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"object\"},\"indices\":{\"type\":\"array\","
+                    + "\"items\":{\"type\":\"string\"}},\"size\":{\"type\":\"integer\"}},\"required\":[\"query\"]}"
+            );
+        Map<String, Object> arguments = Map.of("query", "{\"match_all\":{}}", "indices", "[\"a\",\"b\"]", "size", "3");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, attributes, arguments);
+        assertFalse(((McpSchema.TextContent) result.content().get(0)).text(), result.isError());
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(mockTool).run(captor.capture(), any());
+        assertEquals("{\"match_all\":{}}", captor.getValue().get("query"));
+        assertEquals("[\"a\",\"b\"]", captor.getValue().get("indices"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void test_callTool_singleValueForArray_isAccepted() {
+        Tool mockTool = mockToolWithOutput("ran");
+        Map<String, Object> attributes = Map
+            .of("input_schema", "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}");
+        assertFalse(callToolWithSchema(mockTool, attributes, Map.of("index", "my-index")).isError());
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(mockTool).run(captor.capture(), any());
+        assertEquals("my-index", captor.getValue().get("index"));
+    }
+
+    @Test
+    public void test_callTool_argumentsWrappedInInput_areValidated() {
+        Map<String, Object> attributes = QUESTION_REQUIRED_SCHEMA;
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("input", "{\"question\":\"why\"}")).isError());
+        McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("input", "{\"size\":\"x\"}"));
+        assertTrue(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertTrue(text, text.contains("required property 'question' not found"));
+        assertTrue(text, text.contains("/size: string found, integer expected"));
+    }
+
+    @Test
+    public void test_callTool_inputKeysWinOverTopLevel_likeTheTool() {
+        Map<String, Object> arguments = Map.of("question", "why", "size", "x", "input", "{\"size\":3}");
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), QUESTION_REQUIRED_SCHEMA, arguments).isError());
+        Map<String, Object> wrongInside = Map.of("question", "why", "size", 3, "input", "{\"size\":\"x\"}");
+        assertTrue(callToolWithSchema(mockToolWithOutput("ran"), QUESTION_REQUIRED_SCHEMA, wrongInside).isError());
+    }
+
+    @Test
+    public void test_callTool_inputAsObject_isUnwrapped() {
+        Map<String, Object> arguments = Map.of("input", Map.of("question", "why"));
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), QUESTION_REQUIRED_SCHEMA, arguments).isError());
+    }
+
+    @Test
+    public void test_callTool_inputNotStrictJson_skipsValidation() {
+        // Tools parse "input" with lenient Gson, so a call Jackson can't read is passed to the tool unchecked.
+        Tool mockTool = mockToolWithOutput("ran");
+        assertFalse(callToolWithSchema(mockTool, QUESTION_REQUIRED_SCHEMA, Map.of("input", "{'question':'why'}")).isError());
+        verify(mockTool).run(any(), any());
+    }
+
+    @Test
+    public void test_callTool_coercionEdgeCases() {
+        Map<String, Object> attributes = Map
+            .of(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"n\":{\"type\":[\"integer\",\"null\"]},\"i\":{\"type\":\"array\","
+                    + "\"items\":{\"type\":\"string\"}},\"s\":{\"type\":\"string\"},\"c\":{\"type\":\"integer\"}}}"
+            );
+        // "null" for a nullable integer, "" for an array, a JSON-looking string for a string, 3.0 (Gson clients) for an integer.
+        Map<String, Object> ok = new HashMap<>();
+        ok.put("n", "null");
+        ok.put("i", "");
+        ok.put("s", "{\"a\":1}");
+        ok.put("c", 3.0);
+        McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), attributes, ok);
+        assertFalse(((McpSchema.TextContent) result.content().get(0)).text(), result.isError());
+        McpSchema.CallToolResult bad = callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("n", "x"));
+        assertTrue(bad.isError());
+        assertTrue(((McpSchema.TextContent) bad.content().get(0)).text().contains("/n: "));
+    }
+
+    @Test
+    public void test_callTool_jsonStringOfWrongType_isRejected() {
+        Tool mockTool = mockToolWithOutput("ran");
+        Map<String, Object> attributes = Map.of("input_schema", "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"object\"}}}");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, attributes, Map.of("query", "not json"));
+        assertTrue(result.isError());
+        assertEquals(
+            "Invalid arguments for tool MockTool: /query: string found, object expected",
+            ((McpSchema.TextContent) result.content().get(0)).text()
+        );
+        verify(mockTool, never()).run(any(), any());
+    }
+
+    @Test
+    public void test_callTool_enumAndNestedPointer_areReported() {
+        Map<String, Object> attributes = Map
+            .of(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"mode\":{\"enum\":[\"a\",\"b\"]},\"filter\":{\"type\":\"object\","
+                    + "\"properties\":{\"size\":{\"type\":\"integer\"}}}}}"
+            );
+        McpSchema.CallToolResult result = callToolWithSchema(
+            mockToolWithOutput("ran"),
+            attributes,
+            Map.of("mode", "c", "filter", Map.of("size", "big"))
+        );
+        assertTrue(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertTrue(text, text.contains("/mode: "));
+        assertTrue(text, text.contains("/filter/size: string found, integer expected"));
+    }
+
+    @Test
+    public void test_callTool_internalRef_isResolved() {
+        Map<String, Object> attributes = Map
+            .of(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"n\":{\"$ref\":\"#/$defs/count\"}},\"$defs\":{\"count\":{\"type\":\"integer\"}}}"
+            );
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("n", 2)).isError());
+        McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("n", Map.of()));
+        assertTrue(result.isError());
+        assertTrue(((McpSchema.TextContent) result.content().get(0)).text().contains("/n: "));
+    }
+
+    @Test
+    public void test_callTool_messagesDoNotDependOnDefaultLocale() {
+        Locale original = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMAN);
+            McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), QUESTION_REQUIRED_SCHEMA, Map.of());
+            assertEquals(
+                "Invalid arguments for tool MockTool: required property 'question' not found",
+                ((McpSchema.TextContent) result.content().get(0)).text()
+            );
+        } finally {
+            Locale.setDefault(original);
+        }
+    }
+
+    @Test
+    public void test_callTool_noSchema_acceptsAnyArguments() {
+        // A tool registered without a schema advertises {"type":"object"}, which accepts any object.
+        Tool mockTool = mockToolWithOutput("ran");
+        McpSchema.CallToolResult result = callToolWithSchema(mockTool, Map.of(), Map.of("anything", 1));
+        assertFalse(result.isError());
+    }
+
+    @Test
+    public void test_callTool_manyErrors_reportsFirstFewAndCount() {
+        StringBuilder properties = new StringBuilder();
+        StringBuilder required = new StringBuilder();
+        for (int i = 0; i < 7; i++) {
+            properties.append(i == 0 ? "" : ",").append("\"p").append(i).append("\":{\"type\":\"string\"}");
+            required.append(i == 0 ? "" : ",").append("\"p").append(i).append("\"");
+        }
+        Map<String, Object> attributes = Map
+            .of("input_schema", "{\"type\":\"object\",\"properties\":{" + properties + "},\"required\":[" + required + "]}");
+        McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of());
+        assertTrue(result.isError());
+        String text = ((McpSchema.TextContent) result.content().get(0)).text();
+        assertTrue(text, text.endsWith("(and 2 more)"));
+    }
+
+    @Test
+    public void test_validateArguments_unresolvableRef_skipsValidation() {
+        // An external $ref is not fetched; validation fails internally, and the tool stays callable instead of
+        // failing every call.
+        McpSchema.JsonSchema schema = new McpSchema.JsonSchema(
+            "object",
+            Map.of("q", Map.of("$ref", "https://example.invalid/missing.json")),
+            null,
+            null,
+            null,
+            null
+        );
+        Schema compiled = McpToolsHelper.compileArgumentSchema("t", schema);
+        assertNotNull(compiled);
+        assertNull(McpToolsHelper.validateArguments("t", compiled, schema, Map.of("q", "x")));
+    }
+
+    @Test
+    public void test_validateArguments_nullSchema_returnsNull() {
+        assertNull(McpToolsHelper.validateArguments("t", null, null, Map.of()));
+    }
+
     // ==================== HELPER METHODS ====================
 
     private McpSchema.CallToolResult callMockTool(Object toolOutput) {
@@ -565,6 +818,13 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         when(mockFactory.create(any())).thenReturn(mockTool);
         when(mockFactory.getDefaultAttributes()).thenReturn(defaultAttributes);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(Map.of("MockTool", mockFactory));
+    }
+
+    private McpSchema.CallToolResult callToolWithSchema(Tool mockTool, Map<String, Object> attributes, Map<String, Object> arguments) {
+        mockToolFactory(mockTool, null);
+        McpToolBaseInput tool = new McpToolRegisterInput("MockTool", "MockTool", "Test tool", Map.of(), attributes, null, null);
+        var specification = mcpToolsHelper.createToolSpecification(tool);
+        return specification.callHandler().apply(null, new McpSchema.CallToolRequest("MockTool", arguments)).block();
     }
 
     private McpSchema.CallToolResult callTool(Tool mockTool) {
