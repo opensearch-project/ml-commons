@@ -96,6 +96,19 @@ public class RestQueryPlanningToolMockLlmIT extends MLCommonsRestTestCase {
         assertTrue(body, body.contains("response_filter"));
     }
 
+    /**
+     * Conversational and plan-execute-reflect agents pass their own llm_response_filter to the tools they run. A flow
+     * agent passes execute parameters through to the tool the same way, which exercises that path here.
+     */
+    public void testWithoutResponseFilter_AgentLlmResponseFilterRecoversQuery() throws IOException {
+        String agentId = registerAgent(null);
+        Response response = execute(agentId, Map.of("llm_response_filter", "$.choices[0].message.content"));
+        Map<String, Object> result = parseResponseToMap(response);
+        List<Map<String, Object>> inferenceResults = (List<Map<String, Object>>) result.get("inference_results");
+        List<Map<String, Object>> output = (List<Map<String, Object>>) inferenceResults.get(0).get("output");
+        assertEquals(JSON.fromJson(GENERATED_QUERY, Map.class), JSON.fromJson((String) output.get(0).get("result"), Map.class));
+    }
+
     private String registerAgent(String responseFilter) throws IOException {
         Map<String, String> parameters = new LinkedHashMap<>();
         parameters.put("model_id", modelId);
@@ -109,7 +122,13 @@ public class RestQueryPlanningToolMockLlmIT extends MLCommonsRestTestCase {
     }
 
     private Response execute(String agentId) throws IOException {
-        String body = JSON.toJson(Map.of("parameters", Map.of("question", "Find shoes", "index_name", INDEX)));
+        return execute(agentId, Map.of());
+    }
+
+    private Response execute(String agentId, Map<String, String> extraParameters) throws IOException {
+        Map<String, String> parameters = new LinkedHashMap<>(Map.of("question", "Find shoes", "index_name", INDEX));
+        parameters.putAll(extraParameters);
+        String body = JSON.toJson(Map.of("parameters", parameters));
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, body, null);
     }
 

@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.AGENT_LLM_MODEL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_FORMAT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
@@ -48,6 +49,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.JsonPath;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -259,6 +261,12 @@ public class QueryPlanningTool implements WithModelTool {
                 parameters.put(TEMPLATE_FIELD, DEFAULT_SEARCH_TEMPLATE);
                 try {
                     String templateId = (String) r;
+                    if (templateId != null && templateId.trim().startsWith("{")) {
+                        // A template id is almost certainly not a JSON object. This is likely the model's full response envelope:
+                        // take the id through the agent's llm_response_filter if there is one, otherwise use the
+                        // default template as for a missing id.
+                        templateId = readTemplateIdWithAgentResponseFilter(templateId, parameters.get(LLM_RESPONSE_FILTER));
+                    }
                     if (templateId == null || templateId.isBlank() || templateId.equals("null")) {
                         executeQueryPlanning(parameters, listener);
                     } else {
@@ -331,6 +339,18 @@ public class QueryPlanningTool implements WithModelTool {
                                 Object parsedQuery = outputParser != null ? outputParser.parse(queryString) : queryString;
                                 String notSearchBodyError = checkLooksLikeSearchBody(parsedQuery);
                                 if (notSearchBodyError != null) {
+                                    // Inside a conversational or plan-execute-reflect agent, the agent's own llm_response_filter
+                                    // may locate the generated text in the envelope. Only tried on output that is already rejected.
+                                    String agentResponseFilter = parameters.get(LLM_RESPONSE_FILTER);
+                                    Object recovered = extractWithAgentResponseFilter(parsedQuery, agentResponseFilter);
+                                    if (recovered != null) {
+                                        parsedQuery = recovered;
+                                        notSearchBodyError = null;
+                                    } else if (agentResponseFilter != null && !agentResponseFilter.isBlank()) {
+                                        notSearchBodyError += " The agent's llm_response_filter did not select a query either.";
+                                    }
+                                }
+                                if (notSearchBodyError != null) {
                                     listener.onFailure(new IllegalArgumentException(notSearchBodyError));
                                     return;
                                 }
@@ -392,6 +412,49 @@ public class QueryPlanningTool implements WithModelTool {
             + (body.size() > MAX_REPORTED_KEYS ? " (and more)" : "")
             + " is a search request field. "
             + RESPONSE_FILTER_HINT;
+    }
+
+    private Object extractWithAgentResponseFilter(Object parsedQuery, String agentResponseFilter) {
+        String text = readStringWithAgentResponseFilter(parsedQuery, agentResponseFilter);
+        if (text == null) {
+            return null;
+        }
+        try {
+            Object reparsed = outputParser != null ? outputParser.parse(text) : text;
+            return checkLooksLikeSearchBody(reparsed) == null ? reparsed : null;
+        } catch (Exception e) {
+            log.debug("Failed to parse the text selected by the agent llm_response_filter", e);
+            return null;
+        }
+    }
+
+    private static String readTemplateIdWithAgentResponseFilter(String modelOutput, String agentResponseFilter) {
+        try {
+            Map<String, Object> envelope = gson.fromJson(modelOutput, new TypeToken<Map<String, Object>>() {
+            }.getType());
+            String templateId = readStringWithAgentResponseFilter(envelope, agentResponseFilter);
+            return templateId == null ? null : templateId.trim();
+        } catch (Exception e) {
+            log.debug("Template selection output is not a JSON object", e);
+            return null;
+        }
+    }
+
+    /**
+     * Applies the agent's {@code llm_response_filter} (set by conversational and plan-execute-reflect agents) to a
+     * model output that is a JSON object, and returns the selected text, or null if there is none.
+     */
+    private static String readStringWithAgentResponseFilter(Object modelOutput, String agentResponseFilter) {
+        if (!(modelOutput instanceof Map) || agentResponseFilter == null || agentResponseFilter.isBlank()) {
+            return null;
+        }
+        try {
+            Object text = JsonPath.read(modelOutput, agentResponseFilter);
+            return text instanceof String && !((String) text).isBlank() ? (String) text : null;
+        } catch (Exception e) {
+            log.debug("Agent llm_response_filter did not match the model output", e);
+            return null;
+        }
     }
 
     private void getSampleDocAsync(String indexName, ActionListener<String> listener) {

@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.junit.Before;
@@ -58,6 +60,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -383,6 +386,99 @@ public class QueryPlanningToolTests {
         assertEquals(matchQueryString, future.get());
         // Ensure query generation tool is invoked twice, for template selection and query planning
         verify(queryGenerationTool, times(2)).run(any(), any());
+    }
+
+    private static final String TEMPLATE_ID_ENVELOPE =
+        "{\"id\":\"mock-3\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"template_id\"}}]}";
+
+    @SneakyThrows
+    @Test
+    public void testRunWithUserTemplates_EnvelopeWithoutResponseFilter_UsesDefaultTemplateThenFails() {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        // Both the template selection and the query planning calls return the provider envelope.
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(TEMPLATE_ID_ENVELOPE);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(OPENAI_ENVELOPE);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = createToolWithDefaultParser(USER_SEARCH_TEMPLATES_TYPE_FIELD);
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        validParams.put(QUESTION_FIELD, "help me find some books related to wind");
+        validParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(validParams, ActionListener.wrap(future::complete, future::completeExceptionally));
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        assertTrue(e.getCause().getMessage(), e.getCause().getMessage().startsWith("The model output is not an OpenSearch query"));
+        verify(clusterAdminClient, never()).getStoredScript(any(), any());
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRunWithUserTemplates_TemplateSelectionNotJson_UsesDefaultTemplate() {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("{not json");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        CompletableFuture<String> future = new CompletableFuture<>();
+        validParams.put(QUESTION_FIELD, "help me find some books related to wind");
+        validParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(validParams, ActionListener.wrap(future::complete, future::completeExceptionally));
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        assertEquals(matchQueryString, future.get(10, TimeUnit.SECONDS));
+        verify(clusterAdminClient, never()).getStoredScript(any(), any());
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRunWithUserTemplates_TemplateSelectionEnvelope_RecoveredWithAgentLlmResponseFilter() {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+        ArgumentCaptor<GetStoredScriptRequest> scriptRequest = ArgumentCaptor.forClass(GetStoredScriptRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mock(GetStoredScriptResponse.class));
+            return null;
+        }).when(clusterAdminClient).getStoredScript(scriptRequest.capture(), any());
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(TEMPLATE_ID_ENVELOPE);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null, null);
+        CompletableFuture<String> future = new CompletableFuture<>();
+        validParams.put(QUESTION_FIELD, "help me find some books related to wind");
+        validParams.put(INDEX_NAME_FIELD, "testIndex");
+        validParams.put("llm_response_filter", "$.choices[0].message.content");
+        tool.run(validParams, ActionListener.wrap(future::complete, future::completeExceptionally));
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        assertEquals(matchQueryString, future.get(10, TimeUnit.SECONDS));
+        assertEquals("template_id", scriptRequest.getValue().id());
     }
 
     @SneakyThrows
@@ -1511,8 +1607,23 @@ public class QueryPlanningToolTests {
         assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", result);
     }
 
-    @SneakyThrows
     private CompletableFuture<Object> runWithModelOutput(String modelOutput) {
+        return runWithModelOutput(modelOutput, Map.of());
+    }
+
+    /** A tool with the same default extract_json output parser the factory sets. */
+    private QueryPlanningTool createToolWithDefaultParser(String generationType) {
+        QueryPlanningTool tool = new QueryPlanningTool(generationType, queryGenerationTool, client, null, null);
+        Map<String, Object> extractJsonConfig = new HashMap<>();
+        extractJsonConfig.put("type", "extract_json");
+        extractJsonConfig.put("extract_type", "object");
+        extractJsonConfig.put("default", DEFAULT_QUERY);
+        tool.setOutputParser(ToolParser.createProcessingParser(null, List.of(extractJsonConfig)));
+        return tool;
+    }
+
+    @SneakyThrows
+    private CompletableFuture<Object> runWithModelOutput(String modelOutput, Map<String, String> extraParams) {
         mockSampleDoc();
         mockGetIndexMapping();
         doAnswer(invocation -> {
@@ -1521,19 +1632,14 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        // Same default extract_json output parser the factory sets.
-        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
-        Map<String, Object> extractJsonConfig = new HashMap<>();
-        extractJsonConfig.put("type", "extract_json");
-        extractJsonConfig.put("extract_type", "object");
-        extractJsonConfig.put("default", DEFAULT_QUERY);
-        tool.setOutputParser(ToolParser.createProcessingParser(null, List.of(extractJsonConfig)));
+        QueryPlanningTool tool = createToolWithDefaultParser(LLM_GENERATED_TYPE_FIELD);
 
         CompletableFuture<Object> future = new CompletableFuture<>();
         ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         Map<String, String> runParams = new HashMap<>();
         runParams.put(QUESTION_FIELD, "Find shoes");
         runParams.put(INDEX_NAME_FIELD, "testIndex");
+        runParams.putAll(extraParams);
         tool.run(runParams, listener);
         actionListenerCaptor.getValue().onResponse(getIndexResponse);
         return future;
@@ -1564,6 +1670,45 @@ public class QueryPlanningToolTests {
             + "{\\\"match_all\\\":{}}}\"}]}},\"stopReason\":\"end_turn\",\"usage\":{\"inputTokens\":1,\"outputTokens\":1}}";
         CompletableFuture<Object> future = runWithModelOutput(envelope);
 
+        ExecutionException e = assertThrows(ExecutionException.class, future::get);
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        assertTrue(e.getCause().getMessage().contains("response_filter"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_RawEnvelope_RecoveredWithAgentLlmResponseFilter() {
+        CompletableFuture<Object> future = runWithModelOutput(
+            OPENAI_ENVELOPE,
+            Map.of("llm_response_filter", "$.choices[0].message.content")
+        );
+        assertEquals("{\"query\":{\"match\":{\"name\":\"shoes\"}}}", gson.toJson(future.get()));
+    }
+
+    @Test
+    public void testRun_RawEnvelope_AgentLlmResponseFilterNotMatching_Fails() {
+        CompletableFuture<Object> future = runWithModelOutput(
+            OPENAI_ENVELOPE,
+            Map.of("llm_response_filter", "$.output.message.content[0].text")
+        );
+        ExecutionException e = assertThrows(ExecutionException.class, future::get);
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        assertTrue(e.getCause().getMessage(), e.getCause().getMessage().endsWith("did not select a query either."));
+    }
+
+    @Test
+    public void testRun_RawEnvelope_AgentLlmResponseFilterSelectsNonQuery_Fails() {
+        String envelope =
+            "{\"id\":\"mock-2\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"answer\\\":\\\"no\\\"}\"}}]}";
+        CompletableFuture<Object> future = runWithModelOutput(envelope, Map.of("llm_response_filter", "$.choices[0].message.content"));
+        ExecutionException e = assertThrows(ExecutionException.class, future::get);
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        assertTrue(e.getCause().getMessage().contains("response_filter"));
+    }
+
+    @Test
+    public void testRun_RawEnvelope_AgentLlmResponseFilterSelectsList_Fails() {
+        CompletableFuture<Object> future = runWithModelOutput(OPENAI_ENVELOPE, Map.of("llm_response_filter", "$.choices"));
         ExecutionException e = assertThrows(ExecutionException.class, future::get);
         assertTrue(e.getCause() instanceof IllegalArgumentException);
         assertTrue(e.getCause().getMessage().contains("response_filter"));
