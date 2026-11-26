@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -139,6 +140,43 @@ public class RestMLRegisterAgentActionTests extends OpenSearchTestCase {
         MLAgent mlAgent = argumentCaptor.getValue().getMlAgent();
         assertEquals("testAgentWithModel", mlAgent.getName());
         assertNotNull(mlAgent.getModel());
+    }
+
+    public void testRegisterAgentWithUnknownModelField_Rejected() throws Exception {
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(true);
+        final Map<String, Object> modelData = Map
+            .of("model_provider", "bedrock/converse", "model_id", "anthropic.claude-v2", "parameters", Map.of("temperature", "0.1"));
+        final Map<String, Object> agentData = Map.of("name", "testAgentWithModel", "type", "CONVERSATIONAL", "model", modelData);
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath("/_plugins/_ml/agents/_register")
+            .withContent(new BytesArray(new Gson().toJson(agentData)), XContentType.JSON)
+            .build();
+
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> restMLRegisterAgentAction.handleRequest(request, channel, client)
+        );
+        assertEquals("Unknown field [parameters] in model. Did you mean [model_parameters]?", e.getMessage());
+        verify(client, never()).execute(eq(MLRegisterAgentAction.INSTANCE), any(), any());
+    }
+
+    public void testRegisterAgentWithUnknownModelField_UnifiedAgentApiDisabled_UnknownFieldReportedFirst() throws Exception {
+        // The model block is parsed before the feature-flag check, so the parse error wins; both are 400
+        when(mlFeatureEnabledSetting.isUnifiedAgentApiEnabled()).thenReturn(false);
+        final Map<String, Object> modelData = Map.of("model_provider", "bedrock/converse", "model_id", "anthropic.claude-v2", "foo", "bar");
+        final Map<String, Object> agentData = Map.of("name", "testAgentWithModel", "type", "CONVERSATIONAL", "model", modelData);
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath("/_plugins/_ml/agents/_register")
+            .withContent(new BytesArray(new Gson().toJson(agentData)), XContentType.JSON)
+            .build();
+
+        IllegalArgumentException e = expectThrows(
+            IllegalArgumentException.class,
+            () -> restMLRegisterAgentAction.handleRequest(request, channel, client)
+        );
+        assertTrue(e.getMessage().startsWith("Unknown field [foo] in model."));
     }
 
     private RestRequest getRestRequest() {

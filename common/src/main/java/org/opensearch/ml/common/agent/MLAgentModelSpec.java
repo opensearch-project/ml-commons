@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -33,6 +34,10 @@ public class MLAgentModelSpec implements ToXContentObject {
     public static final String MODEL_PROVIDER_FIELD = "model_provider";
     public static final String CREDENTIAL_FIELD = "credential";
     public static final String MODEL_PARAMETERS_FIELD = "model_parameters";
+    private static final String PARAMETERS_FIELD = "parameters";
+    // Keep in sync with the cases in parse(); listed in the error for an unknown field
+    private static final List<String> SUPPORTED_FIELDS = List
+        .of(MODEL_ID_FIELD, MODEL_PROVIDER_FIELD, CREDENTIAL_FIELD, MODEL_PARAMETERS_FIELD);
 
     private final String modelId;
     private final String modelProvider;
@@ -109,7 +114,18 @@ public class MLAgentModelSpec implements ToXContentObject {
         this.credential = null;
     }
 
+    /** Lenient: skips unknown fields, so a stored agent written by a newer version stays readable. */
     public static MLAgentModelSpec parse(XContentParser parser) throws IOException {
+        return parse(parser, false);
+    }
+
+    /**
+     * rejectUnknownFields belongs on the API input path, where an unknown field is a caller's mistake worth reporting
+     * rather than silently dropping it (for example {@code parameters} instead of {@code model_parameters}). It must
+     * stay off when reading a stored agent: a field a newer version added would otherwise make that agent document
+     * unreadable to this node.
+     */
+    public static MLAgentModelSpec parse(XContentParser parser, boolean rejectUnknownFields) throws IOException {
         String model = null;
         String modelProvider = null;
         Map<String, String> credential = null;
@@ -134,12 +150,23 @@ public class MLAgentModelSpec implements ToXContentObject {
                     modelParameters = getParameterMap(parser.map());
                     break;
                 default:
+                    if (rejectUnknownFields) {
+                        throw new IllegalArgumentException(unknownFieldMessage(fieldName));
+                    }
                     parser.skipChildren();
                     break;
             }
         }
 
         return new MLAgentModelSpec(model, modelProvider, credential, modelParameters);
+    }
+
+    private static String unknownFieldMessage(String fieldName) {
+        // llm.parameters is the field name users know from the legacy agent API
+        if (PARAMETERS_FIELD.equals(fieldName)) {
+            return "Unknown field [" + fieldName + "] in model. Did you mean [" + MODEL_PARAMETERS_FIELD + "]?";
+        }
+        return "Unknown field [" + fieldName + "] in model. Supported fields are [" + String.join(", ", SUPPORTED_FIELDS) + "].";
     }
 
     public static MLAgentModelSpec fromStream(StreamInput in) throws IOException {

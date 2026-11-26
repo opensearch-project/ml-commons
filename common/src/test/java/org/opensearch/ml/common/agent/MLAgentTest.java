@@ -823,6 +823,51 @@ public class MLAgentTest {
     }
 
     @Test
+    public void parseFromUserInput_UnknownFieldInModel_Rejected() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"conversational\","
+            + "\"model\":{\"model_id\":\"m\",\"model_provider\":\"bedrock/converse\",\"parameters\":{\"temperature\":\"0.1\"}}}";
+        XContentParser parser = createAgentParser(jsonStr);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MLAgent.parseFromUserInput(parser));
+        assertEquals("Unknown field [parameters] in model. Did you mean [model_parameters]?", e.getMessage());
+    }
+
+    @Test
+    public void parse_UnknownFieldInModel_SkippedForStoredAgent() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"conversational\","
+            + "\"model\":{\"model_id\":\"m\",\"model_provider\":\"bedrock/converse\",\"client_config\":{\"max_retry_times\":3}}}";
+        XContentParser parser = createAgentParser(jsonStr);
+
+        MLAgent agent = MLAgent.parse(parser);
+
+        assertEquals("m", agent.getModel().getModelId());
+        assertEquals("bedrock/converse", agent.getModel().getModelProvider());
+    }
+
+    @Test
+    public void parseFromUserInput_UnknownTopLevelField_StillSkipped() throws IOException {
+        // Only the model block is strict; other agent fields keep their existing lenient behavior
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"unknown_top_level\":\"x\"}";
+        XContentParser parser = createAgentParser(jsonStr);
+
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertEquals("test", agent.getName());
+    }
+
+    private XContentParser createAgentParser(String jsonStr) throws IOException {
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        return parser;
+    }
+
+    @Test
     public void writeToAndReadFrom_withCustomAgentId() throws IOException {
         MLAgent agent = MLAgent.builder().name("test").type("FLOW").agentId("chat-agent").build();
         BytesStreamOutput out = new BytesStreamOutput();
