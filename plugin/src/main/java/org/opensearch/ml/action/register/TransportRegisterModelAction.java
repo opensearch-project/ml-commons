@@ -308,6 +308,21 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         );
                     return;
                 }
+                if (inlineConnector != null) {
+                    // The inline credential is still plaintext here, as on the validateInternalConnector branch.
+                    try {
+                        ConnectorProtocolValidator
+                            .validateGoogleTokenUri(
+                                inlineConnector.getProtocol(),
+                                inlineConnector.getParameters(),
+                                inlineConnector.getCredential()
+                            );
+                    } catch (IllegalArgumentException e) {
+                        log.error("Rejected model registration: the inline connector token_uri is not allowed", e);
+                        listener.onFailure(e);
+                        return;
+                    }
+                }
                 connectorAccessControlHelper
                     .validateConnectorAccess(
                         sdkClient,
@@ -474,6 +489,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         ConnectorProtocolValidator.validateMutualTlsEnabled(connector.getConnectorClientConfig(), mlFeatureEnabledSetting);
         ConnectorProtocolValidator
             .validateMutualTlsScheme(connector.getActions(), connector.getParameters(), connector.getConnectorClientConfig());
+        // The inline credential is still plaintext here. Applies to hidden models too: it guards where the node sends
+        // the signed token request, not whether the action endpoint is trusted.
+        ConnectorProtocolValidator.validateGoogleTokenUri(connector.getProtocol(), connector.getParameters(), connector.getCredential());
         // check if the connector url is trusted
         // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
         // model, so no need to verify the connector endpoint as trusted or not

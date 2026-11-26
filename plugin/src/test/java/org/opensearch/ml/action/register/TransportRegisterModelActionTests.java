@@ -1087,6 +1087,101 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.FORBIDDEN, ExceptionsHelper.status(argumentCaptor.getValue()));
     }
 
+    /** An inline google_cloud connector whose service-account credential points token_uri at {@code tokenUri}. */
+    private static Connector inlineGoogleConnector(String tokenUri) {
+        Connector connector = mock(Connector.class);
+        when(connector.getProtocol()).thenReturn(ConnectorProtocols.GOOGLE_CLOUD);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://api.openai.com/v1/completions");
+        when(connector.getParameters()).thenReturn(new HashMap<>());
+        when(connector.getActions()).thenReturn(List.of());
+        when(connector.getCredential())
+            .thenReturn(Map.of("client_email", "sa@example.iam.gserviceaccount.com", "private_key", "k", "token_uri", tokenUri));
+        return connector;
+    }
+
+    /** The inline credential is plaintext on register, so token_uri is checked here rather than at first predict. */
+    @Test
+    public void test_execute_registerRemoteModel_withInternalGoogleConnector_disallowedTokenUriRejected() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getIsHidden()).thenReturn(true);
+        Connector connector = inlineGoogleConnector("https://example.com/token");
+        when(input.getConnector()).thenReturn(connector);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("token_uri host must be oauth2.googleapis.com, got: example.com", argumentCaptor.getValue().getMessage());
+        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withBothConnectorIdAndInlineGoogleConnector_disallowedTokenUriRejected() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        Connector connector = inlineGoogleConnector("http://169.254.169.254/token");
+        when(input.getConnector()).thenReturn(connector);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals(
+            "token_uri must be an https Google endpoint, got: http://169.254.169.254/token",
+            argumentCaptor.getValue().getMessage()
+        );
+        verify(connectorAccessControlHelper, never()).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+        verify(mlModelManager, never()).registerMLRemoteModel(any(), any(), any(), any());
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withInternalGoogleConnector_allowedTokenUriPassesCheck() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getModelName()).thenReturn("Test Model");
+        when(input.getVersion()).thenReturn("1");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getIsHidden()).thenReturn(true);
+        Connector connector = inlineGoogleConnector("https://oauth2.googleapis.com/token");
+        when(input.getConnector()).thenReturn(connector);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        // Past the check, validation finishes and the request goes on to the dry-run connector create.
+        verify(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), any());
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withBothConnectorIdAndInlineGoogleConnector_allowedTokenUriPassesCheck() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        Connector connector = inlineGoogleConnector("https://oauth2.googleapis.com/token");
+        when(input.getConnector()).thenReturn(connector);
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        // Past the check, the request goes on to the connector access check.
+        verify(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), any());
+        verify(actionListener, never()).onFailure(any());
+    }
+
     private void assertConnectorIdRejectedAsMcp(Connector storedConnector) {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);

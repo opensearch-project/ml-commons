@@ -419,6 +419,15 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 updateModelInput.getConnector().getParameters(),
                                 updateModelInput.getConnector().getConnectorClientConfig()
                             );
+                        // Before encrypt(): only a credential the request supplies is plaintext.
+                        ConnectorProtocolValidator
+                            .validateGoogleTokenUriAfterUpdate(
+                                connector.getProtocol(),
+                                connector.getParameters(),
+                                updatedProtocol,
+                                updateModelInput.getConnector().getParameters(),
+                                updateModelInput.getConnector().getCredential()
+                            );
                     } catch (Exception e) {
                         log.error("Rejected inline connector update for model {}", modelId, e);
                         wrappedListener.onFailure(e);
