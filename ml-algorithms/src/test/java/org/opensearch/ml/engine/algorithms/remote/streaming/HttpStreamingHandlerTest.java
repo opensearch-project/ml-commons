@@ -139,6 +139,25 @@ public class HttpStreamingHandlerTest {
     }
 
     @Test
+    public void testStartStream_streamIsCreatedWithTheValidatedAddresses() throws Exception {
+        // The pin: the stream's client resolves the host to the addresses the validator returned, not to a fresh lookup.
+        // An IP literal keeps the validator off DNS; 203.0.113.0/24 is public, so the default validator admits it.
+        when(mockConnector.getActionEndpoint(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn("http://203.0.113.5/v1/chat/completions");
+        HttpStreamingHandler spied = org.mockito.Mockito.spy(handler);
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        InetAddress validated = InetAddress.getByName("203.0.113.5");
+
+        spied.startStream("PREDICT", new HashMap<>(), "{\"messages\":[]}", listener);
+
+        org.mockito.ArgumentCaptor<InetAddress[]> addresses = org.mockito.ArgumentCaptor.forClass(InetAddress[].class);
+        org.mockito.Mockito.verify(spied).clientFor(addresses.capture());
+        assertEquals(List.of(validated), List.of(addresses.getValue()));
+        org.mockito.Mockito.verify(listener, org.mockito.Mockito.never()).onFailure(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     public void testClientFor_connectsOnlyToTheValidatedAddresses() throws Exception {
         InetAddress validated = InetAddress.getByName("203.0.113.1");
 

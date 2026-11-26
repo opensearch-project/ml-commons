@@ -5,12 +5,14 @@
 
 package org.opensearch.ml.common.httpclient;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -183,6 +185,14 @@ public class ConnectorAddressValidatorTests {
         expectedException.expect(IllegalArgumentException.class);
         expectedException.expectMessage("Port out of range: -10");
         withPrivateIpDisabled.validate("http://api.openai.com", HTTP, TEST_HOST, -10);
+    }
+
+    @Test
+    public void validate_returnsTheAddressesTheHostResolvedTo() throws Exception {
+        // Callers connect only to what validate returned; an IP literal resolves to itself without DNS.
+        InetAddress[] addresses = withPrivateIpDisabled.validate("http://203.0.113.1", HTTP, "203.0.113.1", 80);
+
+        assertArrayEquals(new InetAddress[] { InetAddress.getByName("203.0.113.1") }, addresses);
     }
 
     @Test
