@@ -34,6 +34,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -338,6 +339,26 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, response.status());
         String expectedError =
             "{\"error\":{\"reason\":\"System Error\",\"details\":\"System Exception\",\"type\":\"RuntimeException\"},\"status\":500}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testPrepareRequestNotFoundException() throws Exception {
+        RestRequest request = getExecuteAgentRestRequest();
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        when(channel.newBuilder()).thenReturn(XContentFactory.jsonBuilder());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.NOT_FOUND, response.status());
+        String expectedError =
+            "{\"status\":404,\"error\":{\"type\":\"OpenSearchStatusException\",\"reason\":\"Not Found\",\"details\":\"Failed to find model\"}}";
         assertEquals(expectedError, response.content().utf8ToString());
     }
 

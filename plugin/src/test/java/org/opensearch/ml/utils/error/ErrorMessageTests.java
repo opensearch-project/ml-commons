@@ -27,6 +27,50 @@ public class ErrorMessageTests {
     }
 
     @Test
+    public void fetchReason_badRequestIsInvalidRequest() {
+        assertEquals("Invalid Request", new ErrorMessage(new IllegalArgumentException("bad"), 400).getReason());
+    }
+
+    @Test
+    public void fetchReason_otherClientErrorsUseStatusName() {
+        assertEquals("Unauthorized", new ErrorMessage(new IllegalStateException("x"), 401).getReason());
+        assertEquals("Forbidden", new ErrorMessage(new IllegalStateException("x"), 403).getReason());
+        assertEquals("Not Found", new ErrorMessage(new IllegalStateException("x"), 404).getReason());
+        assertEquals("Conflict", new ErrorMessage(new IllegalStateException("x"), 409).getReason());
+        assertEquals("Request Entity Too Large", new ErrorMessage(new IllegalStateException("x"), 413).getReason());
+        assertEquals("Too Many Requests", new ErrorMessage(new IllegalStateException("x"), 429).getReason());
+    }
+
+    @Test
+    public void fetchReason_usesStandardReasonPhrases() {
+        assertEquals("Proxy Authentication Required", new ErrorMessage(new IllegalStateException("x"), 407).getReason());
+        assertEquals("Request-URI Too Long", new ErrorMessage(new IllegalStateException("x"), 414).getReason());
+        assertEquals("Requested Range Not Satisfiable", new ErrorMessage(new IllegalStateException("x"), 416).getReason());
+        assertEquals("Unprocessable Entity", new ErrorMessage(new IllegalStateException("x"), 422).getReason());
+    }
+
+    @Test
+    public void fetchReason_unknownClientErrorFallsBackToClientError() {
+        assertEquals("Client Error", new ErrorMessage(new IllegalStateException("x"), 499).getReason());
+    }
+
+    @Test
+    public void fetchReason_serverErrorsStaySystemError() {
+        assertEquals("System Error", new ErrorMessage(new IllegalStateException("x"), 500).getReason());
+        assertEquals("System Error", new ErrorMessage(new IllegalStateException("x"), 502).getReason());
+        assertEquals("System Error", new ErrorMessage(new IllegalStateException("x"), 503).getReason());
+    }
+
+    @Test
+    public void toString_notFoundUsesNotFoundReason() {
+        ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException("missing"), 404);
+        assertEquals(
+            "{\"error\":{\"reason\":\"Not Found\",\"details\":\"missing\",\"type\":\"IllegalStateException\"},\"status\":404}",
+            errorMessage.toString()
+        );
+    }
+
+    @Test
     public void fetchDetails() {
         ErrorMessage errorMessage = new ErrorMessage(new IllegalStateException("illegal state"), SERVICE_UNAVAILABLE.getStatus());
 
