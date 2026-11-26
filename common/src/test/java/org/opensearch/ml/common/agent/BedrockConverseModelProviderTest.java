@@ -221,6 +221,7 @@ public class BedrockConverseModelProviderTest {
         credential.put("secret_key", "test_secret_key");
 
         Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
         modelParameters.put("top_p", "0.9\", \"malicious\": \"value");
 
         // Act & Assert
@@ -234,21 +235,52 @@ public class BedrockConverseModelProviderTest {
     }
 
     @Test
-    public void testCreateConnector_WithDefaultRegion() {
-        // Arrange
-        String modelId = "us.anthropic.claude-3-5-sonnet-20241022-v2:0";
+    public void testCreateConnector_WithoutModelParameters_RequiresRegion() {
+        assertMissingRegion(null);
+    }
+
+    @Test
+    public void testCreateConnector_WithoutRegion_RequiresRegion() {
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("temperature", "0.5");
+        assertMissingRegion(modelParameters);
+    }
+
+    @Test
+    public void testCreateConnector_WithBlankRegion_RequiresRegion() {
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "  ");
+        assertMissingRegion(modelParameters);
+    }
+
+    @Test
+    public void testCreateConnector_UsesGivenRegion() {
         Map<String, String> credential = new HashMap<>();
-        credential.put("access_key", "test_key");
-        credential.put("secret_key", "test_secret");
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+        Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "eu-central-1");
 
-        // Act
-        Connector connector = provider.createConnector(modelId, credential, null);
+        AwsConnector awsConnector = (AwsConnector) provider
+            .createConnector("us.anthropic.claude-3-5-sonnet-20241022-v2:0", credential, modelParameters);
 
-        // Assert
-        assertNotNull(connector);
-        assertTrue(connector instanceof AwsConnector);
-        AwsConnector awsConnector = (AwsConnector) connector;
-        assertEquals("us-east-1", awsConnector.getParameters().get("region"));
+        assertEquals("eu-central-1", awsConnector.getParameters().get("region"));
+        assertEquals(
+            "https://bedrock-runtime.eu-central-1.amazonaws.com/model/us.anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+            awsConnector.getActionEndpoint("predict", awsConnector.getParameters())
+        );
+    }
+
+    private void assertMissingRegion(Map<String, String> modelParameters) {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("access_key", "test_access_key");
+        credential.put("secret_key", "test_secret_key");
+        try {
+            provider.createConnector("us.anthropic.claude-3-5-sonnet-20241022-v2:0", credential, modelParameters);
+            fail("Should throw IllegalArgumentException when region is missing");
+        } catch (IllegalArgumentException e) {
+            assertEquals("model_parameters.region is required for model_provider bedrock/converse", e.getMessage());
+        }
     }
 
     @Test
@@ -287,7 +319,7 @@ public class BedrockConverseModelProviderTest {
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Missing credential");
-        provider.createConnector(modelName, new HashMap<>(), new HashMap<>());
+        provider.createConnector(modelName, new HashMap<>(), new HashMap<>(Map.of("region", "us-west-2")));
     }
 
     @Test
@@ -626,7 +658,7 @@ public class BedrockConverseModelProviderTest {
         credential.put("secret_key", "test_secret");
 
         // Act
-        Connector connector = provider.createConnector(modelId, credential, null);
+        Connector connector = provider.createConnector(modelId, credential, Map.of("region", "us-west-2"));
 
         // Assert
         assertTrue(connector instanceof AwsConnector);
@@ -1356,7 +1388,7 @@ public class BedrockConverseModelProviderTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_access_key");
         credential.put("secret_key", "test_secret_key");
-        Connector connector = provider.createConnector("anthropic.claude-v2", credential, new HashMap<>());
+        Connector connector = provider.createConnector("anthropic.claude-v2", credential, new HashMap<>(Map.of("region", "us-west-2")));
 
         // Act — validatePayload is the gate that rejects a placeholder the template left unfilled
         Map<String, String> params = new HashMap<>(connector.getParameters());

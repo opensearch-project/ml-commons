@@ -1714,7 +1714,7 @@ public class ConnectorUtilsTest {
             .createConnector(
                 "anthropic.claude-v2",
                 ImmutableMap.of("access_key", "test_key", "secret_key", "test_secret"),
-                new HashMap<>()
+                new HashMap<>(Map.of("region", "us-west-2"))
             );
 
         Map<String, String> params = new HashMap<>();
@@ -1742,7 +1742,7 @@ public class ConnectorUtilsTest {
             .createConnector(
                 "anthropic.claude-v2",
                 ImmutableMap.of("access_key", "test_key", "secret_key", "test_secret"),
-                new HashMap<>()
+                new HashMap<>(Map.of("region", "us-west-2"))
             );
 
         Map<String, String> params = new HashMap<>();

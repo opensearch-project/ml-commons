@@ -125,7 +125,7 @@ public class AgentModelServiceTest {
     }
 
     @Test
-    public void testCreateModelFromSpec_WithoutModelParameters() {
+    public void testCreateModelFromSpec_WithoutModelParameters_RequiresRegion() {
         // Arrange
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
@@ -139,16 +139,16 @@ public class AgentModelServiceTest {
             .modelParameters(null)
             .build();
 
-        // Act
-        MLRegisterModelInput result = AgentModelService.createModelFromSpec(modelSpec);
+        // Assert: bedrock/converse has no default region
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model_parameters.region is required for model_provider bedrock/converse");
 
-        // Assert
-        assertNotNull(result);
-        assertNotNull(result.getConnector());
+        // Act
+        AgentModelService.createModelFromSpec(modelSpec);
     }
 
     @Test
-    public void testCreateModelFromSpec_MinimalConfiguration() {
+    public void testCreateModelFromSpec_MinimalConfiguration_RequiresRegion() {
         // Arrange - Test with only required fields
         MLAgentModelSpec modelSpec = MLAgentModelSpec
             .builder()
@@ -157,7 +157,7 @@ public class AgentModelServiceTest {
             .build();
 
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Missing credential");
+        exceptionRule.expectMessage("model_parameters.region is required for model_provider bedrock/converse");
 
         // Act
         AgentModelService.createModelFromSpec(modelSpec);
@@ -233,7 +233,7 @@ public class AgentModelServiceTest {
     }
 
     @Test
-    public void testCreateModelFromSpec_WithEmptyModelParametersMap() {
+    public void testCreateModelFromSpec_WithEmptyModelParametersMap_RequiresRegion() {
         // Arrange
         Map<String, String> credential = new HashMap<>();
         credential.put("access_key", "test_key");
@@ -248,11 +248,11 @@ public class AgentModelServiceTest {
             .modelParameters(modelParameters)
             .build();
 
-        // Act
-        MLRegisterModelInput result = AgentModelService.createModelFromSpec(modelSpec);
+        // Assert: bedrock/converse has no default region
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model_parameters.region is required for model_provider bedrock/converse");
 
-        // Assert
-        assertNotNull(result);
-        assertNotNull(result.getConnector());
+        // Act
+        AgentModelService.createModelFromSpec(modelSpec);
     }
 }
