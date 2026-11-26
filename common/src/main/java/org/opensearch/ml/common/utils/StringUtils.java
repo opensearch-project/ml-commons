@@ -312,6 +312,10 @@ public class StringUtils {
         filteredKeys.retainAll(allowedList);
         for (String key : filteredKeys) {
             Object value = parameterObjs.get(key);
+            if (value == null) {
+                // A JSON null means the field is not set; don't store it as the string "null".
+                continue;
+            }
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                     if (value instanceof String) {

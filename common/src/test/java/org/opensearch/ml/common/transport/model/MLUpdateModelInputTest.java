@@ -224,6 +224,20 @@ public class MLUpdateModelInputTest {
     }
 
     @Test
+    public void parseInterfaceWithNullMembers_doesNotStoreNullString() throws Exception {
+        String json = "{\"interface\":{\"input\":null,\"output\":\"{\\\"type\\\":\\\"object\\\"}\"}}";
+        testParseFromJsonString(json, parsedInput -> {
+            assertEquals(Map.of("output", "{\"type\":\"object\"}"), parsedInput.getModelInterface());
+            try {
+                String jsonStr = serializationWithToXContent(parsedInput);
+                assertFalse(jsonStr, jsonStr.contains("\"null\""));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
     public void parseWithSpaceType() throws Exception {
         String expectedInputStrWithSpaceType = "{\"model_id\":\"test-model-id\",\"name\":\"name\",\"description\":\"description\","
             + "\"model_group_id\":\"modelGroupId\",\"model_config\":{\"model_type\":\"sparse_encoding\","
