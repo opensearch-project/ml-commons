@@ -56,7 +56,8 @@ import org.opensearch.ml.common.utils.ToolUtils;
 // todo: refactor the processing so providers have to only provide the constants
 public class BedrockConverseModelProvider extends ModelProvider {
 
-    private static final String DEFAULT_REGION = "us-east-1";
+    static final String REGION_PARAMETER = "region";
+    static final String MISSING_REGION_ERROR_MESSAGE = "model_parameters.region is required for model_provider bedrock/converse";
 
     // The default matters: a direct _predict against the auto-created model runs without an agent runner
     // and so does not set system_prompt, and would otherwise be rejected by Connector#validatePayload for
@@ -90,27 +91,27 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
+        // There is no reliable cluster region to fall back on, so the region must be given explicitly
+        // rather than defaulting to one the caller did not choose.
+        String region = modelParameters != null ? modelParameters.get(REGION_PARAMETER) : null;
+        if (region == null || region.isBlank()) {
+            throw new IllegalArgumentException(MISSING_REGION_ERROR_MESSAGE);
+        }
+
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("region", DEFAULT_REGION); // Default region, can be overridden
         parameters.put("service_name", "bedrock");
         parameters.put("model", modelId);
 
-        // Override with any provided model parameters
-        if (modelParameters != null) {
-            parameters.putAll(modelParameters);
-            boolean hasTopP = modelParameters.containsKey("top_p");
-            boolean hasTemperature = modelParameters.containsKey("temperature");
-            // Bedrock Converse uses either temperature or topP, not both.
-            // When top_p is set, temperature is omitted to avoid a Bedrock rejection.
-            if (hasTopP) {
-                String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
-                parameters.put("top_p_field", ", \"topP\": " + topPValue);
-            } else {
-                String tempValue = validateNumericParameter(modelParameters.getOrDefault("temperature", "1.0"), "temperature");
-                parameters.put("temperature_field", ", \"temperature\": " + tempValue);
-            }
+        // Apply the caller's model parameters (region included)
+        parameters.putAll(modelParameters);
+        // Bedrock Converse uses either temperature or topP, not both.
+        // When top_p is set, temperature is omitted to avoid a Bedrock rejection.
+        if (modelParameters.containsKey("top_p")) {
+            String topPValue = validateNumericParameter(modelParameters.get("top_p"), "top_p");
+            parameters.put("top_p_field", ", \"topP\": " + topPValue);
         } else {
-            parameters.put("temperature_field", ", \"temperature\": 1.0");
+            String tempValue = validateNumericParameter(modelParameters.getOrDefault("temperature", "1.0"), "temperature");
+            parameters.put("temperature_field", ", \"temperature\": " + tempValue);
         }
 
         Map<String, String> headers = new HashMap<>();

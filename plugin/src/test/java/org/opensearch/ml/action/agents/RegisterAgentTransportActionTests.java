@@ -547,6 +547,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     public void test_execute_registerAgent_WithModelSpec_Success() {
         // Create MLAgentModelSpec with model configuration
         Map<String, String> modelParameters = new HashMap<>();
+        modelParameters.put("region", "us-west-2");
         modelParameters.put("temperature", "0.7");
         modelParameters.put("max_tokens", "100");
 
@@ -636,6 +637,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .builder()
             .modelProvider("bedrock/converse")
             .modelId("anthropic.claude-v2")
+            .modelParameters(Map.of("region", "us-west-2"))
             .credential(credential)
             .build();
 
@@ -661,6 +663,28 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Model registration failed", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_WithBedrockConverseModelSpec_MissingRegion() {
+        MLAgentModelSpec modelSpec = MLAgentModelSpec
+            .builder()
+            .modelProvider("bedrock/converse")
+            .modelId("anthropic.claude-v2")
+            .credential(Map.of("access_key", "test_key", "secret_key", "test_secret"))
+            .build();
+        MLAgent mlAgent = MLAgent.builder().name("test_agent_with_model").type(MLAgentType.CONVERSATIONAL.name()).model(modelSpec).build();
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("model_parameters.region is required for model_provider bedrock/converse", argumentCaptor.getValue().getMessage());
+        // No model (and no stored credential) is created
+        verify(client, never()).execute(any(), any(), any());
     }
 
     @Test
@@ -992,6 +1016,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .builder()
             .modelProvider("bedrock/converse")
             .modelId("anthropic.claude-v2")
+            .modelParameters(Map.of("region", "us-west-2"))
             .credential(credential)
             .build();
 
