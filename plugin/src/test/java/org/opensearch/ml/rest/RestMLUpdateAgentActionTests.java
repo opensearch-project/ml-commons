@@ -109,11 +109,36 @@ public class RestMLUpdateAgentActionTests extends OpenSearchTestCase {
         assertThrows(IllegalStateException.class, () -> restMLUpdateAgentAction.handleRequest(request, channel, client));
     }
 
+    public void test_PrepareRequest_modelBlockRejected() {
+        RestRequest request = getRestRequest(Map.of("model", Map.of("model_id", "gpt-other")));
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLUpdateAgentAction.handleRequest(request, channel, client)
+        );
+        assertEquals("Field [model] cannot be updated through the update agent API", e.getMessage());
+        verify(client, never()).execute(eq(MLAgentUpdateAction.INSTANCE), any(), any());
+    }
+
+    public void test_PrepareRequest_unknownFieldRejected() {
+        RestRequest request = getRestRequest(Map.of("not_a_field", "x"));
+
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLUpdateAgentAction.handleRequest(request, channel, client)
+        );
+        assertEquals("Unknown field [not_a_field] in update agent request", e.getMessage());
+        verify(client, never()).execute(eq(MLAgentUpdateAction.INSTANCE), any(), any());
+    }
+
     private RestRequest getRestRequest() {
+        return getRestRequest(Map.of("name", "testAgentName", "description", "This is a test agent description"));
+    }
+
+    private RestRequest getRestRequest(Map<String, Object> agentData) {
         RestRequest.Method method = RestRequest.Method.PUT;
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_AGENT_ID, "agent_id");
-        final Map<String, Object> agentData = Map.of("name", "testAgentName", "description", "This is a test agent description");
         String requestContent = new Gson().toJson(agentData);
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)

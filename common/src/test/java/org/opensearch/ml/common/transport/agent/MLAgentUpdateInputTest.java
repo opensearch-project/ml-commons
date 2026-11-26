@@ -286,22 +286,64 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
-    public void testParseWithInvalidField() throws Exception {
-        String inputStrWithIllegalField = """
+    public void testParseWithUnknownField() {
+        String inputStr = """
             {
-              "agent_id": "test-agent-id",
               "name": "test-agent",
-              "description": "test description",
-              "invalid_field": "invalid field description"
+              "not_a_field": "x"
             }
             """;
-        testParseFromJsonString(inputStrWithIllegalField, parsedInput -> {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(inputStr, parsed -> {}));
+        assertEquals("Unknown field [not_a_field] in update agent request", e.getMessage());
+    }
+
+    @Test
+    public void testParseWithModelField() {
+        String inputStr = """
+            {
+              "model": {
+                "model_id": "gpt-other",
+                "model_provider": "openai/v1/chat/completions",
+                "model_parameters": { "temperature": "0.9" }
+              }
+            }
+            """;
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(inputStr, parsed -> {}));
+        assertEquals("Field [model] cannot be updated through the update agent API", e.getMessage());
+    }
+
+    @Test
+    public void testParseWithContextManagementFields() {
+        String inlineStr = """
+            { "context_management": { "hooks": {} } }
+            """;
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(inlineStr, parsed -> {}));
+        assertEquals("Field [context_management] cannot be updated through the update agent API", e.getMessage());
+
+        String nameStr = """
+            { "context_management_name": "my-template" }
+            """;
+        e = assertThrows(IllegalArgumentException.class, () -> testParseFromJsonString(nameStr, parsed -> {}));
+        assertEquals("Field [context_management_name] cannot be updated through the update agent API", e.getMessage());
+    }
+
+    @Test
+    public void testParseIgnoresReadOnlyFields() throws Exception {
+        String inputStr = """
+            {
+              "name": "test-agent",
+              "created_time": 1234567890,
+              "is_hidden": false,
+              "provisioned_by": "someone"
+            }
+            """;
+        testParseFromJsonString(inputStr, parsedInput -> {
+            assertEquals("test-agent", parsedInput.getName());
             try {
                 String jsonStr = serializationWithToXContent(parsedInput);
-                assertTrue(jsonStr.contains("\"agent_id\":\"test-agent-id\""));
-                assertTrue(jsonStr.contains("\"name\":\"test-agent\""));
-                assertTrue(jsonStr.contains("\"description\":\"test description\""));
-                assertFalse(jsonStr.contains("\"invalid_field\""));
+                assertFalse(jsonStr.contains("created_time"));
+                assertFalse(jsonStr.contains("is_hidden"));
+                assertFalse(jsonStr.contains("provisioned_by"));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
