@@ -78,9 +78,8 @@ public class MemoryOperationsService {
         String longTermMemoryHistoryIndex = memoryConfig.getLongMemoryHistoryIndexName();
 
         List<MemoryResult> results = new ArrayList<>();
-        List<IndexRequest> addRequests = new ArrayList<>();
-        List<UpdateRequest> updateRequests = new ArrayList<>();
-        List<DeleteRequest> deleteRequests = new ArrayList<>();
+        // Bulk items are added in the same order as results, so bulk item i always belongs to results.get(i)
+        BulkRequest bulkRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         Instant now = Instant.now();
 
@@ -101,7 +100,7 @@ public class MemoryOperationsService {
                         .build();
 
                     IndexRequest addRequest = new IndexRequest(longTermMemoryIndex).source(newMemory.toIndexMap());
-                    addRequests.add(addRequest);
+                    bulkRequest.add(addRequest);
 
                     MemoryResult memoryResult = MemoryResult
                         .builder()
@@ -120,7 +119,7 @@ public class MemoryOperationsService {
                     updateDoc.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
 
                     UpdateRequest updateRequest = new UpdateRequest(longTermMemoryIndex, decision.getId()).doc(updateDoc);
-                    updateRequests.add(updateRequest);
+                    bulkRequest.add(updateRequest);
                     memoryResult = MemoryResult
                         .builder()
                         .ownerId(input.getOwnerId())
@@ -134,7 +133,7 @@ public class MemoryOperationsService {
 
                 case DELETE:
                     DeleteRequest deleteRequest = new DeleteRequest(longTermMemoryIndex, decision.getId());
-                    deleteRequests.add(deleteRequest);
+                    bulkRequest.add(deleteRequest);
 
                     memoryResult = MemoryResult
                         .builder()
@@ -154,24 +153,11 @@ public class MemoryOperationsService {
             }
         }
 
-        BulkRequest bulkRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-        for (IndexRequest request : addRequests) {
-            bulkRequest.add(request);
-        }
-        for (UpdateRequest request : updateRequests) {
-            bulkRequest.add(request);
-        }
-        for (DeleteRequest request : deleteRequests) {
-            bulkRequest.add(request);
-        }
-
         if (bulkRequest.requests().isEmpty()) {
             log.debug("No memory operations to execute");
             listener.onResponse(results);
             return;
         }
-        bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         ActionListener<BulkResponse> bulkResponseActionListener = ActionListener.wrap(bulkResponse -> {
             if (bulkResponse.hasFailures()) {
@@ -181,13 +167,17 @@ public class MemoryOperationsService {
             log.debug("Executed {} memory operations successfully", bulkResponse.getItems().length);
 
             BulkItemResponse[] items = bulkResponse.getItems();
+            List<MemoryResult> succeededResults = new ArrayList<>();
 
-            for (int i = 0; i < bulkResponse.getItems().length; i++) {
+            for (int i = 0; i < items.length; i++) {
                 MemoryResult result = results.get(i);
-                if (result.getEvent() == MemoryEvent.ADD && !items[i].isFailed()) {
-                    String actualId = items[i].getId();
-                    results.get(i).setMemoryId(actualId);
+                if (items[i].isFailed()) {
+                    continue;
                 }
+                if (result.getEvent() == MemoryEvent.ADD) {
+                    result.setMemoryId(items[i].getId());
+                }
+                succeededResults.add(result);
             }
 
             if (memoryConfig.isDisableHistory()) {
@@ -195,8 +185,14 @@ public class MemoryOperationsService {
                 return;
             }
 
+            if (succeededResults.isEmpty()) {
+                listener.onResponse(results);
+                return;
+            }
+
+            // Only record history for operations that were actually applied to the long-term memory index
             BulkRequest bulkHistoryRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            for (MemoryResult memoryResult : results) {
+            for (MemoryResult memoryResult : succeededResults) {
                 bulkHistoryRequest
                     .add(
                         new IndexRequest(longTermMemoryHistoryIndex)

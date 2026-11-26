@@ -79,7 +79,9 @@ public class MemoryOperationsServiceAdditionalTests {
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(true);
         when(bulkResponse.buildFailureMessage()).thenReturn("Some operations failed");
-        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        BulkItemResponse failedItem = mock(BulkItemResponse.class);
+        when(failedItem.isFailed()).thenReturn(true);
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { failedItem });
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(2);
@@ -90,7 +92,8 @@ public class MemoryOperationsServiceAdditionalTests {
         Map<String, String> namespace = Map.of(SESSION_ID_FIELD, sessionId);
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
+        // The failed ADD was not stored, so no history entry is written for it
+        verify(memoryContainerHelper, times(1)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
