@@ -8,13 +8,17 @@ package org.opensearch.ml.common.transport.model;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -23,6 +27,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
@@ -59,6 +64,59 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                                                                               // request
     public static final String GUARDRAILS_FIELD = "guardrails";
 
+    /** Fields the update model API changes. */
+    public static final List<String> UPDATABLE_FIELDS = List
+        .of(
+            MODEL_NAME_FIELD,
+            DESCRIPTION_FIELD,
+            MODEL_GROUP_ID_FIELD,
+            IS_ENABLED_FIELD,
+            RATE_LIMITER_FIELD,
+            MODEL_CONFIG_FIELD,
+            DEPLOY_SETTING_FIELD,
+            CONNECTOR_ID_FIELD,
+            CONNECTOR_FIELD,
+            GUARDRAILS_FIELD,
+            MLModel.INTERFACE_FIELD,
+            MLModel.BATCH_INFERENCE_CONFIG_FIELD
+        );
+
+    /**
+     * Fields that GET model returns but that cannot be changed through update model. They are accepted and ignored, so a
+     * caller can send a GET response body back as an update. Any other field that parse() does not handle is rejected.
+     */
+    public static final Set<String> READ_ONLY_FIELDS = Set
+        .of(
+            MLModel.ALGORITHM_FIELD,
+            MLModel.FUNCTION_NAME_FIELD,
+            MLModel.MODEL_VERSION_FIELD,
+            MLModel.OLD_MODEL_VERSION_FIELD,
+            MLModel.MODEL_CONTENT_FIELD,
+            MLModel.OLD_MODEL_CONTENT_FIELD,
+            CommonValue.USER,
+            MLModel.MODEL_FORMAT_FIELD,
+            MLModel.MODEL_STATE_FIELD,
+            MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD,
+            MLModel.MODEL_CONTENT_HASH_VALUE_FIELD,
+            MLModel.IS_CONTROLLER_ENABLED_FIELD,
+            MLModel.CREATED_TIME_FIELD,
+            MLModel.LAST_UPDATED_TIME_FIELD,
+            MLModel.LAST_UPLOADED_TIME_FIELD,
+            MLModel.LAST_LOADED_TIME_FIELD,
+            MLModel.LAST_UNLOADED_TIME_FIELD,
+            MLModel.LAST_REGISTERED_TIME_FIELD,
+            MLModel.LAST_DEPLOYED_TIME_FIELD,
+            MLModel.LAST_UNDEPLOYED_TIME_FIELD,
+            MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD,
+            MLModel.CHUNK_NUMBER_FIELD,
+            MLModel.TOTAL_CHUNKS_FIELD,
+            MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
+            MLModel.CURRENT_WORKER_NODE_COUNT_FIELD,
+            MLModel.PLANNING_WORKER_NODES_FIELD,
+            MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+            CommonValue.PROVISIONED_BY_FIELD
+        );
+
     @Getter
     private String modelId;
     private String description;
@@ -79,6 +137,13 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     private Map<String, String> modelInterface;
 
+    /**
+     * The is_hidden value the caller sent, if any. It is never written to the model: is_hidden cannot be updated, and the
+     * transport action rejects a value that differs from the stored one. It is carried so that a GET response body, which
+     * always contains is_hidden, can still be sent back as an update.
+     */
+    private Boolean isHidden;
+
     @Builder(toBuilder = true)
     public MLUpdateModelInput(
         String modelId,
@@ -97,7 +162,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails,
         Map<String, String> modelInterface,
         String tenantId,
-        BatchInferenceConfig batchInferenceConfig
+        BatchInferenceConfig batchInferenceConfig,
+        Boolean isHidden
     ) {
         this.modelId = modelId;
         this.description = description;
@@ -116,6 +182,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
         this.batchInferenceConfig = batchInferenceConfig;
+        this.isHidden = isHidden;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -157,6 +224,28 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
             this.batchInferenceConfig = new BatchInferenceConfig(in);
         }
+        if (streamInputVersion.onOrAfter(VERSION_3_11_0)) {
+            this.isHidden = in.readOptionalBoolean();
+        }
+    }
+
+    /**
+     * Whether the request sets at least one field in {@link #UPDATABLE_FIELDS}. A body that holds only read-only fields
+     * (or model_id, tenant_id, is_hidden) changes nothing.
+     */
+    public boolean hasUpdatableField() {
+        return name != null
+            || description != null
+            || modelGroupId != null
+            || isEnabled != null
+            || rateLimiter != null
+            || modelConfig != null
+            || deploySetting != null
+            || connectorId != null
+            || connector != null
+            || guardrails != null
+            || modelInterface != null
+            || batchInferenceConfig != null;
     }
 
     @Override
@@ -282,6 +371,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_11_0)) {
+            out.writeOptionalBoolean(isHidden);
+        }
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -302,6 +394,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Map<String, String> modelInterface = null;
         String tenantId = null;
         BatchInferenceConfig batchInferenceConfig = null;
+        Boolean isHidden = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -350,7 +443,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MLModel.BATCH_INFERENCE_CONFIG_FIELD:
                     batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
+                case MLModel.IS_HIDDEN_FIELD:
+                    isHidden = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
+                    break;
                 default:
+                    if (!READ_ONLY_FIELDS.contains(fieldName)) {
+                        throw new IllegalArgumentException(
+                            String.format(Locale.ROOT, "Unknown field [%s] in update model request", fieldName)
+                        );
+                    }
                     parser.skipChildren();
                     break;
             }
@@ -374,7 +475,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             guardrails,
             modelInterface,
             tenantId,
-            batchInferenceConfig
+            batchInferenceConfig,
+            isHidden
         );
     }
 }

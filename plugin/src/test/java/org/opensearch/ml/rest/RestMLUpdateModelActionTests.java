@@ -143,6 +143,46 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateModelRequestWithUnknownField() throws Exception {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unknown field [connectors] in update model request");
+        RestRequest request = getRestRequestWithContent("{\"connectors\":{\"name\":\"renamed\"}}");
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testUpdateModelRequestWithOnlyReadOnlyFieldsIsPassedToTransport() throws Exception {
+        // Read-only fields are accepted by the parser; the transport action rejects a request with nothing to update.
+        RestRequest request = getRestRequestWithContent("{\"model_state\":\"UNDEPLOYED\"}");
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
+        verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
+        assertFalse(argumentCaptor.getValue().getUpdateModelInput().hasUpdatableField());
+    }
+
+    @Test
+    public void testUpdateModelRequestWithIsHiddenIsPassedToTransport() throws Exception {
+        RestRequest request = getRestRequestWithContent("{\"name\":\"testModelName\",\"model_state\":\"DEPLOYED\",\"is_hidden\":false}");
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
+        verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLUpdateModelInput updateModelInput = argumentCaptor.getValue().getUpdateModelInput();
+        assertEquals("testModelName", updateModelInput.getName());
+        assertEquals(Boolean.FALSE, updateModelInput.getIsHidden());
+    }
+
+    private RestRequest getRestRequestWithContent(String requestContent) {
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+    }
+
+    @Test
     public void testUpdateModelRequestWithConnectorIDAndConnectorUpdateContent() throws Exception {
         exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule
