@@ -617,44 +617,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateHiddenModelWithIsHiddenFalseRejected() {
-        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(4);
-            listener.onResponse(remoteModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
-        doReturn(true).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-
-        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
-        request.getUpdateModelInput().setIsHidden(false);
-        transportUpdateModelAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("The is_hidden field of a model cannot be updated.", argumentCaptor.getValue().getMessage());
-        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
-    }
-
-    @Test
-    public void testUpdateModelWithIsHiddenTrueOnVisibleModelRejected() {
-        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL", false);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(4);
-            listener.onResponse(remoteModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
-
-        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_EXTERNAL");
-        request.getUpdateModelInput().setIsHidden(true);
-        transportUpdateModelAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("The is_hidden field of a model cannot be updated.", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
     public void testUpdateModelWithNoUpdatableFieldRejected() {
         MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL", false);
         doAnswer(invocation -> {
@@ -663,55 +625,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
 
-        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("test_model_id").isHidden(false).build();
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("test_model_id").build();
         transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(input).build(), actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue().getMessage().startsWith("Update model request has no field that can be updated."));
         assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
-    }
-
-    @Test
-    public void testUpdateHiddenModelWithUnchangedIsHiddenSucceeds() throws InterruptedException {
-        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(4);
-            listener.onResponse(remoteModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
-        doReturn(true).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-
-        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
-        request.getUpdateModelInput().setIsHidden(true);
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
-        latch.await(500, TimeUnit.MILLISECONDS);
-
-        ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-        assertEquals(updateResponse.getId(), argumentCaptor.getValue().getId());
-    }
-
-    @Test
-    public void testUpdateHiddenModelWithIsHiddenFalseByNonAdmin_PermissionErrorFirst() {
-        // The is_hidden check must run after the access checks, so a non-admin learns nothing about a hidden model.
-        MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(4);
-            listener.onResponse(remoteModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
-        doReturn(false).when(transportUpdateModelAction).isSuperAdminUserWrapper(clusterService, client);
-
-        MLUpdateModelRequest request = prepareRemoteRequest("REMOTE_INTERNAL");
-        request.getUpdateModelInput().setIsHidden(false);
-        transportUpdateModelAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     @Test

@@ -8,7 +8,6 @@ package org.opensearch.ml.common.transport.model;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
@@ -114,6 +113,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             MLModel.CURRENT_WORKER_NODE_COUNT_FIELD,
             MLModel.PLANNING_WORKER_NODES_FIELD,
             MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+            MLModel.IS_HIDDEN_FIELD,
             CommonValue.PROVISIONED_BY_FIELD
         );
 
@@ -137,13 +137,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
 
     private Map<String, String> modelInterface;
 
-    /**
-     * The is_hidden value the caller sent, if any. It is never written to the model: is_hidden cannot be updated, and the
-     * transport action rejects a value that differs from the stored one. It is carried so that a GET response body, which
-     * always contains is_hidden, can still be sent back as an update.
-     */
-    private Boolean isHidden;
-
     @Builder(toBuilder = true)
     public MLUpdateModelInput(
         String modelId,
@@ -162,8 +155,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails,
         Map<String, String> modelInterface,
         String tenantId,
-        BatchInferenceConfig batchInferenceConfig,
-        Boolean isHidden
+        BatchInferenceConfig batchInferenceConfig
     ) {
         this.modelId = modelId;
         this.description = description;
@@ -182,7 +174,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
         this.batchInferenceConfig = batchInferenceConfig;
-        this.isHidden = isHidden;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -224,14 +215,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
             this.batchInferenceConfig = new BatchInferenceConfig(in);
         }
-        if (streamInputVersion.onOrAfter(VERSION_3_11_0)) {
-            this.isHidden = in.readOptionalBoolean();
-        }
     }
 
     /**
      * Whether the request sets at least one field in {@link #UPDATABLE_FIELDS}. A body that holds only read-only fields
-     * (or model_id, tenant_id, is_hidden) changes nothing.
+     * (or only model_id and tenant_id) changes nothing.
      */
     public boolean hasUpdatableField() {
         return name != null
@@ -371,9 +359,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_11_0)) {
-            out.writeOptionalBoolean(isHidden);
-        }
     }
 
     public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
@@ -394,7 +379,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Map<String, String> modelInterface = null;
         String tenantId = null;
         BatchInferenceConfig batchInferenceConfig = null;
-        Boolean isHidden = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -443,9 +427,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 case MLModel.BATCH_INFERENCE_CONFIG_FIELD:
                     batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
-                case MLModel.IS_HIDDEN_FIELD:
-                    isHidden = parser.currentToken() == XContentParser.Token.VALUE_NULL ? null : parser.booleanValue();
-                    break;
                 default:
                     if (!READ_ONLY_FIELDS.contains(fieldName)) {
                         throw new IllegalArgumentException(
@@ -475,8 +456,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             guardrails,
             modelInterface,
             tenantId,
-            batchInferenceConfig,
-            isHidden
+            batchInferenceConfig
         );
     }
 }

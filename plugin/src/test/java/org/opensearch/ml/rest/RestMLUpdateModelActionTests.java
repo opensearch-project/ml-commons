@@ -161,14 +161,25 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelRequestWithIsHiddenIsPassedToTransport() throws Exception {
+    public void testUpdateModelRequestWithOnlyIsHiddenIsPassedToTransportWithNothingToUpdate() throws Exception {
+        // is_hidden is accepted and ignored like the other read-only fields; the transport action then returns 400 because
+        // nothing is left to update.
+        RestRequest request = getRestRequestWithContent("{\"is_hidden\":false}");
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
+        verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
+        assertFalse(argumentCaptor.getValue().getUpdateModelInput().hasUpdatableField());
+    }
+
+    @Test
+    public void testUpdateModelRequestWithIsHiddenAndNameUpdatesName() throws Exception {
         RestRequest request = getRestRequestWithContent("{\"name\":\"testModelName\",\"model_state\":\"DEPLOYED\",\"is_hidden\":false}");
         restMLUpdateModelAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLUpdateModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelRequest.class);
         verify(client, times(1)).execute(eq(MLUpdateModelAction.INSTANCE), argumentCaptor.capture(), any());
         MLUpdateModelInput updateModelInput = argumentCaptor.getValue().getUpdateModelInput();
         assertEquals("testModelName", updateModelInput.getName());
-        assertEquals(Boolean.FALSE, updateModelInput.getIsHidden());
+        assertTrue(updateModelInput.hasUpdatableField());
     }
 
     private RestRequest getRestRequestWithContent(String requestContent) {

@@ -300,12 +300,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         ActionListener<UpdateResponse> wrappedListener
     ) throws IOException {
-        // is_hidden is immutable; the unchanged value is accepted so GET bodies round-trip.
-        if (updateModelInput.getIsHidden() != null && !updateModelInput.getIsHidden().equals(Boolean.TRUE.equals(mlModel.getIsHidden()))) {
-            wrappedListener
-                .onFailure(new OpenSearchStatusException("The is_hidden field of a model cannot be updated.", RestStatus.BAD_REQUEST));
-            return;
-        }
         if (!updateModelInput.hasUpdatableField()) {
             wrappedListener
                 .onFailure(

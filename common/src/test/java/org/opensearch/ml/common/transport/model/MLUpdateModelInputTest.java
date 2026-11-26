@@ -242,7 +242,6 @@ public class MLUpdateModelInputTest {
             assertEquals("g", parsedInput.getModelGroupId());
             assertNull("model_version is never taken from the request", parsedInput.getVersion());
             assertNull("last_updated_time is never taken from the request", parsedInput.getLastUpdateTime());
-            assertEquals(Boolean.FALSE, parsedInput.getIsHidden());
             try {
                 String jsonStr = serializationWithToXContent(parsedInput);
                 for (String readOnly : new String[] { "model_state", "algorithm", "created_time", "is_hidden", "user", "provisioned_by" }) {
@@ -303,7 +302,6 @@ public class MLUpdateModelInputTest {
 
         testParseFromJsonString(getResponseBody, parsedInput -> {
             assertEquals("m", parsedInput.getName());
-            assertEquals(Boolean.FALSE, parsedInput.getIsHidden());
             assertTrue(parsedInput.hasUpdatableField());
         });
     }
@@ -342,36 +340,10 @@ public class MLUpdateModelInputTest {
             parsedInput -> assertFalse(parsedInput.hasUpdatableField())
         );
         testParseFromJsonString("{}", parsedInput -> assertFalse(parsedInput.hasUpdatableField()));
+        // is_hidden is a read-only field: accepted and ignored, so on its own it is not an update.
+        testParseFromJsonString("{\"is_hidden\":true}", parsedInput -> assertFalse(parsedInput.hasUpdatableField()));
         testParseFromJsonString("{\"is_enabled\":false}", parsedInput -> assertTrue(parsedInput.hasUpdatableField()));
         testParseFromJsonString("{\"interface\":{}}", parsedInput -> assertTrue(parsedInput.hasUpdatableField()));
-    }
-
-    @Test
-    public void parseIsHidden() throws Exception {
-        testParseFromJsonString("{\"is_hidden\":true}", parsedInput -> assertEquals(Boolean.TRUE, parsedInput.getIsHidden()));
-        testParseFromJsonString("{\"is_hidden\":null}", parsedInput -> assertNull(parsedInput.getIsHidden()));
-        testParseFromJsonString("{\"name\":\"n\"}", parsedInput -> assertNull(parsedInput.getIsHidden()));
-    }
-
-    @Test
-    public void serializationCarriesIsHidden() throws IOException {
-        MLUpdateModelInput input = updateModelInput.toBuilder().isHidden(true).build();
-        readInputStream(input, parsedInput -> assertEquals(Boolean.TRUE, parsedInput.getIsHidden()));
-    }
-
-    @Test
-    public void serializationBeforeIsHiddenVersionDropsIt() throws IOException {
-        MLUpdateModelInput input = updateModelInput.toBuilder().isHidden(true).build();
-
-        BytesStreamOutput out = new BytesStreamOutput();
-        out.setVersion(VERSION_3_9_0);
-        input.writeTo(out);
-        StreamInput in = out.bytes().streamInput();
-        in.setVersion(VERSION_3_9_0);
-        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
-
-        assertNull(parsedInput.getIsHidden());
-        assertEquals(input.getName(), parsedInput.getName());
     }
 
     @Test
