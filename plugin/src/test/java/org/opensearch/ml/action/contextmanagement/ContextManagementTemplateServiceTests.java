@@ -12,6 +12,7 @@ import static org.mockito.Mockito.*;
 import java.time.Instant;
 import java.util.List;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +36,9 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.internal.SearchContext;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -101,7 +105,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testListTemplates_WithPagination() {
         @SuppressWarnings("unchecked")
-        ActionListener<java.util.List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
 
         contextManagementTemplateService.listTemplates(5, 20, listener);
 
@@ -250,7 +254,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testListTemplates_NegativeFrom() {
         @SuppressWarnings("unchecked")
-        ActionListener<java.util.List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
 
         contextManagementTemplateService.listTemplates(-1, 10, listener);
 
@@ -262,7 +266,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     @Test
     public void testListTemplates_ZeroSize() {
         @SuppressWarnings("unchecked")
-        ActionListener<java.util.List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
 
         contextManagementTemplateService.listTemplates(0, 0, listener);
 
@@ -446,13 +450,111 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
         }).when(client).search(any(SearchRequest.class), any());
 
         @SuppressWarnings("unchecked")
-        ActionListener<List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
 
         contextManagementTemplateService.listTemplates(0, 10, listener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertEquals("Search error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testListTemplates_ReturnsTotalHitsNotPageSize() {
+        stubSearchWithTemplates(8L, "t1", "t2");
+
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(0, 2, listener);
+
+        ArgumentCaptor<ContextManagementTemplateService.TemplateListResult> captor = ArgumentCaptor
+            .forClass(ContextManagementTemplateService.TemplateListResult.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(2, captor.getValue().getTemplates().size());
+        assertEquals("t1", captor.getValue().getTemplates().get(0).getName());
+        assertEquals(8L, captor.getValue().getTotal());
+
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(requestCaptor.capture(), any());
+        assertEquals(0, requestCaptor.getValue().source().from());
+        assertEquals(2, requestCaptor.getValue().source().size());
+        assertEquals(SearchContext.TRACK_TOTAL_HITS_ACCURATE, requestCaptor.getValue().source().trackTotalHitsUpTo().intValue());
+    }
+
+    @Test
+    public void testListTemplates_MissingTotalHitsFallsBackToPageSize() {
+        stubSearchWithTemplates(-1L, "t1", "t2");
+
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(0, 10, listener);
+
+        ArgumentCaptor<ContextManagementTemplateService.TemplateListResult> captor = ArgumentCaptor
+            .forClass(ContextManagementTemplateService.TemplateListResult.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(2L, captor.getValue().getTotal());
+    }
+
+    @Test
+    public void testListTemplates_NoArgReturnsTemplateList() {
+        stubSearchWithTemplates(3L, "t1");
+
+        @SuppressWarnings("unchecked")
+        ActionListener<List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(listener);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ContextManagementTemplate>> captor = ArgumentCaptor.forClass(List.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("t1", captor.getValue().get(0).getName());
+    }
+
+    @Test
+    public void testListTemplates_IndexNotFoundReturnsEmptyWithZeroTotal() {
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("index not found"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplateService.TemplateListResult> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(0, 10, listener);
+
+        ArgumentCaptor<ContextManagementTemplateService.TemplateListResult> captor = ArgumentCaptor
+            .forClass(ContextManagementTemplateService.TemplateListResult.class);
+        verify(listener).onResponse(captor.capture());
+        assertTrue(captor.getValue().getTemplates().isEmpty());
+        assertEquals(0L, captor.getValue().getTotal());
+    }
+
+    /** Stubs a search returning the named templates; a negative totalHits leaves the hit count unset. */
+    private void stubSearchWithTemplates(long totalHits, String... names) {
+        SearchHit[] hits = new SearchHit[names.length];
+        for (int i = 0; i < names.length; i++) {
+            hits[i] = new SearchHit(i);
+            hits[i]
+                .sourceRef(
+                    new BytesArray(
+                        "{\"name\":\""
+                            + names[i]
+                            + "\",\"hooks\":{\"POST_TOOL\":[{\"type\":\"ToolsOutputTruncateManager\",\"config\":{\"max_output_length\":100}}]}}"
+                    )
+                );
+        }
+        SearchHits searchHits = new SearchHits(hits, totalHits < 0 ? null : new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), 1.0f);
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
     }
 
     @Test
