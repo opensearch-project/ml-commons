@@ -251,11 +251,13 @@ public class McpToolsHelper {
         try {
             Map<String, Object> args = Optional.ofNullable(arguments).orElse(Map.of());
             JsonNode argumentNode = JsonMapper.shared().valueToTree(args);
-            if (argumentNode instanceof ObjectNode objectNode && inputSchema.properties() != null) {
-                if (!unwrapInputArgument(objectNode, inputSchema.properties())) {
+            if (argumentNode instanceof ObjectNode objectNode) {
+                // A schema may list required properties without a properties block, so unwrap "input" either way.
+                Map<String, Object> properties = Optional.ofNullable(inputSchema.properties()).orElse(Map.of());
+                if (!unwrapInputArgument(objectNode, properties)) {
                     return null;
                 }
-                coerceTopLevelArguments(objectNode, inputSchema.properties());
+                coerceTopLevelArguments(objectNode, properties);
             }
             List<Error> errors = argumentSchema
                 .validate(argumentNode)
@@ -300,7 +302,7 @@ public class McpToolsHelper {
             }
         }
         if (parsed instanceof ObjectNode wrapped) {
-            arguments.remove(INPUT_ARGUMENT);
+            // Keep "input" too: the tool still receives it, and an undeclared property is not an error.
             for (Map.Entry<String, JsonNode> entry : wrapped.properties()) {
                 arguments.set(entry.getKey(), entry.getValue());
             }

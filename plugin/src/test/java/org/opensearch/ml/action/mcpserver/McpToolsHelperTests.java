@@ -655,6 +655,25 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_callTool_inputUnwrapped_whenSchemaHasNoProperties() {
+        Map<String, Object> attributes = Map.of("input_schema", "{\"type\":\"object\",\"required\":[\"question\"]}");
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("input", "{\"question\":\"why\"}")).isError());
+        McpSchema.CallToolResult result = callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("input", "{}"));
+        assertTrue(result.isError());
+        assertEquals(
+            "Invalid arguments for tool MockTool: required property 'question' not found",
+            ((McpSchema.TextContent) result.content().get(0)).text()
+        );
+    }
+
+    @Test
+    public void test_callTool_schemaRequiringInput_acceptsWrappedJson() {
+        // The tool keeps "input" after unpacking it, so a schema that requires "input" must still be satisfied.
+        Map<String, Object> attributes = Map.of("input_schema", "{\"type\":\"object\",\"required\":[\"input\"]}");
+        assertFalse(callToolWithSchema(mockToolWithOutput("ran"), attributes, Map.of("input", "{\"question\":\"why\"}")).isError());
+    }
+
+    @Test
     public void test_callTool_inputAsObject_isUnwrapped() {
         Map<String, Object> arguments = Map.of("input", Map.of("question", "why"));
         assertFalse(callToolWithSchema(mockToolWithOutput("ran"), QUESTION_REQUIRED_SCHEMA, arguments).isError());
