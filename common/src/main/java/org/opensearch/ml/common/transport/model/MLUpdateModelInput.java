@@ -8,13 +8,16 @@ package org.opensearch.ml.common.transport.model;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_11_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -77,7 +80,18 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String tenantId;
     private BatchInferenceConfig batchInferenceConfig;
 
+    /**
+     * Interface fields to update. A null value removes that field from the stored interface, for example
+     * {@code {"interface": {"input": null}}}.
+     */
     private Map<String, String> modelInterface;
+
+    /**
+     * Set when the request sends {@code "interface": null}, {@code "interface": {}}, or null for every interface field:
+     * the stored interface is removed. A partial update cannot express this with an empty modelInterface, because an empty
+     * map merges into the stored one.
+     */
+    private boolean clearInterface;
 
     @Builder(toBuilder = true)
     public MLUpdateModelInput(
@@ -97,7 +111,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Guardrails guardrails,
         Map<String, String> modelInterface,
         String tenantId,
-        BatchInferenceConfig batchInferenceConfig
+        BatchInferenceConfig batchInferenceConfig,
+        boolean clearInterface
     ) {
         this.modelId = modelId;
         this.description = description;
@@ -116,6 +131,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.modelInterface = modelInterface;
         this.tenantId = tenantId;
         this.batchInferenceConfig = batchInferenceConfig;
+        this.clearInterface = clearInterface;
     }
 
     public MLUpdateModelInput(StreamInput in) throws IOException {
@@ -150,12 +166,17 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         }
         if (streamInputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (in.readBoolean()) {
-                modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
+                modelInterface = streamInputVersion.onOrAfter(VERSION_3_11_0)
+                    ? in.readMap(StreamInput::readString, StreamInput::readOptionalString)
+                    : in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
             this.batchInferenceConfig = new BatchInferenceConfig(in);
+        }
+        if (streamInputVersion.onOrAfter(VERSION_3_11_0)) {
+            this.clearInterface = in.readBoolean();
         }
     }
 
@@ -201,7 +222,10 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (guardrails != null) {
             builder.field(GUARDRAILS_FIELD, guardrails);
         }
-        if (modelInterface != null) {
+        if (clearInterface) {
+            // An explicit null makes the partial update remove the stored interface.
+            builder.nullField(MLModel.INTERFACE_FIELD);
+        } else if (modelInterface != null) {
             builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
         if (tenantId != null) {
@@ -266,7 +290,14 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(MLRegisterModelInput.MINIMAL_SUPPORTED_VERSION_FOR_INTERFACE)) {
             if (modelInterface != null) {
                 out.writeBoolean(true);
-                out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
+                if (streamOutputVersion.onOrAfter(VERSION_3_11_0)) {
+                    out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeOptionalString);
+                } else {
+                    // Older nodes cannot read a null value; they never had field removal, so drop those entries.
+                    Map<String, String> withoutRemovals = new HashMap<>(modelInterface);
+                    withoutRemovals.values().removeIf(Objects::isNull);
+                    out.writeMap(withoutRemovals, StreamOutput::writeString, StreamOutput::writeString);
+                }
             } else {
                 out.writeBoolean(false);
             }
@@ -281,6 +312,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_3_11_0)) {
+            out.writeBoolean(clearInterface);
         }
     }
 
@@ -302,6 +336,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         Map<String, String> modelInterface = null;
         String tenantId = null;
         BatchInferenceConfig batchInferenceConfig = null;
+        boolean clearInterface = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -342,7 +377,25 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     guardrails = Guardrails.parse(parser);
                     break;
                 case MLModel.INTERFACE_FIELD:
-                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                        clearInterface = true;
+                        modelInterface = null;
+                    } else {
+                        Map<String, Object> interfaceObjs = parser.map();
+                        modelInterface = filteredParameterMap(interfaceObjs, allowedInterfaceFieldKeys);
+                        // A field sent as null is removed from the stored interface.
+                        for (String key : allowedInterfaceFieldKeys) {
+                            if (interfaceObjs.containsKey(key) && interfaceObjs.get(key) == null) {
+                                modelInterface.put(key, null);
+                            }
+                        }
+                        boolean everyFieldRemoved = modelInterface.size() == allowedInterfaceFieldKeys.size()
+                            && modelInterface.values().stream().allMatch(Objects::isNull);
+                        clearInterface = interfaceObjs.isEmpty() || everyFieldRemoved;
+                        if (clearInterface) {
+                            modelInterface = null;
+                        }
+                    }
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
@@ -374,7 +427,8 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             guardrails,
             modelInterface,
             tenantId,
-            batchInferenceConfig
+            batchInferenceConfig,
+            clearInterface
         );
     }
 }

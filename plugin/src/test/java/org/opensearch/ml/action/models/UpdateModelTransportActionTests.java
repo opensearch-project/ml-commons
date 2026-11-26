@@ -1309,6 +1309,31 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testClearInterfaceOnDeployedModelUpdatesModelCache() throws InterruptedException {
+        MLModel deployedModel = prepareMLModel("REMOTE_EXTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(deployedModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("test_model_id").clearInterface(true).build();
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(input).build(), latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        // Removing the interface must refresh the deployed model's cache, or predict keeps validating against the old schema.
+        verify(client).execute(eq(MLUpdateModelCacheAction.INSTANCE), any(), isA(ActionListener.class));
+    }
+
+    @Test
     public void testUpdateModelCacheModelStateDeployedSuccess() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
         doAnswer(invocation -> {

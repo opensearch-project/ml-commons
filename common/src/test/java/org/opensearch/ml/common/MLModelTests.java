@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
@@ -153,6 +154,37 @@ public class MLModelTests {
         MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
 
         assertEquals(Map.of("output", "{\"type\":\"object\"}"), parsed.getModelInterface());
+    }
+
+    @Test
+    public void parse_InterfaceNullIsNoInterface() throws IOException {
+        String json = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"interface\":null,\"model_version\":\"1.0.0\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+
+        MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+
+        assertNull(parsed.getModelInterface());
+        assertEquals("1.0.0", parsed.getVersion());
+    }
+
+    @Test
+    public void parserMapOnNullValue_returnsEmptyMapAndKeepsParsing() throws IOException {
+        // Nodes before this change read "interface" with parser.map() even when the stored value is null, which an update can
+        // now write. That must not fail: it gives an empty map and leaves the parser on the null, so later fields still parse.
+        String json = "{\"interface\":null,\"name\":\"m\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        parser.nextToken();
+        parser.nextToken();
+
+        assertTrue(parser.map().isEmpty());
+        assertEquals(XContentParser.Token.FIELD_NAME, parser.nextToken());
+        assertEquals("name", parser.currentName());
     }
 
     @Test
