@@ -27,12 +27,14 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.CertificateProcessor;
@@ -51,6 +53,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.ConnectorProtocolValidator;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -125,6 +128,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
+        User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             connectorAccessControlHelper
                 .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
@@ -142,6 +146,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                             // permission denial, so an operator debugging a rejected protocol would be told the
                             // wrong thing.
                             try {
+                                validateAccessControlUpdate(mlCreateConnectorInput, connector, user);
                                 if (updatedProtocol != null) {
                                     ConnectorProtocols.validateProtocol(updatedProtocol);
                                     ConnectorProtocolValidator.validateProtocolEnabled(updatedProtocol, mlFeatureEnabledSetting);
@@ -276,6 +281,35 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
         }
+    }
+
+    private void validateAccessControlUpdate(MLCreateConnectorInput input, Connector connector, User user) {
+        if (input.getAccess() == null && input.getBackendRoles() == null && input.getAddAllBackendRoles() == null) {
+            return;
+        }
+        if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
+            TransportCreateConnectorAction.validateSecurityDisabledOrConnectorAccessControlDisabled(input);
+            // Create's check leaves at most an empty list, which on update would wipe the stored roles.
+            input.setBackendRoles(null);
+            return;
+        }
+        if (!ConnectorAccessControlHelper.isOwner(connector.getOwner(), user) && !ConnectorAccessControlHelper.isAdmin(user)) {
+            throw new OpenSearchStatusException("Only owner or admin can update access control data.", RestStatus.FORBIDDEN);
+        }
+        AccessMode requestedAccess = input.getAccess();
+        // An owner-less connector without a mode is served as public.
+        if (requestedAccess == null) {
+            input.setAccess(connector.getAccess() == null ? AccessMode.PUBLIC : connector.getAccess());
+        }
+        TransportCreateConnectorAction.validateRequest4AccessControl(input, user);
+        if (Boolean.TRUE.equals(input.getAddAllBackendRoles())) {
+            input.setBackendRoles(user.getBackendRoles());
+        } else if (input.getAccess() != AccessMode.RESTRICTED) {
+            // update() ignores a null list, so clearing the stored roles needs an empty one.
+            input.setBackendRoles(new ArrayList<>());
+        }
+        // Persist only a mode the caller sent; an inferred mode on a legacy owner-less connector would match Search's public clause.
+        input.setAccess(requestedAccess);
     }
 
     /** The server url of an MCP connector; the two MCP classes share no type that declares it. */

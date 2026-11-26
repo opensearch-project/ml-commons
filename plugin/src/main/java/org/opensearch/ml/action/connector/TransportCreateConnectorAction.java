@@ -241,9 +241,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {
+    static void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {
         Boolean isAddAllBackendRoles = input.getAddAllBackendRoles();
-        if (connectorAccessControlHelper.isAdmin(user)) {
+        if (ConnectorAccessControlHelper.isAdmin(user)) {
             if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin can't add all backend roles");
             }
@@ -277,7 +277,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     throw new IllegalArgumentException(
                         "You must specify at least one backend role or make the connector public/private for registering it."
                     );
-                } else if (!connectorAccessControlHelper.isAdmin(user)
+                } else if (!ConnectorAccessControlHelper.isAdmin(user)
                     && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
                     throw new IllegalArgumentException("You don't have the backend roles specified.");
                 }
@@ -285,7 +285,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void validateSecurityDisabledOrConnectorAccessControlDisabled(MLCreateConnectorInput input) {
+    static void validateSecurityDisabledOrConnectorAccessControlDisabled(MLCreateConnectorInput input) {
         if (input.getAccess() != null || input.getAddAllBackendRoles() != null || !CollectionUtils.isEmpty(input.getBackendRoles())) {
             throw new IllegalArgumentException(
                 "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster."

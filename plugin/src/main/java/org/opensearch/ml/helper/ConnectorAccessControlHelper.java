@@ -269,7 +269,7 @@ public class ConnectorAccessControlHelper {
         return user.getRoles().contains("all_access");
     }
 
-    private boolean isOwner(User owner, User user) {
+    public static boolean isOwner(User owner, User user) {
         if (user == null || owner == null) {
             return false;
         }
