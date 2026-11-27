@@ -416,6 +416,39 @@ public class AgentUtils {
         return extractModelResponseJson(text, null);
     }
 
+    /** A response filter that reads the text of the first content block, such as {@code $.output.message.content[0].text}. */
+    private static final Pattern FIRST_BLOCK_TEXT_FILTER = Pattern.compile("^(.+)\\[0]\\.text$");
+
+    /**
+     * Reads the LLM's text from a model response with {@code responseFilter}.
+     * <p>
+     * A filter such as {@code $.output.message.content[0].text} assumes the first content block is the text. A reasoning
+     * model can put a block without {@code text} first, such as Claude's {@code reasoningContent} block on Bedrock Converse.
+     * When the filter has that form and finds nothing, this reads the text of the first block that has one.
+     *
+     * @throws PathNotFoundException if the filter matches nothing and, for a first-block filter, no block has text
+     */
+    public static Object readLLMResponse(Map<String, ?> dataAsMap, String responseFilter) {
+        try {
+            return JsonPath.read(dataAsMap, responseFilter);
+        } catch (PathNotFoundException e) {
+            Matcher matcher = FIRST_BLOCK_TEXT_FILTER.matcher(responseFilter.trim());
+            if (!matcher.matches()) {
+                throw e;
+            }
+            List<Object> texts;
+            try {
+                texts = JsonPath.read(dataAsMap, matcher.group(1) + "[?(@.text)].text");
+            } catch (PathNotFoundException | ClassCastException ignored) {
+                throw e;
+            }
+            if (texts == null || texts.isEmpty()) {
+                throw e;
+            }
+            return texts.getFirst();
+        }
+    }
+
     public static Map<String, String> parseLLMOutput(
         Map<String, String> parameters,
         ModelTensorOutput tmpModelTensorOutput,
@@ -450,8 +483,28 @@ public class AgentUtils {
                 response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
             } catch (PathNotFoundException e) {
                 // If the regular response path fails, try the tool calls path
-                response = JsonPath.read(dataAsMap, parameters.get(TOOL_CALLS_PATH));
-                isToolUseResponse = true;
+                Object toolCallsResponse = null;
+                PathNotFoundException toolCallsError = null;
+                try {
+                    toolCallsResponse = JsonPath.read(dataAsMap, parameters.get(TOOL_CALLS_PATH));
+                } catch (PathNotFoundException toolCallsNotFound) {
+                    toolCallsError = toolCallsNotFound;
+                }
+                if (toolCallsResponse instanceof List && !((List<?>) toolCallsResponse).isEmpty()) {
+                    response = toolCallsResponse;
+                    isToolUseResponse = true;
+                } else {
+                    // No tool calls. The text may follow a block without text, such as a reasoning block.
+                    try {
+                        response = readLLMResponse(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+                    } catch (PathNotFoundException noText) {
+                        if (toolCallsError != null) {
+                            throw toolCallsError;
+                        }
+                        response = toolCallsResponse;
+                        isToolUseResponse = true;
+                    }
+                }
             }
 
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
