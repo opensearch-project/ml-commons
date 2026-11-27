@@ -119,7 +119,13 @@ public class ModelHelper {
                     .isHidden(isHidden)
                     .modelGroupId(modelGroupId)
                     .functionName(FunctionName.from((functionName)))
-                    .deploySetting(mlDeploySetting);
+                    .deploySetting(mlDeploySetting)
+                    .description(registerModelInput.getDescription())
+                    .isEnabled(registerModelInput.getIsEnabled())
+                    .rateLimiter(registerModelInput.getRateLimiter())
+                    .guardrails(registerModelInput.getGuardrails())
+                    .tenantId(registerModelInput.getTenantId())
+                    .batchInferenceConfig(registerModelInput.getBatchInferenceConfig());
 
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
