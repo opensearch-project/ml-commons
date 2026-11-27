@@ -353,6 +353,58 @@ public class MLAgentModelSpecTest {
     }
 
     @Test
+    public void testParse_RejectUnknownFields_ParametersSuggestsModelParameters() throws IOException {
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock/converse\","
+            + "\"parameters\":{\"temperature\":\"0.1\"}}";
+        XContentParser parser = createParser(jsonString);
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MLAgentModelSpec.parse(parser, true));
+        assertEquals("Unknown field [parameters] in model. Did you mean [model_parameters]?", e.getMessage());
+    }
+
+    @Test
+    public void testParse_RejectUnknownFields_OtherFieldListsSupportedFields() throws IOException {
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock/converse\",\"unknown_field\":\"value\"}";
+        XContentParser parser = createParser(jsonString);
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> MLAgentModelSpec.parse(parser, true));
+        assertEquals(
+            "Unknown field [unknown_field] in model. Supported fields are [model_id, model_provider, credential, model_parameters].",
+            e.getMessage()
+        );
+    }
+
+    @Test
+    public void testParse_RejectUnknownFields_AcceptsKnownFields() throws IOException {
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock/converse\","
+            + "\"credential\":{\"access_key\":\"ak\"},\"model_parameters\":{\"temperature\":\"0.1\"}}";
+        XContentParser parser = createParser(jsonString);
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+
+        MLAgentModelSpec spec = MLAgentModelSpec.parse(parser, true);
+
+        assertEquals("test-model-id", spec.getModelId());
+        assertEquals("ak", spec.getCredential().get("access_key"));
+        assertEquals("0.1", spec.getModelParameters().get("temperature"));
+    }
+
+    @Test
+    public void testParse_Lenient_SkipsParametersField() throws IOException {
+        // Stored agents written by a newer version may carry fields this version doesn't know
+        String jsonString = "{\"model_id\":\"test-model-id\",\"model_provider\":\"bedrock/converse\","
+            + "\"parameters\":{\"temperature\":\"0.1\"},\"client_config\":{\"max_retry_times\":3}}";
+        XContentParser parser = createParser(jsonString);
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+
+        MLAgentModelSpec spec = MLAgentModelSpec.parse(parser, false);
+
+        assertEquals("test-model-id", spec.getModelId());
+        assertNull(spec.getModelParameters());
+    }
+
+    @Test
     public void testEquals_SameObject() {
         // Arrange
         MLAgentModelSpec spec = new MLAgentModelSpec("model-id", "provider", null, null);

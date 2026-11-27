@@ -432,14 +432,15 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     public static MLAgent parse(XContentParser parser) throws IOException {
-        return parseCommonFields(parser, true); // true to parse isHidden field
+        return parseCommonFields(parser, true, false); // parse isHidden; stay lenient for stored docs
     }
 
     public static MLAgent parseFromUserInput(XContentParser parser) throws IOException {
-        return parseCommonFields(parser, false); // false to skip isHidden field
+        return parseCommonFields(parser, false, true); // skip isHidden; reject unknown fields in the model block
     }
 
-    private static MLAgent parseCommonFields(XContentParser parser, boolean parseHidden) throws IOException {
+    private static MLAgent parseCommonFields(XContentParser parser, boolean parseHidden, boolean rejectUnknownModelFields)
+        throws IOException {
         String name = null;
         String type = null;
         String description = null;
@@ -480,7 +481,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                     llm = LLMSpec.parse(parser);
                     break;
                 case MODEL_FIELD:
-                    model = MLAgentModelSpec.parse(parser);
+                    model = MLAgentModelSpec.parse(parser, rejectUnknownModelFields);
                     break;
                 case TOOLS_FIELD:
                     tools = new ArrayList<>();
