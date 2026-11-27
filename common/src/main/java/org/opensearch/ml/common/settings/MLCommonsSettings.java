@@ -436,6 +436,21 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /**
+     * Keeps the previous, allowlist-only execution check for a connector whose own parameters give no scheme or host for an
+     * action URL, so such a connector, stored before the write-time check required them, is migrated after an upgrade
+     * rather than before it. A connector whose parameters give an origin is held to it whatever this setting says. On by
+     * default in 3.x and deprecated: the setting and the lenient path are removed in 4.0.
+     */
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.legacy_action_url_origin_enabled",
+            true,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic,
+            Setting.Property.Deprecated
+        );
+
     public static final Setting<List<String>> ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS = Setting
         .listSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector.restricted_ip_patterns",

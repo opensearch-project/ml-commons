@@ -28,6 +28,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
@@ -225,6 +226,29 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals("COMPLETED", responseMap.get("status"));
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
+    }
+
+    public void testPredictRemoteModel_requestParametersCannotChangeHost() throws IOException, InterruptedException {
+        updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^https://api\\.(openai|example)\\.com/.*$"));
+        try {
+            Response response = createConnector(completionModelConnectorEntity);
+            String connectorId = (String) parseResponseToMap(response).get("connector_id");
+            response = registerRemoteModel("openAI-GPT-3.5 completions", connectorId);
+            String taskId = (String) parseResponseToMap(response).get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+            String modelId = (String) parseResponseToMap(getTask(taskId)).get("model_id");
+            taskId = (String) parseResponseToMap(deployRemoteModel(modelId)).get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+
+            String predictInput = "{\"parameters\": {\"endpoint\": \"api.example.com\", \"prompt\": \"Say this is a test\"}}";
+            ResponseException e = expectThrows(ResponseException.class, () -> predictRemoteModel(modelId, predictInput));
+
+            assertEquals(400, e.getResponse().getStatusLine().getStatusCode());
+            String body = TestHelper.httpEntityToString(e.getResponse().getEntity());
+            assertTrue(body, body.contains(Connector.ACTION_URL_HOST_CHANGED_MESSAGE));
+        } finally {
+            updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", null);
+        }
     }
 
     public void testPredictWithAutoDeployAndTTL_RemoteModel() throws IOException, InterruptedException {

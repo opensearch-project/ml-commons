@@ -120,6 +120,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                             .initInstance(connector.getProtocol(), connector, Connector.class);
                         connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
                         connectorExecutor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+                        connectorExecutor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
                         connectorExecutor.setScriptService(scriptService);
                         connectorExecutor.setClusterService(clusterService);
                         connectorExecutor.setClient(client);

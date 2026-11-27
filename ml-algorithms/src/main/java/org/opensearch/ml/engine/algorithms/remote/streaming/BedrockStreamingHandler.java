@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -152,7 +153,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     @Override
     public void startStream(
-        String action,
+        URI endpoint,
+        Map<String, String> headers,
         Map<String, String> parameters,
         String payload,
         StreamPredictActionListener<MLTaskResponse, ?> listener

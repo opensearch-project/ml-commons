@@ -485,6 +485,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
+            connectorExecutor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(connector, mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, r, actionListener);

@@ -42,6 +42,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.LEGACY_ACTION_URL_ORIGIN_ENABLED;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
@@ -80,6 +81,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -3240,6 +3242,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertNotNull(params);
         assertTrue(params.containsKey(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS));
         assertTrue(params.containsKey(CONNECTOR_RESTRICTED_IP_PATTERNS));
+    }
+
+    @Test
+    public void testSetUpParameterMap_legacyActionUrlOriginFollowsTheSettingAfterDeploy() throws Exception {
+        Method method = MLModelManager.class.getDeclaredMethod("setUpParameterMap", String.class, String.class);
+        method.setAccessible(true);
+        when(mlFeatureEnabledSetting.isLegacyActionUrlOriginEnabled()).thenReturn(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) method.invoke(modelManager, "test-model-id", "test-tenant");
+        BooleanSupplier legacyActionUrlOriginEnabled = (BooleanSupplier) params.get(LEGACY_ACTION_URL_ORIGIN_ENABLED);
+
+        assertTrue(legacyActionUrlOriginEnabled.getAsBoolean());
+        // The deployed model sees the change without being redeployed.
+        when(mlFeatureEnabledSetting.isLegacyActionUrlOriginEnabled()).thenReturn(false);
+        assertFalse(legacyActionUrlOriginEnabled.getAsBoolean());
     }
 
     private void setupForModelMeta() {
