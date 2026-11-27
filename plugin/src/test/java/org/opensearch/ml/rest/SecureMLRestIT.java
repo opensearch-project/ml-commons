@@ -676,4 +676,81 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             }
         }, true);
     }
+
+    public void testIndexInsight_UserWithIndexReadAccess_FirstRequestSucceeds() throws IOException, ParseException {
+        String index = "index_insight_reader_index";
+        String role = "index_insight_reader_role";
+        String user = "index_insight_reader";
+        String password = generatePassword(user);
+        TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.index_insight_feature_enabled\":true}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        TestHelper.makeRequest(client(), "PUT", "/_plugins/_ml/index_insight_config", null, "{\"is_enable\": true}", null);
+        TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/" + index,
+                null,
+                "{\"mappings\": {\"properties\": {\"field1\": {\"type\": \"long\"}, \"field2\": {\"type\": \"keyword\"}}}}",
+                null
+            );
+        TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/" + index + "/_doc",
+                Map.of("refresh", "true"),
+                "{\"field1\": 200, \"field2\": \"text\"}",
+                null
+            );
+
+        TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/roles/" + role,
+                null,
+                "{\"cluster_permissions\": [\"cluster:admin/opensearch/ml/index_insight/get\", "
+                    + "\"cluster:admin/opensearch/ml/index_insight_config/get\"], "
+                    + "\"index_permissions\": [{\"index_patterns\": [\""
+                    + index
+                    + "\"], \"allowed_actions\": [\"read\", \"indices:admin/mappings/get\"]}]}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+        createUser(user, password, new ArrayList<>());
+        createRoleMapping(role, new ArrayList<>(Arrays.asList(user)));
+        try (
+            RestClient readerClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), user, password)
+                .setSocketTimeout(60000)
+                .build()
+        ) {
+            // No stored result exists yet: the lookup in the index insight storage index must not use the user's permissions
+            Response response = TestHelper
+                .makeRequest(readerClient, "GET", "/_plugins/_ml/insights/" + index + "/STATISTICAL_DATA", null, "", null);
+            assertEquals(200, response.getStatusLine().getStatusCode());
+            Map<String, Object> indexInsight = (Map<String, Object>) parseResponseToMap(response).get("index_insight");
+            assertEquals(index, indexInsight.get("index_name"));
+            assertEquals("STATISTICAL_DATA", indexInsight.get("task_type"));
+            assertEquals("COMPLETED", indexInsight.get("status"));
+        } finally {
+            deleteUser(user);
+            TestHelper
+                .makeRequest(
+                    client(),
+                    "DELETE",
+                    "/_opendistro/_security/api/roles/" + role,
+                    null,
+                    "",
+                    ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+                );
+            deleteIndexWithAdminClient(index);
+        }
+    }
 }
