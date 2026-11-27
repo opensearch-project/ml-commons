@@ -28,12 +28,14 @@ public class MLPostProcessFunction {
     public static final String COHERE_V2_EMBEDDING_BINARY = "connector.post_process.cohere_v2.embedding.binary";
     public static final String COHERE_V2_EMBEDDING_UBINARY = "connector.post_process.cohere_v2.embedding.ubinary";
     public static final String OPENAI_EMBEDDING = "connector.post_process.openai.embedding";
+    public static final String VOYAGE_EMBEDDING = "connector.post_process.voyage.embedding";
     public static final String BEDROCK_EMBEDDING = "connector.post_process.bedrock.embedding";
     public static final String BEDROCK_V2_EMBEDDING_FLOAT = "connector.post_process.bedrock_v2.embedding.float";
     public static final String BEDROCK_V2_EMBEDDING_BINARY = "connector.post_process.bedrock_v2.embedding.binary";
     public static final String BEDROCK_NOVA_EMBEDDING = "connector.post_process.bedrock.nova.embedding";
     public static final String BEDROCK_BATCH_JOB_ARN = "connector.post_process.bedrock.batch_job_arn";
     public static final String COHERE_RERANK = "connector.post_process.cohere.rerank";
+    public static final String VOYAGE_RERANK = "connector.post_process.voyage.rerank";
     public static final String BEDROCK_RERANK = "connector.post_process.bedrock.rerank";
     public static final String DEFAULT_EMBEDDING = "connector.post_process.default.embedding";
     public static final String DEFAULT_RERANK = "connector.post_process.default.rerank";
@@ -53,6 +55,7 @@ public class MLPostProcessFunction {
         RemoteMlCommonsPassthroughPostProcessFunction remoteMlCommonsPassthroughPostProcessFunction =
             new RemoteMlCommonsPassthroughPostProcessFunction();
         JSON_PATH_EXPRESSION.put(OPENAI_EMBEDDING, "$.data[*].embedding");
+        JSON_PATH_EXPRESSION.put(VOYAGE_EMBEDDING, "$.data[*].embedding");
         JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
         JSON_PATH_EXPRESSION.put(COHERE_V2_EMBEDDING_FLOAT32, "$.embeddings.float");
         JSON_PATH_EXPRESSION.put(COHERE_V2_EMBEDDING_INT8, "$.embeddings.int8");
@@ -66,10 +69,12 @@ public class MLPostProcessFunction {
         JSON_PATH_EXPRESSION.put(BEDROCK_NOVA_EMBEDDING, "$.embeddings[*].embedding");
         JSON_PATH_EXPRESSION.put(BEDROCK_BATCH_JOB_ARN, "$");
         JSON_PATH_EXPRESSION.put(COHERE_RERANK, "$.results");
+        JSON_PATH_EXPRESSION.put(VOYAGE_RERANK, "$.data");
         JSON_PATH_EXPRESSION.put(BEDROCK_RERANK, "$.results");
         JSON_PATH_EXPRESSION.put(DEFAULT_RERANK, "$[*]");
         JSON_PATH_EXPRESSION.put(ML_COMMONS_PASSTHROUGH, "$");  // Get the entire response
         POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, embeddingPostProcessFunction);
+        POST_PROCESS_FUNCTIONS.put(VOYAGE_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_V2_EMBEDDING_FLOAT32, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_V2_EMBEDDING_INT8, embeddingPostProcessFunction);
@@ -83,6 +88,7 @@ public class MLPostProcessFunction {
         POST_PROCESS_FUNCTIONS.put(BEDROCK_NOVA_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(BEDROCK_BATCH_JOB_ARN, batchJobArnPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_RERANK, cohereRerankPostProcessFunction);
+        POST_PROCESS_FUNCTIONS.put(VOYAGE_RERANK, cohereRerankPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(BEDROCK_RERANK, bedrockRerankPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(DEFAULT_RERANK, cohereRerankPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(ML_COMMONS_PASSTHROUGH, remoteMlCommonsPassthroughPostProcessFunction);

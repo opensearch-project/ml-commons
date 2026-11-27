@@ -298,6 +298,7 @@ public final class MLCommonsSettings {
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.anthropic\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
+                    "^https://api\\.voyageai\\.com/.*$",
                     "^https://api\\.deepseek\\.com/.*$",
                     "^https://generativelanguage\\.googleapis\\.com/.*$",
                     // Vertex AI joins the region to the host with a hyphen (us-central1-aiplatform.googleapis.com)
