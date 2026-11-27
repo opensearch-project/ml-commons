@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.conversation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -15,11 +16,13 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchHit;
 
@@ -118,6 +121,76 @@ public class InteractionTests {
         assertEquals(interaction1.getAdditionalInfo(), interaction.getAdditionalInfo());
         assertEquals(interaction1.getTraceNum(), interaction.getTraceNum());
         assertEquals(interaction1.getConversationId(), interaction.getConversationId());
+    }
+
+    @Test
+    public void test_fromStream_NullUpdatedTime() throws IOException {
+        Interaction withoutUpdatedTime = interactionWithUpdatedTime(null);
+
+        Interaction read = roundTrip(withoutUpdatedTime, CommonValue.VERSION_3_11_0);
+        assertNull(read.getUpdatedTime());
+        assertSameFields(withoutUpdatedTime, read);
+
+        // Nodes before 3.11 always read an instant, so the create time is sent in place of the missing update time
+        read = roundTrip(withoutUpdatedTime, CommonValue.VERSION_3_3_0);
+        assertEquals(withoutUpdatedTime.getCreateTime(), read.getUpdatedTime());
+        assertSameFields(withoutUpdatedTime, read);
+    }
+
+    @Test
+    public void test_fromStream_UpdatedTime() throws IOException {
+        Instant updatedTime = Instant.ofEpochMilli(123456789L);
+        Interaction withUpdatedTime = interactionWithUpdatedTime(updatedTime);
+
+        for (Version version : new Version[] { CommonValue.VERSION_3_11_0, CommonValue.VERSION_3_3_0 }) {
+            Interaction read = roundTrip(withUpdatedTime, version);
+            assertEquals(updatedTime, read.getUpdatedTime());
+            assertSameFields(withUpdatedTime, read);
+        }
+
+        Interaction read = roundTrip(withUpdatedTime, CommonValue.VERSION_3_2_0);
+        assertNull(read.getUpdatedTime());
+        assertSameFields(withUpdatedTime, read);
+    }
+
+    private Interaction interactionWithUpdatedTime(Instant updatedTime) {
+        return new Interaction(
+            "id",
+            Instant.ofEpochMilli(1000L),
+            updatedTime,
+            "conversation-id",
+            "input",
+            "pt",
+            "response",
+            "origin",
+            Collections.singletonMap("metadata", "some meta"),
+            "parent_id",
+            1
+        );
+    }
+
+    private Interaction roundTrip(Interaction interaction, Version version) throws IOException {
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(version);
+        interaction.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(version);
+        Interaction read = Interaction.fromStream(in);
+        assertEquals(0, in.available());
+        return read;
+    }
+
+    private void assertSameFields(Interaction expected, Interaction actual) {
+        assertEquals(expected.getId(), actual.getId());
+        assertEquals(expected.getCreateTime(), actual.getCreateTime());
+        assertEquals(expected.getConversationId(), actual.getConversationId());
+        assertEquals(expected.getInput(), actual.getInput());
+        assertEquals(expected.getPromptTemplate(), actual.getPromptTemplate());
+        assertEquals(expected.getResponse(), actual.getResponse());
+        assertEquals(expected.getOrigin(), actual.getOrigin());
+        assertEquals(expected.getAdditionalInfo(), actual.getAdditionalInfo());
+        assertEquals(expected.getParentInteractionId(), actual.getParentInteractionId());
+        assertEquals(expected.getTraceNum(), actual.getTraceNum());
     }
 
     @Test
