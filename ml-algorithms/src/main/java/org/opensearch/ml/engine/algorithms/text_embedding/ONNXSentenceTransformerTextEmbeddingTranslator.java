@@ -173,7 +173,7 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         embeddings = embeddings.duplicate();
         embeddings.set(inputAttentionMask, -1e9); // Set padding tokens to large negative value
 
-        return embeddings.max(AXIS, true);
+        return embeddings.max(AXIS);
     }
 
     private NDArray weightedMeanPool(NDArray embeddings, NDArray attentionMask) {
