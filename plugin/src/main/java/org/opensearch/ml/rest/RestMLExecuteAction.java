@@ -139,7 +139,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
             String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
             if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
                 if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
-                    throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+                    throw new OpenSearchStatusException(ML_COMMONS_AG_UI_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
                 }
                 throw new IllegalArgumentException(
                     "AG-UI agents require streaming execution. "

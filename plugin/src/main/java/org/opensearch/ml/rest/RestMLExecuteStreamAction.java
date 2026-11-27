@@ -183,6 +183,11 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             );
         }
 
+        // Reject AG_UI agents before the stream opens so the client gets a real 403
+        if (agentType == MLAgentType.AG_UI && !mlFeatureEnabledSetting.isAGUIEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_AG_UI_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
+
         if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
             if (!isModelValid(agent.getLlm().getModelId(), request, client)) {
                 throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
@@ -385,7 +390,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         Input input;
         if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
             if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
-                throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+                throw new OpenSearchStatusException(ML_COMMONS_AG_UI_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
             }
             log.debug("AG-UI: Detected AG-UI input format for streaming agent: {}", agentId);
             input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);

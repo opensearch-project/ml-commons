@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID;
 import static org.opensearch.ml.common.CommonValue.MCP_HEADER_AWS_REGION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
@@ -34,6 +35,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -146,6 +148,30 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
         assertEquals(FunctionName.AGENT, input.getFunctionName());
+    }
+
+    public void testGetRequestAgent_AGUIInput_featureDisabled_returnsForbidden() {
+        when(mlFeatureEnabledSetting.isAGUIEnabled()).thenReturn(false);
+        RestRequest request = getAGUIExecuteAgentRestRequest("/_plugins/_ml/agents/test_agent_id/_execute");
+
+        OpenSearchStatusException e = expectThrows(
+            OpenSearchStatusException.class,
+            () -> restMLExecuteAction.getRequest(request, client)
+        );
+        assertEquals(RestStatus.FORBIDDEN, e.status());
+        assertEquals(ML_COMMONS_AG_UI_DISABLED_MESSAGE, e.getMessage());
+    }
+
+    private RestRequest getAGUIExecuteAgentRestRequest(String path) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent =
+            "{\"threadId\":\"t1\",\"runId\":\"r1\",\"messages\":[{\"id\":\"m1\",\"role\":\"user\",\"content\":\"hello\"}],\"tools\":[],\"context\":[],\"state\":{},\"forwardedProps\":{}}";
+        return new FakeRestRequest.Builder(xContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath(path)
+            .build();
     }
 
     public void testGetRequestTool() throws IOException {
