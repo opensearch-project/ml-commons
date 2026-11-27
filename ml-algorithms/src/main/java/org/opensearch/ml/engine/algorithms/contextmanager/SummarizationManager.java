@@ -37,9 +37,9 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.transport.client.Client;
 
-import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
@@ -519,7 +519,9 @@ public class SummarizationManager implements ContextManager {
                             && !parameters.get(LLM_RESPONSE_FILTER).isEmpty()) {
                             try {
                                 String responseFilter = parameters.get(LLM_RESPONSE_FILTER);
-                                Object filteredResponse = JsonPath.read(dataAsMap, responseFilter);
+                                // A reasoning model can put a block without text first, such as a reasoningContent block on
+                                // Bedrock Converse.
+                                Object filteredResponse = AgentUtils.readLLMResponse(dataAsMap, responseFilter);
                                 if (filteredResponse instanceof String) {
                                     String result = ((String) filteredResponse).trim();
                                     return result;

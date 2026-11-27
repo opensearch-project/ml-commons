@@ -196,6 +196,29 @@ public class SummarizationManagerTest {
     }
 
     @Test
+    public void testExtractSummaryFromResponseWithBedrockReasoningBlockFirst() throws Exception {
+        manager.initialize(new HashMap<>());
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        context.setParameters(parameters);
+
+        // Claude on Bedrock Converse can return its reasoning before the text.
+        Map<String, Object> reasoningBlock = Map
+            .of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+        Map<String, Object> message = Map
+            .of("role", "assistant", "content", List.of(reasoningBlock, Map.of("text", "Summary after reasoning")));
+        MLTaskResponse mockResponse = createMockMLTaskResponse(Map.of("output", Map.of("message", message), "stopReason", "end_turn"));
+
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        Assert.assertEquals("Summary after reasoning", result);
+    }
+
+    @Test
     public void testExtractSummaryFromResponseWithBedrockResponseFilter() throws Exception {
         Map<String, Object> config = new HashMap<>();
         manager.initialize(config);
