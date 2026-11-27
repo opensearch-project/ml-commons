@@ -11,6 +11,8 @@ import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -18,10 +20,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -29,9 +34,15 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -559,73 +570,175 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
         assertTrue(exceptionCaptor.getValue().getMessage().contains("Context management name cannot be null"));
     }
 
-    @Test
-    public void testUpdateTemplate_Success() throws Exception {
-        String templateName = "test_template";
-        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
-        when(template.isValidName()).thenReturn(true);
-        when(template.isValid()).thenReturn(true);
-        when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
+    private static final String STORED_TEMPLATE_JSON = "{\"name\":\"test_template\",\"description\":\"stored description\","
+        + "\"hooks\":{\"PRE_LLM\":[{\"type\":\"SlidingWindowManager\",\"config\":{\"max_messages\":6}}],"
+        + "\"POST_TOOL\":[{\"type\":\"ToolsOutputTruncateManager\",\"config\":{\"max_output_length\":100}}]},"
+        + "\"created_time\":1000,\"last_modified\":1000,\"created_by\":\"creator\"}";
 
-        UpdateResponse updateResponse = mock(UpdateResponse.class);
-
+    private void mockStoredTemplate(String sourceJson, long seqNo, long primaryTerm) {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(sourceJson != null);
+        if (sourceJson != null) {
+            when(getResponse.getSourceAsBytesRef()).thenReturn(new BytesArray(sourceJson));
+            when(getResponse.getSeqNo()).thenReturn(seqNo);
+            when(getResponse.getPrimaryTerm()).thenReturn(primaryTerm);
+        }
         doAnswer((Answer<Void>) invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
             return null;
-        }).when(client).update(any(UpdateRequest.class), any());
+        }).when(client).get(any(GetRequest.class), any());
+    }
 
-        @SuppressWarnings("unchecked")
-        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+    private void mockIndexResponse() {
+        IndexResponse indexResponse = new IndexResponse(new ShardId("index", "uuid", 0), "test_template", 3, 1, 2, false);
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+    }
 
-        contextManagementTemplateService.updateTemplate(templateName, template, listener);
-
-        verify(listener).onResponse(updateResponse);
-        verify(template).setLastModified(any(Instant.class));
+    private static ContextManagementTemplate templateWithHooks(String description, String hooksJson) throws Exception {
+        String json = "{\"name\":\"test_template\""
+            + (description != null ? ",\"description\":\"" + description + "\"" : "")
+            + (hooksJson != null ? ",\"hooks\":" + hooksJson : "")
+            + "}";
+        XContentParser parser = JsonXContent.jsonXContent
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return ContextManagementTemplate.parse(parser);
     }
 
     @Test
-    public void testUpdateTemplate_IndexNotFoundException() throws Exception {
-        String templateName = "test_template";
-        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
-        when(template.isValidName()).thenReturn(true);
-        when(template.isValid()).thenReturn(true);
-        when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
-
-        doAnswer((Answer<Void>) invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IndexNotFoundException("index not found"));
-            return null;
-        }).when(client).update(any(UpdateRequest.class), any());
-
-        @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_ReplacesHooksAndKeepsUnsetFields() throws Exception {
+        mockStoredTemplate(STORED_TEMPLATE_JSON, 7L, 2L);
+        mockIndexResponse();
+        ContextManagementTemplate template = templateWithHooks(
+            null,
+            "{\"POST_TOOL\":[{\"type\":\"ToolsOutputTruncateManager\",\"config\":{\"max_output_length\":200}}]}"
+        );
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
 
-        contextManagementTemplateService.updateTemplate(templateName, template, listener);
+        contextManagementTemplateService.updateTemplate("test_template", template, listener);
+
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(requestCaptor.capture(), any());
+        verify(client, never()).update(any(UpdateRequest.class), any());
+        IndexRequest indexRequest = requestCaptor.getValue();
+        assertEquals("test_template", indexRequest.id());
+        assertEquals(7L, indexRequest.ifSeqNo());
+        assertEquals(2L, indexRequest.ifPrimaryTerm());
+
+        Map<String, Object> source = indexRequest.sourceAsMap();
+        Map<String, Object> hooks = (Map<String, Object>) source.get("hooks");
+        assertEquals(Set.of("POST_TOOL"), hooks.keySet());
+        Map<String, Object> postTool = ((List<Map<String, Object>>) hooks.get("POST_TOOL")).get(0);
+        assertEquals(200, ((Map<String, Object>) postTool.get("config")).get("max_output_length"));
+        assertEquals("stored description", source.get("description"));
+        assertEquals(1000L, ((Number) source.get("created_time")).longValue());
+        assertEquals("creator", source.get("created_by"));
+        assertTrue(((Number) source.get("last_modified")).longValue() > 1000L);
+
+        ArgumentCaptor<UpdateResponse> responseCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(listener).onResponse(responseCaptor.capture());
+        assertEquals("test_template", responseCaptor.getValue().getId());
+        assertEquals(3L, responseCaptor.getValue().getSeqNo());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_WithoutHooksKeepsStoredHooks() throws Exception {
+        mockStoredTemplate(STORED_TEMPLATE_JSON, 7L, 2L);
+        mockIndexResponse();
+        ContextManagementTemplate template = templateWithHooks("new description", null);
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", template, listener);
+
+        ArgumentCaptor<IndexRequest> requestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(requestCaptor.capture(), any());
+        Map<String, Object> source = requestCaptor.getValue().sourceAsMap();
+        assertEquals("new description", source.get("description"));
+        assertEquals(Set.of("PRE_LLM", "POST_TOOL"), ((Map<String, Object>) source.get("hooks")).keySet());
+        verify(listener).onResponse(any(UpdateResponse.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_NotFound() throws Exception {
+        mockStoredTemplate(null, 0L, 0L);
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertTrue(exceptionCaptor.getValue().getMessage().contains("not found"));
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+        verify(client, never()).index(any(IndexRequest.class), any());
     }
 
     @Test
-    public void testUpdateTemplate_OtherException() throws Exception {
-        String templateName = "test_template";
-        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
-        when(template.isValidName()).thenReturn(true);
-        when(template.isValid()).thenReturn(true);
-        when(template.toXContent(any(), any())).thenReturn(org.opensearch.common.xcontent.json.JsonXContent.contentBuilder());
-
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_IndexNotFoundException() throws Exception {
         doAnswer((Answer<Void>) invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Update error"));
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("index not found"));
             return null;
-        }).when(client).update(any(UpdateRequest.class), any());
-
-        @SuppressWarnings("unchecked")
+        }).when(client).get(any(GetRequest.class), any());
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
 
-        contextManagementTemplateService.updateTemplate(templateName, template, listener);
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_GetException() throws Exception {
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Get error"));
+            return null;
+        }).when(client).get(any(GetRequest.class), any());
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertEquals("Get error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_StoredTemplateUnparseable() throws Exception {
+        mockStoredTemplate("not json", 7L, 2L);
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
+
+        verify(listener).onFailure(any(Exception.class));
+        verify(client, never()).index(any(IndexRequest.class), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_IndexException() throws Exception {
+        mockStoredTemplate(STORED_TEMPLATE_JSON, 7L, 2L);
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Update error"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
