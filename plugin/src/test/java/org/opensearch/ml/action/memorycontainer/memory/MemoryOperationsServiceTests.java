@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -26,7 +27,9 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.commons.authuser.User;
@@ -178,7 +181,8 @@ public class MemoryOperationsServiceTests {
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
-        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        BulkItemResponse item = bulkItem("memory-1", false);
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { item });
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(2);
@@ -209,7 +213,8 @@ public class MemoryOperationsServiceTests {
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
-        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
+        BulkItemResponse item = bulkItem("memory-1", false);
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { item });
 
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(2);
@@ -593,6 +598,172 @@ public class MemoryOperationsServiceTests {
         assertTrue(!result.containsKey("memory_container_id"));
         assertTrue(result.containsKey("error"));
         assertTrue(result.containsKey("created_time"));
+    }
+
+    private MemoryDecision decision(MemoryEvent event, String id, String text) {
+        MemoryDecision decision = mock(MemoryDecision.class);
+        when(decision.getEvent()).thenReturn(event);
+        when(decision.getId()).thenReturn(id);
+        when(decision.getText()).thenReturn(text);
+        return decision;
+    }
+
+    private BulkItemResponse bulkItem(String id, boolean failed) {
+        BulkItemResponse item = mock(BulkItemResponse.class);
+        when(item.getId()).thenReturn(id);
+        when(item.isFailed()).thenReturn(failed);
+        return item;
+    }
+
+    private MLAddMemoriesInput historyInput() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
+        return input;
+    }
+
+    private MemoryConfiguration historyEnabledConfig() {
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
+        when(storageConfig.getLongMemoryIndexName()).thenReturn("long-term-index");
+        when(storageConfig.getLongMemoryHistoryIndexName()).thenReturn("history-index");
+        return storageConfig;
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_DeleteAndUpdateBeforeAdds_RecordsCorrectMemoryIds() {
+        List<MemoryDecision> decisions = Arrays
+            .asList(
+                decision(MemoryEvent.DELETE, "old-1", "Lives in Seattle"),
+                decision(MemoryEvent.ADD, "new_0", "Lives in Portland"),
+                decision(MemoryEvent.UPDATE, "old-2", "Has a dog (updated)"),
+                decision(MemoryEvent.ADD, "new_1", "Likes tea")
+            );
+        MLAddMemoriesInput input = historyInput();
+        MemoryConfiguration storageConfig = historyEnabledConfig();
+
+        // Bulk response items come back in request order
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(false);
+        BulkItemResponse[] items = new BulkItemResponse[] {
+            bulkItem("old-1", false),
+            bulkItem("generated-a", false),
+            bulkItem("old-2", false),
+            bulkItem("generated-b", false) };
+        when(bulkResponse.getItems()).thenReturn(items);
+        BulkResponse historyResponse = mock(BulkResponse.class);
+        when(historyResponse.hasFailures()).thenReturn(false);
+
+        List<BulkRequest> bulkRequests = new ArrayList<>();
+        doAnswer(invocation -> {
+            BulkRequest request = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            bulkRequests.add(request);
+            listener.onResponse(bulkRequests.size() == 1 ? bulkResponse : historyResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, null, input, strategy, operationsListener);
+
+        assertEquals(2, bulkRequests.size());
+
+        // The long-term bulk request follows decision order
+        List<DocWriteRequest<?>> memoryRequests = bulkRequests.get(0).requests();
+        assertEquals(4, memoryRequests.size());
+        assertEquals(DocWriteRequest.OpType.DELETE, memoryRequests.get(0).opType());
+        assertEquals("old-1", memoryRequests.get(0).id());
+        assertEquals(DocWriteRequest.OpType.INDEX, memoryRequests.get(1).opType());
+        assertEquals("Lives in Portland", ((IndexRequest) memoryRequests.get(1)).sourceAsMap().get("memory"));
+        assertEquals(DocWriteRequest.OpType.UPDATE, memoryRequests.get(2).opType());
+        assertEquals("old-2", memoryRequests.get(2).id());
+        assertEquals(DocWriteRequest.OpType.INDEX, memoryRequests.get(3).opType());
+        assertEquals("Likes tea", ((IndexRequest) memoryRequests.get(3)).sourceAsMap().get("memory"));
+
+        ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(operationsListener).onResponse(resultsCaptor.capture());
+        List<MemoryResult> results = resultsCaptor.getValue();
+        assertEquals(4, results.size());
+        assertEquals("old-1", results.get(0).getMemoryId());
+        assertEquals("generated-a", results.get(1).getMemoryId());
+        assertEquals("old-2", results.get(2).getMemoryId());
+        assertEquals("generated-b", results.get(3).getMemoryId());
+
+        List<DocWriteRequest<?>> historyRequests = bulkRequests.get(1).requests();
+        assertEquals(4, historyRequests.size());
+        String[][] expected = { { "old-1", "DELETE" }, { "generated-a", "ADD" }, { "old-2", "UPDATE" }, { "generated-b", "ADD" } };
+        for (int i = 0; i < expected.length; i++) {
+            Map<String, Object> history = ((IndexRequest) historyRequests.get(i)).sourceAsMap();
+            assertEquals(expected[i][0], history.get("memory_id"));
+            assertEquals(expected[i][1], history.get("action"));
+        }
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_FailedBulkItems_SkipHistory() {
+        List<MemoryDecision> decisions = Arrays
+            .asList(
+                decision(MemoryEvent.ADD, "new_0", "Fact 1"),
+                decision(MemoryEvent.DELETE, "old-1", "Old fact"),
+                decision(MemoryEvent.ADD, "new_1", "Fact 2")
+            );
+        MLAddMemoriesInput input = historyInput();
+        MemoryConfiguration storageConfig = historyEnabledConfig();
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(true);
+        BulkItemResponse[] items = new BulkItemResponse[] { bulkItem(null, true), bulkItem("old-1", true), bulkItem("generated-b", false) };
+        when(bulkResponse.getItems()).thenReturn(items);
+        BulkResponse historyResponse = mock(BulkResponse.class);
+        when(historyResponse.hasFailures()).thenReturn(false);
+
+        List<BulkRequest> bulkRequests = new ArrayList<>();
+        doAnswer(invocation -> {
+            BulkRequest request = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            bulkRequests.add(request);
+            listener.onResponse(bulkRequests.size() == 1 ? bulkResponse : historyResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, null, input, strategy, operationsListener);
+
+        ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(operationsListener).onResponse(resultsCaptor.capture());
+        List<MemoryResult> results = resultsCaptor.getValue();
+        assertNull(results.get(0).getMemoryId());
+        assertEquals("generated-b", results.get(2).getMemoryId());
+
+        // Only the item that was applied gets a history entry
+        assertEquals(2, bulkRequests.size());
+        List<DocWriteRequest<?>> historyRequests = bulkRequests.get(1).requests();
+        assertEquals(1, historyRequests.size());
+        Map<String, Object> history = ((IndexRequest) historyRequests.get(0)).sourceAsMap();
+        assertEquals("generated-b", history.get("memory_id"));
+        assertEquals("ADD", history.get("action"));
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_AllBulkItemsFailed_NoHistoryWritten() {
+        List<MemoryDecision> decisions = Arrays.asList(decision(MemoryEvent.ADD, "new_0", "Fact 1"));
+        MLAddMemoriesInput input = historyInput();
+        MemoryConfiguration storageConfig = historyEnabledConfig();
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(true);
+        BulkItemResponse[] items = new BulkItemResponse[] { bulkItem(null, true) };
+        when(bulkResponse.getItems()).thenReturn(items);
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, null, input, strategy, operationsListener);
+
+        verify(memoryContainerHelper, times(1)).bulkIngestData(any(), any(), any());
+        verify(operationsListener).onResponse(any(List.class));
     }
 
 }
