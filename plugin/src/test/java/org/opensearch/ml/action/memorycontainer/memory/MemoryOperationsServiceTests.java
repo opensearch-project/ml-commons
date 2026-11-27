@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,11 +27,13 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
@@ -593,6 +596,93 @@ public class MemoryOperationsServiceTests {
         assertTrue(!result.containsKey("memory_container_id"));
         assertTrue(result.containsKey("error"));
         assertTrue(result.containsKey("created_time"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_SetsOwnerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(null, input, new RuntimeException("Test error"), "container-123");
+
+        assertEquals("owner-123", result.get("owner_id"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_NullOwnerIdIsOmitted() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn(null);
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(null, input, new RuntimeException("Test error"), "container-123");
+
+        assertTrue(!result.containsKey("owner_id"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_RecordsRemoteServiceError() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        String remoteError = "Error from remote service: {\"error\": {\"message\": \"upstream failure\"}}";
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(
+                null,
+                input,
+                new OpenSearchStatusException(remoteError, RestStatus.INTERNAL_SERVER_ERROR),
+                "container-123"
+            );
+
+        assertEquals(remoteError, result.get("error"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_HidesInternalServerErrors() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(
+                null,
+                input,
+                new OpenSearchStatusException("all shards failed on node [abc123]", RestStatus.INTERNAL_SERVER_ERROR),
+                "container-123"
+            );
+
+        assertEquals("Internal server error", result.get("error"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_RecordsClientError() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        String clientError = "LLM predict result cannot be extracted with current llm_result_path";
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(null, input, new OpenSearchStatusException(clientError, RestStatus.BAD_REQUEST), "container-123");
+
+        assertEquals(clientError, result.get("error"));
+    }
+
+    @Test
+    public void testWriteErrorToMemoryHistory_HistoryDisabled_WritesNothing() {
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+
+        memoryOperationsService.writeErrorToMemoryHistory(storageConfig, null, input, new RuntimeException("LLM error"));
+
+        verify(memoryContainerHelper, never()).indexData(any(), any(), any());
+    }
+
+    @Test
+    public void testWriteErrorToMemoryHistory_HistoryEnabled_WritesErrorDoc() {
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
+        when(storageConfig.getLongMemoryHistoryIndexName()).thenReturn("history-index");
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+
+        memoryOperationsService.writeErrorToMemoryHistory(storageConfig, null, input, new RuntimeException("LLM error"));
+
+        verify(memoryContainerHelper, times(1)).indexData(any(), any(), any());
     }
 
 }

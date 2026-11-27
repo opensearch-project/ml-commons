@@ -720,4 +720,68 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         assertFalse(wrapped.getMessage().contains("10.0.0.5"));
         assertFalse(wrapped.getMessage().contains("abc123"));
     }
+
+    @Test
+    public void testWrapAsStatusExceptionWithRemoteError_ForwardsRemote5XXMessage() {
+        // A remote model error is already returned by _predict to the same caller, so it is forwarded with its status.
+        String remoteError = "Error from remote service: {\"error\": {\"message\": \"upstream failure\"}}";
+        Exception wrapped = RestActionUtils
+            .wrapAsStatusExceptionWithRemoteError(
+                new org.opensearch.OpenSearchStatusException(remoteError, RestStatus.SERVICE_UNAVAILABLE)
+            );
+        assertTrue(wrapped instanceof org.opensearch.OpenSearchStatusException);
+        assertEquals(RestStatus.SERVICE_UNAVAILABLE, ExceptionsHelper.status(wrapped));
+        assertEquals(remoteError, wrapped.getMessage());
+    }
+
+    @Test
+    public void testWrapAsStatusExceptionWithRemoteError_UnwrapsTransportWrapper() {
+        // A remote model error relayed from another node is unwrapped, so the node details in the wrapper are dropped.
+        String remoteError = "Error from remote service: {\"error\": {\"message\": \"Incorrect API key provided\"}}";
+        org.opensearch.transport.RemoteTransportException transportException = new org.opensearch.transport.RemoteTransportException(
+            "[node-1][10.0.0.5:9300][cluster:admin/opensearch/ml/predict]",
+            new org.opensearch.OpenSearchStatusException(remoteError, RestStatus.UNAUTHORIZED)
+        );
+        Exception wrapped = RestActionUtils.wrapAsStatusExceptionWithRemoteError(transportException);
+        assertEquals(RestStatus.UNAUTHORIZED, ExceptionsHelper.status(wrapped));
+        assertEquals(remoteError, wrapped.getMessage());
+        assertNull(wrapped.getCause());
+    }
+
+    @Test
+    public void testWrapAsStatusExceptionWithRemoteError_SanitizesOtherServerErrors() {
+        Exception wrapped = RestActionUtils
+            .wrapAsStatusExceptionWithRemoteError(
+                new org.opensearch.OpenSearchStatusException("all shards failed on node [abc123]", RestStatus.INTERNAL_SERVER_ERROR)
+            );
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+    }
+
+    @Test
+    public void testWrapAsStatusExceptionWithRemoteError_PreservesClientError() {
+        IllegalArgumentException original = new IllegalArgumentException("bad input");
+        assertSame(original, RestActionUtils.wrapAsStatusExceptionWithRemoteError(original));
+    }
+
+    @Test
+    public void testWrapAsStatusExceptionWithRemoteError_NullStatusFallsBackTo500() {
+        // RestStatus.fromCode returns null for unknown HTTP codes such as 529
+        String remoteError = "Error from remote service: {\"error\": {\"message\": \"overloaded\"}}";
+        Exception wrapped = RestActionUtils
+            .wrapAsStatusExceptionWithRemoteError(new org.opensearch.OpenSearchStatusException(remoteError, null));
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals(remoteError, wrapped.getMessage());
+    }
+
+    @Test
+    public void testWrapAsStatusException_NullStatusIsSanitized() {
+        Exception wrapped = RestActionUtils
+            .wrapAsStatusException(
+                new org.opensearch.OpenSearchStatusException("Remote service returned error status 529 with empty body", null)
+            );
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ExceptionsHelper.status(wrapped));
+        assertEquals("Internal server error", wrapped.getMessage());
+    }
+
 }

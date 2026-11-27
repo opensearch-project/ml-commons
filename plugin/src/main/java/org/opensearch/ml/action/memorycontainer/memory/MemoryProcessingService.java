@@ -186,19 +186,13 @@ public class MemoryProcessingService {
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
-                if (e instanceof OpenSearchException) {
-                    OpenSearchException osException = (OpenSearchException) e;
-                    if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
-                        listener.onFailure(e);
-                        return;
-                    }
-                }
+                // Pass the original exception through; the caller records it in history and sanitizes the response
                 log.error("Failed to parse facts from LLM response", e);
-                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                listener.onFailure(e);
             }
         }, e -> {
             log.error("Failed to call LLM for fact extraction", e);
-            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            listener.onFailure(e);
         }));
     }
 
@@ -322,21 +316,13 @@ public class MemoryProcessingService {
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
-                    // Preserve client errors (4XX) with their detailed messages
-                    if (e instanceof OpenSearchException) {
-                        OpenSearchException osException = (OpenSearchException) e;
-                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
-                            listener.onFailure(e);
-                            return;
-                        }
-                    }
-                    // Wrap server errors and unexpected exceptions
+                    // Pass the original exception through; the caller records it in history and sanitizes the response
                     log.error("Failed to parse memory decisions from LLM response", e);
-                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    listener.onFailure(e);
                 }
             }, e -> {
                 log.error("Failed to get memory decisions from LLM", e);
-                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                listener.onFailure(e);
             }));
         } catch (Exception e) {
             log.error("Failed to build memory decision request", e);
@@ -531,21 +517,13 @@ public class MemoryProcessingService {
                         String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
                         listener.onResponse(summary);
                     } catch (Exception e) {
-                        // Preserve client errors (4XX) with their detailed messages
-                        if (e instanceof OpenSearchException) {
-                            OpenSearchException osException = (OpenSearchException) e;
-                            if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
-                                listener.onFailure(e);
-                                return;
-                            }
-                        }
-                        // Wrap server errors and unexpected exceptions
-                        log.error("Failed to parse memory decisions from LLM response", e);
-                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                        // Pass the original exception through; the caller sanitizes the response
+                        log.error("Failed to parse session summary from LLM response", e);
+                        listener.onFailure(e);
                     }
                 }, e -> {
-                    log.error("Failed to get memory decisions from LLM", e);
-                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    log.error("Failed to call LLM for session summary", e);
+                    listener.onFailure(e);
                 }));
             } catch (Exception e) {
                 log.error("Failed to build summarization request", e);

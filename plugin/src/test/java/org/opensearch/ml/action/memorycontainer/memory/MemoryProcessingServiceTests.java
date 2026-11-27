@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -1392,29 +1393,101 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testExtractFactsFromConversation_Wraps5XXErrors() {
+    public void testExtractFactsFromConversation_PassesLlmFailureThrough() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        // Mock LLM to throw a server error (5XX)
+        // Mock LLM to throw a remote server error (5XX)
+        OpenSearchStatusException llmError = new OpenSearchStatusException(
+            "Error from remote service: {\"error\": {\"message\": \"upstream failure\"}}",
+            RestStatus.SERVICE_UNAVAILABLE
+        );
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
-            listener.onFailure(new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE));
+            listener.onFailure(llmError);
             return null;
         }).when(client).execute(any(), any(), any());
 
         memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
-        // Verify that 5XX error is wrapped in generic "Internal server error"
-        verify(factsListener)
-            .onFailure(
-                argThat(
-                    exception -> exception instanceof OpenSearchStatusException
-                        && ((OpenSearchStatusException) exception).status() == RestStatus.INTERNAL_SERVER_ERROR
-                        && exception.getMessage().contains("Internal server error")
-                )
-            );
+        // The original exception is passed through; the transport action decides what the client sees
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(factsListener).onFailure(captor.capture());
+        assertSame(llmError, captor.getValue());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_KeepsRemote4XXStatus() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        OpenSearchStatusException llmError = new OpenSearchStatusException(
+            "Error from remote service: {\"error\": {\"message\": \"Incorrect API key provided\"}}",
+            RestStatus.UNAUTHORIZED
+        );
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onFailure(llmError);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(factsListener).onFailure(captor.capture());
+        assertSame(llmError, captor.getValue());
+        assertEquals(RestStatus.UNAUTHORIZED, ((OpenSearchStatusException) captor.getValue()).status());
+    }
+
+    @Test
+    public void testMakeMemoryDecisions_PassesLlmFailureThrough() {
+        List<String> facts = Arrays.asList("User name is John");
+        List<FactSearchResult> searchResults = Arrays.asList();
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        OpenSearchStatusException llmError = new OpenSearchStatusException(
+            "Error from remote service: {\"error\": {\"message\": \"upstream failure\"}}",
+            RestStatus.INTERNAL_SERVER_ERROR
+        );
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onFailure(llmError);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(decisionsListener).onFailure(captor.capture());
+        assertSame(llmError, captor.getValue());
+    }
+
+    @Test
+    public void testSummarizeMessages_PassesLlmFailureThrough() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
+        ActionListener<String> summaryListener = mock(ActionListener.class);
+
+        OpenSearchStatusException llmError = new OpenSearchStatusException(
+            "Error from remote service: {\"error\": {\"message\": \"Incorrect API key provided\"}}",
+            RestStatus.UNAUTHORIZED
+        );
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onFailure(llmError);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.summarizeMessages(null, storageConfig, messages, summaryListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(summaryListener).onFailure(captor.capture());
+        assertSame(llmError, captor.getValue());
     }
 
     @Test

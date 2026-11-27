@@ -2069,4 +2069,145 @@ public class TransportAddMemoriesActionTests {
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
         verify(actionListener, org.mockito.Mockito.never()).onFailure(any());
     }
+
+    private static final String REMOTE_LLM_ERROR = "Error from remote service: {\"error\": {\"message\": \"upstream failure\"}}";
+
+    private MLAddMemoriesRequest mockInferRequest(MLAddMemoriesInput input, MemoryConfiguration config, List<MessageInput> messages) {
+        when(input.getPinned()).thenReturn(null);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any(), any());
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-123");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        return request;
+    }
+
+    @Test
+    public void testDoExecute_SessionCreation_SummarizeRemote5XX_ForwardsRemoteMessage() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Hello")).role("user").build());
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(new HashMap<>());
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123");
+        MLAddMemoriesRequest request = mockInferRequest(input, config, messages);
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(3);
+            listener.onFailure(new OpenSearchStatusException(REMOTE_LLM_ERROR, RestStatus.INTERNAL_SERVER_ERROR));
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(any(), eq(config), eq(messages), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // The remote model's error is shown, as _predict does; other 5xx errors stay hidden
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals(REMOTE_LLM_ERROR, captor.getValue().getMessage());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
+    }
+
+    @Test
+    public void testExtractLongTermMemory_Remote4XXFailure_WritesHistoryWithOriginalCause() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test")).role("user").build());
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("user_id", "user-123");
+        namespace.put("session_id", "session-123");
+        MemoryStrategy strategy = new MemoryStrategy("strat-1", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.isInfer()).thenReturn(true);
+        when(input.getNamespace()).thenReturn(namespace);
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getLlmId()).thenReturn("llm-123");
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getStrategies()).thenReturn(Arrays.asList(strategy));
+        MLAddMemoriesRequest request = mockInferRequest(input, config, messages);
+
+        // A rejected API key comes back from the remote model as a 4xx
+        OpenSearchStatusException llmError = new OpenSearchStatusException(
+            "Error from remote service: {\"error\": {\"message\": \"Incorrect API key provided\"}}",
+            RestStatus.UNAUTHORIZED
+        );
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(4);
+            listener.onFailure(llmError);
+            return null;
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(memoryOperationsService).writeErrorToMemoryHistory(eq(config), any(), eq(input), eq(llmError));
+    }
+
+    @Test
+    public void testStoreLongTermMemory_DecisionFailure_WritesHistoryWithOriginalCause() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test")).role("user").build());
+        Map<String, String> namespace = new HashMap<>();
+        namespace.put("user_id", "user-123");
+        namespace.put("session_id", "session-123");
+        MemoryStrategy strategy = new MemoryStrategy("strat-1", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.isInfer()).thenReturn(true);
+        when(input.getNamespace()).thenReturn(namespace);
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getLlmId()).thenReturn("llm-123");
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getStrategies()).thenReturn(Arrays.asList(strategy));
+        MLAddMemoriesRequest request = mockInferRequest(input, config, messages);
+
+        List<String> facts = Arrays.asList("fact1");
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(4);
+            listener.onResponse(facts);
+            return null;
+        }).when(memoryProcessingService).runMemoryStrategy(any(), eq(strategy), eq(messages), eq(config), any());
+        doAnswer(invocation -> {
+            ActionListener<List> listener = invocation.getArgument(4);
+            listener.onResponse(Arrays.asList("similarFact1"));
+            return null;
+        }).when(memorySearchService).searchSimilarFactsForSession(eq(strategy), eq(input), eq(facts), eq(config), any());
+
+        OpenSearchStatusException llmError = new OpenSearchStatusException(REMOTE_LLM_ERROR, RestStatus.INTERNAL_SERVER_ERROR);
+        doAnswer(invocation -> {
+            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(5);
+            listener.onFailure(llmError);
+            return null;
+        }).when(memoryProcessingService).makeMemoryDecisions(any(), eq(facts), any(), any(), eq(config), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        verify(memoryOperationsService).writeErrorToMemoryHistory(eq(config), any(), eq(input), eq(llmError));
+    }
+
 }
