@@ -16,6 +16,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.tools.templatefill.FillToolSchemaTests.productSchema;
@@ -359,6 +360,20 @@ public class SearchTemplateFillToolTests {
         verify(fallbackTool).run(fallbackParams.capture(), any());
         assertFalse(fallbackParams.getValue().containsKey("stream"));
         assertEquals("true", params.get("stream"));
+    }
+
+    @Test
+    public void fallbackFailure_isReturnedOnce() {
+        // e.g. the fallback QueryPlanningTool rejects a raw model response envelope
+        IllegalArgumentException notAQuery = new IllegalArgumentException("The model output is not an OpenSearch query");
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(notAQuery);
+            return null;
+        }).when(fallbackTool).run(any(), any());
+        modelFills("FillTemplate", Map.of("cannot_express", true));
+        assertEquals(notAQuery, runFailing(tool("product_search"), question()));
+        verify(fallbackTool, times(1)).run(any(), any());
     }
 
     @Test
