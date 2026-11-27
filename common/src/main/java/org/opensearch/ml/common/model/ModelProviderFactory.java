@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.model;
 
+import org.opensearch.ml.common.agent.AnthropicMessagesModelProvider;
 import org.opensearch.ml.common.agent.BedrockConverseModelProvider;
 import org.opensearch.ml.common.agent.GeminiV1BetaGenerateContentModelProvider;
 import org.opensearch.ml.common.agent.OpenaiV1ChatCompletionsModelProvider;
@@ -29,6 +30,7 @@ public class ModelProviderFactory {
             case BEDROCK_CONVERSE -> new BedrockConverseModelProvider();
             case GEMINI_V1BETA_GENERATE_CONTENT -> new GeminiV1BetaGenerateContentModelProvider();
             case OPENAI_V1_CHAT_COMPLETIONS -> new OpenaiV1ChatCompletionsModelProvider();
+            case ANTHROPIC_MESSAGES -> new AnthropicMessagesModelProvider();
             default -> throw new IllegalArgumentException("Unsupported model provider type");
         };
     }

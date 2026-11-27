@@ -24,6 +24,7 @@ public class Message {
 
     private List<ToolCall> toolCalls;  // Optional, for assistant messages with tool calls
     private String toolCallId;  // Optional, for tool result messages (role "tool")
+    private Boolean toolError;  // Optional, true when a tool result message reports a failed tool call
 
     public Message(String role, List<ContentBlock> content) {
         this.role = role;

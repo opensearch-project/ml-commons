@@ -335,6 +335,26 @@ public abstract class AbstractV2AgentRunner implements MLAgentRunner {
     }
 
     /**
+     * Add the model provider's prompt-cache breakpoints for the tools and the conversation, as configured in
+     * the agent's model parameters. Call once the request parameters hold the messages and the tools.
+     * The provider checks each flag itself and validates the cache settings on every request.
+     *
+     * @param mlAgent Agent configuration; its LLM parameters are the model_parameters given at registration
+     * @param llmParams LLM request parameters, updated in place
+     * @param messages Messages the request body was built from
+     * @param modelProvider Model provider that renders the breakpoints
+     */
+    protected final void applyPromptCache(
+        MLAgent mlAgent,
+        Map<String, String> llmParams,
+        List<Message> messages,
+        ModelProvider modelProvider
+    ) {
+        Map<String, String> modelParameters = mlAgent.getLlm() != null ? mlAgent.getLlm().getParameters() : null;
+        modelProvider.applyPromptCache(llmParams, messages, MLAgentType.from(mlAgent.getType()), modelParameters);
+    }
+
+    /**
      * Get system prompt with fallback.
      * Default implementation checks params → agent params → default.
      * Override if agent needs custom system prompt logic.
