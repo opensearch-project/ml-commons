@@ -6,12 +6,19 @@
 package org.opensearch.ml.utils;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.WrapperQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
@@ -36,7 +43,43 @@ public class MemorySearchQueryBuilderNewMethodsTests {
             .build();
     }
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> semanticEmbeddingClause(QueryBuilder query, String queryType) {
+        WrapperQueryBuilder wrapper = (WrapperQueryBuilder) ((BoolQueryBuilder) query).must().get(0);
+        String json = new String(wrapper.source(), StandardCharsets.UTF_8);
+        Map<String, Object> parsed = XContentHelper.convertToMap(JsonXContent.jsonXContent, json, false);
+        return (Map<String, Object>) ((Map<String, Object>) parsed.get(queryType)).get(MEMORY_EMBEDDING_FIELD);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> hybridEmbeddingClause(String query, String queryType) {
+        Map<String, Object> parsed = XContentHelper.convertToMap(JsonXContent.jsonXContent, query, false);
+        List<Object> queries = (List<Object>) ((Map<String, Object>) parsed.get("hybrid")).get("queries");
+        Map<String, Object> neural = (Map<String, Object>) queries.get(1);
+        return (Map<String, Object>) ((Map<String, Object>) neural.get(queryType)).get(MEMORY_EMBEDDING_FIELD);
+    }
+
     // === buildSemanticSearchQuery tests ===
+
+    @Test
+    public void testBuildSemanticSearchQuery_TextEmbedding_IncludesK() {
+        QueryBuilder query = MemorySearchQueryBuilder
+            .buildSemanticSearchQuery("test query", null, null, null, "container-1", textEmbeddingConfig(), null, 7);
+        Map<String, Object> clause = semanticEmbeddingClause(query, "neural");
+        assertEquals("test query", clause.get("query_text"));
+        assertEquals("model-123", clause.get("model_id"));
+        assertEquals(7, clause.get("k"));
+    }
+
+    @Test
+    public void testBuildSemanticSearchQuery_SparseEncoding_OmitsK() {
+        QueryBuilder query = MemorySearchQueryBuilder
+            .buildSemanticSearchQuery("test query", null, null, null, "container-1", sparseEncodingConfig(), null, 7);
+        Map<String, Object> clause = semanticEmbeddingClause(query, "neural_sparse");
+        assertEquals("test query", clause.get("query_text"));
+        assertEquals("sparse-model-456", clause.get("model_id"));
+        assertFalse("neural_sparse does not accept k", clause.containsKey("k"));
+    }
 
     @Test
     public void testBuildSemanticSearchQuery_TextEmbedding() {
@@ -157,6 +200,24 @@ public class MemorySearchQueryBuilderNewMethodsTests {
         assertTrue(query.contains("match"));
         assertTrue(query.contains("neural_sparse"));
         assertTrue(query.contains("sparse-model-456"));
+    }
+
+    @Test
+    public void testBuildHybridSearchQueryString_TextEmbedding_IncludesK() {
+        String query = MemorySearchQueryBuilder
+            .buildHybridSearchQueryString("test query", textEmbeddingConfig(), 7, null, null, null, "c1", null);
+        Map<String, Object> clause = hybridEmbeddingClause(query, "neural");
+        assertEquals("model-123", clause.get("model_id"));
+        assertEquals(7, clause.get("k"));
+    }
+
+    @Test
+    public void testBuildHybridSearchQueryString_SparseEncoding_OmitsK() {
+        String query = MemorySearchQueryBuilder
+            .buildHybridSearchQueryString("test query", sparseEncodingConfig(), 7, null, null, null, "c1", null);
+        Map<String, Object> clause = hybridEmbeddingClause(query, "neural_sparse");
+        assertEquals("sparse-model-456", clause.get("model_id"));
+        assertFalse("neural_sparse does not accept k", clause.containsKey("k"));
     }
 
     @Test

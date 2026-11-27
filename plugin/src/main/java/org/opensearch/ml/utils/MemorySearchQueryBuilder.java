@@ -206,20 +206,18 @@ public class MemorySearchQueryBuilder {
             && memoryConfig.getEmbeddingModelType() != FunctionName.SPARSE_ENCODING) {
             throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
         }
-        String queryType = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING ? "neural" : "neural_sparse";
+        boolean isDense = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING;
+        String queryType = isDense ? "neural" : "neural_sparse";
         try {
-            String neuralQuery = XContentBuilder
+            XContentBuilder builder = XContentBuilder
                 .builder(jsonXContent)
                 .startObject()
                 .startObject(queryType)
                 .startObject(MEMORY_EMBEDDING_FIELD)
                 .field("query_text", query)
-                .field("model_id", memoryConfig.getEmbeddingModelId())
-                .field("k", k)
-                .endObject()
-                .endObject()
-                .endObject()
-                .toString();
+                .field("model_id", memoryConfig.getEmbeddingModelId());
+            addKForDenseQuery(builder, isDense, k);
+            String neuralQuery = builder.endObject().endObject().endObject().toString();
             boolQuery.must(QueryBuilders.wrapperQuery(neuralQuery));
         } catch (IOException e) {
             throw new IllegalStateException("Failed to build neural query", e);
@@ -272,7 +270,8 @@ public class MemorySearchQueryBuilder {
             && memoryConfig.getEmbeddingModelType() != FunctionName.SPARSE_ENCODING) {
             throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
         }
-        String queryType = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING ? "neural" : "neural_sparse";
+        boolean isDense = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING;
+        String queryType = isDense ? "neural" : "neural_sparse";
 
         // Build the filter bool query for hybrid.filter
         BoolQueryBuilder filterQuery = QueryBuilders.boolQuery();
@@ -297,12 +296,9 @@ public class MemorySearchQueryBuilder {
                 .startObject(queryType)
                 .startObject(MEMORY_EMBEDDING_FIELD)
                 .field("query_text", query)
-                .field("model_id", memoryConfig.getEmbeddingModelId())
-                .field("k", k)
-                .endObject()
-                .endObject()
-                .endObject()
-                .endArray();
+                .field("model_id", memoryConfig.getEmbeddingModelId());
+            addKForDenseQuery(builder, isDense, k);
+            builder.endObject().endObject().endObject().endArray();
 
             // Add filter inside hybrid query (not post_filter)
             if (hasFilters) {
@@ -313,6 +309,16 @@ public class MemorySearchQueryBuilder {
             return builder.endObject().endObject().toString();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to build hybrid search query", e);
+        }
+    }
+
+    /**
+     * Adds k to a neural query clause. neural_sparse does not accept k, so for sparse queries the caller limits
+     * results with the search request size instead.
+     */
+    private static void addKForDenseQuery(XContentBuilder builder, boolean isDense, int k) throws IOException {
+        if (isDense) {
+            builder.field("k", k);
         }
     }
 
