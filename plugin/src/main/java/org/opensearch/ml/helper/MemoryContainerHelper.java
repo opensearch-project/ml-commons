@@ -39,6 +39,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.ingest.DeletePipelineRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -333,6 +334,28 @@ public class MemoryContainerHelper {
             }
         } else {
             client.admin().indices().delete(deleteIndexRequest, listener);
+        }
+    }
+
+    /**
+     * Delete an ingest pipeline, using the same thread context as {@link #deleteIndex} for the container's indices.
+     *
+     * @param configuration memory configuration
+     * @param pipelineName the pipeline to delete
+     * @param listener action listener for the result
+     */
+    public void deleteIngestPipeline(
+        MemoryConfiguration configuration,
+        String pipelineName,
+        ActionListener<AcknowledgedResponse> listener
+    ) {
+        DeletePipelineRequest deletePipelineRequest = new DeletePipelineRequest(pipelineName);
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.admin().cluster().deletePipeline(deletePipelineRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.admin().cluster().deletePipeline(deletePipelineRequest, listener);
         }
     }
 

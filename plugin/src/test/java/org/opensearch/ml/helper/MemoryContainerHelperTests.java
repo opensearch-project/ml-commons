@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BEDROCK_STRUCTURED_OUTPUT_RESULT_PATH;
@@ -44,6 +45,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.ingest.DeletePipelineRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
@@ -477,6 +479,28 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         }).when(client).bulk(eq(bulkRequest), any());
         helper.bulkIngestData(systemConfig, bulkRequest, bulkFuture);
         assertNotNull(bulkFuture.actionGet());
+    }
+
+    public void testDeleteIngestPipeline() {
+        AdminClient adminClient = mock(AdminClient.class);
+        ClusterAdminClient clusterAdminClient = mock(ClusterAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+        doAnswer(invocation -> {
+            DeletePipelineRequest request = invocation.getArgument(0);
+            assertEquals("index-embedding", request.getId());
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(clusterAdminClient).deletePipeline(any(DeletePipelineRequest.class), any());
+
+        for (boolean useSystemIndex : new boolean[] { false, true }) {
+            MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(useSystemIndex).build();
+            PlainActionFuture<AcknowledgedResponse> future = PlainActionFuture.newFuture();
+            helper.deleteIngestPipeline(configuration, "index-embedding", future);
+            assertTrue(future.actionGet().isAcknowledged());
+        }
+        verify(clusterAdminClient, times(2)).deletePipeline(any(DeletePipelineRequest.class), any());
     }
 
     public void testBulkIngestData() {

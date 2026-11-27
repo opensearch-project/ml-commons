@@ -1327,8 +1327,9 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testCreateContainer_PipelineAlreadyExists() throws InterruptedException {
-        // Test shared index scenario where pipeline already exists
+    public void testCreateContainer_LeftoverPipelineWithoutIndex_IsOverwritten() throws InterruptedException {
+        // A pipeline left over from a deleted container exists, but its long-term index does not
+        // (mockSuccessfulModelValidation makes get-mappings report the index as missing)
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
 
@@ -1346,6 +1347,13 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(getPipelineResponse);
             return null;
         }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        ArgumentCaptor<PutPipelineRequest> putPipelineCaptor = ArgumentCaptor.forClass(PutPipelineRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(clusterAdminClient).putPipeline(putPipelineCaptor.capture(), any(ActionListener.class));
 
         mockSuccessfulModelValidation();
         mockSuccessfulIndexCreation();
@@ -1366,6 +1374,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLCreateMemoryContainerResponse response = responseCaptor.getValue();
         assertNotNull(response);
         assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
+        // The leftover pipeline is replaced with this container's embedding model
+        PutPipelineRequest putPipelineRequest = putPipelineCaptor.getValue();
+        assertTrue(putPipelineRequest.getId().endsWith("-memory-long-term-embedding"));
+        assertTrue(putPipelineRequest.getSource().utf8ToString().contains("\"model_id\":\"test-embedding-model\""));
     }
 
     @Test
@@ -1774,6 +1786,8 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLCreateMemoryContainerResponse response = responseCaptor.getValue();
         assertNotNull(response);
         assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
+        // The shared index keeps its existing pipeline
+        verify(clusterAdminClient, never()).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
     }
 
     @Test
