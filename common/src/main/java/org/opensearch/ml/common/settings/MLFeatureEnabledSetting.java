@@ -9,6 +9,8 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_TEMPLATE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_AUTH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -21,6 +23,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MUTUAL_TLS_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
@@ -29,6 +32,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REM
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_UNIFIED_AGENT_API_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED;
 
@@ -38,6 +42,7 @@ import java.util.List;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.common.connector.auth.TokenEndpointAllowlist;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -51,6 +56,7 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isLocalModelEnabled;
     private volatile Boolean isConnectorPrivateIpEnabled;
     private volatile List<String> trustedConnectorEndpointsRegex;
+    private volatile Boolean isLegacyActionUrlOriginEnabled;
 
     private volatile Boolean isControllerEnabled;
     private volatile Boolean isBatchIngestionEnabled;
@@ -78,6 +84,10 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isVertexAIConnectorEnabled;
 
+    private volatile Boolean isConnectorAuthEnabled;
+    private volatile TokenEndpointAllowlist trustedOAuth2TokenEndpoints;
+    private volatile Integer oauth2TokenCacheMaxSeconds;
+
     private volatile Boolean isMutualTlsEnabled;
 
     private volatile Boolean isIndexInsightEnabled;
@@ -100,6 +110,7 @@ public class MLFeatureEnabledSetting {
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings);
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        isLegacyActionUrlOriginEnabled = ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED.get(settings);
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
@@ -114,6 +125,9 @@ public class MLFeatureEnabledSetting {
         isRemoteAgenticMemoryEnabled = ML_COMMONS_REMOTE_AGENTIC_MEMORY_ENABLED.get(settings);
         isMemoryRetentionEnabled = ML_COMMONS_MEMORY_RETENTION_ENABLED.get(settings);
         isVertexAIConnectorEnabled = ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED.get(settings);
+        isConnectorAuthEnabled = ML_COMMONS_CONNECTOR_AUTH_ENABLED.get(settings);
+        trustedOAuth2TokenEndpoints = new TokenEndpointAllowlist(ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX.get(settings));
+        oauth2TokenCacheMaxSeconds = ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS.get(settings);
         isMutualTlsEnabled = ML_COMMONS_MUTUAL_TLS_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
@@ -140,6 +154,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED, it -> isLegacyActionUrlOriginEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
         clusterService
             .getClusterSettings()
@@ -163,6 +180,16 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_VERTEXAI_CONNECTOR_ENABLED, it -> isVertexAIConnectorEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_AUTH_ENABLED, it -> isConnectorAuthEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(
+                ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX,
+                it -> trustedOAuth2TokenEndpoints = new TokenEndpointAllowlist(it)
+            );
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS, it -> oauth2TokenCacheMaxSeconds = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MUTUAL_TLS_ENABLED, it -> isMutualTlsEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
         clusterService
@@ -230,6 +257,11 @@ public class MLFeatureEnabledSetting {
     public List<String> getTrustedConnectorEndpointsRegex() {
         List<String> current = trustedConnectorEndpointsRegex;
         return current == null ? Collections.emptyList() : Collections.unmodifiableList(current);
+    }
+
+    /** Whether a connector whose parameters give no origin for an action URL keeps the allowlist-only check (deprecated). */
+    public boolean isLegacyActionUrlOriginEnabled() {
+        return isLegacyActionUrlOriginEnabled;
     }
 
     /**
@@ -332,6 +364,30 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isVertexAIConnectorEnabled() {
         return isVertexAIConnectorEnabled;
+    }
+
+    /**
+     * Whether connector auth_config can be written, the type none included. Disabled by default (opt-in).
+     * @return whether connector auth_config is enabled.
+     */
+    public boolean isConnectorAuthEnabled() {
+        return isConnectorAuthEnabled;
+    }
+
+    /**
+     * The patterns a connector auth_config token_url must match, in canonical form.
+     * @return the current patterns, compiled once per settings change.
+     */
+    public TokenEndpointAllowlist getTrustedOAuth2TokenEndpoints() {
+        return trustedOAuth2TokenEndpoints;
+    }
+
+    /**
+     * The longest time, in seconds, a cached OAuth2 access token may be used.
+     * @return the current value of plugins.ml_commons.connector.oauth2_token_cache_max_seconds.
+     */
+    public int getOAuth2TokenCacheMaxSeconds() {
+        return oauth2TokenCacheMaxSeconds;
     }
 
     /**

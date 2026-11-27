@@ -74,6 +74,7 @@ public abstract class AbstractConnector implements Connector {
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
     public static final String BATCH_JOB_STATUS_FIELD = "batch_job_status";
+    public static final String AUTH_CONFIG_FIELD = "auth_config";
 
     protected String name;
     protected String description;
@@ -206,8 +207,7 @@ public abstract class AbstractConnector implements Connector {
         }
         String predictEndpoint = actionEndpoint.get().getUrl();
         if (parameters != null && !parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
+            predictEndpoint = Connector.substituteParameters(predictEndpoint, parameters);
         }
         return predictEndpoint;
     }

@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -19,4 +21,10 @@ import lombok.Data;
 public class ExecutionContext {
     // Should never be null
     private int sequence;
+
+    /**
+     * Set once the access token of this request has been replaced after the remote service answered 401. Every retry
+     * attempt of the request shares this object, so the token is replaced at most once per request.
+     */
+    private final AtomicBoolean tokenRefreshUsed = new AtomicBoolean(false);
 }
