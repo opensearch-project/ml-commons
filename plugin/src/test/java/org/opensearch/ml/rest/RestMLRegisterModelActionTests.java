@@ -19,6 +19,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -107,6 +108,13 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         String actionName = restMLRegisterModelAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_register_model_action", actionName);
+    }
+
+    public void testGetFilteredFields_redactsTheAuthConfigSecret() {
+        assertEquals(
+            Set.of("connector.credential", "*.Authorization", "connector.auth_config.client_secret"),
+            restMLRegisterModelAction.getFilteredFields()
+        );
     }
 
     @Ignore

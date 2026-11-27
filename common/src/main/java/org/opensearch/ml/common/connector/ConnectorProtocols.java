@@ -22,6 +22,8 @@ public class ConnectorProtocols {
 
     private static final Set<String> MCP_PROTOCOLS = Set.of(MCP_SSE, MCP_STREAMABLE_HTTP);
 
+    private static final Set<String> AUTH_CONFIG_PROTOCOLS = Set.of(HTTP);
+
     /**
      * Whether the protocol speaks MCP. MCP connectors are a different shape from the inference protocols:
      * they carry no actions, so the action accessors on {@link Connector} are unimplemented for them and
@@ -38,6 +40,18 @@ public class ConnectorProtocols {
      */
     public static boolean isMcpProtocol(String protocol) {
         return protocol != null && MCP_PROTOCOLS.contains(protocol.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * Whether connectors of {@code protocol} take an {@code auth_config} declaration. The protocol decides, not the
+     * connector class, so a connector whose protocol an update changes is validated on the resulting protocol.
+     * Matching ignores case, as {@link #isMcpProtocol(String)} does.
+     *
+     * @param protocol connector protocol, may be null
+     * @return true if connectors of the protocol take {@code auth_config}
+     */
+    public static boolean supportsAuthConfig(String protocol) {
+        return protocol != null && AUTH_CONFIG_PROTOCOLS.contains(protocol.toLowerCase(Locale.ROOT));
     }
 
     public static void validateProtocol(String protocol) {

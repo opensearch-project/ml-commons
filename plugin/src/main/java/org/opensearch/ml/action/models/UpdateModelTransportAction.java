@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -48,6 +49,7 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -60,6 +62,7 @@ import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -92,6 +95,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     final MLModelManager mlModelManager;
     final MLModelGroupManager mlModelGroupManager;
     final MLEngine mlEngine;
+    final MLIndicesHandler mlIndicesHandler;
     volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
@@ -107,7 +111,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         Settings settings,
         ClusterService clusterService,
         MLEngine mlEngine,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLIndicesHandler mlIndicesHandler
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -119,6 +124,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mlIndicesHandler = mlIndicesHandler;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -144,6 +150,20 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             actionListener
                 .onFailure(new OpenSearchStatusException("Cannot update this model to use an MCP connector.", RestStatus.BAD_REQUEST));
             return;
+        }
+        // A caller-supplied connector is written as it is, so its auth_config gets the checks of a create. Whether it
+        // keeps the model's stored declaration is checked once the model has been read.
+        if (updateModelInput.getUpdatedConnector() != null) {
+            Connector supplied = updateModelInput.getUpdatedConnector();
+            try {
+                ConnectorProtocolValidator
+                    .validateAuth(supplied.getProtocol(), supplied.getAuthConfig(), mlFeatureEnabledSetting, clusterService::state);
+                AuthConfigValidator.validate(supplied, AuthConfigValidator.keysOf(supplied.getCredential()));
+            } catch (Exception e) {
+                log.error("Rejected update of model {} with a caller-supplied connector: {}", modelId, e.getMessage());
+                actionListener.onFailure(e);
+                return;
+            }
         }
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
@@ -300,6 +320,15 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         ActionListener<UpdateResponse> wrappedListener
     ) throws IOException {
+        // Before any branch below writes a caller-supplied connector.
+        if (updateModelInput.getUpdatedConnector() != null) {
+            try {
+                ConnectorProtocolValidator.validateSuppliedConnector(mlModel.getConnector(), updateModelInput.getUpdatedConnector());
+            } catch (IllegalArgumentException e) {
+                wrappedListener.onFailure(e);
+                return;
+            }
+        }
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
@@ -397,6 +426,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                 );
                             }
                         }
+                        // Outside the protocol block: an update that only changes auth_config sets no protocol. Runs
+                        // before update(), which changes the connector in place.
+                        ConnectorProtocolValidator
+                            .validateAuthAfterUpdate(
+                                connector,
+                                updatedProtocol,
+                                updateModelInput.getConnector().getAuthConfig(),
+                                updateModelInput.getConnector().getCredential(),
+                                mlFeatureEnabledSetting,
+                                clusterService::state
+                            );
                         ConnectorProtocolValidator
                             .validateMutualTlsSupportedAfterUpdate(
                                 connector.getProtocol(),
@@ -441,6 +481,12 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     // model document unreadable and undeletable.
                     Map<String, String> suppliedCredential = updateModelInput.getConnector().getCredential();
                     boolean hasSuppliedCredential = suppliedCredential != null && !suppliedCredential.isEmpty();
+                    // Before update(), which changes the connector in place. The stored credential values are
+                    // ciphertext; only their keys are needed.
+                    boolean authOrProtocolTouched = ConnectorProtocolValidator
+                        .touchesAuthOrProtocol(updateModelInput.getConnector().getAuthConfig(), updatedProtocol, connector.getProtocol());
+                    Set<String> storedKeys = AuthConfigValidator.keysOf(connector.getCredential());
+                    boolean storedPassed = AuthConfigValidator.passes(connector, storedKeys);
                     connector.update(updateModelInput.getConnector());
 
                     // Only validate headers if connector actions were modified in this update
@@ -451,6 +497,21 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             Map<String, String> headers = action.getHeaders();
                             AbstractConnector.validateConnectorHeaders(headers, connector.getProtocol());
                         }
+                    }
+                    // A supplied credential replaces the stored one, so its keys are the ones the references must name.
+                    Set<String> keyView = hasSuppliedCredential ? AuthConfigValidator.keysOf(suppliedCredential) : storedKeys;
+                    try {
+                        if (AuthConfigValidator.validateOrGrandfather(connector, keyView, authOrProtocolTouched, storedPassed)) {
+                            log
+                                .warn(
+                                    "Model {} keeps a stored inline auth_config that fails validation; this update leaves it unchanged",
+                                    modelId
+                                );
+                        }
+                    } catch (IllegalArgumentException e) {
+                        log.error("Rejected inline connector update for model {}", modelId, e);
+                        wrappedListener.onFailure(e);
+                        return;
                     }
                     ActionListener<Boolean> encryptSuccessfulListener = ActionListener.wrap(r -> {
                         connector.validateConnectorURL(trustedConnectorEndpointsRegex);
@@ -663,17 +724,19 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         } else {
             updateListener = getUpdateResponseListener(modelId, wrappedListener);
         }
-        sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
-            if (ut == null) {
-                try {
-                    updateListener.onResponse(ur.updateResponse());
-                } catch (Exception e) {
+        initModelIndexThenWrite(wrappedListener, () -> {
+            sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
+                if (ut == null) {
+                    try {
+                        updateListener.onResponse(ur.updateResponse());
+                    } catch (Exception e) {
+                        updateListener.onFailure(e);
+                    }
+                } else {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
                     updateListener.onFailure(e);
                 }
-            } else {
-                Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
-                updateListener.onFailure(e);
-            }
+            });
         });
     }
 
@@ -713,32 +776,52 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         } else {
             updateListener = getUpdateResponseListener(modelId, wrappedListener);
         }
-        sdkClient.updateDataObjectAsync(updateModelGroupRequest).whenComplete((r, throwable) -> {
-            if (throwable == null) {
-                sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
-                    if (ut == null) {
-                        try {
-                            updateListener.onResponse(ur.updateResponse());
-                        } catch (Exception e) {
+        // Before the model-group write as well, so a mapping failure leaves nothing half applied.
+        initModelIndexThenWrite(wrappedListener, () -> {
+            sdkClient.updateDataObjectAsync(updateModelGroupRequest).whenComplete((r, throwable) -> {
+                if (throwable == null) {
+                    sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
+                        if (ut == null) {
+                            try {
+                                updateListener.onResponse(ur.updateResponse());
+                            } catch (Exception e) {
+                                updateListener.onFailure(e);
+                            }
+                        } else {
+                            Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
                             updateListener.onFailure(e);
                         }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(ut);
-                        updateListener.onFailure(e);
-                    }
-                });
-            } else {
-                Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                log
-                    .error(
-                        "Failed to register ML model with model ID {} to the new model group with model group ID {}",
-                        modelId,
-                        newModelGroupId,
-                        e
-                    );
-                wrappedListener.onFailure(e);
-            }
+                    });
+                } else {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    log
+                        .error(
+                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                            modelId,
+                            newModelGroupId,
+                            e
+                        );
+                    wrappedListener.onFailure(e);
+                }
+            });
         });
+    }
+
+    /**
+     * As register does: brings the model index mapping up to date, so a document whose connector carries
+     * {@code auth_config} is never mapped dynamically, then runs {@code write}. A failure fails {@code listener} instead.
+     */
+    private void initModelIndexThenWrite(ActionListener<UpdateResponse> listener, Runnable write) {
+        mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
+            if (!indexCreated) {
+                listener.onFailure(new RuntimeException("No response to create ML Model index"));
+                return;
+            }
+            write.run();
+        }, e -> {
+            log.error("Failed to init ML model index", e);
+            listener.onFailure(e);
+        }));
     }
 
     private ActionListener<UpdateResponse> getUpdateResponseListenerWithUpdateModelCache(

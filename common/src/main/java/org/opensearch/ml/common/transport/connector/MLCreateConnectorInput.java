@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.MLModel.CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.GOOGLE_CLOUD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.HttpConnector.MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 
 import lombok.Builder;
 import lombok.Data;
@@ -91,6 +93,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private String provisionedBy;
     private String connectorId;
     private BatchJobStatusMapping batchJobStatus;
+    private OAuth2AuthConfig authConfig;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
@@ -112,7 +115,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Map<String, String> headers,
         String provisionedBy,
         String connectorId,
-        BatchJobStatusMapping batchJobStatus
+        BatchJobStatusMapping batchJobStatus,
+        OAuth2AuthConfig authConfig
     ) {
         if (!dryRun && !updateConnector) {
 
@@ -166,6 +170,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.provisionedBy = provisionedBy;
         this.connectorId = connectorId;
         this.batchJobStatus = batchJobStatus;
+        this.authConfig = authConfig;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -191,6 +196,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         String provisionedBy = null;
         String connectorId = null;
         BatchJobStatusMapping batchJobStatus = null;
+        OAuth2AuthConfig authConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -260,6 +266,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case AbstractConnector.BATCH_JOB_STATUS_FIELD:
                     batchJobStatus = BatchJobStatusMapping.parse(parser);
                     break;
+                case AbstractConnector.AUTH_CONFIG_FIELD:
+                    authConfig = OAuth2AuthConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -284,7 +293,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             headers,
             provisionedBy,
             connectorId,
-            batchJobStatus
+            batchJobStatus,
+            authConfig
         );
     }
 
@@ -305,6 +315,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (parameters != null) {
             builder.field(CONNECTOR_PARAMETERS_FIELD, parameters);
+        }
+        if (authConfig != null) {
+            builder.field(AbstractConnector.AUTH_CONFIG_FIELD, authConfig);
         }
         if (credential != null) {
             builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
@@ -425,6 +438,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 output.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH)) {
+            output.writeBoolean(authConfig != null);
+            if (authConfig != null) {
+                authConfig.writeTo(output);
+            }
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -472,5 +491,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             ? input.readOptionalString()
             : null;
         this.batchJobStatus = streamInputVersion.onOrAfter(VERSION_3_9_0) && input.readBoolean() ? new BatchJobStatusMapping(input) : null;
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH) && input.readBoolean()) {
+            this.authConfig = new OAuth2AuthConfig(input);
+        }
     }
 }
