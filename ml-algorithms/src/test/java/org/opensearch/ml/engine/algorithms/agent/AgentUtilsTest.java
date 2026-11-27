@@ -112,8 +112,10 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.BedrockConverseFunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
+import org.opensearch.ml.engine.function_calling.GeminiV1BetaGenerateContentFunctionCalling;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -123,6 +125,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.JsonSyntaxException;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import io.modelcontextprotocol.client.McpSyncClient;
 
@@ -2637,6 +2640,148 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Assert.assertEquals("", output.get(TOOL_CALL_ID));
         Assert.assertTrue(output.containsKey(FINAL_ANSWER));
         Assert.assertTrue(output.get(FINAL_ANSWER).contains("[]"));
+    }
+
+    private static Map<String, Object> reasoningBlock() {
+        return Map.of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+    }
+
+    private static Map<String, Object> converseResponse(String stopReason, List<Map<String, Object>> content) {
+        return Map.of("output", Map.of("message", Map.of("role", "assistant", "content", content)), "stopReason", stopReason);
+    }
+
+    private static ModelTensorOutput toModelTensorOutput(Map<String, Object> dataAsMap) {
+        return ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+    }
+
+    @Test
+    public void testReadLLMResponse_FirstBlockHasText() {
+        Map<String, Object> data = converseResponse("end_turn", List.of(Map.of("text", "first"), Map.of("text", "second")));
+        assertEquals("first", AgentUtils.readLLMResponse(data, "$.output.message.content[0].text"));
+    }
+
+    @Test
+    public void testReadLLMResponse_ReasoningBlockFirst_ReadsFirstTextBlock() {
+        Map<String, Object> data = converseResponse(
+            "end_turn",
+            List.of(reasoningBlock(), Map.of("text", "the answer"), Map.of("text", "more"))
+        );
+        assertEquals("the answer", AgentUtils.readLLMResponse(data, "$.output.message.content[0].text"));
+    }
+
+    @Test
+    public void testReadLLMResponse_NestedIndexFilter_ReadsFirstTextPart() {
+        Map<String, Object> functionCall = Map.of("functionCall", Map.of("name", "test_tool", "args", Map.of()));
+        Map<String, Object> data = Map
+            .of("candidates", List.of(Map.of("content", Map.of("parts", List.of(functionCall, Map.of("text", "x"))))));
+        assertEquals("x", AgentUtils.readLLMResponse(data, "$.candidates[0].content.parts[0].text"));
+    }
+
+    @Test
+    public void testReadLLMResponse_NoTextBlock_Throws() {
+        Map<String, Object> toolUse = Map.of("toolUse", Map.of("toolUseId", "t1", "name", "test_tool", "input", Map.of()));
+        Map<String, Object> data = converseResponse("tool_use", List.of(reasoningBlock(), toolUse));
+        assertThrows(PathNotFoundException.class, () -> AgentUtils.readLLMResponse(data, "$.output.message.content[0].text"));
+    }
+
+    @Test
+    public void testReadLLMResponse_OtherFilterNotFound_Throws() {
+        Map<String, Object> data = Map.of("choices", List.of(Map.of("message", Map.of("role", "assistant"))));
+        assertThrows(PathNotFoundException.class, () -> AgentUtils.readLLMResponse(data, "$.choices[0].message.content"));
+    }
+
+    @Test
+    public void testParseLLMOutput_BedrockConverseReasoningThenText_IsFinalAnswer() {
+        Map<String, String> parameters = new HashMap<>();
+        BedrockConverseFunctionCalling functionCalling = new BedrockConverseFunctionCalling();
+        functionCalling.configure(parameters);
+        Map<String, Object> data = converseResponse("end_turn", List.of(reasoningBlock(), Map.of("text", "There are 3 indices.")));
+        List<String> interactions = new ArrayList<>();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, toModelTensorOutput(data), null, Set.of("test_tool"), interactions, functionCalling);
+
+        Assert.assertEquals("There are 3 indices.", output.get(FINAL_ANSWER));
+        Assert.assertNull(output.get(ACTION));
+        Assert.assertTrue(interactions.isEmpty());
+    }
+
+    @Test
+    public void testParseLLMOutput_BedrockConverseReasoningThenToolUse_IsToolCall() {
+        Map<String, String> parameters = new HashMap<>();
+        BedrockConverseFunctionCalling functionCalling = new BedrockConverseFunctionCalling();
+        functionCalling.configure(parameters);
+        Map<String, Object> toolUse = Map.of("toolUse", Map.of("toolUseId", "t1", "name", "test_tool", "input", Map.of("q", "x")));
+        Map<String, Object> data = converseResponse("tool_use", List.of(reasoningBlock(), toolUse));
+        List<String> interactions = new ArrayList<>();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, toModelTensorOutput(data), null, Set.of("test_tool"), interactions, functionCalling);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("t1", output.get(TOOL_CALL_ID));
+        Assert.assertNull(output.get(FINAL_ANSWER));
+        Assert.assertEquals(1, interactions.size());
+        Assert.assertTrue("the reasoning block is carried with the tool call", interactions.getFirst().contains("reasoningContent"));
+    }
+
+    @Test
+    public void testParseLLMOutput_BedrockConverseReasoningTextThenToolUse_IsToolCall() {
+        Map<String, String> parameters = new HashMap<>();
+        BedrockConverseFunctionCalling functionCalling = new BedrockConverseFunctionCalling();
+        functionCalling.configure(parameters);
+        Map<String, Object> toolUse = Map.of("toolUse", Map.of("toolUseId", "t1", "name", "test_tool", "input", Map.of("q", "x")));
+        Map<String, Object> data = converseResponse("tool_use", List.of(reasoningBlock(), Map.of("text", "I'll call test_tool."), toolUse));
+        List<String> interactions = new ArrayList<>();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, toModelTensorOutput(data), null, Set.of("test_tool"), interactions, functionCalling);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("t1", output.get(TOOL_CALL_ID));
+        Assert.assertNull(output.get(FINAL_ANSWER));
+        Assert.assertEquals(1, interactions.size());
+    }
+
+    @Test
+    public void testParseLLMOutput_GeminiFunctionCallThenText_IsToolCall() {
+        Map<String, String> parameters = new HashMap<>();
+        GeminiV1BetaGenerateContentFunctionCalling functionCalling = new GeminiV1BetaGenerateContentFunctionCalling();
+        functionCalling.configure(parameters);
+        Map<String, Object> functionCall = Map.of("functionCall", Map.of("name", "test_tool", "args", Map.of("q", "x")));
+        Map<String, Object> data = Map
+            .of(
+                "candidates",
+                List
+                    .of(
+                        Map
+                            .of(
+                                "content",
+                                Map.of("role", "model", "parts", List.of(functionCall, Map.of("text", "Calling test_tool."))),
+                                "finishReason",
+                                "STOP"
+                            )
+                    )
+            );
+        List<String> interactions = new ArrayList<>();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, toModelTensorOutput(data), null, Set.of("test_tool"), interactions, functionCalling);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertNull(output.get(FINAL_ANSWER));
+        Assert.assertEquals(1, interactions.size());
     }
 
     @Test

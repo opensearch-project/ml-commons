@@ -95,7 +95,6 @@ import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.jayway.jsonpath.JsonPath;
 
 import joptsimple.internal.Strings;
 import lombok.extern.log4j.Log4j2;
@@ -853,7 +852,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
             }
 
-            llmResponse = ((String) JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
+            // A reasoning model can put a block without text first, such as a reasoningContent block on Bedrock Converse.
+            llmResponse = ((String) AgentUtils.readLLMResponse(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
         }
 
         // if response is not a pure json, check if it is returned as markdown and fetch that
@@ -1191,7 +1191,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             }
 
             if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, parameters.get(LLM_RESPONSE_FILTER));
+                // A reasoning model can put a block without text first, such as a reasoningContent block on Bedrock Converse.
+                Object outputObj = AgentUtils.readLLMResponse(dataMap, parameters.get(LLM_RESPONSE_FILTER));
                 if (outputObj != null) {
                     return String.valueOf(outputObj).trim();
                 }

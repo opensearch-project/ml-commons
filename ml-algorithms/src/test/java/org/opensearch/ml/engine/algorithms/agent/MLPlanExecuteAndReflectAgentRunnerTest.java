@@ -20,6 +20,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_SYSTEM_PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.getPlanExecuteReflectResponseFormat;
 
@@ -604,6 +605,14 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             .build();
     }
 
+    /** A Bedrock Converse response whose first content block is Claude's reasoning, followed by {@code text}. */
+    private static Map<String, Object> converseResponse(String text) {
+        Map<String, Object> reasoningBlock = Map
+            .of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+        Map<String, Object> message = Map.of("role", "assistant", "content", List.of(reasoningBlock, Map.of("text", text)));
+        return Map.of("output", Map.of("message", message), "stopReason", "end_turn");
+    }
+
     private List<Interaction> generateInteractions() {
         return Arrays
             .asList(
@@ -752,6 +761,23 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             IllegalArgumentException.class,
             () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput3)
         );
+    }
+
+    @Test
+    public void testParseLLMOutput_BedrockConverseReasoningBlockFirst() {
+        Map<String, String> allParams = new HashMap<>();
+        allParams.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(converseResponse("{\"steps\":[\"step1\",\"step2\"],\"result\":\"\"}"))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Map<String, Object> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
+
+        assertEquals(Arrays.asList("step1", "step2"), result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD));
+        assertFalse(result.containsKey(MLPlanExecuteAndReflectAgentRunner.RESULT_FIELD));
     }
 
     @Test
@@ -1155,6 +1181,54 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             .getDataAsMap()
             .get("response");
         assertTrue(response.contains("Summary from result"));
+    }
+
+    @Test
+    public void testSummaryExtraction_BedrockConverseReasoningBlockFirst() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(converseResponse("Summary after reasoning")).build();
+            when(mlTaskResponse.getOutput())
+                .thenReturn(
+                    ModelTensorOutput
+                        .builder()
+                        .mlModelOutputs(Arrays.asList(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build()))
+                        .build()
+                );
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        params.put("parent_interaction_id", "pid");
+        params.put("max_steps", "0");
+        params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        String response = (String) ((ModelTensorOutput) objectCaptor.getValue())
+            .getMlModelOutputs()
+            .get(1)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap()
+            .get("response");
+        assertTrue(response.contains("Summary after reasoning"));
     }
 
     @Test
