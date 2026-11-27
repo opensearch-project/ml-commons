@@ -9,10 +9,11 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
@@ -36,8 +37,8 @@ import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
@@ -135,7 +136,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                                         )
                                     );
                             } else {
-                                updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
+                                updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, getResponse, wrappedListener);
                             }
                         } else {
                             log.error("Failed to validate tenant for Agent ID {}", agentId);
@@ -153,6 +154,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         String agentId,
         MLAgentUpdateInput updateInput,
         MLAgent originalAgent,
+        GetResponse originalResponse,
         ActionListener<UpdateResponse> wrappedListener
     ) {
         Instant now = Instant.now();
@@ -160,26 +162,62 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
 
         MLAgent updatedAgent = updateInput.toMLAgent(originalAgent);
 
-        UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+        // A partial-document update merges object fields, so a key removed from parameters would stay in the stored agent.
+        // Write the whole agent instead, gated on the read so a concurrent update fails rather than being overwritten.
+        PutDataObjectRequest putDataObjectRequest = PutDataObjectRequest
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
+            .tenantId(updatedAgent.getTenantId())
+            .ifSeqNo(originalResponse.getSeqNo())
+            .ifPrimaryTerm(originalResponse.getPrimaryTerm())
+            .overwriteIfExists(true)
             .dataObject(updatedAgent)
             .build();
 
-        sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
+        sdkClient.putDataObjectAsync(putDataObjectRequest).whenComplete((r, throwable) -> {
             log.debug("Completed Update Agent request for Agent ID {}", agentId);
             if (throwable != null) {
                 Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                log.error("Failed to update ML Agent {}", agentId, cause);
-                wrappedListener.onFailure(cause);
+                // The write is gated on the read's seq_no/primary_term, so a concurrent update surfaces as a conflict.
+                if (ExceptionsHelper.status(cause) == RestStatus.CONFLICT) {
+                    log.warn("ML Agent {} was updated concurrently", agentId);
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Agent " + agentId + " was updated concurrently. Retry the update.",
+                                RestStatus.CONFLICT,
+                                cause
+                            )
+                        );
+                } else {
+                    log.error("Failed to update ML Agent {}", agentId, cause);
+                    wrappedListener.onFailure(cause);
+                }
             } else {
                 try {
-                    UpdateResponse updateResponse = r.updateResponse();
-                    if (updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                        log.info("Successfully updated ML agent {}", agentId);
-                        wrappedListener.onResponse(updateResponse);
+                    IndexResponse indexResponse = r.indexResponse();
+                    if (indexResponse == null) {
+                        log.error("No index response when updating ML agent {}", agentId);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to update agent " + agentId, RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                        return;
                     }
+                    log.info("Successfully updated ML agent {}", agentId);
+                    wrappedListener
+                        .onResponse(
+                            new UpdateResponse(
+                                indexResponse.getShardInfo(),
+                                indexResponse.getShardId(),
+                                indexResponse.getId(),
+                                indexResponse.getSeqNo(),
+                                indexResponse.getPrimaryTerm(),
+                                indexResponse.getVersion(),
+                                indexResponse.getResult()
+                            )
+                        );
                 } catch (Exception e) {
                     log.error("Failed to update ML agent {}", agentId, e);
                     wrappedListener.onFailure(e);
