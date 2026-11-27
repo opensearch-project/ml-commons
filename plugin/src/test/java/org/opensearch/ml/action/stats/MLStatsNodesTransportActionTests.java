@@ -241,4 +241,106 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertNull(modelStats);
     }
 
+    @Test
+    public void testNodeOperation_NodeLevelOnly_NoModelStats() {
+        MLStatsNodeResponse response = runWithModelCounter(MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.NODE)).build());
+
+        assertEquals(0, response.getModelStatSize());
+    }
+
+    @Test
+    public void testNodeOperation_AlgorithmLevelOnly_NoModelStats() {
+        MLStatsNodeResponse response = runWithModelCounter(
+            MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM)).build()
+        );
+
+        assertEquals(1, response.getAlgorithmStatSize());
+        assertEquals(0, response.getModelStatSize());
+    }
+
+    @Test
+    public void testNodeOperation_ModelLevel_ReturnsModelStats() {
+        MLStatsNodeResponse response = runWithModelCounter(MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.MODEL)).build());
+
+        assertEquals(0, response.getAlgorithmStatSize());
+        assertEquals(1, response.getModelStatSize());
+        assertNotNull(response.getModelStats(modelId));
+    }
+
+    @Test
+    public void testNodeOperation_ActionLevel_ReturnsModelStats() {
+        MLStatsNodeResponse response = runWithModelCounter(MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ACTION)).build());
+
+        assertEquals(1, response.getModelStatSize());
+        assertNotNull(response.getModelStats(modelId));
+    }
+
+    @Test
+    public void testNodeOperation_NoTargetStatLevels_ModelFilter_StillReturnsModelStats() {
+        // A body like {"models": ["<id>"], "actions": ["predict"]} without target_stat_levels parses to an empty level set and has always
+        // returned
+        // model stats; it must keep doing so.
+        MLStatsInput input = MLStatsInput
+            .builder()
+            .targetStatLevels(EnumSet.noneOf(MLStatLevel.class))
+            .models(Set.of(modelId))
+            .actions(EnumSet.of(ActionName.PREDICT))
+            .build();
+        MLStatsNodeResponse response = runWithModelCounter(input);
+
+        assertEquals(0, response.getAlgorithmStatSize());
+        assertEquals(1, response.getModelStatSize());
+        assertNotNull(response.getModelStats(modelId).getActionStats(ActionName.PREDICT));
+    }
+
+    @Test
+    public void testNodeOperation_NoTargetStatLevels_NoFilters_StillReturnsModelStats() {
+        // An empty body ({}) parses to an empty level set and has only ever returned model stats; keep that.
+        MLStatsNodeResponse response = runWithModelCounter(
+            MLStatsInput.builder().targetStatLevels(EnumSet.noneOf(MLStatLevel.class)).build()
+        );
+
+        assertEquals(0, response.getNodeLevelStatSize());
+        assertEquals(0, response.getAlgorithmStatSize());
+        assertEquals(1, response.getModelStatSize());
+    }
+
+    @Test
+    public void testNodeOperation_NodeLevelWithModelFilter_NoModelStats() {
+        MLStatsInput input = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.NODE)).models(Set.of(modelId)).build();
+        MLStatsNodeResponse response = runWithModelCounter(input);
+
+        assertEquals(0, response.getModelStatSize());
+    }
+
+    @Test
+    public void testNodeOperation_NoTargetStatLevels_ModelFilterOtherModel_ReturnsNothing() {
+        MLStatsInput input = MLStatsInput
+            .builder()
+            .targetStatLevels(EnumSet.noneOf(MLStatLevel.class))
+            .models(Set.of("other_model"))
+            .build();
+        MLStatsNodeResponse response = runWithModelCounter(input);
+
+        assertEquals(0, response.getModelStatSize());
+    }
+
+    private MLStatsNodeResponse runWithModelCounter(MLStatsInput input) {
+        MLStats mlStats = new MLStats(statsMap);
+        mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+        MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
+            client().threadPool(),
+            clusterService(),
+            mock(TransportService.class),
+            mock(ActionFilters.class),
+            mlStats,
+            environment,
+            client,
+            mlModelManager
+        );
+        String nodeId = clusterService().localNode().getId();
+        MLStatsNodesRequest request = new MLStatsNodesRequest(new String[] { nodeId }, input);
+        return action.nodeOperation(new MLStatsNodeRequest(request));
+    }
 }

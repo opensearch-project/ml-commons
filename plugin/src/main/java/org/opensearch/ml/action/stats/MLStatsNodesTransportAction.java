@@ -160,6 +160,9 @@ public class MLStatsNodesTransportAction extends
 
     private Map<String, MLModelStats> getModelStats(MLStatsNodesRequest request) {
         Map<String, MLModelStats> stats = new HashMap<>();
+        if (!shouldIncludeModelStats(request.getMlStatsInput())) {
+            return stats;
+        }
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         Set<String> hiddenModels = Optional.ofNullable(request.getHiddenModelIds()).orElse(Collections.emptySet());
 
@@ -176,6 +179,18 @@ public class MLStatsNodesTransportAction extends
             }
         }
         return stats;
+    }
+
+    /**
+     * Model stats are returned when the target stat levels include model or action. A request body that sets no
+     * target_stat_levels at all (for example {}, or one that only sends node_ids, models or actions filters) has always
+     * received model stats and nothing else, so keep returning them in that case.
+     */
+    private static boolean shouldIncludeModelStats(MLStatsInput input) {
+        if (input.getTargetStatLevels() == null || input.getTargetStatLevels().isEmpty()) {
+            return true;
+        }
+        return input.includeModelStats();
     }
 
     @VisibleForTesting
