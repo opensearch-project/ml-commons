@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
@@ -177,10 +178,22 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         sdkClient.putDataObjectAsync(putDataObjectRequest).whenComplete((r, throwable) -> {
             log.debug("Completed Update Agent request for Agent ID {}", agentId);
             if (throwable != null) {
-                // A version conflict from the ifSeqNo/ifPrimaryTerm check arrives here as a 409 status exception.
                 Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                log.error("Failed to update ML Agent {}", agentId, cause);
-                wrappedListener.onFailure(cause);
+                // The write is gated on the read's seq_no/primary_term, so a concurrent update surfaces as a conflict.
+                if (ExceptionsHelper.status(cause) == RestStatus.CONFLICT) {
+                    log.warn("ML Agent {} was updated concurrently", agentId);
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Agent " + agentId + " was updated concurrently. Retry the update.",
+                                RestStatus.CONFLICT,
+                                cause
+                            )
+                        );
+                } else {
+                    log.error("Failed to update ML Agent {}", agentId, cause);
+                    wrappedListener.onFailure(cause);
+                }
             } else {
                 try {
                     IndexResponse indexResponse = r.indexResponse();

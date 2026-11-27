@@ -901,6 +901,26 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
+    public void testToMLAgentAddMemoryWithoutTypeFails() {
+        MLAgent originalAgent = MLAgent.builder().name("agent").type(MLAgentType.FLOW.name()).build();
+        MLAgentUpdateInput input = MLAgentUpdateInput.builder().agentId("id").memorySessionId("session").build();
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> input.toMLAgent(originalAgent));
+        assertEquals("memory.type is required to add memory to an agent that has none", e.getMessage());
+    }
+
+    @Test
+    public void testToMLAgentAddMemoryWithType() {
+        MLAgent originalAgent = MLAgent.builder().name("agent").type(MLAgentType.FLOW.name()).build();
+        MLAgentUpdateInput input = MLAgentUpdateInput.builder().agentId("id").memoryType("conversation_index").memoryWindowSize(3).build();
+
+        MLAgent updatedAgent = input.toMLAgent(originalAgent);
+
+        assertEquals("conversation_index", updatedAgent.getMemory().getType());
+        assertEquals(Integer.valueOf(3), updatedAgent.getMemory().getWindowSize());
+    }
+
+    @Test
     public void testToMLAgentReplacesParameters() {
         MLAgent originalAgent = MLAgent
             .builder()

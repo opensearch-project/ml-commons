@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.agents;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -384,7 +383,7 @@ public class UpdateAgentTransportActionTests {
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(RestStatus.CONFLICT, argumentCaptor.getValue().status());
-        assertTrue(argumentCaptor.getValue().getMessage().contains("version conflict"));
+        assertEquals("Agent test_agent_id was updated concurrently. Retry the update.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -425,6 +424,29 @@ public class UpdateAgentTransportActionTests {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, argumentCaptor.getValue().status());
         assertEquals("Failed to update agent test_agent_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_AddMemoryWithoutTypeReturnsBadRequest() throws IOException {
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput.builder().agentId(agentId).memorySessionId("session").build();
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("memory.type is required to add memory to an agent that has none", argumentCaptor.getValue().getMessage());
+        verify(client, never()).index(any(), any());
     }
 
     private GetResponse prepareMLAgentGetResponse(String agentId, boolean isHidden, String tenantId) throws IOException {

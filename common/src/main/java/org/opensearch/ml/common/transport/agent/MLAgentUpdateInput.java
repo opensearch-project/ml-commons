@@ -373,6 +373,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             finalMemory = originalAgent.getMemory();
         } else {
             MLMemorySpec originalMemory = originalAgent.getMemory();
+            if (originalMemory == null && memoryType == null) {
+                throw new IllegalArgumentException("memory.type is required to add memory to an agent that has none");
+            }
             // Start from the stored memory so fields this API doesn't set, such as memory_container_id, are kept.
             MLMemorySpec.MLMemorySpecBuilder memoryBuilder = originalMemory != null ? originalMemory.toBuilder() : MLMemorySpec.builder();
             if (memoryType != null) {
