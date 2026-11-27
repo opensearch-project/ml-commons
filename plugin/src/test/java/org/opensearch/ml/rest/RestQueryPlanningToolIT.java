@@ -30,6 +30,8 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     private static final String IRIS_INDEX = "iris_data";
     private String queryPlanningModelId;
     private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
+    private static final String RESPONSE_FILTER_FIELD = "response_filter";
+    private static final String OPENAI_RESPONSE_FILTER = "$.choices[0].message.content";
     private final String openaiConnectorEntity = "{\n"
         + "    \"name\": \"My openai connector: gpt-4o\",\n"
         + "    \"description\": \"The connector to openai chat model\",\n"
@@ -92,6 +94,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String result = output.get("result").toString();
 
         assertTrue(result.contains("query"));
+        assertFalse(result, result.contains("chat.completion"));
         deleteAgent(agentId);
     }
 
@@ -135,6 +138,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String result = output.get("result").toString();
 
         assertTrue(result.contains("query"));
+        assertFalse(result, result.contains("chat.completion"));
         deleteAgent(agentId);
     }
 
@@ -153,7 +157,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
             .type("QueryPlanningTool")
             .name("MyQueryPlanningTool")
             .description("A tool for planning queries")
-            .parameters(Map.of(MODEL_ID_FIELD, modelId))
+            .parameters(Map.of(MODEL_ID_FIELD, modelId, RESPONSE_FILTER_FIELD, OPENAI_RESPONSE_FILTER))
             .includeOutputInAgentResponse(true)
             .build();
 
@@ -188,6 +192,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
                 Map
                     .ofEntries(
                         Map.entry(MODEL_ID_FIELD, modelId),
+                        Map.entry(RESPONSE_FILTER_FIELD, OPENAI_RESPONSE_FILTER),
                         Map.entry(GENERATION_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD),
                         Map.entry(SEARCH_TEMPLATES_FIELD, searchTemplates)
                     )

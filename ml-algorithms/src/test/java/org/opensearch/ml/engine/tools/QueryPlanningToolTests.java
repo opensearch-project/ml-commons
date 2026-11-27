@@ -46,6 +46,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -1508,6 +1509,101 @@ public class QueryPlanningToolTests {
         Object resultObj = future.get();
         String result = resultObj instanceof String ? (String) resultObj : gson.toJson(resultObj);
         assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", result);
+    }
+
+    @SneakyThrows
+    private CompletableFuture<Object> runWithModelOutput(String modelOutput) {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(modelOutput);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        // Same default extract_json output parser the factory sets.
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null, null);
+        Map<String, Object> extractJsonConfig = new HashMap<>();
+        extractJsonConfig.put("type", "extract_json");
+        extractJsonConfig.put("extract_type", "object");
+        extractJsonConfig.put("default", DEFAULT_QUERY);
+        tool.setOutputParser(ToolParser.createProcessingParser(null, List.of(extractJsonConfig)));
+
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        Map<String, String> runParams = new HashMap<>();
+        runParams.put(QUESTION_FIELD, "Find shoes");
+        runParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(runParams, listener);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+        return future;
+    }
+
+    private static final String OPENAI_ENVELOPE =
+        "{\"id\":\"mock-1\",\"object\":\"chat.completion\",\"model\":\"mock\",\"choices\":[{\"index\":0,"
+            + "\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"query\\\":{\\\"match\\\":"
+            + "{\\\"name\\\":\\\"shoes\\\"}}}\"}}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}";
+
+    @Test
+    public void testRun_RawOpenAIEnvelopeWithoutResponseFilter_Fails() {
+        CompletableFuture<Object> future = runWithModelOutput(OPENAI_ENVELOPE);
+
+        ExecutionException e = assertThrows(ExecutionException.class, future::get);
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        String message = e.getCause().getMessage();
+        assertTrue(message, message.startsWith("The model output is not an OpenSearch query"));
+        assertTrue(message, message.contains("response_filter"));
+        assertTrue(message, message.contains("choices"));
+        // the raw model output itself is not echoed back
+        assertFalse(message, message.contains("mock-1"));
+    }
+
+    @Test
+    public void testRun_RawBedrockConverseEnvelopeWithoutResponseFilter_Fails() {
+        String envelope = "{\"output\":{\"message\":{\"role\":\"assistant\",\"content\":[{\"text\":\"{\\\"query\\\":"
+            + "{\\\"match_all\\\":{}}}\"}]}},\"stopReason\":\"end_turn\",\"usage\":{\"inputTokens\":1,\"outputTokens\":1}}";
+        CompletableFuture<Object> future = runWithModelOutput(envelope);
+
+        ExecutionException e = assertThrows(ExecutionException.class, future::get);
+        assertTrue(e.getCause() instanceof IllegalArgumentException);
+        assertTrue(e.getCause().getMessage().contains("response_filter"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testRun_SearchBodyWithoutQueryKey_Passes() {
+        CompletableFuture<Object> future = runWithModelOutput("{\"size\":0,\"aggs\":{\"by_color\":{\"terms\":{\"field\":\"color\"}}}}");
+        Map<String, Object> result = (Map<String, Object>) future.get();
+        assertEquals(0, result.get("size"));
+        assertTrue(result.containsKey("aggs"));
+    }
+
+    @Test
+    public void testCheckLooksLikeSearchBody() {
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(Map.of("query", Map.of("match_all", Map.of()))));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(Map.of("post_filter", Map.of(), "explanation", "x")));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(DEFAULT_QUERY));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(Map.of()));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(null));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody("not json"));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody("{not valid json"));
+        assertNull(QueryPlanningTool.checkLooksLikeSearchBody(List.of(Map.of("id", "1"))));
+
+        assertNotNull(QueryPlanningTool.checkLooksLikeSearchBody(Map.of("id", "1", "choices", List.of())));
+        assertNotNull(QueryPlanningTool.checkLooksLikeSearchBody("{\"candidates\":[],\"usageMetadata\":{}}"));
+
+        Map<String, Object> manyKeys = new LinkedHashMap<>();
+        for (int i = 0; i < 11; i++) {
+            manyKeys.put("k" + i, i);
+        }
+        String message = QueryPlanningTool.checkLooksLikeSearchBody(manyKeys);
+        assertTrue(message, message.contains("[k0, k1, k2, k3, k4, k5, k6, k7, k8, k9] (and more)"));
+        assertFalse(message, message.contains("k10"));
+
+        String longKey = "x".repeat(200);
+        message = QueryPlanningTool.checkLooksLikeSearchBody(Map.of(longKey, 1));
+        assertTrue(message, message.contains("x".repeat(64) + "..."));
+        assertFalse(message, message.contains("x".repeat(65)));
     }
 
     @Test
