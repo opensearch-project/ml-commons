@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.PROVISIONED_BY_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -55,6 +57,16 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     public static final String TYPE_FIELD = "type";
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+
+    /** Agent fields that the update agent API does not support changing. They are rejected so the caller knows nothing changed. */
+    public static final Set<String> NON_UPDATABLE_FIELDS = Set
+        .of(MLAgent.MODEL_FIELD, MLAgent.CONTEXT_MANAGEMENT_FIELD, MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD);
+
+    /**
+     * Fields that get agent returns but that are set by the system. They are accepted and ignored, so a caller can send a get
+     * agent response back as an update. Any other field that parse() does not handle is rejected.
+     */
+    public static final Set<String> READ_ONLY_FIELDS = Set.of(MLAgent.CREATED_TIME_FIELD, MLAgent.IS_HIDDEN_FIELD, PROVISIONED_BY_FIELD);
 
     @Getter
     private String agentId;
@@ -322,6 +334,16 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                     tenantId = parser.textOrNull();
                     break;
                 default:
+                    if (NON_UPDATABLE_FIELDS.contains(fieldName)) {
+                        throw new IllegalArgumentException(
+                            String.format(Locale.ROOT, "Field [%s] cannot be updated through the update agent API", fieldName)
+                        );
+                    }
+                    if (!READ_ONLY_FIELDS.contains(fieldName)) {
+                        throw new IllegalArgumentException(
+                            String.format(Locale.ROOT, "Unknown field [%s] in update agent request", fieldName)
+                        );
+                    }
                     parser.skipChildren();
                     break;
             }
