@@ -207,7 +207,7 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
             connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
 
             String llmInterface = parameters.get(LLM_INTERFACE);
-            if (llmInterface == null) {
+            if (llmInterface == null || llmInterface.isBlank()) {
                 throw new IllegalArgumentException(LLM_INTERFACE + " is required for streaming");
             }
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface.trim().toLowerCase(Locale.ROOT));
@@ -227,6 +227,9 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
                     new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
                 );
             handler.startStream(action, parameters, payload, actionListener);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid google_cloud streaming request", e);
+            actionListener.onFailure(e);
         } catch (Exception e) {
             log.error("Failed to execute google_cloud streaming", e);
             actionListener.onFailure(new MLException("Fail to execute google_cloud streaming", e));
