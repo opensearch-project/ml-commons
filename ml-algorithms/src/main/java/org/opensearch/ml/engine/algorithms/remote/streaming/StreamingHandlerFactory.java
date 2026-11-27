@@ -13,14 +13,25 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import java.lang.reflect.Constructor;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 public class StreamingHandlerFactory {
+
+    /** The interfaces {@link #createHandler} serves with an HTTP streaming handler, lower case. */
+    public static final Set<String> HTTP_STREAMING_INTERFACES = Set
+        .of(LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT);
+
+    /** Whether {@link #createHandler} serves {@code llmInterface} with an HTTP streaming handler; the case is ignored. */
+    public static boolean isHttpStreamingInterface(String llmInterface) {
+        return llmInterface != null && HTTP_STREAMING_INTERFACES.contains(llmInterface.toLowerCase(Locale.ROOT));
+    }
 
     public static StreamingHandler createHandler(
         String llmInterface,
@@ -38,12 +49,22 @@ public class StreamingHandlerFactory {
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters
     ) {
-        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, parameters, StreamingAddressPolicy.DEFAULT);
+        return createHandler(
+            llmInterface,
+            connector,
+            httpClient,
+            connectorClientConfig,
+            parameters,
+            ConnectorAddressValidator.DEFAULT,
+            null
+        );
     }
 
     /**
-     * @param addressPolicy applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
-     *                      validates addresses itself
+     * @param addressValidator applied by the HTTP streaming handler; Bedrock streams go through {@code httpClient}, which
+     *                         validates addresses itself
+     * @param onUnauthorized   run when the remote service answers 401, before the failure is reported; may be null; HTTP
+     *                         streams only
      */
     public static StreamingHandler createHandler(
         String llmInterface,
@@ -51,15 +72,16 @@ public class StreamingHandlerFactory {
         SdkAsyncHttpClient httpClient,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        StreamingAddressPolicy addressPolicy
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
+        if (isHttpStreamingInterface(llmInterface)) {
+            return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator, onUnauthorized);
+        }
         switch (llmInterface.toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE:
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);
-            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-            case LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -88,8 +110,9 @@ public class StreamingHandlerFactory {
         Connector connector,
         ConnectorClientConfig connectorClientConfig,
         Map<String, String> parameters,
-        StreamingAddressPolicy addressPolicy
+        ConnectorAddressValidator addressValidator,
+        Runnable onUnauthorized
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressPolicy);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters, addressValidator, onUnauthorized);
     }
 }

@@ -12,12 +12,15 @@ import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
@@ -59,5 +62,27 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
         MLStatsNodeResponse nodeResponse = responseList.get(0);
         assertEquals(1, nodeResponse.getNodeLevelStatSize());
         assertEquals(0l, nodeResponse.getNodeLevelStat(ML_EXECUTING_TASK_COUNT));
+    }
+
+    public void testOAuth2TokenStatsAreNodeLevelAndStartAtZero() throws ExecutionException, InterruptedException {
+        Set<MLNodeLevelStat> oauth2Stats = EnumSet
+            .of(
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_REQUEST_COUNT,
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_FAILURE_COUNT,
+                MLNodeLevelStat.ML_OAUTH2_TOKEN_CACHE_HIT_COUNT,
+                MLNodeLevelStat.ML_OAUTH2_UNAUTHORIZED_RESPONSE_COUNT
+            );
+        MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0], new MLStatsInput());
+        request.addNodeLevelStats(oauth2Stats);
+
+        MLStatsNodesResponse response = client().execute(MLStatsNodesAction.INSTANCE, request).get();
+
+        assertFalse(response.getNodes().isEmpty());
+        for (MLStatsNodeResponse nodeResponse : response.getNodes()) {
+            assertEquals(oauth2Stats.size(), nodeResponse.getNodeLevelStatSize());
+            for (MLNodeLevelStat stat : oauth2Stats) {
+                assertEquals(0L, nodeResponse.getNodeLevelStat(stat));
+            }
+        }
     }
 }

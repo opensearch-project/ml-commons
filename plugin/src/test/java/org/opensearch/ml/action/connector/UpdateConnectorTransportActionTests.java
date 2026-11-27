@@ -62,14 +62,17 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -128,6 +131,9 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     MLModelManager mlModelManager;
+
+    @Mock
+    MLIndicesHandler mlIndicesHandler;
 
     ThreadContext threadContext;
 
@@ -205,8 +211,14 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             settings,
             clusterService,
             mlEngine,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            mlIndicesHandler
         );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(any(ActionListener.class));
 
         when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
@@ -239,7 +251,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             // doNothing().when(connector).update(any(), any());
             listener.onResponse(connector);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -742,7 +754,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
     }
 
     private void stubUpdateSucceeds() {
@@ -880,7 +892,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
@@ -912,7 +924,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
         stubSearchReturnsNoModels();
         stubUpdateSucceeds();
 
@@ -997,6 +1009,92 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
      * mutual_tls_enabled to keep it. That must not be rejected, or turning the setting off would make an
      * existing mutual-TLS connector uneditable rather than just preventing new reliance on it.
      */
+    /** A google_cloud connector written before an Authorization header was refused keeps it: the token replaces it. */
+    @Test
+    public void testUpdate_googleCloudConnectorWithAStoredAuthorizationHeader_isUpdatedWhenActionsAreUntouched() {
+        stubStoredGoogleCloudConnector(Map.of("authorization", "Bearer stale"));
+        stubSearchReturnsNoModels();
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        when(updateRequest.getUpdateContent())
+            .thenReturn(MLCreateConnectorInput.builder().updateConnector(true).description("updated description").build());
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(any(UpdateResponse.class));
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testUpdate_googleCloudConnector_thatSuppliesActionsWithAnAuthorizationHeader_isRejected() {
+        stubStoredGoogleCloudConnector(Map.of("authorization", "Bearer stale"));
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .actions(googleCloudActions(Map.of("Authorization", "Bearer still-stale")))
+                    .build()
+            );
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals(AuthConfigValidator.GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE, captor.getValue().getMessage());
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    private static List<ConnectorAction> googleCloudActions(Map<String, String> headers) {
+        return List
+            .of(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url(
+                        "https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1/publishers/google/models/m:predict"
+                    )
+                    .headers(headers)
+                    .requestBody("{}")
+                    .build()
+            );
+    }
+
+    /** The stored connector is a google_cloud service account connector without a declaration, its predict action carrying {@code headers}. */
+    private void stubStoredGoogleCloudConnector(Map<String, String> headers) {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    GoogleCloudConnector
+                        .googleCloudConnectorBuilder()
+                        .name("gcp")
+                        .version("1")
+                        .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                        .credential(
+                            Map
+                                .of(
+                                    GoogleCloudConnector.PRIVATE_KEY_FIELD,
+                                    "encrypted-key",
+                                    GoogleCloudConnector.CLIENT_EMAIL_FIELD,
+                                    "encrypted-account"
+                                )
+                        )
+                        .actions(googleCloudActions(headers))
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
+    }
+
     @Test
     public void testUpdateConnectorAllowsCarryingForwardStoredMutualTlsWhileSettingOff() {
         when(mlFeatureEnabledSetting.isMutualTlsEnabled()).thenReturn(false);
@@ -1013,7 +1111,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                         .build()
                 );
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
         when(updateRequest.getUpdateContent())
             .thenReturn(
                 MLCreateConnectorInput
@@ -1374,7 +1472,7 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             ActionListener<Connector> listener = invocation.getArgument(5);
             listener.onResponse(stored);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any(), anyBoolean());
         when(updateRequest.getUpdateContent()).thenReturn(update);
         stubUpdateSucceeds();
     }

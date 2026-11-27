@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADAT
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -30,6 +31,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -56,6 +58,8 @@ public class RemoteModel implements Predictable {
     public static final String CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS = "connectorTrustedPrivateEndpoints";
     public static final String CONNECTOR_RESTRICTED_IP_PATTERNS = "connectorRestrictedIpPatterns";
     public static final String TRUSTED_CONNECTOR_ENDPOINTS_REGEX = "trustedConnectorEndpointsRegex";
+    public static final String LEGACY_ACTION_URL_ORIGIN_ENABLED = "legacyActionUrlOriginEnabled";
+    public static final String AUTHORIZATION_PROVIDER_FACTORY = "authorizationProviderFactory";
     public static final String SDK_CLIENT = "sdk_client";
     public static final String SETTINGS = "settings";
 
@@ -163,6 +167,12 @@ public class RemoteModel implements Predictable {
                         (List) params.getOrDefault(CONNECTOR_RESTRICTED_IP_PATTERNS, Collections.emptyList())
                     );
                 this.connectorExecutor.setTrustedConnectorEndpointsRegex((List<String>) params.get(TRUSTED_CONNECTOR_ENDPOINTS_REGEX));
+                this.connectorExecutor
+                    .setLegacyActionUrlOriginEnabled(
+                        (BooleanSupplier) params.getOrDefault(LEGACY_ACTION_URL_ORIGIN_ENABLED, (BooleanSupplier) () -> true)
+                    );
+                this.connectorExecutor
+                    .setAuthorizationProviderFactory((AuthorizationProviderFactory) params.get(AUTHORIZATION_PROVIDER_FACTORY));
                 listener.onResponse(this);
             }, e -> {
                 log.error("Failed to init remote model.", e);

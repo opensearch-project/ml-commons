@@ -61,11 +61,13 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.AuthConfigTestFixtures;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -115,6 +117,8 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    @Mock
+    private AuthorizationProviderFactory authorizationProviderFactory;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -154,7 +158,8 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
                 encryptor,
                 mlTaskManager,
                 mlModelManager,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                authorizationProviderFactory
             )
         );
 
@@ -334,6 +339,34 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_BatchPredictCancel_anOauth2ConnectorObtainsItsProviderFromTheFactory() throws IOException {
+        HttpConnector oauth2 = AuthConfigTestFixtures.oauth2Http(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT);
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(oauth2);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(invocation.getArgument(0));
+            return null;
+        }).when(encryptor).decrypt(any(), any(), any());
+        when(authorizationProviderFactory.providerFor(oauth2)).thenThrow(new IllegalArgumentException("refused"));
+        GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, new HashMap<>(Map.of("id", "b1")));
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
+
+        verify(authorizationProviderFactory).providerFor(oauth2);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("refused", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareMLTask(FunctionName functionName, MLTaskType mlTaskType, Map<String, Object> remoteJob) throws IOException {

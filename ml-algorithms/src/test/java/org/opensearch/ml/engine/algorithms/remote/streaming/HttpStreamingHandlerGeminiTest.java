@@ -9,10 +9,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,6 +57,20 @@ public class HttpStreamingHandlerGeminiTest {
         streamListener = mock(StreamPredictActionListener.class);
         Map<String, String> parameters = new HashMap<>();
         listener = handler.new HTTPEventSourceListener(streamListener, LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT, parameters);
+    }
+
+    /** The interfaces an executor over HTTP accepts for a stream are the ones the factory serves with this handler. */
+    @Test
+    public void isHttpStreamingInterface_namesTheInterfacesServedByTheHttpHandler() {
+        assertEquals(
+            Set.of(LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS, LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT),
+            StreamingHandlerFactory.HTTP_STREAMING_INTERFACES
+        );
+        assertTrue(StreamingHandlerFactory.isHttpStreamingInterface(LLM_INTERFACE_GEMINI_V1BETA_GENERATE_CONTENT));
+        assertTrue(StreamingHandlerFactory.isHttpStreamingInterface("Gemini/v1beta/generateContent"));
+        assertTrue(StreamingHandlerFactory.isHttpStreamingInterface(LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS));
+        assertFalse(StreamingHandlerFactory.isHttpStreamingInterface(LLM_INTERFACE_BEDROCK_CONVERSE));
+        assertFalse(StreamingHandlerFactory.isHttpStreamingInterface(null));
     }
 
     @Test

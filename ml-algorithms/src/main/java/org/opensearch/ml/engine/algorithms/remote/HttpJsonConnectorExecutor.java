@@ -6,38 +6,48 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
+import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.CertificateProcessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
+import org.opensearch.ml.common.connector.auth.OAuth2Support;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProvider;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.TokenHandle;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
-import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingAddressPolicy;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
@@ -58,6 +68,9 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 @Log4j2
 @ConnectorExecutor(HTTP)
 public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
+    public static final String NO_AUTHORIZATION_PROVIDER_FACTORY_MESSAGE =
+        "The connector executor has no authorization provider factory, so it cannot send requests for a connector whose auth_config attaches a token";
+    public static final String LLM_INTERFACE_REQUIRED_MESSAGE = LLM_INTERFACE + " is required for streaming";
 
     @Getter
     private HttpConnector connector;
@@ -87,6 +100,14 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+    @Setter
+    private volatile BooleanSupplier legacyActionUrlOriginEnabled = () -> false;
+
+    @Setter
+    private volatile AuthorizationProviderFactory authorizationProviderFactory;
+    private final AtomicReference<AuthorizationProvider> authorizationProvider = new AtomicReference<>();
+    /** True when the connector's effective auth_config has a type that attaches a token. */
+    private final boolean declaresAuthorization;
 
     private final CertificateProcessor certificateProcessor = new CertificateProcessor();
     // Cache manager for client lifecycle management
@@ -99,6 +120,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
+        OAuth2AuthConfig authConfig = this.connector.getEffectiveAuthConfig();
+        this.declaresAuthorization = authConfig != null && authConfig.getType().isActive();
     }
 
     @Override
@@ -106,7 +129,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         return log;
     }
 
-    @SuppressWarnings("removal")
     @Override
     public void invokeRemoteService(
         String action,
@@ -117,23 +139,65 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
+            Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+            if (!declaresAuthorization) {
+                send(action, endpoint, headers, parameters, payload, executionContext, actionListener);
+                return;
+            }
+            // Checked before a token is requested, so a request that cannot be sent costs no call to the identity provider.
+            AuthConfigValidator.requireHttps(endpoint, connector);
+            AuthorizationProvider provider = authorizationProvider();
+            ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true);
+            ActionListener<TokenHandle> sendWithToken = ActionListener.wrap(handle -> {
+                Map<String, String> authorized = OAuth2Support.withBearer(headers, handle.value());
+                ActionListener<Tuple<Integer, ModelTensors>> responseListener = refreshOnceOnUnauthorized(
+                    provider,
+                    handle,
+                    action,
+                    mlInput,
+                    parameters,
+                    payload,
+                    executionContext,
+                    actionListener
+                );
+                send(action, endpoint, authorized, parameters, payload, executionContext, responseListener);
+            }, actionListener::onFailure);
+            provider.authorizationValue(ActionListener.runBefore(sendWithToken, context::restore));
+        } catch (RuntimeException e) {
+            log.error("Fail to execute http connector", e);
+            actionListener.onFailure(e);
+        }
+    }
 
+    /** Builds the request from a URI that passed the connector's URL checks and the final headers, and sends it. */
+    @SuppressWarnings("removal")
+    private void send(
+        String action,
+        URI endpoint,
+        Map<String, String> headers,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        try {
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, POST);
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, GET);
                     break;
                 case "PUT":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, PUT);
                     break;
                 case "DELETE":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
+                    request = ConnectorUtils.buildSdkRequest(action, endpoint, headers, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
@@ -171,6 +235,48 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
+    /** The provider of this executor's connector, built on first use; the first instance published is the one kept. */
+    private AuthorizationProvider authorizationProvider() {
+        AuthorizationProvider provider = authorizationProvider.get();
+        if (provider == null) {
+            AuthorizationProviderFactory factory = authorizationProviderFactory;
+            if (factory == null) {
+                // A caller that builds executors itself must pass the node's factory; name the gap instead of failing on a null.
+                throw new IllegalStateException(NO_AUTHORIZATION_PROVIDER_FACTORY_MESSAGE);
+            }
+            // Two first requests may each build one; the first to be published wins, so a request sent again after a
+            // 401 reads the instance that issued its token and dropped it.
+            authorizationProvider.compareAndSet(null, factory.providerFor(connector));
+            provider = authorizationProvider.get();
+        }
+        return provider;
+    }
+
+    /** The response listener of a request that carried {@code handle}'s token. */
+    private ActionListener<Tuple<Integer, ModelTensors>> refreshOnceOnUnauthorized(
+        AuthorizationProvider provider,
+        TokenHandle handle,
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        return ActionListener.delegateResponse(actionListener, (listener, e) -> {
+            // Sent again at most once per request, and only when the provider dropped or replaced the token.
+            if (isUnauthorized(e) && provider.invalidate(handle) && executionContext.getTokenRefreshUsed().compareAndSet(false, true)) {
+                invokeRemoteService(action, mlInput, parameters, payload, executionContext, listener);
+            } else {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    private static boolean isUnauthorized(Exception e) {
+        return e instanceof OpenSearchStatusException status && status.status() == RestStatus.UNAUTHORIZED;
+    }
+
     @Override
     public void invokeRemoteServiceStream(
         String action,
@@ -181,36 +287,73 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
-            String llmInterface = parameters.get(LLM_INTERFACE);
-            llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
-            llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+            String declaredInterface = parameters.get(LLM_INTERFACE);
+            if (declaredInterface == null) {
+                throw new IllegalArgumentException(LLM_INTERFACE_REQUIRED_MESSAGE);
+            }
+            String llmInterface = StringEscapeUtils.unescapeJava(declaredInterface.trim().toLowerCase(Locale.ROOT));
             validateLLMInterface(llmInterface);
 
-            StreamingHandler handler = StreamingHandlerFactory
-                .createHandler(
-                    llmInterface,
-                    connector,
-                    null,
-                    super.getConnectorClientConfig(),
-                    parameters,
-                    new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
-                );
-            handler.startStream(action, parameters, payload, actionListener);
+            Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
+            if (!declaresAuthorization) {
+                startStream(llmInterface, endpoint, headers, null, parameters, payload, actionListener);
+                return;
+            }
+            // Checked before a token is requested, so a request that cannot be sent costs no call to the identity provider.
+            AuthConfigValidator.requireHttps(endpoint, connector);
+            AuthorizationProvider provider = authorizationProvider();
+            ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true);
+            // A 401 ends the stream and discards this token unless it is younger than ten seconds; the stream is not sent again.
+            ActionListener<TokenHandle> streamWithToken = ActionListener.wrap(handle -> {
+                Map<String, String> authorized = OAuth2Support.withBearer(headers, handle.value());
+                startStream(llmInterface, endpoint, authorized, () -> provider.invalidate(handle), parameters, payload, actionListener);
+            }, e -> streamFailed(e, actionListener));
+            provider.authorizationValue(ActionListener.runBefore(streamWithToken, context::restore));
         } catch (Exception e) {
-            log.error("Failed to execute streaming", e);
+            streamFailed(e, actionListener);
+        }
+    }
+
+    private void startStream(
+        String llmInterface,
+        URI endpoint,
+        Map<String, String> headers,
+        Runnable onUnauthorized,
+        Map<String, String> parameters,
+        String payload,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        StreamingHandler handler = StreamingHandlerFactory
+            .createHandler(
+                llmInterface,
+                connector,
+                null,
+                super.getConnectorClientConfig(),
+                parameters,
+                new ConnectorAddressValidator(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns),
+                onUnauthorized
+            );
+        handler.startStream(endpoint, headers, parameters, payload, actionListener);
+    }
+
+    private static void streamFailed(Exception e, StreamPredictActionListener<MLTaskResponse, ?> actionListener) {
+        log.error("Failed to execute streaming", e);
+        // A refusal keeps its status and an argument error its message, as on the request path.
+        if (e instanceof OpenSearchStatusException || e instanceof IllegalArgumentException) {
+            actionListener.onFailure(e);
+        } else {
             actionListener.onFailure(new MLException("Fail to execute streaming", e));
         }
     }
 
-    private void validateLLMInterface(String llmInterface) {
-        switch (llmInterface) {
-            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+    /** The interfaces the streaming handler factory serves over HTTP; the list lives there. */
+    private static void validateLLMInterface(String llmInterface) {
+        if (!StreamingHandlerFactory.HTTP_STREAMING_INTERFACES.contains(llmInterface)) {
+            throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
     }
 
