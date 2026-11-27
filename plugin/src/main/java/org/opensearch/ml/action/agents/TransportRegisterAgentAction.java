@@ -134,9 +134,15 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
                 LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
 
-                // Create sanitized model spec without credentials and model parameters
-                // (stored in the model document and LLMSpec respectively)
-                MLAgentModelSpec sanitizedModelSpec = mlAgent.getModel().toBuilder().modelParameters(null).credential(null).build();
+                // Create sanitized model spec without credentials, model parameters and client config
+                // (stored in the model document, LLMSpec and the model's connector respectively)
+                MLAgentModelSpec sanitizedModelSpec = mlAgent
+                    .getModel()
+                    .toBuilder()
+                    .modelParameters(null)
+                    .credential(null)
+                    .clientConfig(null)
+                    .build();
                 // ToDo: store model details within agent to prevent creating a new model document
                 MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(sanitizedModelSpec).parameters(parameters).build();
                 // The model is provisioned before the agent is validated and indexed, so any later failure
