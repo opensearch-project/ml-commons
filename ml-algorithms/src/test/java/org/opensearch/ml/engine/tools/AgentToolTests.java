@@ -143,6 +143,25 @@ public class AgentToolTests {
     }
 
     @Test
+    public void testFactoryDefaultAttributes() {
+        Map<String, Object> defaults = AgentTool.Factory.getInstance().getDefaultAttributes();
+        assertEquals(false, defaults.get(AgentTool.STRICT_FIELD));
+        Map<String, Object> schema = gson.fromJson((String) defaults.get("input_schema"), Map.class);
+        assertEquals("object", schema.get("type"));
+        Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
+        assertEquals("string", ((Map<String, Object>) properties.get("question")).get("type"));
+        // Nothing is required, so callers that pass other agent parameters keep working.
+        assertFalse(schema.containsKey("required"));
+    }
+
+    @Test
+    public void testToolInstanceAttributesUnchanged() {
+        // The default schema is only advertised through the factory; the tool instance keeps null attributes so agents
+        // that embed AgentTool behave as before.
+        assertNull(AgentTool.Factory.getInstance().create(Map.of("agent_id", "test_agent_id")).getAttributes());
+    }
+
+    @Test
     public void testToolFailure() {
         assertThrows(IllegalArgumentException.class, () -> AgentTool.Factory.getInstance().create(Collections.emptyMap()));
         assertThrows(IllegalArgumentException.class, () -> AgentTool.Factory.getInstance().create(Map.of("agent_id", "")));
