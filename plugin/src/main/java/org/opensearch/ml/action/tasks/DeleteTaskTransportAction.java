@@ -151,7 +151,13 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             }
 
             if (mlTask.getState() == MLTaskState.RUNNING) {
-                actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after some time."));
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Task cannot be deleted in running state. Try after some time.",
+                            RestStatus.BAD_REQUEST
+                        )
+                    );
             } else {
                 executeDelete(taskId, tenantId, actionListener);
             }
