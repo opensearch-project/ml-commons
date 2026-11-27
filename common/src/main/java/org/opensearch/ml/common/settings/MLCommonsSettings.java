@@ -15,6 +15,8 @@ import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_OPENSEARCH;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -936,5 +938,106 @@ public final class MLCommonsSettings {
         } catch (PatternSyntaxException e) {
             throw new IllegalArgumentException("Invalid regex pattern: " + regex, e);
         }
+
+        // java.util.regex runs the minimum count of a counted repetition without checking for zero-length matches,
+        // so "(?:(?:){2147483647}){2147483647}" loops without ever reading the input and the match budget in
+        // TrustedEndpointMatcher never applies. Reject large nested minimum counts; the defaults top out at 2.
+        if (maxRepetitionMinimum(regex) > MAX_REPETITION_MINIMUM) {
+            throw new IllegalArgumentException(
+                "Regex pattern repeats too many times (nested minimum repetition count above " + MAX_REPETITION_MINIMUM + "): " + regex
+            );
+        }
+    }
+
+    static final long MAX_REPETITION_MINIMUM = 10_000L;
+
+    /**
+     * Returns the largest product of nested counted-repetition minimums ({@code {n}}, {@code {n,}}, {@code {n,m}})
+     * in the regex, capped just above {@link #MAX_REPETITION_MINIMUM}. Expects a regex that compiles.
+     */
+    static long maxRepetitionMinimum(String regex) {
+        // Each open group keeps the largest minimum seen among its items so far.
+        Deque<Long> groups = new ArrayDeque<>();
+        groups.push(1L);
+        int i = 0;
+        int length = regex.length();
+        while (i < length) {
+            char c = regex.charAt(i);
+            long item = 1L;
+            if (c == '(') {
+                groups.push(1L);
+                i++;
+                continue;
+            } else if (c == ')') {
+                item = groups.size() > 1 ? groups.pop() : 1L;
+                i++;
+            } else if (c == '\\') {
+                if (i + 1 < length && regex.charAt(i + 1) == 'Q') {
+                    int end = regex.indexOf("\\E", i + 2);
+                    i = end < 0 ? length : end + 2;
+                } else {
+                    i += 2;
+                }
+            } else if (c == '[') {
+                i = skipCharacterClass(regex, i);
+            } else {
+                i++;
+            }
+            // Quantifiers can be stacked ("x{100}{100}" compiles), and '?' or '+' after one makes it lazy or possessive.
+            while (i < length) {
+                char next = regex.charAt(i);
+                if (next == '*' || next == '+' || next == '?') {
+                    i++;
+                    continue;
+                }
+                if (next != '{') {
+                    break;
+                }
+                int j = i + 1;
+                long minimum = 0;
+                while (j < length && Character.isDigit(regex.charAt(j))) {
+                    minimum = Math.min(minimum * 10 + (regex.charAt(j) - '0'), MAX_REPETITION_MINIMUM + 1);
+                    j++;
+                }
+                if (j == i + 1 || j >= length || (regex.charAt(j) != ',' && regex.charAt(j) != '}')) {
+                    break;
+                }
+                int close = regex.indexOf('}', j);
+                if (close < 0) {
+                    break;
+                }
+                item = Math.min(item * Math.max(minimum, 1L), MAX_REPETITION_MINIMUM + 1);
+                i = close + 1;
+            }
+            groups.push(Math.max(groups.pop(), item));
+        }
+        long max = 1L;
+        for (long value : groups) {
+            max = Math.max(max, value);
+        }
+        return max;
+    }
+
+    private static int skipCharacterClass(String regex, int start) {
+        int i = start + 1;
+        if (i < regex.length() && regex.charAt(i) == '^') {
+            i++;
+        }
+        if (i < regex.length() && regex.charAt(i) == ']') {
+            i++;
+        }
+        int depth = 1;
+        while (i < regex.length() && depth > 0) {
+            char c = regex.charAt(i);
+            if (c == '\\') {
+                i++;
+            } else if (c == '[') {
+                depth++;
+            } else if (c == ']') {
+                depth--;
+            }
+            i++;
+        }
+        return i;
     }
 }
