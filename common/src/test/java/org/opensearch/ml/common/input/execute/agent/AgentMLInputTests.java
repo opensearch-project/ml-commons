@@ -8,6 +8,7 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,8 +21,12 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.Version;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -131,5 +136,107 @@ public class AgentMLInputTests {
         AgentMLInput inputNewVersion = new AgentMLInput(newVersionIn);
         assertEquals("testAgentId", inputNewVersion.getAgentId());
         assertEquals("testTenantId", inputNewVersion.getTenantId()); // tenantId should be populated for newer versions
+    }
+
+    private static AgentMLInput parseJson(String json) throws IOException {
+        XContentParser parser = JsonXContent.jsonXContent
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+        return new AgentMLInput(parser, FunctionName.AGENT);
+    }
+
+    private static Map<String, String> parameters(AgentMLInput input) {
+        return ((RemoteInferenceInputDataSet) input.getInputDataset()).getParameters();
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementName_CopiedIntoParameters() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":\"tmpl\",\"parameters\":{\"question\":\"hi\"}}");
+
+        assertEquals("tmpl", input.getContextManagementName());
+        assertEquals("tmpl", parameters(input).get("context_management_name"));
+        assertEquals("hi", parameters(input).get("question"));
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameAfterParameters() throws IOException {
+        AgentMLInput input = parseJson("{\"parameters\":{\"question\":\"hi\"},\"context_management_name\":\"tmpl\"}");
+
+        assertEquals("tmpl", input.getContextManagementName());
+        assertEquals("tmpl", parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_ParametersContextManagementNameWins() throws IOException {
+        AgentMLInput input = parseJson(
+            "{\"context_management_name\":\"top\",\"parameters\":{\"question\":\"hi\",\"context_management_name\":\"inner\"}}"
+        );
+
+        assertEquals("inner", input.getContextManagementName());
+        assertEquals("inner", parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameWithStandardInput() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":\"tmpl\",\"input\":\"hi\"}");
+
+        assertTrue(input.hasStandardInput());
+        assertEquals("tmpl", input.getContextManagementName());
+        assertEquals("tmpl", parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameWithoutAnyInput_LeavesDatasetEmpty() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":\"tmpl\"}");
+
+        assertNull(input.getInputDataset());
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameNull_Ignored() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":null,\"parameters\":{\"question\":\"hi\"}}");
+
+        assertNull(input.getContextManagementName());
+        assertNull(parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameBlank_Ignored() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":\"  \",\"parameters\":{\"question\":\"hi\"}}");
+
+        assertNull(input.getContextManagementName());
+        assertNull(parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_BlankParametersContextManagementName_FilledFromTopLevel() throws IOException {
+        AgentMLInput input = parseJson(
+            "{\"context_management_name\":\"top\",\"parameters\":{\"question\":\"hi\",\"context_management_name\":\"\"}}"
+        );
+
+        assertEquals("top", input.getContextManagementName());
+        assertEquals("top", parameters(input).get("context_management_name"));
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameNotString_Rejected() {
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> parseJson("{\"context_management_name\":{\"name\":\"x\"},\"parameters\":{\"question\":\"hi\"}}")
+        );
+        assertEquals("context_management_name must be a string", e.getMessage());
+    }
+
+    @Test
+    public void testParse_TopLevelContextManagementNameSurvivesSerialization() throws IOException {
+        AgentMLInput input = parseJson("{\"context_management_name\":\"tmpl\",\"parameters\":{\"question\":\"hi\"}}");
+        input.setAgentId("agent");
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        input.writeTo(out);
+        AgentMLInput read = new AgentMLInput(out.bytes().streamInput());
+
+        assertNull("the field itself is runtime-only", read.getContextManagementName());
+        assertEquals("tmpl", parameters(read).get("context_management_name"));
     }
 }

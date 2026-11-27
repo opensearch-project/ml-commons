@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.agent.MLAgent.CONTEXT_MANAGEMENT_NAME_FIELD;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -135,6 +136,7 @@ public class AgentMLInput extends MLInput {
         super();
         this.algorithm = functionName;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        String topLevelContextManagementName = null;
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
@@ -161,10 +163,51 @@ public class AgentMLInput extends MLInput {
                 case ASYNC_FIELD:
                     isAsync = parser.booleanValue();
                     break;
+                case CONTEXT_MANAGEMENT_NAME_FIELD:
+                    if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                        topLevelContextManagementName = null;
+                    } else if (parser.currentToken() == XContentParser.Token.VALUE_STRING) {
+                        topLevelContextManagementName = parser.text();
+                    } else {
+                        throw new IllegalArgumentException(CONTEXT_MANAGEMENT_NAME_FIELD + " must be a string");
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
+        }
+        applyTopLevelContextManagementName(topLevelContextManagementName);
+    }
+
+    /**
+     * Agent registration takes context_management_name as a top-level field, so execute accepts it there too, next to
+     * parameters.context_management_name. A value inside parameters wins. contextManagementName is not serialized, so the
+     * name is also copied into the parameters: after the request is sent to another node it is then handled exactly like
+     * parameters.context_management_name.
+     */
+    private void applyTopLevelContextManagementName(String name) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        if (inputDataset == null) {
+            if (agentInput == null) {
+                // No parameters and no input: leave the dataset unset so the request still fails as empty.
+                return;
+            }
+            inputDataset = new RemoteInferenceInputDataSet(new HashMap<>());
+        }
+        if (!(inputDataset instanceof RemoteInferenceInputDataSet)) {
+            return;
+        }
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) inputDataset;
+        if (dataset.getParameters() == null) {
+            dataset.setParameters(new HashMap<>());
+        }
+        String fromParameters = dataset.getParameters().get(CONTEXT_MANAGEMENT_NAME_FIELD);
+        if (fromParameters == null || fromParameters.isBlank()) {
+            dataset.getParameters().put(CONTEXT_MANAGEMENT_NAME_FIELD, name);
+            contextManagementName = name;
         }
     }
 
