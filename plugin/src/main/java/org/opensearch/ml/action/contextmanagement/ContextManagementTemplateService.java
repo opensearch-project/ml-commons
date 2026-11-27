@@ -10,6 +10,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.time.Instant;
 import java.util.List;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -17,7 +18,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.WriteRequest;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -31,6 +31,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
@@ -346,22 +347,83 @@ public class ContextManagementTemplateService {
                 return;
             }
 
-            User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
 
-                // Set last modified timestamp
-                template.setLastModified(Instant.now());
+                // A partial-document update would merge the request's hooks into the stored ones, so a hook left out of the
+                // request could never be removed. Read the stored template, apply the request's fields to it, and write the
+                // whole document, gated on the read so a concurrent update fails instead of being overwritten.
+                GetRequest getRequest = new GetRequest(ContextManagementIndexUtils.getIndexName(), templateName);
+                client.get(getRequest, ActionListener.wrap(getResponse -> {
+                    if (!getResponse.isExists()) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(CONTEXT_MANAGEMENT_NOT_FOUND_ERROR + templateName, RestStatus.NOT_FOUND)
+                            );
+                        return;
+                    }
 
-                // Create the update request
-                UpdateRequest updateRequest = new UpdateRequest(ContextManagementIndexUtils.getIndexName(), templateName)
-                    .doc(template.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
-                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                    IndexRequest indexRequest;
+                    try {
+                        ContextManagementTemplate stored;
+                        try (
+                            XContentParser parser = createXContentParserFromRegistry(
+                                NamedXContentRegistry.EMPTY,
+                                LoggingDeprecationHandler.INSTANCE,
+                                getResponse.getSourceAsBytesRef()
+                            )
+                        ) {
+                            stored = ContextManagementTemplate.parse(parser);
+                        }
+                        ContextManagementTemplate updated = stored
+                            .toBuilder()
+                            .name(templateName)
+                            .description(template.getDescription() != null ? template.getDescription() : stored.getDescription())
+                            .hooks(template.getHooks() != null ? template.getHooks() : stored.getHooks())
+                            .lastModified(Instant.now())
+                            .build();
+                        indexRequest = new IndexRequest(ContextManagementIndexUtils.getIndexName())
+                            .id(templateName)
+                            .source(updated.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
+                            .setIfSeqNo(getResponse.getSeqNo())
+                            .setIfPrimaryTerm(getResponse.getPrimaryTerm())
+                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                    } catch (Exception e) {
+                        log.error("Failed to prepare context management update: {}", templateName, e);
+                        wrappedListener.onFailure(e);
+                        return;
+                    }
 
-                // Execute the update operation
-                client.update(updateRequest, ActionListener.wrap(updateResponse -> {
-                    log.info("Context management updated successfully: {}", templateName);
-                    wrappedListener.onResponse(updateResponse);
+                    client.index(indexRequest, ActionListener.wrap(indexResponse -> {
+                        log.info("Context management updated successfully: {}", templateName);
+                        wrappedListener
+                            .onResponse(
+                                new UpdateResponse(
+                                    indexResponse.getShardInfo(),
+                                    indexResponse.getShardId(),
+                                    indexResponse.getId(),
+                                    indexResponse.getSeqNo(),
+                                    indexResponse.getPrimaryTerm(),
+                                    indexResponse.getVersion(),
+                                    indexResponse.getResult()
+                                )
+                            );
+                    }, exception -> {
+                        if (ExceptionsHelper.unwrapCause(exception) instanceof VersionConflictEngineException) {
+                            log.warn("Context management was modified concurrently: {}", templateName);
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "Context management [" + templateName + "] was updated concurrently. Retry the update.",
+                                        RestStatus.CONFLICT,
+                                        exception
+                                    )
+                                );
+                        } else {
+                            log.error("Failed to update context management: {}", templateName, exception);
+                            wrappedListener.onFailure(exception);
+                        }
+                    }));
                 }, exception -> {
                     if (exception instanceof IndexNotFoundException) {
                         wrappedListener
