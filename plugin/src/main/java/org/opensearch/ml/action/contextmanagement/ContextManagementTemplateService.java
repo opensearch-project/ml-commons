@@ -10,6 +10,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.time.Instant;
 import java.util.List;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -30,6 +31,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
@@ -363,12 +365,16 @@ public class ContextManagementTemplateService {
 
                     IndexRequest indexRequest;
                     try {
-                        XContentParser parser = createXContentParserFromRegistry(
-                            NamedXContentRegistry.EMPTY,
-                            LoggingDeprecationHandler.INSTANCE,
-                            getResponse.getSourceAsBytesRef()
-                        );
-                        ContextManagementTemplate stored = ContextManagementTemplate.parse(parser);
+                        ContextManagementTemplate stored;
+                        try (
+                            XContentParser parser = createXContentParserFromRegistry(
+                                NamedXContentRegistry.EMPTY,
+                                LoggingDeprecationHandler.INSTANCE,
+                                getResponse.getSourceAsBytesRef()
+                            )
+                        ) {
+                            stored = ContextManagementTemplate.parse(parser);
+                        }
                         ContextManagementTemplate updated = stored
                             .toBuilder()
                             .name(templateName)
@@ -403,8 +409,20 @@ public class ContextManagementTemplateService {
                                 )
                             );
                     }, exception -> {
-                        log.error("Failed to update context management: {}", templateName, exception);
-                        wrappedListener.onFailure(exception);
+                        if (ExceptionsHelper.unwrapCause(exception) instanceof VersionConflictEngineException) {
+                            log.warn("Context management was modified concurrently: {}", templateName);
+                            wrappedListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "Context management [" + templateName + "] was updated concurrently. Retry the update.",
+                                        RestStatus.CONFLICT,
+                                        exception
+                                    )
+                                );
+                        } else {
+                            log.error("Failed to update context management: {}", templateName, exception);
+                            wrappedListener.onFailure(exception);
+                        }
                     }));
                 }, exception -> {
                     if (exception instanceof IndexNotFoundException) {

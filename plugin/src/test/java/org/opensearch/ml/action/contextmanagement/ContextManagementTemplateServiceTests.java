@@ -44,6 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
@@ -743,6 +744,26 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertEquals("Update error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testUpdateTemplate_ConcurrentUpdateReturnsConflict() throws Exception {
+        mockStoredTemplate(STORED_TEMPLATE_JSON, 7L, 2L);
+        doAnswer((Answer<Void>) invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new VersionConflictEngineException(new ShardId("index", "uuid", 0), "test_template", "version conflict"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), any());
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.updateTemplate("test_template", templateWithHooks("d", null), listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) exceptionCaptor.getValue()).status());
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("updated concurrently"));
     }
 
     @Test
