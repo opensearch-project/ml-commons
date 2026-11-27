@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,6 +50,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -383,6 +385,46 @@ public class UpdateAgentTransportActionTests {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(RestStatus.CONFLICT, argumentCaptor.getValue().status());
         assertTrue(argumentCaptor.getValue().getMessage().contains("version conflict"));
+    }
+
+    @Test
+    public void testDoExecute_NullIndexResponse() throws IOException {
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput.builder().agentId(agentId).name("agent").build();
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        SdkClient mockSdkClient = mock(SdkClient.class);
+        when(mockSdkClient.getDataObjectAsync(any())).thenAnswer(invocation -> sdkClient.getDataObjectAsync(invocation.getArgument(0)));
+        when(mockSdkClient.putDataObjectAsync(any()))
+            .thenReturn(CompletableFuture.completedFuture(PutDataObjectResponse.builder().id(agentId).build()));
+        UpdateAgentTransportAction action = spy(
+            new UpdateAgentTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                mockSdkClient,
+                xContentRegistry,
+                clusterService,
+                mlFeatureEnabledSetting
+            )
+        );
+        doReturn(true).when(action).isSuperAdminUserWrapper(clusterService, client);
+
+        action.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, argumentCaptor.getValue().status());
+        assertEquals("Failed to update agent test_agent_id", argumentCaptor.getValue().getMessage());
     }
 
     private GetResponse prepareMLAgentGetResponse(String agentId, boolean isHidden, String tenantId) throws IOException {

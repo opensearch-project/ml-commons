@@ -184,6 +184,14 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             } else {
                 try {
                     IndexResponse indexResponse = r.indexResponse();
+                    if (indexResponse == null) {
+                        log.error("No index response when updating ML agent {}", agentId);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to update agent " + agentId, RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                        return;
+                    }
                     log.info("Successfully updated ML agent {}", agentId);
                     wrappedListener
                         .onResponse(
