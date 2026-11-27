@@ -39,6 +39,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -244,6 +245,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You are not allowed to delete this connector", argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     public void testDeleteConnector_SearchFailure() throws InterruptedException {

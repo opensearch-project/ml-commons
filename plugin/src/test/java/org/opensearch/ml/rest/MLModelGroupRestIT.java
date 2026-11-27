@@ -674,6 +674,45 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         });
     }
 
+    public void test_DeletePrivateConnectorOfAnotherUser_returnsForbidden() throws IOException {
+        setConnectorAccessControl(true);
+        try {
+            String connectorBody = "{\"name\": \"user1 private connector\", \"description\": \"private connector\", "
+                + "\"version\": 1, \"protocol\": \"http\", \"access_mode\": \"private\", "
+                + "\"parameters\": {\"endpoint\": \"api.openai.com\", \"model\": \"gpt-4o-mini\"}, "
+                + "\"credential\": {\"openAI_key\": \"placeholder\"}, "
+                + "\"actions\": [{\"action_type\": \"predict\", \"method\": \"POST\", "
+                + "\"url\": \"https://${parameters.endpoint}/v1/chat/completions\", "
+                + "\"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\" }\"}]}";
+            Response response = TestHelper
+                .makeRequest(user1Client, "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(connectorBody), null);
+            String connectorId = (String) parseResponseToMap(response).get("connector_id");
+            assertNotNull(connectorId);
+
+            ResponseException e = expectThrows(
+                ResponseException.class,
+                () -> TestHelper.makeRequest(user3Client, "DELETE", "/_plugins/_ml/connectors/" + connectorId, null, "", null)
+            );
+            assertEquals(RestStatus.FORBIDDEN.getStatus(), e.getResponse().getStatusLine().getStatusCode());
+            assertTrue(Throwables.getStackTraceAsString(e).contains("You are not allowed to delete this connector"));
+        } finally {
+            setConnectorAccessControl(false);
+        }
+    }
+
+    private void setConnectorAccessControl(boolean enabled) throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":" + enabled + "}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+    }
+
     public void test_RegisterModelGroupOnAccessControlDisabledCluster() throws IOException {
         disableModelAccessControl(false);
         mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", null, null, null);
