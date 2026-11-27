@@ -142,6 +142,20 @@ public class MLModelTests {
     }
 
     @Test
+    public void parse_InterfaceWithNullMemberIsDropped() throws IOException {
+        String json = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\","
+            + "\"interface\":{\"input\":null,\"output\":\"{\\\"type\\\":\\\"object\\\"}\"}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json);
+        parser.nextToken();
+
+        MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+
+        assertEquals(Map.of("output", "{\"type\":\"object\"}"), parsed.getModelInterface());
+    }
+
+    @Test
     public void readInputStream_Success() throws IOException {
         readInputStream(mlModel);
     }

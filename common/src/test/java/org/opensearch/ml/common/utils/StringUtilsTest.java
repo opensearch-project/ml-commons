@@ -349,6 +349,27 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void filteredParameterMap_skipsNullValues() {
+        final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input", "output"));
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("input", null);
+        parameters.put("output", "{\"type\":\"object\"}");
+        Map<String, String> interfaceMap = StringUtils.filteredParameterMap(parameters, allowedInterfaceFieldNameList);
+        Assert.assertEquals(1, interfaceMap.size());
+        Assert.assertFalse(interfaceMap.containsKey("input"));
+        Assert.assertEquals("{\"type\":\"object\"}", interfaceMap.get("output"));
+    }
+
+    @Test
+    public void filteredParameterMap_allNullValuesGiveEmptyMap() {
+        final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input", "output"));
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("input", null);
+        parameters.put("output", null);
+        Assert.assertTrue(StringUtils.filteredParameterMap(parameters, allowedInterfaceFieldNameList).isEmpty());
+    }
+
+    @Test
     public void processTextDocs() {
         List<String> processedDocs = StringUtils.processTextDocs(Arrays.asList("abc \n\n123\"4", null, "[1.01,\"abc\"]"));
         assertEquals(3, processedDocs.size());
