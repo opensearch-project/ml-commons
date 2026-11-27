@@ -16,12 +16,16 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.AUTHORIZATION_PROVIDER_FACTORY;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -34,6 +38,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
@@ -44,10 +49,13 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.OAuth2TestFixtures;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
@@ -305,6 +313,38 @@ public class RemoteModelTest extends MLStaticMockBase {
             assertEquals("connectorTenantId", executor.getConnector().getTenantId());
         });
         remoteModel.initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor, listener);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void initModelAsync_givesTheExecutorTheAuthorizationProviderFactory() {
+        when(mlModel.getConnector()).thenReturn(OAuth2TestFixtures.oauth2Connector("https://203.0.113.20/v1/chat/completions"));
+        AuthorizationProviderFactory factory = mock(AuthorizationProviderFactory.class);
+        when(factory.providerFor(any())).thenThrow(new IllegalArgumentException("refused"));
+        Encryptor unchanged = mock(Encryptor.class);
+        doAnswer(invocation -> {
+            invocation.<ActionListener<List<String>>>getArgument(2).onResponse(invocation.getArgument(0));
+            return null;
+        }).when(unchanged).decrypt(any(), any(), any());
+        Map<String, Object> params = Map
+            .of(
+                SDK_CLIENT,
+                sdkClient,
+                SETTINGS,
+                settings,
+                AUTHORIZATION_PROVIDER_FACTORY,
+                factory,
+                TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                List.of("^https://203\\.0\\.113\\.20/.*$")
+            );
+        remoteModel.initModelAsync(mlModel, params, unchanged, createPredictableListener(() -> {}));
+        ActionListener<Tuple<Integer, ModelTensors>> predictListener = mock(ActionListener.class);
+
+        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+        executor.invokeRemoteService(PREDICT.name(), null, new HashMap<>(), "{}", new ExecutionContext(0), predictListener);
+
+        verify(factory).providerFor(executor.getConnector());
+        verify(predictListener).onFailure(isA(IllegalArgumentException.class));
     }
 
     private Connector createConnector(Map<String, String> headers) {

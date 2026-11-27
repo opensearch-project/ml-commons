@@ -94,6 +94,7 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -186,6 +187,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     MLEngine mlEngine;
+
+    @Mock
+    MLIndicesHandler mlIndicesHandler;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -282,9 +286,15 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 clusterService,
                 mlEngine,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlIndicesHandler
             )
         );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(isA(ActionListener.class));
 
         testConnector = HttpConnector
             .builder()

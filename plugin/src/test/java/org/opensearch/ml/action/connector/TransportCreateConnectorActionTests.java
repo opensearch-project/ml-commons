@@ -57,6 +57,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.auth.AuthConfigValidator;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -844,6 +845,52 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLCreateConnectorResponse> captor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
         verify(actionListener).onResponse(captor.capture());
         assertEquals(CONNECTOR_ID, captor.getValue().getConnectorId());
+    }
+
+    public void test_googleCloud_connector_withAnAuthorizationHeader_isRejected() {
+        // The connector's access token is sent in that header, so a new connector may not define one.
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        List<ConnectorAction> actions = List
+            .of(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/v1/completions")
+                    .headers(Map.of("Authorization", "Bearer stale"))
+                    .build()
+            );
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(ImmutableMap.of("endpoint", "api.openai.com", "auth_mode", "adc"))
+            .actions(actions)
+            .build();
+
+        action.doExecute(task, new MLCreateConnectorRequest(mlCreateConnectorInput), actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals(AuthConfigValidator.GOOGLE_CLOUD_AUTHORIZATION_HEADER_MESSAGE, captor.getValue().getMessage());
+        verify(client, never()).index(any(IndexRequest.class), isA(ActionListener.class));
     }
 
     public void test_vertexai_connector_creation_rejects_versionless_batch_predict_url() {

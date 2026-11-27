@@ -114,6 +114,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler implements RestRe
 
     @Override
     public Set<String> getFilteredFields() {
-        return Set.of("connector.credential", "*.Authorization");
+        return Set
+            .of("connector.credential", "*.Authorization", "connector.auth_config.client_secret", "connector.auth_config.jwt.private_key");
     }
 }

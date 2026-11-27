@@ -8,8 +8,11 @@ package org.opensearch.ml.common;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.STORED_WITH_MARKERS_JSON;
+import static org.opensearch.ml.common.connector.auth.AuthTestFixtures.storedWithMarkersAsRead;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -33,6 +36,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.auth.OAuth2AuthConfig;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -653,4 +657,54 @@ public class MLModelTests {
             assertNull(((BaseModelConfig) parsed.getModelConfig()).getAdditionalConfig());
         }
     }
+
+    private static final String STORED_INLINE_MODEL = "{\"name\":\"m\",\"algorithm\":\"REMOTE\",\"model_version\":\"1\","
+        + "\"connector\":{\"name\":\"c\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"model\":\"x\"},"
+        + "\"auth_config\":"
+        + STORED_WITH_MARKERS_JSON
+        + ",\"credential\":{\"key\":\"ciphertext\"},"
+        + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://api.openai.com/v1/chat\"}]}}";
+
+    @Test
+    public void parse_storedInlineConnectorAuthConfigIsReadIntoTheField() throws IOException {
+        try (
+            XContentParser parser = jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, STORED_INLINE_MODEL)
+        ) {
+            parser.nextToken();
+            MLModel parsed = MLModel.parse(parser, FunctionName.REMOTE.name());
+            assertEquals(storedWithMarkersAsRead(), parsed.getConnector().getAuthConfig());
+            assertEquals(Map.of("model", "x"), parsed.getConnector().getParameters());
+            assertEquals(Map.of("key", "ciphertext"), parsed.getConnector().getCredential());
+        }
+    }
+
+    @Test
+    public void toXContent_emitsTheInlineConnectorAuthConfig() throws IOException {
+        MLModel model = MLModel
+            .builder()
+            .name("m")
+            .algorithm(FunctionName.REMOTE)
+            .connector(
+                HttpConnector
+                    .builder()
+                    .name("c")
+                    .protocol("http")
+                    .parameters(Map.of("model", "x"))
+                    .authConfig(OAuth2AuthConfig.NONE)
+                    .build()
+            )
+            .build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        model.toXContent(builder, EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertTrue(
+            content,
+            content
+                .contains(
+                    "\"connector\":{\"name\":\"c\",\"protocol\":\"http\",\"parameters\":{\"model\":\"x\"},\"auth_config\":{\"type\":\"none\"}}"
+                )
+        );
+    }
+
 }

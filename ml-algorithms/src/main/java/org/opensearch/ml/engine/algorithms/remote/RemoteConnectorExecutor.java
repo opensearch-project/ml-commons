@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Logger;
@@ -54,6 +55,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
@@ -204,6 +206,14 @@ public interface RemoteConnectorExecutor extends AutoCloseable {
     default void setMlGuard(MLGuard mlGuard) {}
 
     default void setTrustedConnectorEndpointsRegex(List<String> trustedConnectorEndpointsRegex) {}
+
+    /**
+     * Whether a connector whose parameters give no origin for an action URL keeps the allowlist-only check (deprecated). Read
+     * on every request, so a change to the setting reaches models that are already deployed.
+     */
+    default void setLegacyActionUrlOriginEnabled(BooleanSupplier legacyActionUrlOriginEnabled) {}
+
+    default void setAuthorizationProviderFactory(AuthorizationProviderFactory authorizationProviderFactory) {}
 
     default void preparePayloadAndInvoke(
         String action,
