@@ -17,6 +17,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -87,6 +88,10 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         String actionName = restMLUpdateConnectorAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_update_connector_action", actionName);
+    }
+
+    public void testGetFilteredFields_redactsTheAuthConfigSecret() {
+        assertEquals(Set.of("credential", "*.Authorization", "auth_config.client_secret"), restMLUpdateConnectorAction.getFilteredFields());
     }
 
     public void testRoutes() {

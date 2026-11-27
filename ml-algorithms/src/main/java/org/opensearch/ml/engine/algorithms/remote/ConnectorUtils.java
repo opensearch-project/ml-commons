@@ -345,7 +345,8 @@ public class ConnectorUtils {
 
     public static SdkHttpFullRequest buildSdkRequest(
         String action,
-        Connector connector,
+        URI endpoint,
+        Map<String, String> headers,
         Map<String, String> parameters,
         String payload,
         SdkHttpMethod method
@@ -364,29 +365,12 @@ public class ConnectorUtils {
             log.error("Content length is 0. Aborting request to remote model");
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
-        String endpoint = connector.getActionEndpoint(action, parameters);
-        URI uri;
-        try {
-            uri = URI.create(endpoint);
-            if (uri.getHost() == null) {
-                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
-                e
-            );
-        }
-        if (uri.getRawUserInfo() != null) {
-            throw new IllegalArgumentException("Connector URL must not contain user information");
-        }
 
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)
-            .uri(uri)
+            .uri(endpoint)
             .contentStreamProvider(requestBody.contentStreamProvider());
-        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
         validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
@@ -402,7 +386,7 @@ public class ConnectorUtils {
         return builder.build();
     }
 
-    public static Request buildOKHttpStreamingRequest(String action, Connector connector, Map<String, String> parameters, String payload) {
+    public static Request buildOKHttpStreamingRequest(URI endpoint, Map<String, String> headers, String payload) {
         okhttp3.RequestBody requestBody;
         if (payload != null) {
             requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
@@ -410,24 +394,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
 
-        String endpoint = connector.getActionEndpoint(action, parameters);
-        URI uri;
-        try {
-            uri = URI.create(endpoint);
-            if (uri.getHost() == null) {
-                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException(
-                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
-                e
-            );
-        }
-        if (uri.getRawUserInfo() != null) {
-            throw new IllegalArgumentException("Connector URL must not contain user information");
-        }
         Request.Builder requestBuilder = new Request.Builder();
-        Map<String, String> headers = connector.getHeadersWithRuntimeParameters(parameters);
         validateSubstitutedHeaders(headers);
         if (headers != null) {
             for (String key : headers.keySet()) {
@@ -439,7 +406,7 @@ public class ConnectorUtils {
         requestBuilder.addHeader("Accept-Encoding", "");
         requestBuilder.addHeader("Accept", "text/event-stream");
         requestBuilder.addHeader("Cache-Control", "no-cache");
-        requestBuilder.url(endpoint);
+        requestBuilder.url(endpoint.toString());
         requestBuilder.post(requestBody);
         Request request = requestBuilder.build();
 
@@ -455,8 +422,7 @@ public class ConnectorUtils {
 
         // Apply parameter substitution only if needed
         if (!parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
+            predictEndpoint = Connector.substituteParameters(predictEndpoint, parameters);
         }
 
         boolean isCancelAction = actionType == CANCEL_BATCH_PREDICT;

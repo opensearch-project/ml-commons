@@ -436,6 +436,21 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /**
+     * Keeps the previous, allowlist-only execution check for a connector whose own parameters give no scheme or host for an
+     * action URL, so such a connector, stored before the write-time check required them, is migrated after an upgrade
+     * rather than before it. A connector whose parameters give an origin is held to it whatever this setting says. On by
+     * default in 3.x and deprecated: the setting and the lenient path are removed in 4.0.
+     */
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_LEGACY_ACTION_URL_ORIGIN_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.legacy_action_url_origin_enabled",
+            true,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic,
+            Setting.Property.Deprecated
+        );
+
     public static final Setting<List<String>> ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS = Setting
         .listSetting(
             ML_PLUGIN_SETTING_PREFIX + "connector.restricted_ip_patterns",
@@ -771,6 +786,73 @@ public final class MLCommonsSettings {
             -1,
             -1,
             10000000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // Feature flag for connector auth_config. Every write of the object needs it, type "none" included, since a stored
+    // object cannot be removed again; the one exception is switching a stored type that attaches credentials to "none".
+    // Disabled by default (opt-in).
+    //
+    // Enable it only after every node in the cluster runs a release that contains this setting: older nodes do not
+    // support auth_config.
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_AUTH_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.auth_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_CONNECTOR_AUTH_DISABLED_MESSAGE =
+        "Connector auth_config is not enabled. To enable it, please update the cluster setting "
+            + ML_COMMONS_CONNECTOR_AUTH_ENABLED.getKey();
+
+    // Token endpoints a connector auth_config token_url may name. Patterns are matched against the canonical URL:
+    // https, lower-case host, no default port, then the path as written. The defaults fix the host with literal
+    // domains or explicit label classes and restrict the path.
+    //
+    // Unlike the inference endpoint lists, a pattern with a wildcard in the host position is rejected rather than
+    // logged: such a pattern lets a URL whose real host is elsewhere match. This setting has no values persisted
+    // before the check existed, so rejecting cannot break a restart.
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_OAUTH2_TOKEN_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "trusted_oauth2_token_endpoints_regex",
+            ImmutableList
+                .of(
+                    "^https://login\\.microsoftonline\\.com/[A-Za-z0-9][A-Za-z0-9.-]*/oauth2/v2\\.0/token$",
+                    "^https://login\\.microsoftonline\\.us/[A-Za-z0-9][A-Za-z0-9.-]*/oauth2/v2\\.0/token$",
+                    "^https://login\\.partner\\.microsoftonline\\.cn/[A-Za-z0-9][A-Za-z0-9.-]*/oauth2/v2\\.0/token$",
+                    "^https://oauth2\\.googleapis\\.com/token$",
+                    "^https://iam\\.cloud\\.ibm\\.com/identity/token$",
+                    "^https://[a-z0-9-]+\\.okta\\.com/oauth2/([A-Za-z0-9]+/)?v1/token$",
+                    "^https://login\\.salesforce\\.com/services/oauth2/token$",
+                    "^https://[a-z0-9-]+\\.my\\.salesforce\\.com/services/oauth2/token$",
+                    "^https://accounts\\.cloud\\.databricks\\.com/oidc/accounts/[a-z0-9-]+/v1/token$"
+                ),
+            Function.identity(),
+            new Setting.Validator<List<String>>() {
+                @Override
+                public void validate(List<String> value) {
+                    for (String regex : value) {
+                        validateRegexSafety(regex);
+                        if (authorityContainsWildcard(authorityPart(regex))) {
+                            throw new IllegalArgumentException(
+                                "Trusted OAuth2 token endpoint pattern \""
+                                    + regex
+                                    + "\" uses a wildcard in the host position that can match path or query characters;"
+                                    + " write the host with literal labels or [a-z0-9-]+"
+                            );
+                        }
+                    }
+                }
+            },
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    // The longest time a connector may use an OAuth2 access token from the node's cache, whatever lifetime the token
+    // endpoint reports. A lower value applies to tokens obtained after the change.
+    public static final Setting<Integer> ML_COMMONS_OAUTH2_TOKEN_CACHE_MAX_SECONDS = Setting
+        .intSetting(
+            ML_PLUGIN_SETTING_PREFIX + "connector.oauth2_token_cache_max_seconds",
+            3600,
+            60,
+            86400,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

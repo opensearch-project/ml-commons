@@ -23,6 +23,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.HttpConnector;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -129,9 +130,23 @@ public class MLStatsInput implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalEnumSet(targetStatLevels);
+        EnumSet<MLStatLevel> levels = targetStatLevels;
+        EnumSet<MLNodeLevelStat> nodeStats = nodeLevelStats;
+        if (nodeStats != null
+            && !nodeStats.isEmpty()
+            && out.getVersion().before(HttpConnector.MINIMAL_SUPPORTED_VERSION_FOR_CONNECTOR_AUTH)) {
+            nodeStats = EnumSet.copyOf(nodeStats);
+            nodeStats.removeAll(MLNodeLevelStat.CONNECTOR_AUTH_STATS);
+            // An empty set asks the reader for every node level stat, and a reader of that version has none of the
+            // requested ones, so the node level is left out of the request instead.
+            if (nodeStats.isEmpty() && levels != null && levels.contains(MLStatLevel.NODE)) {
+                levels = EnumSet.copyOf(levels);
+                levels.remove(MLStatLevel.NODE);
+            }
+        }
+        out.writeOptionalEnumSet(levels);
         out.writeOptionalEnumSet(clusterLevelStats);
-        out.writeOptionalEnumSet(nodeLevelStats);
+        out.writeOptionalEnumSet(nodeStats);
         out.writeOptionalEnumSet(actionLevelStats);
         out.writeOptionalStringCollection(nodeIds);
         out.writeOptionalStringCollection(models);

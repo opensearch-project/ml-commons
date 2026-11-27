@@ -34,12 +34,14 @@ import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.AUTHORIZATION_PROVIDER_FACTORY;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_RESTRICTED_IP_PATTERNS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.LEGACY_ACTION_URL_ORIGIN_ENABLED;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
@@ -85,6 +87,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -137,6 +140,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelState;
@@ -152,6 +156,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.algorithms.remote.oauth2.AuthorizationProviderFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.model.MLModelCacheHelper.DeployAttempt;
@@ -218,6 +223,7 @@ public class MLModelManager {
     private volatile Integer maxBatchIngestionTasks;
     private volatile List<Pattern> connectorTrustedPrivateEndpoints;
     private volatile List<Pattern> connectorRestrictedIpPatterns;
+    private volatile AuthorizationProviderFactory authorizationProviderFactory;
 
     public static final ImmutableSet<MLModelState> MODEL_DONE_STATES = ImmutableSet
         .of(
@@ -296,6 +302,20 @@ public class MLModelManager {
 
         connectorRestrictedIpPatterns = new CopyOnWriteArrayList<>();
         connectorRestrictedIpPatterns.addAll(compilePatterns(ML_COMMONS_CONNECTOR_RESTRICTED_IP_PATTERNS.get(settings)));
+    }
+
+    /** The connector address checks under the current settings. */
+    public ConnectorAddressValidator connectorAddressValidator() {
+        return new ConnectorAddressValidator(
+            mlFeatureEnabledSetting.isConnectorPrivateIpEnabled(),
+            connectorTrustedPrivateEndpoints,
+            connectorRestrictedIpPatterns
+        );
+    }
+
+    /** The factory that gives deployed remote models the access tokens their connectors declare. */
+    public void setAuthorizationProviderFactory(AuthorizationProviderFactory authorizationProviderFactory) {
+        this.authorizationProviderFactory = authorizationProviderFactory;
     }
 
     private List<Pattern> compilePatterns(List<String> regexList) {
@@ -1935,6 +1955,8 @@ public class MLModelManager {
         params.put(CONNECTOR_TRUSTED_PRIVATE_ENDPOINTS, connectorTrustedPrivateEndpoints);
         params.put(CONNECTOR_RESTRICTED_IP_PATTERNS, connectorRestrictedIpPatterns);
         params.put(TRUSTED_CONNECTOR_ENDPOINTS_REGEX, mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+        params.put(LEGACY_ACTION_URL_ORIGIN_ENABLED, (BooleanSupplier) mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
+        params.put(AUTHORIZATION_PROVIDER_FACTORY, authorizationProviderFactory);
         params.put(SDK_CLIENT, sdkClient);
         params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);

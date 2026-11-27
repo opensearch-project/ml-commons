@@ -101,6 +101,8 @@ dependencies {
     compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
     compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
+    // The connector persistence tests drive the DynamoDB attribute conversion of the remote metadata client.
+    testImplementation group: 'software.amazon.awssdk', name: 'dynamodb', version: "${versions.aws}"
 
     implementation ('com.jayway.jsonpath:json-path:2.9.0') {
         exclude group: 'net.minidev', module: 'json-smart'

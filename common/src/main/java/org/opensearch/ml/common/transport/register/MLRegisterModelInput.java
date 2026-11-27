@@ -12,7 +12,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_7_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_9_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.connector.Connector.createConnectorFromRequest;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
@@ -516,7 +516,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     deploySetting = MLDeploySetting.parse(parser);
                     break;
                 case CONNECTOR_FIELD:
-                    connector = createConnector(parser);
+                    connector = createConnectorFromRequest(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
@@ -659,7 +659,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     url = parser.text();
                     break;
                 case CONNECTOR_FIELD:
-                    connector = createConnector(parser);
+                    connector = createConnectorFromRequest(parser);
                     break;
                 case MODEL_CONTENT_HASH_VALUE_FIELD:
                     hashValue = parser.text();

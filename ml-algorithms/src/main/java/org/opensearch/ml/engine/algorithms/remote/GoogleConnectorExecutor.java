@@ -13,6 +13,7 @@ import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
+import java.net.URI;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -32,13 +34,13 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.ConnectorAddressValidator;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
-import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingAddressPolicy;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
@@ -88,6 +90,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private volatile List<String> trustedConnectorEndpointsRegex;
+    @Setter
+    private volatile BooleanSupplier legacyActionUrlOriginEnabled = () -> false;
 
     @Setter
     @Getter
@@ -133,8 +137,9 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist.
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
             // Resolve and validate the HTTP method up front, before minting a token.
             SdkHttpMethod method;
@@ -161,7 +166,8 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
             String token = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> credentialProvider().getAccessToken());
             connector.setAuthorizationValue("Bearer " + token);
 
-            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, method);
+            SdkHttpFullRequest request = ConnectorUtils
+                .buildSdkRequest(action, endpoint, connector.getHeadersWithRuntimeParameters(parameters), parameters, payload, method);
             ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
 
             ThreadedActionListener<Tuple<Integer, ModelTensors>> threadedListener = createThreadedListener(log, actionListener);
@@ -203,8 +209,9 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
-            // Re-validate the resolved URL against the trusted-connector-endpoints allowlist.
-            connector.validateResolvedEndpoint(connector.getActionEndpoint(action, parameters), trustedConnectorEndpointsRegex);
+            // The request is built from this URI, which passed the connector's URL checks.
+            URI endpoint = connector
+                .resolveActionEndpoint(action, parameters, trustedConnectorEndpointsRegex, legacyActionUrlOriginEnabled.getAsBoolean());
 
             String llmInterface = parameters.get(LLM_INTERFACE);
             if (llmInterface == null) {
@@ -224,9 +231,14 @@ public class GoogleConnectorExecutor extends AbstractConnectorExecutor {
                     null,
                     super.getConnectorClientConfig(),
                     parameters,
-                    new StreamingAddressPolicy(connectorPrivateIpEnabled, connectorTrustedPrivateEndpoints, connectorRestrictedIpPatterns)
+                    new ConnectorAddressValidator(
+                        connectorPrivateIpEnabled,
+                        connectorTrustedPrivateEndpoints,
+                        connectorRestrictedIpPatterns
+                    ),
+                    null
                 );
-            handler.startStream(action, parameters, payload, actionListener);
+            handler.startStream(endpoint, connector.getHeadersWithRuntimeParameters(parameters), parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute google_cloud streaming", e);
             actionListener.onFailure(new MLException("Fail to execute google_cloud streaming", e));
