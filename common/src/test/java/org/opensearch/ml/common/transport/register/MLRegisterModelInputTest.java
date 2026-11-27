@@ -32,6 +32,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -298,6 +299,24 @@ public class MLRegisterModelInputTest {
             Map<String, Object> additionalConfig = baseConfig.getAdditionalConfig();
             assertNotNull(additionalConfig);
             assertEquals("l2", additionalConfig.get("space_type"));
+        });
+    }
+
+    @Test
+    public void parse_InterfaceWithNullMembers_doesNotStoreNullString() throws Exception {
+        String json = "{\"function_name\":\"REMOTE\",\"name\":\"m\",\"model_group_id\":\"g\",\"connector_id\":\"c\","
+            + "\"interface\":{\"input\":null,\"output\":null}}";
+        testParseFromJsonString(false, json, parsedInput -> {
+            assertTrue(parsedInput.getModelInterface().isEmpty());
+            try {
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                parsedInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                String jsonStr = builder.toString();
+                assertTrue(jsonStr, jsonStr.contains("\"interface\":{}"));
+                assertFalse(jsonStr, jsonStr.contains("\"null\""));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         });
     }
 

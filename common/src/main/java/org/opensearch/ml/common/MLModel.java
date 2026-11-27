@@ -834,7 +834,10 @@ public class MLModel implements ToXContentObject {
                     guardrails = Guardrails.parse(parser);
                     break;
                 case INTERFACE_FIELD:
-                    modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
+                    // An update can store "interface": null to remove the interface.
+                    modelInterface = parser.currentToken() == XContentParser.Token.VALUE_NULL
+                        ? null
+                        : filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();

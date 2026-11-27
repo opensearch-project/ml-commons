@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -221,6 +222,118 @@ public class MLUpdateModelInputTest {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    @Test
+    public void parseInterfaceWithNullMember_removesThatMember() throws Exception {
+        String json = "{\"interface\":{\"input\":null,\"output\":\"{\\\"type\\\":\\\"object\\\"}\"}}";
+        testParseFromJsonString(json, parsedInput -> {
+            assertFalse(parsedInput.isClearInterface());
+            Map<String, String> expected = new HashMap<>();
+            expected.put("input", null);
+            expected.put("output", "{\"type\":\"object\"}");
+            assertEquals(expected, parsedInput.getModelInterface());
+            try {
+                String jsonStr = serializationWithToXContent(parsedInput);
+                assertFalse(jsonStr, jsonStr.contains("\"null\""));
+                assertTrue(jsonStr, jsonStr.contains("\"input\":null"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    public void parseInterfaceWithEveryMemberNull_clearsInterface() throws Exception {
+        testParseFromJsonString("{\"interface\":{\"input\":null,\"output\":null}}", parsedInput -> {
+            assertTrue(parsedInput.isClearInterface());
+            assertNull(parsedInput.getModelInterface());
+        });
+    }
+
+    @Test
+    public void parseInterfaceNull_clearsInterface() throws Exception {
+        testParseFromJsonString("{\"interface\":null}", parsedInput -> {
+            assertTrue(parsedInput.isClearInterface());
+            assertNull(parsedInput.getModelInterface());
+            try {
+                assertTrue(serializationWithToXContent(parsedInput).contains("\"interface\":null"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    public void parseInterfaceEmptyObject_clearsInterface() throws Exception {
+        testParseFromJsonString("{\"interface\":{}}", parsedInput -> {
+            assertTrue(parsedInput.isClearInterface());
+            assertNull(parsedInput.getModelInterface());
+            try {
+                assertTrue(serializationWithToXContent(parsedInput).contains("\"interface\":null"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    public void parseInterfaceWithMembers_doesNotClear() throws Exception {
+        testParseFromJsonString("{\"interface\":{\"input\":\"{}\"}}", parsedInput -> {
+            assertFalse(parsedInput.isClearInterface());
+            assertEquals(Map.of("input", "{}"), parsedInput.getModelInterface());
+            try {
+                assertTrue(serializationWithToXContent(parsedInput).contains("\"interface\":{\"input\":\"{}\"}"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        testParseFromJsonString("{\"name\":\"n\"}", parsedInput -> {
+            assertFalse(parsedInput.isClearInterface());
+            try {
+                assertFalse(serializationWithToXContent(parsedInput).contains("\"interface\""));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    @Test
+    public void toXContent_clearInterfaceWinsOverModelInterface() throws IOException {
+        MLUpdateModelInput input = updateModelInput.toBuilder().modelInterface(Map.of("input", "{}")).clearInterface(true).build();
+        String jsonStr = serializationWithToXContent(input);
+        assertTrue(jsonStr, jsonStr.contains("\"interface\":null"));
+    }
+
+    @Test
+    public void serializationCarriesClearInterfaceAndMemberRemoval() throws IOException {
+        MLUpdateModelInput clear = updateModelInput.toBuilder().modelInterface(null).clearInterface(true).build();
+        readInputStream(clear, parsedInput -> assertTrue(parsedInput.isClearInterface()));
+
+        Map<String, String> withRemoval = new HashMap<>();
+        withRemoval.put("input", null);
+        withRemoval.put("output", "{}");
+        MLUpdateModelInput removal = updateModelInput.toBuilder().modelInterface(withRemoval).build();
+        readInputStream(removal, parsedInput -> assertEquals(withRemoval, parsedInput.getModelInterface()));
+    }
+
+    @Test
+    public void serializationBeforeClearInterfaceVersionDropsRemovals() throws IOException {
+        Map<String, String> withRemoval = new HashMap<>();
+        withRemoval.put("input", null);
+        withRemoval.put("output", "{}");
+        MLUpdateModelInput input = updateModelInput.toBuilder().modelInterface(withRemoval).clearInterface(true).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_3_9_0);
+        input.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_3_9_0);
+        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
+
+        assertFalse(parsedInput.isClearInterface());
+        assertEquals(Map.of("output", "{}"), parsedInput.getModelInterface());
+        assertEquals(input.getName(), parsedInput.getName());
     }
 
     @Test
