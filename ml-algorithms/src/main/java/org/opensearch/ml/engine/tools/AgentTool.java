@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 
 import java.util.Map;
 
@@ -49,6 +50,14 @@ public class AgentTool implements Tool {
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
+
+    // Default schema advertised for this tool type (for example by the MCP server when a tool is registered without
+    // input_schema). Agents read the user's input from the "question" parameter. No property is required, so callers
+    // that pass other parameters to the agent keep working. Tool instances keep null attributes, as before.
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\"properties\":{\"question\":"
+        + "{\"type\":\"string\",\"description\":\"The question or task for the agent\"}}}";
+    public static final String STRICT_FIELD = "strict";
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
     @Getter
     @Setter
@@ -162,6 +171,11 @@ public class AgentTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

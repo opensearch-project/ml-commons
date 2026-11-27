@@ -57,6 +57,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Log4j2
 public class McpToolsHelper {
     public static final int MAX_TOOL_NUMBER = 1000;
+    static final String OBJECT_TYPE = "object";
+    static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\"}";
+    private static final JacksonMcpJsonMapper JSON_MAPPER = new JacksonMcpJsonMapper(JsonMapper.shared());
     private final Client client;
     private final ToolFactoryWrapper toolFactoryWrapper;
 
@@ -77,20 +80,14 @@ public class McpToolsHelper {
 
         Tool actualTool = factory.create(Optional.ofNullable(tool.getParameters()).orElse(ImmutableMap.of()));
 
-        // MCP server doesn't allow null schema
-        String schema = Optional
-            .ofNullable(getSchema(tool.getAttributes()))
-            .orElse(Optional.ofNullable(getSchema(actualTool.getAttributes())).orElse("{}"));
+        // Schema precedence: registered attributes, then the tool instance, then the tool type's defaults.
+        String schema = Optional.ofNullable(getSchema(tool.getAttributes())).orElse(getSchema(actualTool.getAttributes()));
+        McpSchema.JsonSchema inputSchema = schema != null ? toObjectSchema(schema) : defaultSchema(toolName, factory);
 
         String description = Optional.ofNullable(tool.getDescription()).orElse(factory.getDefaultDescription());
 
         return new McpStatelessServerFeatures.AsyncToolSpecification(
-            McpSchema.Tool
-                .builder()
-                .name(toolName)
-                .description(String.valueOf(description))
-                .inputSchema(new JacksonMcpJsonMapper(JsonMapper.shared()), schema)
-                .build(),
+            McpSchema.Tool.builder().name(toolName).description(String.valueOf(description)).inputSchema(inputSchema).build(),
             (ctx, request) -> Mono.create(sink -> {
                 // Tools may respond with non-String outputs (e.g. SearchIndexTool returns ModelTensorOutput when
                 // return_raw_response is true), so serialize the output instead of assuming it is a String.
@@ -107,13 +104,74 @@ public class McpToolsHelper {
                             ),
                         e -> {
                             log.error("Failed to execute tool, tool name: {}", toolName, e);
-                            sink.error(e);
+                            sink.success(toolErrorResult(e));
                         }
                     );
 
-                actualTool.run(StringUtils.getParameterMap(request.arguments()), actionListener);
+                try {
+                    actualTool.run(StringUtils.getParameterMap(request.arguments()), actionListener);
+                } catch (Exception e) {
+                    actionListener.onFailure(e);
+                }
             })
         );
+    }
+
+    /**
+     * Parses the tool's input schema. MCP requires an object schema, and MCP SDK clients (for example the Python SDK
+     * 2.x and the TypeScript SDK) reject the whole tools/list response when "type" is missing or is not "object". A
+     * schema without a type is treated as an object; a schema with another type is rejected.
+     */
+    static McpSchema.JsonSchema toObjectSchema(String schema) {
+        McpSchema.JsonSchema parsed;
+        try {
+            parsed = JSON_MAPPER.readValue(schema, McpSchema.JsonSchema.class);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid tool input schema: " + e.getMessage(), e);
+        }
+        if (parsed == null) {
+            return toObjectSchema(DEFAULT_INPUT_SCHEMA);
+        }
+        if (parsed.type() != null) {
+            if (!OBJECT_TYPE.equals(parsed.type())) {
+                throw new IllegalArgumentException("Tool input schema must have type \"object\", got \"" + parsed.type() + "\"");
+            }
+            return parsed;
+        }
+        return new McpSchema.JsonSchema(
+            OBJECT_TYPE,
+            parsed.properties(),
+            parsed.required(),
+            parsed.additionalProperties(),
+            parsed.defs(),
+            parsed.definitions()
+        );
+    }
+
+    /**
+     * Schema for a tool registered without one: the tool type's default attributes, else an empty object schema.
+     * Built-in and plugin factory defaults were not parsed before, so an unusable default is logged and replaced
+     * instead of dropping the tool from tools/list.
+     */
+    private static McpSchema.JsonSchema defaultSchema(String toolName, Tool.Factory<?> factory) {
+        try {
+            String factorySchema = getSchema(factory.getDefaultAttributes());
+            if (factorySchema != null) {
+                return toObjectSchema(factorySchema);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Ignoring unusable default input schema of tool {}: {}", toolName, e.getMessage());
+        }
+        return toObjectSchema(DEFAULT_INPUT_SCHEMA);
+    }
+
+    /**
+     * Reports a tool execution failure as a tool result with isError set, as the MCP spec asks, so the calling model
+     * sees the error. JSON-RPC errors are left for protocol problems such as an unknown tool.
+     */
+    static McpSchema.CallToolResult toolErrorResult(Exception e) {
+        String message = Optional.ofNullable(e.getMessage()).filter(m -> !m.isBlank()).orElse(e.getClass().getSimpleName());
+        return new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(message)), true, null, Map.of());
     }
 
     private static String getSchema(Map<String, Object> attrs) {
