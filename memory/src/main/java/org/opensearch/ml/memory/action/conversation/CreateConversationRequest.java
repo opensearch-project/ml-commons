@@ -157,11 +157,8 @@ public class CreateConversationRequest extends ActionRequest {
                         break;
                 }
             }
-            if (body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD) != null) {
-                return new CreateConversationRequest(name, applicationType, additionalInfo);
-            } else {
-                return new CreateConversationRequest();
-            }
+            // name is optional
+            return new CreateConversationRequest(name, applicationType, additionalInfo);
         } catch (Exception exception) {
             throw new OpenSearchParseException(exception.getMessage());
         }

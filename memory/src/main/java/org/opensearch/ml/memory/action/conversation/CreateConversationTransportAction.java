@@ -89,11 +89,8 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
                 internalListener.onFailure(e);
             });
 
-            if (name == null) {
-                cmHandler.createConversation(al);
-            } else {
-                cmHandler.createConversation(name, applicationType, additionalInfos, al);
-            }
+            // name is optional; the 4-arg path handles a missing name
+            cmHandler.createConversation(name, applicationType, additionalInfos, al);
         } catch (Exception e) {
             log.error("Failed to create new memory with name " + request.getName(), e);
             actionListener.onFailure(e);

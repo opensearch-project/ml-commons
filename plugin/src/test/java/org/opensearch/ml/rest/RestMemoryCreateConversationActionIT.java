@@ -77,4 +77,25 @@ public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase 
         Map map = gson.fromJson(entityString, Map.class);
         assert (map.containsKey(CONVERSATION_ID_FIELD));
     }
+
+    public void testCreateConversationWithoutName_KeepsAdditionalInfo() throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_CONVERSATION_REST_PATH,
+                null,
+                gson.toJson(Map.of("application_type", "my-app", "additional_info", Map.of("k", "v"))),
+                null
+            );
+        assert (TestHelper.restStatus(response) == RestStatus.OK);
+        Map map = gson.fromJson(TestHelper.httpEntityToString(response.getEntity()), Map.class);
+        String id = (String) map.get(CONVERSATION_ID_FIELD);
+
+        Response getResponse = TestHelper
+            .makeRequest(client(), "GET", ActionConstants.GET_CONVERSATION_REST_PATH.replace("{memory_id}", id), null, "", null);
+        assert (TestHelper.restStatus(getResponse) == RestStatus.OK);
+        Map getMap = gson.fromJson(TestHelper.httpEntityToString(getResponse.getEntity()), Map.class);
+        assertEquals(Map.of("k", "v"), getMap.get("additional_info"));
+    }
 }
