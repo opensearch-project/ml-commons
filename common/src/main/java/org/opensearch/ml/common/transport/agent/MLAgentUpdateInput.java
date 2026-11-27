@@ -373,19 +373,24 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             finalMemory = originalAgent.getMemory();
         } else {
             MLMemorySpec originalMemory = originalAgent.getMemory();
-
-            String finalMemoryType = memoryType != null ? memoryType : originalMemory.getType();
-            String finalSessionId = memorySessionId != null ? memorySessionId : originalMemory.getSessionId();
-            Integer finalWindowSize = memoryWindowSize != null ? memoryWindowSize : originalMemory.getWindowSize();
-
-            finalMemory = MLMemorySpec.builder().type(finalMemoryType).sessionId(finalSessionId).windowSize(finalWindowSize).build();
+            // Start from the stored memory so fields this API doesn't set, such as memory_container_id, are kept.
+            MLMemorySpec.MLMemorySpecBuilder memoryBuilder = originalMemory != null ? originalMemory.toBuilder() : MLMemorySpec.builder();
+            if (memoryType != null) {
+                memoryBuilder.type(memoryType);
+            }
+            if (memorySessionId != null) {
+                memoryBuilder.sessionId(memorySessionId);
+            }
+            if (memoryWindowSize != null) {
+                memoryBuilder.windowSize(memoryWindowSize);
+            }
+            finalMemory = memoryBuilder.build();
         }
 
-        return MLAgent
-            .builder()
-            .type(originalAgent.getType())
-            .createdTime(originalAgent.getCreatedTime())
-            .isHidden(originalAgent.getIsHidden())
+        // The result replaces the stored document, so start from the original agent to keep every field this API doesn't
+        // change (for example model, context_management and provisioned_by).
+        return originalAgent
+            .toBuilder()
             .name(name == null ? originalAgent.getName() : name)
             .description(description == null ? originalAgent.getDescription() : description)
             .llm(finalLlm)
@@ -393,8 +398,8 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             .parameters(parameters == null ? originalAgent.getParameters() : parameters)
             .memory(finalMemory)
             .lastUpdateTime(lastUpdateTime)
-            .appType(appType)
-            .tenantId(tenantId)
+            .appType(appType == null ? originalAgent.getAppType() : appType)
+            .tenantId(tenantId == null ? originalAgent.getTenantId() : tenantId)
             .build();
     }
 

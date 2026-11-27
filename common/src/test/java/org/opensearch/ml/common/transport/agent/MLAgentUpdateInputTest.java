@@ -842,8 +842,19 @@ public class MLAgentUpdateInputTest {
             .llm(LLMSpec.builder().modelId("original-model").parameters(Map.of("temp", "0.5")).build())
             .tools(Collections.singletonList(MLToolSpec.builder().name("original-tool").type("original-type").build()))
             .parameters(Map.of("original", "param"))
-            .memory(MLMemorySpec.builder().type("conversation_index").sessionId("original-session").windowSize(5).build())
+            .memory(
+                MLMemorySpec
+                    .builder()
+                    .type("conversation_index")
+                    .sessionId("original-session")
+                    .windowSize(5)
+                    .memoryContainerId("original-container")
+                    .build()
+            )
             .appType("original-app")
+            .contextManagementName("original-template")
+            .provisionedBy("original-provisioner")
+            .tenantId("original-tenant")
             .build();
 
         // Update only the name
@@ -864,8 +875,48 @@ public class MLAgentUpdateInputTest {
         assertEquals(originalAgent.getMemory().getType(), updatedAgent.getMemory().getType());
         assertEquals(originalAgent.getMemory().getSessionId(), updatedAgent.getMemory().getSessionId());
         assertEquals(originalAgent.getMemory().getWindowSize(), updatedAgent.getMemory().getWindowSize());
-        // appType is set to null because updateInput.appType is null
-        assertNull(updatedAgent.getAppType());
+        assertEquals("original-container", updatedAgent.getMemory().getMemoryContainerId());
+        // The update agent API writes the whole document, so fields the request doesn't set must be carried over.
+        assertEquals("original-app", updatedAgent.getAppType());
+        assertEquals("original-template", updatedAgent.getContextManagementName());
+        assertEquals("original-provisioner", updatedAgent.getProvisionedBy());
+        assertEquals("original-tenant", updatedAgent.getTenantId());
+    }
+
+    @Test
+    public void testToMLAgentMemoryUpdateKeepsMemoryContainerId() {
+        MLAgent originalAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("model").build())
+            .memory(MLMemorySpec.builder().type("conversation_index").sessionId("old").memoryContainerId("container").build())
+            .build();
+
+        MLAgent updatedAgent = MLAgentUpdateInput.builder().agentId("id").memorySessionId("new").build().toMLAgent(originalAgent);
+
+        assertEquals("new", updatedAgent.getMemory().getSessionId());
+        assertEquals("conversation_index", updatedAgent.getMemory().getType());
+        assertEquals("container", updatedAgent.getMemory().getMemoryContainerId());
+    }
+
+    @Test
+    public void testToMLAgentReplacesParameters() {
+        MLAgent originalAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.FLOW.name())
+            .parameters(Map.of("keep_me", "1", "remove_me", "2"))
+            .build();
+
+        MLAgent updatedAgent = MLAgentUpdateInput
+            .builder()
+            .agentId("id")
+            .parameters(Map.of("keep_me", "3"))
+            .build()
+            .toMLAgent(originalAgent);
+
+        assertEquals(Map.of("keep_me", "3"), updatedAgent.getParameters());
     }
 
     @Test
