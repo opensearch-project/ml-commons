@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.agents;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
@@ -40,6 +41,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSelectionConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
@@ -158,6 +160,35 @@ public class UpdateAgentTransportActionTests {
         ArgumentCaptor<UpdateResponse> argumentCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(DocWriteResponse.Result.UPDATED, argumentCaptor.getValue().getResult());
+    }
+
+    @Test
+    public void testDoExecute_ToolSelectionOnANonV2AgentIsRejected() throws IOException {
+        String agentId = "test_agent_id";
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
+            .builder()
+            .agentId(agentId)
+            .toolSelection(MLToolSelectionConfig.builder().enabled(true).build())
+            .build();
+        // The stored agent is a conversational (V1) agent, which never reads tool_selection.
+        GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, "test_tenant_id");
+
+        MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
+        doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        updateAgentTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertTrue(argumentCaptor.getValue().getMessage().contains("tool_selection is only supported for V2 agents"));
+        verify(client, never()).update(any(), any());
     }
 
     @Test

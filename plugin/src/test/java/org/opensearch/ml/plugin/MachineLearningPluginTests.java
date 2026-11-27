@@ -20,6 +20,7 @@ package org.opensearch.ml.plugin;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -49,6 +50,7 @@ import org.opensearch.ingest.Processor;
 import org.opensearch.jobscheduler.spi.JobDocVersion;
 import org.opensearch.jobscheduler.spi.utils.LockService;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -366,5 +368,58 @@ public class MachineLearningPluginTests {
         } finally {
             MemoryRetentionJobProcessor.reset();
         }
+    }
+
+    @Test
+    public void testToolSelectionSettingsRegisteredWithSafeDefaults() {
+        List<org.opensearch.common.settings.Setting<?>> settings = plugin.getSettings();
+
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_ENABLED));
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID));
+        assertTrue(settings.contains(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT));
+
+        assertFalse(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_ENABLED.getDefault(Settings.EMPTY));
+        assertEquals("", MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID.getDefault(Settings.EMPTY));
+        assertEquals(5000L, MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT.getDefault(Settings.EMPTY).millis());
+    }
+
+    @Test
+    public void testOnlyTheSwitchModelAndTimeoutAreClusterSettings() {
+        // Pinned tools, top_k, min_pool_size and the growth cap are per agent, not cluster-wide.
+        long clusterLevel = plugin
+            .getSettings()
+            .stream()
+            .filter(setting -> setting.getKey().startsWith("plugins.ml_commons.tool_selection."))
+            .count();
+        assertEquals(3, clusterLevel);
+    }
+
+    @Test
+    public void testToolSelectionSettingKeys() {
+        assertEquals("plugins.ml_commons.tool_selection.enabled", MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_ENABLED.getKey());
+        assertEquals(
+            "plugins.ml_commons.tool_selection.embedding_model_id",
+            MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID.getKey()
+        );
+        assertEquals(
+            "plugins.ml_commons.tool_selection.search_timeout",
+            MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT.getKey()
+        );
+    }
+
+    @Test
+    public void testToolSelectionSettingsAreDynamic() {
+        assertTrue(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_ENABLED.isDynamic());
+        assertTrue(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_EMBEDDING_MODEL_ID.isDynamic());
+        assertTrue(MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT.isDynamic());
+    }
+
+    @Test
+    public void testToolSelectionSearchTimeoutRejectsTooSmall() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> MLCommonsSettings.ML_COMMONS_TOOL_SELECTION_SEARCH_TIMEOUT
+                .get(Settings.builder().put("plugins.ml_commons.tool_selection.search_timeout", "10ms").build())
+        );
     }
 }
