@@ -137,6 +137,19 @@ public abstract class ModelProvider {
     public abstract Message parseToUnifiedMessage(String json);
 
     /**
+     * Parses a provider-specific message into one or more unified messages. Override when one
+     * message can carry several tool results, as Gemini's can. Defaults to
+     * {@link #parseToUnifiedMessage}.
+     *
+     * @param json JSON string in the provider's native message format
+     * @return the parsed messages; empty if the message has no content
+     */
+    public List<Message> parseToUnifiedMessages(String json) {
+        Message message = parseToUnifiedMessage(json);
+        return message == null ? List.of() : List.of(message);
+    }
+
+    /**
      * Adds prompt-cache breakpoints after the tool definitions and at the end of the conversation, when
      * the agent's model parameters enable them (see {@link org.opensearch.ml.common.agent.PromptCacheSettings}).
      * V2 agent runners call this on every request, once the request parameters hold the mapped messages
