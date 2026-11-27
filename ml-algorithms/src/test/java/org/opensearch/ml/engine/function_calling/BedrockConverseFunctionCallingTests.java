@@ -69,6 +69,22 @@ public class BedrockConverseFunctionCallingTests {
     }
 
     @Test
+    public void handleWithoutAStopReasonReturnsNoToolCalls() {
+        Map<String, Object> output = Map.of("message", Map.of("role", "assistant", "content", List.of()));
+        Map<String, Object> nullReason = new HashMap<>();
+        nullReason.put("output", output);
+        nullReason.put("stopReason", null);
+        for (Map<String, Object> response : List.of(Map.<String, Object>of("output", output), nullReason)) {
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(response).build();
+            ModelTensorOutput tensorOutput = ModelTensorOutput
+                .builder()
+                .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(tensor)).build()))
+                .build();
+            Assert.assertTrue(functionCalling.handle(tensorOutput, new HashMap<>()).isEmpty());
+        }
+    }
+
+    @Test
     public void supply() {
         List<LLMMessage> messages = functionCalling
             .supply(List.of(ImmutableMap.of(TOOL_CALL_ID, "test_tool_call_id", TOOL_RESULT, "test result for bedrock converse")));

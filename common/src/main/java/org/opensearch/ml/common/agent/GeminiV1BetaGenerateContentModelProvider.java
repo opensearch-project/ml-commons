@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agent;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -78,6 +79,9 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
         "{\"fileData\":{\"mimeType\":\"video/${parameters.video_format}\",\"fileUri\":\"${parameters.video_data}\"}}";
 
     private static final String MESSAGE_TEMPLATE = "{\"role\":\"${parameters.msg_role}\",\"parts\":[${parameters.msg_content_array}]}";
+
+    // Keys a response part can have and still count as empty: a thought, or blank text
+    private static final Set<String> EMPTY_PART_KEYS = Set.of("text", "thought", "thoughtSignature");
 
     @Override
     public Connector createConnector(String modelId, Map<String, String> credential, Map<String, String> modelParameters) {
@@ -302,6 +306,60 @@ public class GeminiV1BetaGenerateContentModelProvider extends ModelProvider {
                 throw new IllegalArgumentException("Unsupported image source type. Supported types: " + supportedTypes);
             }
         };
+    }
+
+    @Override
+    public String extractFinishReason(Map<String, ?> responseData) {
+        Object candidatesObj = responseData == null ? null : responseData.get("candidates");
+        if (candidatesObj instanceof List<?> candidates && !candidates.isEmpty() && candidates.get(0) instanceof Map<?, ?> candidate) {
+            Object reason = candidate.get("finishReason");
+            return reason == null ? null : reason.toString();
+        }
+        // A blocked prompt gets no candidates; the reason is in promptFeedback.blockReason instead.
+        Object feedback = responseData == null ? null : responseData.get("promptFeedback");
+        if (feedback instanceof Map<?, ?> promptFeedback && promptFeedback.get("blockReason") != null) {
+            return promptFeedback.get("blockReason").toString();
+        }
+        return null;
+    }
+
+    /**
+     * A reply is empty when the first candidate stopped with no content (Gemini omits it after a token limit
+     * or a safety stop), or its parts hold only thoughts or blank text. A blocked prompt, with no candidates
+     * and a promptFeedback.blockReason, is empty too.
+     */
+    @Override
+    public boolean isEmptyReply(Map<String, ?> responseData) {
+        Object candidatesObj = responseData == null ? null : responseData.get("candidates");
+        if (!(candidatesObj instanceof List<?> candidates) || candidates.isEmpty()) {
+            return extractFinishReason(responseData) != null;
+        }
+        if (!(candidates.get(0) instanceof Map<?, ?> candidate)) {
+            return false;
+        }
+        Object content = candidate.get("content");
+        if (content == null) {
+            return candidate.get("finishReason") != null;
+        }
+        if (!(content instanceof Map<?, ?> contentMap)) {
+            return false;
+        }
+        Object parts = contentMap.get("parts");
+        if (parts == null) {
+            return true;
+        }
+        if (!(parts instanceof List<?> partList)) {
+            return false;
+        }
+        return partList.stream().allMatch(GeminiV1BetaGenerateContentModelProvider::isEmptyPart);
+    }
+
+    /** A part with only a thought or blank text, and nothing else such as a functionCall. */
+    private static boolean isEmptyPart(Object part) {
+        if (!(part instanceof Map<?, ?> partMap) || !EMPTY_PART_KEYS.containsAll(partMap.keySet())) {
+            return false;
+        }
+        return Boolean.TRUE.equals(partMap.get("thought")) || !(partMap.get("text") instanceof String text) || text.isBlank();
     }
 
     @Override

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -116,7 +117,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 accumulatedTokenUsage,
                 toolsMap,
                 toolInteractionJsonList,
-                listener
+                listener,
+                false
             );
         }, e -> {
             // Continue without MCP tools if they fail
@@ -139,7 +141,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                 accumulatedTokenUsage,
                 toolsMap,
                 toolInteractionJsonList,
-                listener
+                listener,
+                false
             );
         }));
     }
@@ -152,6 +155,7 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
      *
      * @param toolsMap Pre-created tools to reuse across iterations (performance optimization)
      * @param toolInteractionJsonList List to accumulate tool interaction JSON strings for persistence (like V1)
+     * @param emptyReplyRetried true when this call is the one retry of an empty reply (see {@link #handleEmptyReply})
      */
     private void executeLLMCall(
         MLAgent mlAgent,
@@ -164,7 +168,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
         TokenUsage[] accumulatedTokenUsage,
         Map<String, Tool> toolsMap,
         List<String> toolInteractionJsonList,
-        ActionListener<AgentLogicResult> listener
+        ActionListener<AgentLogicResult> listener,
+        boolean emptyReplyRetried
     ) {
         String agentId = params.get(AGENT_ID_LOG_FIELD);
         String tenantId = mlAgent.getTenantId();
@@ -215,7 +220,30 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                     List<Map<String, String>> toolCalls = functionCalling.handle(output, params);
 
                     // Extract assistant message from response using base class method
-                    Message assistantMessage = extractAssistantMessage(output, modelProvider);
+                    Message assistantMessage;
+                    try {
+                        assistantMessage = extractAssistantMessage(output, modelProvider);
+                    } catch (EmptyModelResponseException e) {
+                        handleEmptyReply(e, emptyReplyRetried, agentId, listener, () -> {
+                            // Give back this step: the retry re-sends the same messages, nothing was added.
+                            iteration.decrementAndGet();
+                            executeLLMCall(
+                                mlAgent,
+                                params,
+                                messages,
+                                modelProvider,
+                                functionCalling,
+                                iteration,
+                                maxIterations,
+                                accumulatedTokenUsage,
+                                toolsMap,
+                                toolInteractionJsonList,
+                                listener,
+                                true
+                            );
+                        });
+                        return;
+                    }
                     messages.add(assistantMessage);
 
                     // Check if we should continue the loop
@@ -306,7 +334,8 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
                             accumulatedTokenUsage,
                             toolsMap,
                             toolInteractionJsonList,
-                            listener
+                            listener,
+                            false
                         );
                     }, e -> {
                         log.error("Tool execution failed in ReAct loop. agentId={}", agentId, e);
@@ -326,5 +355,41 @@ public class MLChatAgentRunnerV2 extends AbstractV2AgentRunner {
             log.error("Failed to build LLM request. agentId={}", agentId, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * An empty reply (no text, no tool calls) is retried once when its finish reason says a second
+     * attempt can help, for example a normal stop with nothing in it, which some models return
+     * intermittently. One caused by the token limit or a content filter would fail the same way
+     * again, so it is reported straight away. Package-private for tests.
+     */
+    void handleEmptyReply(
+        EmptyModelResponseException emptyReply,
+        boolean alreadyRetried,
+        String agentId,
+        ActionListener<AgentLogicResult> listener,
+        Runnable retry
+    ) {
+        if (emptyReply.isRetryable() && !alreadyRetried) {
+            log
+                .warn(
+                    "LLM returned an empty response; retrying once. agentId={}, provider={}, finishReason={}",
+                    agentId,
+                    emptyReply.getProvider(),
+                    emptyReply.getFinishReason()
+                );
+            retry.run();
+            return;
+        }
+        log
+            .error(
+                "LLM returned an empty response. agentId={}, provider={}, finishReason={}, retried={}",
+                agentId,
+                emptyReply.getProvider(),
+                emptyReply.getFinishReason(),
+                alreadyRetried
+            );
+        // A plain status exception crosses node boundaries without a wrapper around the message.
+        listener.onFailure(new OpenSearchStatusException(emptyReply.getMessage(), emptyReply.status()));
     }
 }
