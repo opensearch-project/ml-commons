@@ -205,6 +205,15 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                             mlUpdateConnectorAction.getUpdateContent().getConnectorClientConfig()
                                         );
                                 }
+                                // Before encrypt(): the update's credential is plaintext only until then.
+                                ConnectorProtocolValidator
+                                    .validateGoogleTokenUriAfterUpdate(
+                                        connector.getProtocol(),
+                                        connector.getParameters(),
+                                        updatedProtocol,
+                                        mlUpdateConnectorAction.getUpdateContent().getParameters(),
+                                        mlUpdateConnectorAction.getUpdateContent().getCredential()
+                                    );
                             } catch (Exception e) {
                                 log.error("Rejected connector update for connector id {}", connectorId, e);
                                 listener.onFailure(e);

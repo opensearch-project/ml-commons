@@ -57,6 +57,36 @@ public class ConnectorProtocolValidator {
     }
 
     /**
+     * Rejects a {@code google_cloud} service-account credential whose {@code token_uri} the token request would
+     * reject, so the connector fails when it is saved rather than at its first predict. Call it while the credential
+     * is still plaintext, before it is encrypted. See
+     * {@link org.opensearch.ml.common.connector.GoogleTokenUriValidator#validateCredential(String, Map, Map)}.
+     *
+     * @throws IllegalArgumentException if {@code token_uri} is not allowed
+     */
+    public static void validateGoogleTokenUri(String protocol, Map<String, String> parameters, Map<String, String> credential) {
+        org.opensearch.ml.common.connector.GoogleTokenUriValidator.validateCredential(protocol, parameters, credential);
+    }
+
+    /**
+     * Update variant of {@link #validateGoogleTokenUri(String, Map, Map)}: checks only a credential the update
+     * supplies, against the protocol and parameters the connector will have. See
+     * {@link org.opensearch.ml.common.connector.GoogleTokenUriValidator#validateCredentialAfterUpdate}.
+     *
+     * @throws IllegalArgumentException if {@code token_uri} is not allowed
+     */
+    public static void validateGoogleTokenUriAfterUpdate(
+        String storedProtocol,
+        Map<String, String> storedParameters,
+        String updatedProtocol,
+        Map<String, String> updatedParameters,
+        Map<String, String> updatedCredential
+    ) {
+        org.opensearch.ml.common.connector.GoogleTokenUriValidator
+            .validateCredentialAfterUpdate(storedProtocol, storedParameters, updatedProtocol, updatedParameters, updatedCredential);
+    }
+
+    /**
      * Rejects a request that turns {@code mutual_tls_enabled} on while the mutual-TLS setting is off.
      * <p>
      * Create variant: there is no stored connector, so any request asking for mutual TLS is turning it on.

@@ -125,6 +125,13 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     mlCreateConnectorInput.getUrl(),
                     mlCreateConnectorInput.getConnectorClientConfig()
                 );
+            // The credential is still plaintext here; it is encrypted just before the write.
+            ConnectorProtocolValidator
+                .validateGoogleTokenUri(
+                    mlCreateConnectorInput.getProtocol(),
+                    mlCreateConnectorInput.getParameters(),
+                    mlCreateConnectorInput.getCredential()
+                );
         } catch (Exception e) {
             listener.onFailure(e);
             return;

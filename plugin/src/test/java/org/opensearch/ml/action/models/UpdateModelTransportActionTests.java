@@ -2004,6 +2004,59 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
+    private void updateRemoteModelWithInlineGoogleTokenUri(String tokenUri) throws InterruptedException {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+
+        MLUpdateModelRequest request = MLUpdateModelRequest
+            .builder()
+            .updateModelInput(
+                MLUpdateModelInput
+                    .builder()
+                    .modelId("test_model_id")
+                    .connector(
+                        MLCreateConnectorInput
+                            .builder()
+                            .updateConnector(true)
+                            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                            .credential(
+                                Map.of("client_email", "sa@example.iam.gserviceaccount.com", "private_key", "k", "token_uri", tokenUri)
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        transportUpdateModelAction.doExecute(task, request, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+    }
+
+    /** The supplied inline credential is plaintext until encrypt(), so token_uri is checked before it. */
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorDisallowedGoogleTokenUriRejected() throws InterruptedException {
+        updateRemoteModelWithInlineGoogleTokenUri("https://example.com/token");
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("token_uri host must be oauth2.googleapis.com, got: example.com", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithInlineConnectorAllowedGoogleTokenUriPassesCheck() throws InterruptedException {
+        updateRemoteModelWithInlineGoogleTokenUri("https://oauth2.googleapis.com/token");
+
+        verify(actionListener, never()).onFailure(argThat(e -> e.getMessage() != null && e.getMessage().contains("token_uri")));
+    }
+
     @Test
     public void testUpdateRemoteModelWithInlineConnectorGatedMcpStreamableProtocolRejected() throws InterruptedException {
         MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.REGISTERED);

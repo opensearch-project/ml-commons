@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -62,6 +63,7 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.GoogleCloudConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -1037,6 +1039,111 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
                 e instanceof OpenSearchStatusException && ((OpenSearchStatusException) e).status() == RestStatus.FORBIDDEN
             );
         }
+    }
+
+    private static Map<String, String> googleServiceAccountCredential(String tokenUri) {
+        Map<String, String> credential = new HashMap<>();
+        credential.put("client_email", "sa@example.iam.gserviceaccount.com");
+        credential.put("private_key", "not-parsed-on-update");
+        credential.put("token_uri", tokenUri);
+        return credential;
+    }
+
+    private void stubStoredGoogleCloudConnector() {
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(5);
+            listener
+                .onResponse(
+                    GoogleCloudConnector
+                        .googleCloudConnectorBuilder()
+                        .name("google")
+                        .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                        .version("1")
+                        .credential(googleServiceAccountCredential("https://oauth2.googleapis.com/token"))
+                        .parameters(new HashMap<>(Map.of("model", "gemini")))
+                        .actions(
+                            Arrays
+                                .asList(
+                                    ConnectorAction
+                                        .builder()
+                                        .actionType(ConnectorAction.ActionType.PREDICT)
+                                        .method("POST")
+                                        .url("https://api.openai.com/v1/chat/completions")
+                                        .requestBody("{\"model\": \"${parameters.model}\"}")
+                                        .build()
+                                )
+                        )
+                        .build()
+                );
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
+    }
+
+    /** token_uri is a credential, so it can only be checked while the update still holds it in plaintext. */
+    @Test
+    public void testUpdateGoogleCloudConnectorRejectsDisallowedTokenUri() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        stubStoredGoogleCloudConnector();
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .credential(googleServiceAccountCredential("http://mock:8080/token"))
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("token_uri must be an https Google endpoint, got: http://mock:8080/token", captor.getValue().getMessage());
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    /** The protocol the connector ends up with decides, not the stored one. */
+    @Test
+    public void testUpdateConnectorToGoogleCloudRejectsDisallowedTokenUri() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+                    .credential(googleServiceAccountCredential("https://oauth2.googleapis.com:8443/token"))
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertEquals("token_uri must use the default https port, got port: 8443", captor.getValue().getMessage());
+        verify(client, never()).update(any(UpdateRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testUpdateGoogleCloudConnectorAcceptsAllowedTokenUri() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        stubStoredGoogleCloudConnector();
+        stubUpdateSucceeds();
+        when(updateRequest.getUpdateContent())
+            .thenReturn(
+                MLCreateConnectorInput
+                    .builder()
+                    .updateConnector(true)
+                    .credential(googleServiceAccountCredential("https://oauth2.googleapis.com/token"))
+                    .build()
+            );
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        verify(actionListener).onResponse(updateResponse);
     }
 
     private void stubSearchReturnsNoModels() {

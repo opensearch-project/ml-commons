@@ -846,6 +846,97 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         assertEquals(CONNECTOR_ID, captor.getValue().getConnectorId());
     }
 
+    private MLCreateConnectorInput googleServiceAccountConnectorInput(String tokenUri) {
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/v1/completions")
+                    .build()
+            );
+        Map<String, String> credential = new HashMap<>();
+        credential.put("client_email", "sa@example.iam.gserviceaccount.com");
+        credential.put("private_key", "not-parsed-on-create");
+        if (tokenUri != null) {
+            credential.put("token_uri", tokenUri);
+        }
+        return MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.GOOGLE_CLOUD)
+            .parameters(ImmutableMap.of("endpoint", "api.openai.com"))
+            .credential(credential)
+            .actions(actions)
+            .build();
+    }
+
+    public void test_google_cloud_connector_creation_rejects_disallowed_token_uri() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        action.doExecute(task, new MLCreateConnectorRequest(googleServiceAccountConnectorInput("https://example.com/token")), actionListener);
+
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assertTrue(argCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("token_uri host must be oauth2.googleapis.com, got: example.com", argCaptor.getValue().getMessage());
+        verify(mlIndicesHandler, never()).initMLConnectorIndex(any());
+        verify(mlEngine, never()).encrypt(any(), any(), any());
+    }
+
+    public void test_google_cloud_connector_creation_accepts_default_token_uri() {
+        when(mlFeatureEnabledSetting.isVertexAIConnectorEnabled()).thenReturn(true);
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        action
+            .doExecute(task, new MLCreateConnectorRequest(googleServiceAccountConnectorInput("https://oauth2.googleapis.com/token")), actionListener);
+
+        ArgumentCaptor<MLCreateConnectorResponse> captor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals(CONNECTOR_ID, captor.getValue().getConnectorId());
+    }
+
     public void test_vertexai_connector_creation_rejects_versionless_batch_predict_url() {
         // The batch_predict version check runs on the create request path (validateConnectorURL), not in the
         // connector constructor, so this proves create still rejects the URL before anything is indexed.
