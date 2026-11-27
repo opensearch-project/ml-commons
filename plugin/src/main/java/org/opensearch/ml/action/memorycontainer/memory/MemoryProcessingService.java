@@ -51,12 +51,12 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
 import org.opensearch.ml.engine.processor.MLProcessorType;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
-import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
@@ -375,7 +375,7 @@ public class MemoryProcessingService {
                 ? structuredOutputResultPath
                 : memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
             try {
-                Object filterdResult = JsonPath.read(dataMap, llmResultPath);
+                Object filterdResult = AgentUtils.readLLMResponse(dataMap, llmResultPath);
                 String llmResult = null;
                 if (filterdResult != null) {
                     llmResult = StringUtils.toJson(filterdResult);
@@ -435,7 +435,7 @@ public class MemoryProcessingService {
 
             Map<String, ?> dataAsMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
             try {
-                Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+                Object filterdResult = AgentUtils.readLLMResponse(dataAsMap, llmResultPath);
                 if (filterdResult == null) {
                     log.error("No response content found in LLM output");
                     throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
@@ -557,7 +557,7 @@ public class MemoryProcessingService {
     private String parseSessionSummary(ModelTensorOutput output, String llmResultPath) {
         Map<String, ?> dataAsMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         try {
-            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+            Object filterdResult = AgentUtils.readLLMResponse(dataAsMap, llmResultPath);
             String sessionSummary = null;
             if (filterdResult != null) {
                 sessionSummary = StringUtils.toJson(filterdResult);

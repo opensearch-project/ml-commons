@@ -15,6 +15,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +54,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -965,6 +967,105 @@ public class MemoryProcessingServiceTests {
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
         memoryProcessingService.summarizeMessages(null, memoryConfig, messages, stringListener);
         verify(stringListener).onResponse(any(String.class));
+    }
+
+    /**
+     * A Bedrock Converse response whose first content block is Claude's reasoning, followed by {@code text}. With the
+     * default llm_result_path {@code $.output.message.content[0].text}, the text must still be read.
+     */
+    private static MLTaskResponse converseReasoningFirstResponse(String text) {
+        Map<String, Object> reasoningBlock = Map
+            .of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+        Map<String, Object> message = Map.of("role", "assistant", "content", List.of(reasoningBlock, Map.of("text", text)));
+        Map<String, Object> dataAsMap = Map.of("output", Map.of("message", message), "stopReason", "end_turn");
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(ModelTensor.builder().dataAsMap(dataAsMap).build())).build();
+        return MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build()).build();
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_BedrockReasoningBlockFirst() {
+        when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.output.message.content[0].text");
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(converseReasoningFirstResponse("{\"facts\": [\"User name is John\"]}"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
+
+        verify(factsListener).onResponse(List.of("User name is John"));
+    }
+
+    @Test
+    public void testMakeMemoryDecisions_BedrockReasoningBlockFirst() {
+        when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.output.message.content[0].text");
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(converseReasoningFirstResponse("{\"memory_decision\": [{\"text\": \"User name is John\", \"event\": \"ADD\"}]}"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService
+            .makeMemoryDecisions(null, Arrays.asList("User name is John"), Arrays.asList(), null, storageConfig, decisionsListener);
+
+        ArgumentCaptor<List<MemoryDecision>> captor = ArgumentCaptor.forClass(List.class);
+        verify(decisionsListener).onResponse(captor.capture());
+        verify(decisionsListener, never()).onFailure(any());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("User name is John", captor.getValue().get(0).getText());
+        assertEquals(MemoryEvent.ADD, captor.getValue().get(0).getEvent());
+    }
+
+    @Test
+    public void testSummarizeMessages_BedrockReasoningOnlyStillReturns400() {
+        ActionListener<String> stringListener = mock(ActionListener.class);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        Map<String, Object> reasoningBlock = Map
+            .of("reasoningContent", Map.of("reasoningText", Map.of("text", "Let me think.", "signature", "sig")));
+        Map<String, Object> message = Map.of("role", "assistant", "content", List.of(reasoningBlock));
+        Map<String, Object> dataAsMap = Map.of("output", Map.of("message", message), "stopReason", "max_tokens");
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(ModelTensor.builder().dataAsMap(dataAsMap).build())).build();
+        MLTaskResponse response = MLTaskResponse
+            .builder()
+            .output(ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build())
+            .build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.summarizeMessages(null, memoryConfig, messages, stringListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(stringListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) captor.getValue()).status());
+        assertTrue(captor.getValue().getMessage().contains("LLM predict result cannot be extracted with current llm_result_path"));
+    }
+
+    @Test
+    public void testSummarizeMessages_BedrockReasoningBlockFirst() {
+        ActionListener<String> stringListener = mock(ActionListener.class);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(converseReasoningFirstResponse("test summary"));
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        // memoryConfig has no llm_result_path, so the default $.output.message.content[0].text is used.
+        memoryProcessingService.summarizeMessages(null, memoryConfig, messages, stringListener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(stringListener).onResponse(captor.capture());
+        assertTrue(captor.getValue().contains("test summary"));
+        assertFalse(captor.getValue().contains("Let me think."));
     }
 
     @Test
