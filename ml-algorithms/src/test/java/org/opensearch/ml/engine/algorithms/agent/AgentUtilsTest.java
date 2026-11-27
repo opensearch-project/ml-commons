@@ -68,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -401,13 +402,36 @@ public class AgentUtilsTest extends MLStaticMockBase {
         // Expected output
         String expectedPrompt = "initial prompt You have access to the following tools defined in <tools>: \n"
             + "<tools>\n<tool>\nTool1: Description of Tool1\n</tool>\n"
-            + "<tool>\nTool2: Description of Tool2\n</tool>\n</tools>\n and Tool1, Tool2,";
+            + "<tool>\nTool2: Description of Tool2\n</tool>\n</tools>\n and Tool1, Tool2";
 
         // Call the method under test
         String actualPrompt = AgentUtils.addToolsToPrompt(tools, new HashMap<>(), inputTools, initialPrompt);
 
         // Assert
         assertEquals(expectedPrompt, actualPrompt);
+    }
+
+    @Test
+    public void testAddToolsToPrompt_NoTools() {
+        String initialPrompt = "initial prompt ${parameters.tool_descriptions} and [${parameters.tool_names}]";
+
+        String actualPrompt = AgentUtils.addToolsToPrompt(new HashMap<>(), new HashMap<>(), Collections.emptyList(), initialPrompt);
+
+        assertEquals(
+            "initial prompt You have access to the following tools defined in <tools>: \n<tools>\n</tools>\n and []",
+            actualPrompt
+        );
+    }
+
+    @Test
+    public void testAddToolsToPrompt_SingleTool() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+
+        String actualPrompt = AgentUtils.addToolsToPrompt(tools, new HashMap<>(), List.of("Tool1"), "[${parameters.tool_names}]");
+
+        assertEquals("[Tool1]", actualPrompt);
     }
 
     @Test
@@ -3577,6 +3601,50 @@ public class AgentUtilsTest extends MLStaticMockBase {
         assertEquals("model-1", result.get()[1]); // name falls back to modelId
     }
 
+    @Test
+    public void testGetModel_listenerExceptionIsNotReportedAsFailure() {
+        stubGetModelSuccess("{\"name\":\"test-model\",\"algorithm\":\"TEXT_EMBEDDING\"}");
+        AtomicInteger failures = new AtomicInteger();
+        ActionListener<org.opensearch.ml.common.MLModel> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(org.opensearch.ml.common.MLModel mlModel) {
+                throw new IllegalStateException("downstream failure");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                failures.incrementAndGet();
+            }
+        };
+
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, listener);
+
+        assertEquals(0, failures.get());
+    }
+
+    @Test
+    public void testGetModelMetadata_listenerExceptionDoesNotRerunListener() {
+        // The model has no connector, so URL resolution fails and getModelMetadata answers from its fallback.
+        stubGetModelSuccess("{\"name\":\"test-model\",\"algorithm\":\"REMOTE\"}");
+        AtomicInteger responses = new AtomicInteger();
+        ActionListener<String[]> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(String[] metadata) {
+                responses.incrementAndGet();
+                throw new IllegalStateException("downstream failure");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new AssertionError("getModelMetadata never fails", e);
+            }
+        };
+
+        AgentUtils.getModelMetadata("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, listener);
+
+        assertEquals(1, responses.get());
+    }
+
     // ===== addTokenUsageTensor tests =====
 
     @Test
@@ -3918,6 +3986,26 @@ public class AgentUtilsTest extends MLStaticMockBase {
         }, error::set));
 
         assertNotNull(error.get());
+    }
+
+    @Test
+    public void testGetModel_parseFailure() {
+        // The model source is not an object, so it cannot be parsed into a model.
+        stubGetModelSuccess("[]");
+
+        AtomicReference<Exception> error = new AtomicReference<>();
+        AtomicInteger failures = new AtomicInteger();
+        AgentUtils.getModel("model-1", "tenant-1", sdkClient, client, NamedXContentRegistry.EMPTY, ActionListener.wrap(m -> {
+            throw new AssertionError("Should not succeed");
+        }, e -> {
+            failures.incrementAndGet();
+            error.set(e);
+        }));
+
+        assertEquals(1, failures.get());
+        assertNotNull(error.get());
+        // A parse failure is not reported as a missing model.
+        assertFalse(error.get().getMessage().contains("Failed to find model"));
     }
 
     @Test

@@ -368,16 +368,50 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String llmInterface = allParams.get(MLChatAgentRunner.LLM_INTERFACE);
         FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
 
-        // getModelMetadata always calls onResponse (falls back to modelId on failure),
-        // but we handle onFailure defensively in case the contract changes.
-        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, ActionListener.wrap(metadata -> {
-            tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+        // getModelMetadata always calls onResponse (falls back to modelId on failure), but we handle onFailure
+        // defensively in case the contract changes. This is not ActionListener.wrap: wrap would send an exception thrown
+        // by onResponse to onFailure, which would run the agent a second time.
+        AgentUtils.getModelMetadata(llmModelId, tenantId, sdkClient, client, xContentRegistry, new ActionListener<>() {
+            @Override
+            public void onResponse(String[] metadata) {
+                tokenTracker.setModelMetadata(llmModelId, metadata[0], metadata[1]);
+                startSetupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
+                tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
+                startSetupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
+            }
+        });
+    }
+
+    /**
+     * Runs {@link #setupMemoryAndRun} and sends an exception it throws before its first async call to {@code listener}.
+     * The metadata callbacks that call this would otherwise catch the exception, run the agent again from their fallback,
+     * and finally drop it, so the request never completes.
+     */
+    private void startSetupMemoryAndRun(
+        MLAgent mlAgent,
+        Map<String, String> apiParams,
+        Map<String, String> allParams,
+        ActionListener<Object> listener,
+        AgentTokenTracker tokenTracker,
+        FunctionCalling functionCalling
+    ) {
+        try {
             setupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
-        }, e -> {
-            log.debug("Failed to resolve model metadata for token tracking, proceeding with model ID as fallback", e);
-            tokenTracker.setModelMetadata(llmModelId, llmModelId, llmModelId);
-            setupMemoryAndRun(mlAgent, apiParams, allParams, listener, tokenTracker, functionCalling);
-        }));
+        } catch (Exception e) {
+            log
+                .error(
+                    "Failed to run plan-execute-reflect agent. agentId={}, tenantId={}",
+                    allParams.get(AGENT_ID_LOG_FIELD),
+                    allParams.get(TENANT_ID_FIELD),
+                    e
+                );
+            listener.onFailure(e);
+        }
     }
 
     private void setupMemoryAndRun(
