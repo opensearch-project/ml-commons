@@ -277,6 +277,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.setTrustedConnectorEndpointsRegex(trustedConnectorEndpointsRegex);
+            connectorExecutor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
             connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
                 connectorExecutor.close();
                 processTaskResponse(taskResponse, actionListener);

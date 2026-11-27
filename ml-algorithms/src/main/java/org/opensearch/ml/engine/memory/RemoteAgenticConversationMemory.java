@@ -123,6 +123,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         this.executor.setXContentRegistry(xContentRegistry);
         this.executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         this.executor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+        this.executor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
 
         // Log creation for debugging/monitoring
         log
@@ -1264,6 +1265,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             executor.setXContentRegistry(xContentRegistry);
             executor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
             executor.setTrustedConnectorEndpointsRegex(mlFeatureEnabledSetting.getTrustedConnectorEndpointsRegex());
+            executor.setLegacyActionUrlOriginEnabled(mlFeatureEnabledSetting::isLegacyActionUrlOriginEnabled);
 
             // Prepare parameters for the action
             Map<String, String> inputParams = new HashMap<>();

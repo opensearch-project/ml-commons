@@ -14,7 +14,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1465,8 +1467,8 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .build();
     }
 
-    @Test
-    public void invokeRemoteService_HostOverrideRejectedBeforeClientCall() {
+    /** A Bedrock connector whose host takes the stored region. */
+    private static Connector storedRegionConnector() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -1474,7 +1476,7 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .url("https://bedrock-runtime.${parameters.region}.amazonaws.com/model/m/invoke")
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
-        Connector connector = AwsConnector
+        return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
             .version("1")
@@ -1483,12 +1485,16 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
             .credential(ImmutableMap.of(ACCESS_KEY_FIELD, "test_key", SECRET_KEY_FIELD, "test_secret_key"))
             .actions(Arrays.asList(predictAction))
             .build();
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
-        executor
-            .setTrustedConnectorEndpointsRegex(
-                org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
-                    .get(org.opensearch.common.settings.Settings.EMPTY)
-            );
+    }
+
+    private static List<String> defaultTrustedEndpoints() {
+        return org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(Settings.EMPTY);
+    }
+
+    @Test
+    public void invokeRemoteService_HostOverrideRejectedBeforeClientCall() {
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(storedRegionConnector()));
+        executor.setTrustedConnectorEndpointsRegex(defaultTrustedEndpoints());
         SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
         org.mockito.Mockito.doReturn(httpClient).when(executor).getHttpClient();
         @SuppressWarnings("unchecked")
@@ -1503,5 +1509,39 @@ public class AwsConnectorExecutorTest extends MLStaticMockBase {
         assertTrue(failure.getValue() instanceof IllegalArgumentException);
         assertTrue(failure.getValue().getMessage(), failure.getValue().getMessage().contains("not matching"));
         verify(httpClient, org.mockito.Mockito.never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteService_requestParametersCannotChangeRegionInHost() {
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(storedRegionConnector()));
+        executor.setTrustedConnectorEndpointsRegex(defaultTrustedEndpoints());
+        SdkAsyncHttpClient httpClient = mock(SdkAsyncHttpClient.class);
+        doReturn(httpClient).when(executor).getHttpClient();
+        @SuppressWarnings("unchecked")
+        ActionListener<Tuple<Integer, ModelTensors>> listener = mock(ActionListener.class);
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock", "input", "x");
+
+        executor.invokeRemoteService(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getMessage());
+        verify(httpClient, never()).execute(any());
+    }
+
+    @Test
+    public void invokeRemoteServiceStream_requestParametersCannotChangeRegionInHost() {
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(storedRegionConnector()));
+        executor.setTrustedConnectorEndpointsRegex(defaultTrustedEndpoints());
+        @SuppressWarnings("unchecked")
+        StreamPredictActionListener<MLTaskResponse, ?> listener = mock(StreamPredictActionListener.class);
+        Map<String, String> parameters = Map.of(REGION_FIELD, "us-west-2", LLM_INTERFACE, LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE);
+
+        executor.invokeRemoteServiceStream(PREDICT.name(), null, parameters, "{\"input\": \"x\"}", new ExecutionContext(0), listener);
+
+        ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(failure.capture());
+        assertEquals(Connector.ACTION_URL_HOST_CHANGED_MESSAGE, failure.getValue().getCause().getMessage());
+        verify(executor, never()).getHttpClient();
     }
 }
