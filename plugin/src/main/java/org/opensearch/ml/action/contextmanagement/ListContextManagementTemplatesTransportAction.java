@@ -46,10 +46,9 @@ public class ListContextManagementTemplatesTransportAction extends
         try {
             log.debug("Listing context management templates from: {} size: {}", request.getFrom(), request.getSize());
 
-            contextManagementTemplateService.listTemplates(request.getFrom(), request.getSize(), ActionListener.wrap(templates -> {
-                log.debug("Successfully retrieved {} context management templates", templates.size());
-                // For now, return the size as total. In a real implementation, you'd get the actual total count
-                listener.onResponse(new MLListContextManagementTemplatesResponse(templates, templates.size()));
+            contextManagementTemplateService.listTemplates(request.getFrom(), request.getSize(), ActionListener.wrap(result -> {
+                log.debug("Successfully retrieved {} of {} context management templates", result.getTemplates().size(), result.getTotal());
+                listener.onResponse(new MLListContextManagementTemplatesResponse(result.getTemplates(), result.getTotal()));
             }, exception -> {
                 log.error("Error listing context management templates", exception);
                 listener.onFailure(exception);

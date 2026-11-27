@@ -85,8 +85,8 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
 
         // Mock successful template listing
         doAnswer(invocation -> {
-            ActionListener<List<ContextManagementTemplate>> listListener = invocation.getArgument(2);
-            listListener.onResponse(templates);
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
+            listListener.onResponse(new ContextManagementTemplateService.TemplateListResult(templates, templates.size()));
             return null;
         }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
 
@@ -101,6 +101,33 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
     }
 
     @Test
+    public void testDoExecute_TotalIsTotalHitsNotPageSize() {
+        int from = 0;
+        int size = 2;
+        MLListContextManagementTemplatesRequest request = new MLListContextManagementTemplatesRequest(from, size);
+        Task task = mock(Task.class);
+        ActionListener<MLListContextManagementTemplatesResponse> listener = mock(ActionListener.class);
+
+        List<ContextManagementTemplate> page = Arrays.asList(createTestTemplate("template1"), createTestTemplate("template2"));
+
+        doAnswer(invocation -> {
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
+            listListener.onResponse(new ContextManagementTemplateService.TemplateListResult(page, 8L));
+            return null;
+        }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
+
+        transportAction.doExecute(task, request, listener);
+
+        ArgumentCaptor<MLListContextManagementTemplatesResponse> responseCaptor = ArgumentCaptor
+            .forClass(MLListContextManagementTemplatesResponse.class);
+        verify(listener).onResponse(responseCaptor.capture());
+
+        MLListContextManagementTemplatesResponse response = responseCaptor.getValue();
+        assertEquals(page, response.getTemplates());
+        assertEquals(8L, response.getTotal());
+    }
+
+    @Test
     public void testDoExecute_EmptyList() {
         int from = 0;
         int size = 10;
@@ -112,8 +139,8 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
 
         // Mock empty template list
         doAnswer(invocation -> {
-            ActionListener<List<ContextManagementTemplate>> listListener = invocation.getArgument(2);
-            listListener.onResponse(emptyTemplates);
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
+            listListener.onResponse(new ContextManagementTemplateService.TemplateListResult(emptyTemplates, 0));
             return null;
         }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
 
@@ -140,7 +167,7 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
 
         // Mock exception during template listing
         doAnswer(invocation -> {
-            ActionListener<List<ContextManagementTemplate>> listListener = invocation.getArgument(2);
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
             listListener.onFailure(serviceException);
             return null;
         }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
@@ -180,8 +207,8 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
 
         // Mock successful template listing
         doAnswer(invocation -> {
-            ActionListener<List<ContextManagementTemplate>> listListener = invocation.getArgument(2);
-            listListener.onResponse(templates);
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
+            listListener.onResponse(new ContextManagementTemplateService.TemplateListResult(templates, templates.size()));
             return null;
         }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
 
@@ -203,8 +230,8 @@ public class ListContextManagementTemplatesTransportActionTests extends OpenSear
 
         // Mock successful template listing with custom pagination
         doAnswer(invocation -> {
-            ActionListener<List<ContextManagementTemplate>> listListener = invocation.getArgument(2);
-            listListener.onResponse(templates);
+            ActionListener<ContextManagementTemplateService.TemplateListResult> listListener = invocation.getArgument(2);
+            listListener.onResponse(new ContextManagementTemplateService.TemplateListResult(templates, templates.size()));
             return null;
         }).when(contextManagementTemplateService).listTemplates(eq(from), eq(size), any());
 

@@ -10,6 +10,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.time.Instant;
 import java.util.List;
 
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -40,6 +41,8 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -202,22 +205,26 @@ public class ContextManagementTemplateService {
      * @param listener ActionListener for the response
      */
     public void listTemplates(ActionListener<List<ContextManagementTemplate>> listener) {
-        listTemplates(0, DEFAULT_MAX_TEMPLATES, listener);
+        listTemplates(0, DEFAULT_MAX_TEMPLATES, ActionListener.map(listener, TemplateListResult::getTemplates));
     }
 
     /**
      * List context management templates with pagination
      * @param from Starting index for pagination
      * @param size Number of templates to return
-     * @param listener ActionListener for the response
+     * @param listener ActionListener for the page of templates and the total number of matching templates
      */
-    public void listTemplates(int from, int size, ActionListener<List<ContextManagementTemplate>> listener) {
+    public void listTemplates(int from, int size, ActionListener<TemplateListResult> listener) {
         try {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<List<ContextManagementTemplate>> wrappedListener = ActionListener.runBefore(listener, context::restore);
+                ActionListener<TemplateListResult> wrappedListener = ActionListener.runBefore(listener, context::restore);
 
                 SearchRequest searchRequest = new SearchRequest(ContextManagementIndexUtils.getIndexName());
-                SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(new MatchAllQueryBuilder()).from(from).size(size);
+                SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+                    .query(new MatchAllQueryBuilder())
+                    .from(from)
+                    .size(size)
+                    .trackTotalHits(true);
                 searchRequest.source(searchSourceBuilder);
 
                 client.search(searchRequest, ActionListener.wrap(searchResponse -> {
@@ -232,7 +239,9 @@ public class ContextManagementTemplateService {
                             ContextManagementTemplate template = ContextManagementTemplate.parse(parser);
                             templates.add(template);
                         }
-                        wrappedListener.onResponse(templates);
+                        TotalHits totalHits = searchResponse.getHits().getTotalHits();
+                        long total = totalHits != null ? totalHits.value() : templates.size();
+                        wrappedListener.onResponse(new TemplateListResult(templates, total));
                     } catch (Exception e) {
                         log.error("Failed to parse context management", e);
                         wrappedListener.onFailure(e);
@@ -240,7 +249,7 @@ public class ContextManagementTemplateService {
                 }, exception -> {
                     if (exception instanceof IndexNotFoundException) {
                         // Return empty list if index doesn't exist
-                        wrappedListener.onResponse(new java.util.ArrayList<>());
+                        wrappedListener.onResponse(new TemplateListResult(new java.util.ArrayList<>(), 0));
                     } else {
                         log.error("Failed to list context management", exception);
                         wrappedListener.onFailure(exception);
@@ -389,5 +398,15 @@ public class ContextManagementTemplateService {
         org.opensearch.core.common.bytes.BytesReference bytesReference
     ) throws java.io.IOException {
         return MediaTypeRegistry.JSON.xContent().createParser(xContentRegistry, deprecationHandler, bytesReference.streamInput());
+    }
+
+    /**
+     * One page of context management templates plus the total number of templates that match the search.
+     */
+    @Getter
+    @RequiredArgsConstructor
+    public static final class TemplateListResult {
+        private final List<ContextManagementTemplate> templates;
+        private final long total;
     }
 }
