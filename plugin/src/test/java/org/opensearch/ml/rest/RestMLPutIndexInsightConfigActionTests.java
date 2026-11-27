@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -119,9 +120,33 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
         assertEquals(e.getMessage(), AGENT_FRAMEWORK_DISABLED_ERR_MSG);
     }
 
+    @Test
+    public void testPutIndexInsightConfigRequest_WithAgentId() throws Exception {
+        RestRequest request = getRestRequest("{\"is_enable\":true,\"agent_id\":\"agent-1\"}");
+        restMLPutIndexInsightConfigAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLIndexInsightConfigPutRequest> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigPutRequest.class);
+        verify(client, times(1)).execute(eq(MLIndexInsightConfigPutAction.INSTANCE), argumentCaptor.capture(), any());
+        assertEquals(true, argumentCaptor.getValue().getIsEnable());
+        assertEquals("agent-1", argumentCaptor.getValue().getAgentId());
+    }
+
+    @Test
+    public void testPutIndexInsightConfigRequest_UnknownField() {
+        RestRequest request = getRestRequest("{\"is_enable\":true,\"agentId\":\"agent-1\"}");
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> restMLPutIndexInsightConfigAction.handleRequest(request, channel, client)
+        );
+        assertEquals("Unknown field [agentId] in index insight config", e.getMessage());
+        verify(client, never()).execute(eq(MLIndexInsightConfigPutAction.INSTANCE), any(), any());
+    }
+
     private RestRequest getRestRequest() {
+        return getRestRequest("{\"is_enable\":true}");
+    }
+
+    private RestRequest getRestRequest(String requestContent) {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"is_enable\":true}";
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/index_insight_config")
