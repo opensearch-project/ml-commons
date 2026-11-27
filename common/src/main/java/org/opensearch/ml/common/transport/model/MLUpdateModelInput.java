@@ -14,7 +14,10 @@ import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -23,6 +26,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
@@ -58,6 +62,60 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; // passively set when sending update
                                                                               // request
     public static final String GUARDRAILS_FIELD = "guardrails";
+
+    /** Fields the update model API changes. */
+    public static final List<String> UPDATABLE_FIELDS = List
+        .of(
+            MODEL_NAME_FIELD,
+            DESCRIPTION_FIELD,
+            MODEL_GROUP_ID_FIELD,
+            IS_ENABLED_FIELD,
+            RATE_LIMITER_FIELD,
+            MODEL_CONFIG_FIELD,
+            DEPLOY_SETTING_FIELD,
+            CONNECTOR_ID_FIELD,
+            CONNECTOR_FIELD,
+            GUARDRAILS_FIELD,
+            MLModel.INTERFACE_FIELD,
+            MLModel.BATCH_INFERENCE_CONFIG_FIELD
+        );
+
+    /**
+     * Fields that GET model returns but that cannot be changed through update model. They are accepted and ignored, so a
+     * caller can send a GET response body back as an update. Any other field that parse() does not handle is rejected.
+     */
+    public static final Set<String> READ_ONLY_FIELDS = Set
+        .of(
+            MLModel.ALGORITHM_FIELD,
+            MLModel.FUNCTION_NAME_FIELD,
+            MLModel.MODEL_VERSION_FIELD,
+            MLModel.OLD_MODEL_VERSION_FIELD,
+            MLModel.MODEL_CONTENT_FIELD,
+            MLModel.OLD_MODEL_CONTENT_FIELD,
+            CommonValue.USER,
+            MLModel.MODEL_FORMAT_FIELD,
+            MLModel.MODEL_STATE_FIELD,
+            MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD,
+            MLModel.MODEL_CONTENT_HASH_VALUE_FIELD,
+            MLModel.IS_CONTROLLER_ENABLED_FIELD,
+            MLModel.CREATED_TIME_FIELD,
+            MLModel.LAST_UPDATED_TIME_FIELD,
+            MLModel.LAST_UPLOADED_TIME_FIELD,
+            MLModel.LAST_LOADED_TIME_FIELD,
+            MLModel.LAST_UNLOADED_TIME_FIELD,
+            MLModel.LAST_REGISTERED_TIME_FIELD,
+            MLModel.LAST_DEPLOYED_TIME_FIELD,
+            MLModel.LAST_UNDEPLOYED_TIME_FIELD,
+            MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD,
+            MLModel.CHUNK_NUMBER_FIELD,
+            MLModel.TOTAL_CHUNKS_FIELD,
+            MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
+            MLModel.CURRENT_WORKER_NODE_COUNT_FIELD,
+            MLModel.PLANNING_WORKER_NODES_FIELD,
+            MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+            MLModel.IS_HIDDEN_FIELD,
+            CommonValue.PROVISIONED_BY_FIELD
+        );
 
     @Getter
     private String modelId;
@@ -157,6 +215,25 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(VERSION_3_9_0) && in.readBoolean()) {
             this.batchInferenceConfig = new BatchInferenceConfig(in);
         }
+    }
+
+    /**
+     * Whether the request sets at least one field in {@link #UPDATABLE_FIELDS}. A body that holds only read-only fields
+     * (or only model_id and tenant_id) changes nothing.
+     */
+    public boolean hasUpdatableField() {
+        return name != null
+            || description != null
+            || modelGroupId != null
+            || isEnabled != null
+            || rateLimiter != null
+            || modelConfig != null
+            || deploySetting != null
+            || connectorId != null
+            || connector != null
+            || guardrails != null
+            || modelInterface != null
+            || batchInferenceConfig != null;
     }
 
     @Override
@@ -351,6 +428,11 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     batchInferenceConfig = BatchInferenceConfig.parse(parser, true);
                     break;
                 default:
+                    if (!READ_ONLY_FIELDS.contains(fieldName)) {
+                        throw new IllegalArgumentException(
+                            String.format(Locale.ROOT, "Unknown field [%s] in update model request", fieldName)
+                        );
+                    }
                     parser.skipChildren();
                     break;
             }

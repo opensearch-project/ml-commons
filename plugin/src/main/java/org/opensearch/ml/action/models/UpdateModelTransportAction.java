@@ -300,6 +300,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         ActionListener<UpdateResponse> wrappedListener
     ) throws IOException {
+        if (!updateModelInput.hasUpdatableField()) {
+            wrappedListener
+                .onFailure(
+                    new OpenSearchStatusException(
+                        "Update model request has no field that can be updated. Updatable fields: " + MLUpdateModelInput.UPDATABLE_FIELDS,
+                        RestStatus.BAD_REQUEST
+                    )
+                );
+            return;
+        }
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String newConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;

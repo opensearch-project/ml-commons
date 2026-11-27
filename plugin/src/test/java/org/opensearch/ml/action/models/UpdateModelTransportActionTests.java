@@ -617,6 +617,24 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testUpdateModelWithNoUpdatableFieldRejected() {
+        MLModel remoteModel = prepareMLModel("REMOTE_EXTERNAL", false);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(remoteModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        MLUpdateModelInput input = MLUpdateModelInput.builder().modelId("test_model_id").build();
+        transportUpdateModelAction.doExecute(task, MLUpdateModelRequest.builder().updateModelInput(input).build(), actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().startsWith("Update model request has no field that can be updated."));
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
+    }
+
+    @Test
     public void testUpdateHiddenRemoteModelPermissionError() {
         MLModel remoteModel = prepareMLModel("REMOTE_INTERNAL", true);
         doAnswer(invocation -> {
@@ -1095,6 +1113,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateRequestDocIOException() throws IOException, InterruptedException {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
+        doReturn(true).when(mockUpdateModelInput).hasUpdatableField();
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
@@ -1122,6 +1141,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateRequestDocInRegisterToNewModelGroupIOException() throws IOException, InterruptedException {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
+        doReturn(true).when(mockUpdateModelInput).hasUpdatableField();
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
@@ -2173,6 +2193,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateModelStatePartiallyLoadedException() {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
+        doReturn(true).when(mockUpdateModelInput).hasUpdatableField();
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
@@ -2198,6 +2219,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public void testUpdateModelStatePartiallyDeployedException() {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
+        doReturn(true).when(mockUpdateModelInput).hasUpdatableField();
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(4);
