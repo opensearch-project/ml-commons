@@ -130,7 +130,9 @@ public class ConnectorUtils {
                 if (parameters.containsKey(PROCESS_REMOTE_INFERENCE_INPUT)
                     && Boolean.parseBoolean(parameters.get(PROCESS_REMOTE_INFERENCE_INPUT))) {
                     Map<String, String> params = new HashMap<>();
-                    params.putAll(connector.getParameters());
+                    if (connector.getParameters() != null) {
+                        params.putAll(connector.getParameters());
+                    }
                     params.putAll(parameters);
                     RemoteInferencePreProcessFunction function = new RemoteInferencePreProcessFunction(
                         scriptService,

@@ -161,7 +161,7 @@ public class MLEngine {
     public void getConnectorCredential(Connector connector, ActionListener<Map<String, String>> listener) {
         ActionListener<Boolean> decryptSuccessfulListener = ActionListener.wrap(r -> {
             Map<String, String> decryptedCredential = connector.getDecryptedCredential();
-            String region = connector.getParameters().get(REGION_FIELD);
+            String region = connector.getParameters() != null ? connector.getParameters().get(REGION_FIELD) : null;
             if (region != null) {
                 decryptedCredential.putIfAbsent(REGION_FIELD, region);
             }
